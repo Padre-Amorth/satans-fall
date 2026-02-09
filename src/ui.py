@@ -1,15 +1,19 @@
 import math
+import os
 import random
+import logging
+from typing import Any, Literal
 
+logger: logging.Logger = logging.getLogger(__name__)
 
 class UIManager:
-    def __init__(self, game):
-        self.game = game
+    def __init__(self, game) -> None:
+        self.game: Any = game
         self.canvas = game.canvas
         self.width = game.width
         self.height = game.height
 
-    def draw_ui(self):
+    def draw_ui(self) -> None:
         """Draw all UI elements (HUD, messages, special effects)"""
         # Draw basic HUD
         self.draw_hud()
@@ -28,7 +32,7 @@ class UIManager:
         elif self.game.game_state.paused:
             self.draw_pause_menu()
 
-    def draw_hud(self):
+    def draw_hud(self) -> None:
         """Draw the main HUD elements"""
         # Score
         self.canvas.create_text(
@@ -88,7 +92,7 @@ class UIManager:
         # Center messages
         self.draw_center_messages()
 
-    def draw_xp_bar(self):
+    def draw_xp_bar(self) -> None:
         """Draw the XP progress bar"""
         xp_bar_width = 200
         xp_bar_height = 20
@@ -107,7 +111,7 @@ class UIManager:
         )
 
         # XP fill
-        xp_ratio = min(
+        xp_ratio: float = min(
             1.0, self.game.game_state.player_xp / self.game.game_state.xp_to_next_level
         )
         self.canvas.create_rectangle(
@@ -128,7 +132,7 @@ class UIManager:
             font=("Arial", 10, "bold"),
         )
 
-    def draw_weapon_hud(self):
+    def draw_weapon_hud(self) -> None:
         """Draw the weapon information HUD"""
         hud_x = self.width - 10
         hud_y = 65 + 20 + 12  # After XP bar
@@ -136,7 +140,7 @@ class UIManager:
 
         # Extra weapons
         if getattr(self.game.game_state, "player_weapons", None):
-            name_map = {
+            name_map: dict[str, str] = {
                 "shotgun": "Hellgun",
                 "orbital": "Orbitals",
                 "spear": "Spear",
@@ -144,9 +148,9 @@ class UIManager:
             }
             for i, wid in enumerate(self.game.game_state.player_weapons):
                 lvl = self.game.game_state.weapon_levels.get(wid, 0)
-                display_name = name_map.get(wid, wid.capitalize())
-                display_text = f"{display_name} Lv{lvl}"
-                y = hud_y + i * 18
+                display_name: str | None = name_map.get(wid, wid.capitalize())
+                display_text: str = f"{display_name} Lv{lvl}"
+                y: int = hud_y + i * 18
                 # Background box
                 self.canvas.create_rectangle(
                     hud_x - box_w,
@@ -173,7 +177,7 @@ class UIManager:
                         font=("Arial", 8, "bold"),
                     )
 
-    def draw_center_messages(self):
+    def draw_center_messages(self) -> None:
         """Draw centered messages with shadows"""
         if getattr(self.game.game_state, "center_messages", None):
             for m in self.game.game_state.center_messages[:]:
@@ -199,7 +203,7 @@ class UIManager:
                 if m["frames"] <= 0:
                     self.game.game_state.center_messages.remove(m)
 
-    def draw_special_effects(self):
+    def draw_special_effects(self) -> None:
         """Draw special UI effects like lightning and spine effects"""
         # Divine lightning effect
         if (
@@ -211,60 +215,80 @@ class UIManager:
         # Spine effect (thorns)
         self.draw_spine_effect()
 
-    def draw_lightning_effect(self):
+    def draw_lightning_effect(self) -> None:
         """Draw the divine lightning strike effect"""
         # Full screen white flash with pulsing
-        flash_alpha = abs(math.sin(self.game.frame_count * 0.3))
+        flash_alpha: float = abs(math.sin(self.game.frame_count * 0.3))
         if flash_alpha > 0.3:
             self.canvas.create_rectangle(
                 0, 0, self.width, self.height, fill="#ffffff", stipple="gray25"
             )
 
-        # Lightning bolt from saved points
-        if (
-            hasattr(self.game.game_state, "lightning_points")
-            and self.game.game_state.lightning_points
-        ):
-            # Outer glow (blue-white)
-            for i in range(len(self.game.game_state.lightning_points) - 1):
-                x1, y1 = self.game.game_state.lightning_points[i]
-                x2, y2 = self.game.game_state.lightning_points[i + 1]
-                self.canvas.create_line(x1, y1, x2, y2, fill="#64c8ff", width=20)
-            # Middle layer (bright white)
-            for i in range(len(self.game.game_state.lightning_points) - 1):
-                x1, y1 = self.game.game_state.lightning_points[i]
-                x2, y2 = self.game.game_state.lightning_points[i + 1]
-                self.canvas.create_line(x1, y1, x2, y2, fill="#ffffff", width=12)
-            # Inner core (electric yellow)
-            for i in range(len(self.game.game_state.lightning_points) - 1):
-                x1, y1 = self.game.game_state.lightning_points[i]
-                x2, y2 = self.game.game_state.lightning_points[i + 1]
-                self.canvas.create_line(x1, y1, x2, y2, fill="#ffff00", width=6)
-            # Add some branching lightning effects
-            if len(self.game.game_state.lightning_points) > 3:
-                mid_point = self.game.game_state.lightning_points[
-                    len(self.game.game_state.lightning_points) // 2
-                ]
-                branch_x = mid_point[0] + 40
-                branch_y = mid_point[1] + 30
-                self.canvas.create_line(
-                    mid_point[0],
-                    mid_point[1],
-                    branch_x,
-                    branch_y,
-                    fill="#ffffff",
-                    width=8,
-                )
-                self.canvas.create_line(
-                    mid_point[0],
-                    mid_point[1],
-                    branch_x,
-                    branch_y,
-                    fill="#ffff00",
-                    width=4,
-                )
+        # Falling light beam from above (replaces bolt)
+        t: math.Any | int = getattr(self.game.game_state, "prologo_lightning_timer", 0)
+        pts: math.Any | None = getattr(self.game.game_state, "lightning_points", None)
+        if pts and len(pts) > 0:
+            end_x, end_y = pts[-1]
+        else:
+            end_x = int(getattr(self.game.player, "x", self.width // 2))
+            end_y = int(getattr(self.game.player, "y", self.height - 80))
+        # Beam fall progress (fast initial fall)
+        fall_frames = 30
+        progress: float = min(1.0, t / float(fall_frames))
+        beam_y = int(end_y * progress)
+        # Beam widths scale with progress
+        outer_w = int(max(30, 180 * (0.2 + 0.8 * progress)))
+        core_w = int(max(6, 40 * progress))
+        # Outer glow rectangle (top -> current beam_y)
+        self.canvas.create_rectangle(
+            end_x - outer_w // 2,
+            0,
+            end_x + outer_w // 2,
+            beam_y,
+            fill="#fff8e6",
+            outline="",
+        )
+        # Inner core
+        self.canvas.create_rectangle(
+            end_x - core_w // 2,
+            0,
+            end_x + core_w // 2,
+            beam_y,
+            fill="#ffffe0",
+            outline="",
+        )
+        # Thin bright center line
+        self.canvas.create_line(
+            end_x,
+            0,
+            end_x,
+            beam_y,
+            fill="#fff8b0",
+            width=3,
+        )
+        # Impact explosion (pulsing)
+        max_radius = 160
+        duration = float(getattr(self.game, "prologo_lightning_duration_frames", 180))
+        radius = int(min(max_radius, (t / duration) * max_radius + 8))
+        pulse: float = (math.sin(self.game.frame_count * 0.25) + 1) * 0.5
+        self.canvas.create_oval(
+            end_x - int(radius * 1.1),
+            end_y - int(radius * 1.1),
+            end_x + int(radius * 1.1),
+            end_y + int(radius * 1.1),
+            fill="#fff0d8",
+            outline="",
+        )
+        self.canvas.create_oval(
+            end_x - int(radius * 0.6 + pulse * 8),
+            end_y - int(radius * 0.6 + pulse * 8),
+            end_x + int(radius * 0.6 + pulse * 8),
+            end_y + int(radius * 0.6 + pulse * 8),
+            fill="#ffffe0",
+            outline="",
+        )
 
-    def draw_spine_effect(self):
+    def draw_spine_effect(self) -> None:
         """Draw the spine/thorns effect on enemies"""
         for enemy in self.game.enemy_manager.enemies:
             if enemy.get("spine_timer", 0) > 0 and "spine_from" in enemy:
@@ -281,8 +305,8 @@ class UIManager:
                         for t in [0.25, 0.5, 0.75]:
                             lx = px + (ex - px) * t
                             ly = py + (ey - py) * t
-                            r = 18 + 6 * random.random()
-                            color = (
+                            r: float = 18 + 6 * random.random()
+                            color: str = (
                                 "#ffffcc"
                                 if self.game.frame_count % 2 == 0
                                 else "#fffbe0"
@@ -312,7 +336,7 @@ class UIManager:
                 if enemy["spine_timer"] <= 0:
                     enemy.pop("spine_from", None)
 
-    def draw_weapon_selection(self):
+    def draw_weapon_selection(self) -> None:
         """Draw the weapon selection screen"""
         # Semi-transparent overlay
         self.canvas.create_rectangle(
@@ -329,7 +353,7 @@ class UIManager:
         )
 
         # Weapon options
-        weapon_options = [
+        weapon_options: list[tuple[str, str]] = [
             ("Shotgun", "Powerful close-range spread weapon"),
             ("Orbitals", "Orbiting projectiles around you"),
             ("Spear", "Piercing projectile with chain lightning"),
@@ -339,8 +363,8 @@ class UIManager:
         spacing = 80
 
         for i, (name, desc) in enumerate(weapon_options):
-            y = start_y + i * spacing
-            color = (
+            y: int = start_y + i * spacing
+            color: str = (
                 "#ffffff"
                 if i != self.game.game_state.selected_weapon_index
                 else "#ffff00"
@@ -382,7 +406,7 @@ class UIManager:
             font=("Arial", 14),
         )
 
-    def draw_upgrade_selection(self):
+    def draw_upgrade_selection(self) -> None:
         """Draw the upgrade selection screen"""
         # Semi-transparent overlay
         self.canvas.create_rectangle(
@@ -399,7 +423,7 @@ class UIManager:
         )
 
         # Upgrade options
-        upgrade_options = [
+        upgrade_options: list[tuple[str, str]] = [
             ("Health +20", "Increase maximum health"),
             ("Speed +10%", "Move faster"),
             ("Damage +15%", "Deal more damage"),
@@ -409,8 +433,8 @@ class UIManager:
         spacing = 80
 
         for i, (name, desc) in enumerate(upgrade_options):
-            y = start_y + i * spacing
-            color = (
+            y: int = start_y + i * spacing
+            color: str = (
                 "#ffffff"
                 if i != self.game.game_state.selected_upgrade_index
                 else "#ffff00"
@@ -452,7 +476,7 @@ class UIManager:
             font=("Arial", 14),
         )
 
-    def draw_pause_menu(self):
+    def draw_pause_menu(self) -> None:
         """Draw the pause menu"""
         # Semi-transparent overlay
         self.canvas.create_rectangle(
@@ -469,13 +493,13 @@ class UIManager:
         )
 
         # Menu options
-        menu_options = ["Resume", "Restart", "Quit"]
+        menu_options: list[str] = ["Resume", "Restart", "Quit"]
         start_y = 250
         spacing = 60
 
         for i, option in enumerate(menu_options):
-            y = start_y + i * spacing
-            color = (
+            y: int = start_y + i * spacing
+            color: str = (
                 "#ffffff" if i != self.game.game_state.pause_menu_index else "#ffff00"
             )
 
@@ -501,7 +525,7 @@ class UIManager:
                 )
 
         # Stats display
-        stats_y = start_y + len(menu_options) * spacing + 50
+        stats_y: int = start_y + len(menu_options) * spacing + 50
         self.canvas.create_text(
             self.width // 2,
             stats_y,
@@ -558,20 +582,20 @@ class UIManager:
 class PygameUIManager:
     """A Pygame-specific UI manager which encapsulates all drawing logic previously inside Game."""
 
-    def __init__(self, game):
+    def __init__(self, game) -> None:
         # Defer importing pygame to runtime (helps tests without SDL)
         try:
             import pygame
 
-            self.pygame = pygame
+            self.pygame: Any = pygame
         except Exception:
             self.pygame = None
-        self.game = game
-        self.screen = getattr(game, "screen", None)
-        self.width = getattr(game, "width", 0)
-        self.height = getattr(game, "height", 0)
+        self.game: Any = game
+        self.screen: math.Any | None = getattr(game, "screen", None)
+        self.width: math.Any | int = getattr(game, "width", 0)
+        self.height: math.Any | int = getattr(game, "height", 0)
 
-    def draw_game_world(self, shake_x=0, shake_y=0):
+    def draw_game_world(self, shake_x=0, shake_y=0) -> None:
         """Draw walls, buildings and background following the original implementation."""
         if (
             not self.screen
@@ -580,7 +604,7 @@ class PygameUIManager:
         ):
             return
 
-        pygame = self.pygame
+        pygame: Any | None = self.pygame
         settings = self.game.stage_settings[self.game.selected_stage]
 
         # Fill inside battlefield with dark green
@@ -653,7 +677,7 @@ class PygameUIManager:
         elif hasattr(self.game, "draw_fog"):
             self.game.draw_fog(shake_x, shake_y)
 
-    def draw_dead_trees(self, shake_x=0, shake_y=0):
+    def draw_dead_trees(self, shake_x=0, shake_y=0) -> None:
         # Debugging hook: log when drawing dead trees to help visibility issues
         try:
             if not self.game.is_limbo_stage() or not hasattr(self.game, "dead_trees"):
@@ -672,7 +696,7 @@ class PygameUIManager:
                 )
         except Exception:
             pass
-        pygame = self.pygame
+        pygame: Any | None = self.pygame
         for tree in self.game.dead_trees:
             x = tree["x"] + shake_x
             y = tree["y"] + shake_y
@@ -717,24 +741,24 @@ class PygameUIManager:
                         1,
                     )
 
-    def draw_pedestals(self, shake_x=0, shake_y=0):
+    def draw_pedestals(self, shake_x=0, shake_y=0) -> None:
         """Draw tall pedestals with demonic statues for Limbo stage"""
         if not self.game.is_limbo_stage():
             if getattr(self.game, "debug", False):
                 print("[DEBUG] draw_pedestals: not in limbo")
             return
-        pygame = self.pygame
+        pygame: Any | None = self.pygame
         if getattr(self.game, "debug", False):
             print("[DEBUG] draw_pedestals: drawing pedestals")
         # Two pedestals at the sides of the play area
-        pedestals = [
+        pedestals: list[dict[str, int]] = [
             {"x": 320, "y": 620},  # Left pedestal
             {"x": 960, "y": 620},  # Right pedestal
         ]
 
         for pedestal in pedestals:
-            x = pedestal["x"] + shake_x
-            y = pedestal["y"] + shake_y
+            x: int = pedestal["x"] + shake_x
+            y: int = pedestal["y"] + shake_y
 
             # Pedestal base (wide)
             pygame.draw.rect(self.screen, (58, 32, 16), (x - 25, y + 50, 50, 10))
@@ -757,10 +781,10 @@ class PygameUIManager:
             pygame.draw.rect(self.screen, (200, 170, 100), (x - 20, y - 10, 40, 10), 1)
 
             # Slimmer demonic statue on top with pitchfork
-            statue_base_y = y - 10
+            statue_base_y: int = y - 10
 
             # Statue body (slimmer triangular/demonic shape - dark red)
-            body_points = [
+            body_points: list[tuple[int, int]] = [
                 (x, statue_base_y - 60),  # Neck point (head connects here)
                 (x - 12, statue_base_y - 40),  # Left shoulder (narrower)
                 (x - 15, statue_base_y),  # Left base (narrower)
@@ -771,7 +795,7 @@ class PygameUIManager:
             pygame.draw.polygon(self.screen, (26, 0, 0), body_points, 2)
 
             # Head (larger and round)
-            head_y = statue_base_y - 70
+            head_y: int = statue_base_y - 70
             head_radius = 15
             pygame.draw.circle(self.screen, (58, 10, 10), (x, head_y), head_radius)
             pygame.draw.circle(self.screen, (26, 0, 0), (x, head_y), head_radius, 2)
@@ -803,9 +827,9 @@ class PygameUIManager:
 
             # Pitchfork in hand
             # Handle (long pole)
-            fork_x = x + 20  # Held to the right side
-            fork_top_y = statue_base_y - 100
-            fork_bottom_y = statue_base_y - 20
+            fork_x: int = x + 20  # Held to the right side
+            fork_top_y: int = statue_base_y - 100
+            fork_bottom_y: int = statue_base_y - 20
             pygame.draw.line(
                 self.screen,
                 (42, 42, 42),
@@ -851,7 +875,7 @@ class PygameUIManager:
 
             # Smaller wings (simple angular shapes)
             # Left wing
-            left_wing_points = [
+            left_wing_points: list[tuple[int, int]] = [
                 (x - 12, statue_base_y - 40),
                 (x - 30, statue_base_y - 45),
                 (x - 25, statue_base_y - 30),
@@ -860,7 +884,7 @@ class PygameUIManager:
             pygame.draw.polygon(self.screen, (42, 0, 0), left_wing_points, 1)
 
             # Right wing (smaller to not interfere with pitchfork)
-            right_wing_points = [
+            right_wing_points: list[tuple[int, int]] = [
                 (x + 12, statue_base_y - 40),
                 (x + 28, statue_base_y - 45),
                 (x + 23, statue_base_y - 30),
@@ -868,22 +892,22 @@ class PygameUIManager:
             pygame.draw.polygon(self.screen, (74, 16, 16), right_wing_points)
             pygame.draw.polygon(self.screen, (42, 0, 0), right_wing_points, 1)
 
-    def draw_fog(self, shake_x=0, shake_y=0):
+    def draw_fog(self, shake_x=0, shake_y=0) -> None:
         if not self.game.is_limbo_stage():
             return
         if not self.game.left_wall_points or not self.game.right_wall_points:
             return
-        pygame = self.pygame
+        pygame: Any | None = self.pygame
         wall_thickness = 40
         num_layers = 5
         base_r, base_g, base_b = 60, 60, 60
         for i in range(num_layers):
-            opacity = (num_layers - i) / num_layers
-            layer_offset = 250 * (i + 1) // num_layers
+            opacity: float = (num_layers - i) / num_layers
+            layer_offset: int = 250 * (i + 1) // num_layers
             r = int(base_r * (1 - opacity * 0.6))
             g = int(base_g * (1 - opacity * 0.6))
             b = int(base_b * (1 - opacity * 0.6))
-            color = (r, g, b)
+            color: tuple[int, int, int] = (r, g, b)
             left_fog_points = []
             for point in self.game.left_wall_points:
                 left_fog_points.append((0 + shake_x, point[1] + shake_y))
@@ -922,8 +946,8 @@ class PygameUIManager:
                 )
                 self.screen.blit(fog_surface, (0, 0))
 
-    def draw_game_objects(self, shake_x=0, shake_y=0):
-        pygame = self.pygame
+    def draw_game_objects(self, shake_x=0, shake_y=0) -> None:
+        pygame: Any | None = self.pygame
         # Draw enemies
         for enemy in self.game.enemies:
             enemy.draw(self.screen, shake_x, shake_y)
@@ -986,32 +1010,162 @@ class PygameUIManager:
         # Draw special effects
         self.draw_special_effects(shake_x, shake_y)
 
-    def draw_special_effects(self, shake_x=0, shake_y=0):
-        pygame = self.pygame
+    def draw_special_effects(self, shake_x=0, shake_y=0) -> None:
         if self.game.selected_stage == "prologo" and self.game.prologo_lightning_strike:
             self.draw_lightning_effect(shake_x, shake_y)
         self.draw_spine_effect(shake_x, shake_y)
 
     def draw_lightning_effect(self, shake_x=0, shake_y=0):
-        pygame = self.pygame
+        pygame: Any | None = self.pygame
         try:
-            player_x = getattr(self.game.player, "x", self.width // 2)
-            player_y = getattr(self.game.player, "y", self.height - 80)
-            beam_width = 8
-            beam_x = player_x
-            pulse_intensity = abs(math.sin(self.game.frame_count * 0.2)) * 0.5 + 0.5
-            pygame.draw.line(
+            # Screen flash based on a pulsing alpha (use frame_count)
+            flash_alpha: float = abs(math.sin(self.game.frame_count * 0.18))
+            if flash_alpha > 0.25:
+                overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+                alpha = int(min(255, 180 * flash_alpha))
+                overlay.fill((255, 255, 255, alpha))
+                self.screen.blit(overlay, (0, 0))
+
+            # Draw falling light beam (replaces bolt) and keep explosion
+            pts: math.Any | None = getattr(self.game, "lightning_points", None)
+            if pts and len(pts) > 0:
+                end_x, end_y = pts[-1]
+            else:
+                end_x = int(getattr(self.game.player, "x", self.width // 2))
+                end_y = int(getattr(self.game.player, "y", self.height - 80))
+            t: math.Any | int = getattr(self.game, "prologo_lightning_timer", 0)
+            # Beam fall progress (fast initial fall)
+            fall_frames = 30
+            progress: float = min(1.0, t / float(fall_frames))
+            current_y = int(end_y * progress)
+            # Beam widths
+            max_outer = 180
+            max_core = 40
+            outer_w = int(max(30, max_outer * (0.2 + 0.8 * progress)))
+            core_w = int(max(6, max_core * progress))
+            # Draw beam using alpha surface for glow
+            beam_surf = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            outer_color: tuple[Literal[255], Literal[240], Literal[200], int] = (255, 240, 200, int(150 * (0.5 + progress * 0.5)))
+            core_color: tuple[Literal[255], Literal[255], Literal[200], int] = (255, 255, 200, int(220 * (0.3 + progress * 0.7)))
+            center_color: tuple[Literal[255], Literal[255], Literal[180], int] = (255, 255, 180, int(255 * progress))
+            # Outer glow rectangle
+            pygame.draw.rect(
+                beam_surf,
+                outer_color,
+                (
+                    int(end_x - outer_w / 2) + int(shake_x),
+                    0 + int(shake_y),
+                    outer_w,
+                    current_y,
+                ),
+            )
+            # Inner core rectangle
+            pygame.draw.rect(
+                beam_surf,
+                core_color,
+                (
+                    int(end_x - core_w / 2) + int(shake_x),
+                    0 + int(shake_y),
+                    core_w,
+                    current_y,
+                ),
+            )
+            # Bright center line
+            pygame.draw.rect(
+                beam_surf,
+                center_color,
+                (
+                    int(end_x - 3) + int(shake_x),
+                    0 + int(shake_y),
+                    6,
+                    current_y,
+                ),
+            )
+            # Blit the beam
+            self.screen.blit(beam_surf, (0, 0))
+
+            # Try to capture screenshots at two key moments (non-fatal)
+            try:
+                total = int(
+                    getattr(self.game, "prologo_lightning_duration_frames", 180)
+                )
+                start_frame: int = max(1, int(total * 0.1))
+                peak_frame: int = max(1, int(total * 0.75))
+                os.makedirs("screenshots", exist_ok=True)
+                if (
+                    not getattr(self.game, "_screenshot_taken_start", False)
+                    and t == start_frame
+                ):
+                    pygame.image.save(
+                        self.screen,
+                        os.path.join("screenshots", "prologo_beam_start.png"),
+                    )
+                    self.game._screenshot_taken_start = True
+                if (
+                    not getattr(self.game, "_screenshot_taken_peak", False)
+                    and t == peak_frame
+                ):
+                    pygame.image.save(
+                        self.screen,
+                        os.path.join("screenshots", "prologo_beam_peak.png"),
+                    )
+                    self.game._screenshot_taken_peak = True
+            except Exception:
+                pass
+
+            # Explosion / impact at the end point
+            # Make a pulsing explosion that grows over the configured timer
+            max_radius = 160
+            duration = float(
+                getattr(self.game, "prologo_lightning_duration_frames", 180)
+            )
+            radius = int(min(max_radius, (t / duration) * max_radius + 8))
+            pulse: float = (math.sin(self.game.frame_count * 0.25) + 1) * 0.5
+            # Outer glow circle
+            pygame.draw.circle(
+                self.screen,
+                (255, 240, 200),
+                (int(end_x + shake_x), int(end_y + shake_y)),
+                int(radius * 1.1),
+            )
+            # Inner bright core
+            pygame.draw.circle(
                 self.screen,
                 (255, 255, 200),
-                (beam_x + shake_x, 0 + shake_y),
-                (beam_x + shake_x, player_y + shake_y),
-                beam_width + 12,
+                (int(end_x + shake_x), int(end_y + shake_y)),
+                int(radius * 0.6 + pulse * 8),
             )
+            # Flash star lines
+            for ang in range(0, 360, 45):
+                rad: float = math.radians(ang)
+                lx: math.Any | float = end_x + math.cos(rad) * (radius * 0.9)
+                ly: math.Any | float = end_y + math.sin(rad) * (radius * 0.9)
+                pygame.draw.line(
+                    self.screen,
+                    (255, 255, 230),
+                    (int(end_x + shake_x), int(end_y + shake_y)),
+                    (int(lx + shake_x), int(ly + shake_y)),
+                    3,
+                )
+            else:
+                # Fallback: vertical beam above player like old behavior
+                player_x: math.Any | int = getattr(self.game.player, "x", self.width // 2)
+                player_y: math.Any | int = getattr(self.game.player, "y", self.height - 80)
+                beam_width = 8
+                beam_x: math.Any | int = player_x
+                pygame.draw.line(
+                    self.screen,
+                    (255, 255, 200),
+                    (beam_x + shake_x, 0 + shake_y),
+                    (beam_x + shake_x, player_y + shake_y),
+                    beam_width + 12,
+                )
         except Exception:
-            pass
+            # Avoid breaking the game if drawing fails
+            logger.exception("draw_lightning_effect failed")
 
     def draw_spine_effect(self, shake_x=0, shake_y=0):
-        pygame = self.pygame
+        pygame: Any | None = self.pygame
         for enemy in self.game.enemies:
             if (
                 hasattr(enemy, "spine_timer")
@@ -1031,8 +1185,8 @@ class PygameUIManager:
                         for t in [0.25, 0.5, 0.75]:
                             lx = px + (ex - px) * t
                             ly = py + (ey - py) * t
-                            r = 18 + 6 * random.random()
-                            color = (
+                            r: float = 18 + 6 * random.random()
+                            color: tuple[Literal[255], Literal[255], Literal[204]] | tuple[Literal[255], Literal[254], Literal[224]] = (
                                 (255, 255, 204)
                                 if self.game.frame_count % 2 == 0
                                 else (255, 254, 224)

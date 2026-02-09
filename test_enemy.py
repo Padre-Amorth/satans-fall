@@ -3,7 +3,7 @@ import sys
 
 sys.path.insert(0, "src")
 
-from enemy import Enemy
+from src.entities.enemy import Enemy
 
 # Create an enemy instance
 enemy = Enemy(100, 100, "basic", 20, 100)

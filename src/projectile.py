@@ -1,13 +1,15 @@
-from typing import TYPE_CHECKING
 import importlib
+from typing import TYPE_CHECKING, Any
+
+from pygame import Rect, Surface
 
 if TYPE_CHECKING:
     import pygame  # type: ignore
 
 try:
-    pygame = importlib.import_module("pygame")
+    pygame: importlib.ModuleType = importlib.import_module("pygame")
 except Exception:
-    pygame = importlib.import_module("pygame_ce")  # type: ignore
+    pygame: importlib.ModuleType = importlib.import_module("pygame_ce")  # type: ignore
 
 import math
 import os
@@ -25,15 +27,15 @@ class Projectile(pygame.sprite.Sprite):
         is_enemy_projectile=False,
         weapon_type=None,
         source=None,
-    ):
+    ) -> None:
         super().__init__()
-        self.x = x
-        self.y = y
-        self.vel_x = vel_x
-        self.vel_y = vel_y
-        self.damage = damage
-        self.radius = radius
-        self.is_enemy_projectile = is_enemy_projectile
+        self.x: Any = x
+        self.y: Any = y
+        self.vel_x: Any = vel_x
+        self.vel_y: Any = vel_y
+        self.damage: int = damage
+        self.radius: int = radius
+        self.is_enemy_projectile: bool = is_enemy_projectile
         self.weapon_type = weapon_type  # 'spear', 'shotgun', or None for regular
         self.source = source  # 'orbital' for orbital projectiles
         self.pierce_all = False  # Default: projectiles don't pierce
@@ -42,15 +44,15 @@ class Projectile(pygame.sprite.Sprite):
         # Create image
         self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
         self.draw_projectile()
-        self.rect = self.image.get_rect(center=(self.x, self.y))
+        self.rect: Rect | math.Any = self.image.get_rect(center=(self.x, self.y))
 
-    def draw_projectile(self):
+    def draw_projectile(self) -> None:
         """Draw projectile, try to load image first"""
         # Special handling for different weapon types
         if self.weapon_type == "spear":
             # Create spear image: long shaft with arrowhead
-            length = max(30, self.radius * 6)
-            width = max(2, int(self.radius * 0.6))
+            length: int = max(30, self.radius * 6)
+            width: int = max(2, int(self.radius * 0.6))
             self.image = pygame.Surface((length, width * 2), pygame.SRCALPHA)
 
             # Shaft (tan color)
@@ -61,7 +63,7 @@ class Projectile(pygame.sprite.Sprite):
             )
 
             # Arrowhead (light tan)
-            arrowhead_points = [
+            arrowhead_points: list[tuple[int, int]] = [
                 (length, width),  # tip
                 (length - self.radius * 2, width // 2),  # center back
                 (length, 0),  # top
@@ -98,14 +100,14 @@ class Projectile(pygame.sprite.Sprite):
         else:
             # Regular projectiles or enemy projectiles
             try:
-                image_name = (
+                image_name: str = (
                     "enemy_projectile.png"
                     if self.is_enemy_projectile
                     else "projectile.png"
                 )
-                image_path = os.path.join("assets", image_name)
-                loaded_image = pygame.image.load(image_path).convert_alpha()
-                self.image = pygame.transform.scale(
+                image_path: str = os.path.join("assets", image_name)
+                loaded_image: Surface | math.Any = pygame.image.load(image_path).convert_alpha()
+                self.image: Surface | math.Any = pygame.transform.scale(
                     loaded_image, (self.radius * 2, self.radius * 2)
                 )
             except Exception:
@@ -136,24 +138,24 @@ class Projectile(pygame.sprite.Sprite):
                     # Player projectile - draw as a red "6" as a simple fallback
                     self.image.fill((0, 0, 0, 0))  # Transparent background
                     font = pygame.font.Font(None, max(8, int(self.radius * 2)))
-                    text = font.render("6", True, (255, 51, 51))  # Red color fallback
-                    text_rect = text.get_rect(center=(self.radius, self.radius))
+                    text: Surface | math.Any = font.render("6", True, (255, 51, 51))  # Red color fallback
+                    text_rect: Rect | math.Any = text.get_rect(center=(self.radius, self.radius))
                     self.image.blit(text, text_rect)
 
-    def update(self):
+    def update(self) -> None:
         self.x += self.vel_x / 60  # Divide by FPS
         self.y += self.vel_y / 60
         self.rect.center = (self.x, self.y)
 
-    def draw(self, screen, shake_x=0, shake_y=0):
-        draw_x = self.rect.x + shake_x
-        draw_y = self.rect.y + shake_y
+    def draw(self, screen, shake_x=0, shake_y=0) -> None:
+        draw_x: int | math.Any = self.rect.x + shake_x
+        draw_y: int | math.Any = self.rect.y + shake_y
 
         if self.weapon_type == "spear":
             # Rotate spear based on velocity direction
-            angle = math.degrees(math.atan2(self.vel_y, self.vel_x))
-            rotated_image = pygame.transform.rotate(self.image, -angle)
-            rotated_rect = rotated_image.get_rect(
+            angle: float = math.degrees(math.atan2(self.vel_y, self.vel_x))
+            rotated_image: Surface | math.Any = pygame.transform.rotate(self.image, -angle)
+            rotated_rect: Rect | math.Any = rotated_image.get_rect(
                 center=(draw_x + self.radius, draw_y + self.radius)
             )
             screen.blit(rotated_image, rotated_rect)

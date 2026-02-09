@@ -1,5 +1,6 @@
 import math
-from src.enemy import Enemy
+
+from src.entities.enemy import Enemy
 from src.game import Game
 
 
@@ -31,9 +32,9 @@ def test_boss_moves_to_center_and_shines_when_immortal():
     new_dist = math.hypot(boss.x - center_x, boss.y - center_y)
 
     assert new_dist < initial_dist, "Boss did not move closer to center when immortal"
-    assert boss.width > initial_width, (
-        "Boss did not increase in size during regeneration"
-    )
+    assert (
+        boss.width > initial_width
+    ), "Boss did not increase in size during regeneration"
     assert hasattr(boss, "shine_phase") and boss.shine_phase > 0
     assert boss.shining is True
     # If base image exists, the image should have been modified (at least one pixel differs)

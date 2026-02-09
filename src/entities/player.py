@@ -1,20 +1,22 @@
-import os
 import logging
+import os
 
+from numpy import ndarray
 import pygame
+from typing import Any
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, x, y) -> None:
         super().__init__()
-        self.x = x
-        self.y = y
+        self.x: Any = x
+        self.y: Any = y
         self.width = 61  # Increased by another 10%
         self.height = 73  # Increased by another 10%
         self.max_health = 100
-        self.health = self.max_health
+        self.health: int = self.max_health
         self.speed = 300
         self.velocity_x = 0
 
@@ -29,11 +31,14 @@ class Player(pygame.sprite.Sprite):
 
         # Load image
         try:
-            assets_dir = os.path.join(os.path.dirname(__file__), "..", "assets")
-            self.base_image = pygame.image.load(
+            # Robust assets path: two levels up from src/entities -> project root 'assets'
+            assets_dir: str = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "assets")
+            )
+            self.base_image: pygame.Surface = pygame.image.load(
                 os.path.join(assets_dir, "satan.png")
             ).convert_alpha()
-            self.base_image = pygame.transform.scale(
+            self.base_image: pygame.Surface = pygame.transform.scale(
                 self.base_image, (self.width, self.height)
             )
             self.image = self.base_image.copy()
@@ -54,7 +59,7 @@ class Player(pygame.sprite.Sprite):
             self.walk_frames = []
         self.rect = self.image.get_rect(center=(self.x, self.y))
 
-    def create_walk_frames(self):
+    def create_walk_frames(self) -> None:
         """Create walking animation frames by shifting pixels"""
         if self.base_image is None:
             return
@@ -63,9 +68,9 @@ class Player(pygame.sprite.Sprite):
 
         # Create 4 walking frames
         for frame in range(4):
-            frame_surface = self.base_image.copy()
-            pixels = pygame.surfarray.pixels3d(frame_surface)
-            alpha_pixels = pygame.surfarray.pixels_alpha(frame_surface)
+            frame_surface: pygame.Surface = self.base_image.copy()
+            pixels: ndarray = pygame.surfarray.pixels3d(frame_surface)
+            alpha_pixels: ndarray = pygame.surfarray.pixels_alpha(frame_surface)
 
             # Calculate leg movement offsets
             if frame == 0:
@@ -82,14 +87,14 @@ class Player(pygame.sprite.Sprite):
                 offset_right = -2
 
             # Apply pixel shifting to simulate leg movement
-            new_pixels = pixels.copy()
-            new_alpha = alpha_pixels.copy()
+            new_pixels: ndarray = pixels.copy()
+            new_alpha: ndarray = alpha_pixels.copy()
 
             for y in range(height):
                 for x in range(width):
                     if x < width // 2:
                         # Left side (left leg)
-                        src_x = x - offset_left
+                        src_x: int = x - offset_left
                         if 0 <= src_x < width:
                             new_pixels[x, y] = pixels[src_x, y]
                             new_alpha[x, y] = alpha_pixels[src_x, y]
@@ -98,7 +103,7 @@ class Player(pygame.sprite.Sprite):
                             new_alpha[x, y] = 0
                     else:
                         # Right side (right leg)
-                        src_x = x - offset_right
+                        src_x: int = x - offset_right
                         if 0 <= src_x < width:
                             new_pixels[x, y] = pixels[src_x, y]
                             new_alpha[x, y] = alpha_pixels[src_x, y]
@@ -118,10 +123,10 @@ class Player(pygame.sprite.Sprite):
             self.walk_frames.append(new_frame)
 
             # Create flipped version
-            flipped_frame = pygame.transform.flip(new_frame, True, False)
+            flipped_frame: pygame.Surface = pygame.transform.flip(new_frame, True, False)
             self.walk_frames.append(flipped_frame)
 
-    def draw_satan(self):
+    def draw_satan(self) -> None:
         """Draw Satan character - bright red demon with horns"""
         self.image.fill((0, 0, 0, 0))  # Transparent background
 
@@ -152,18 +157,18 @@ class Player(pygame.sprite.Sprite):
         pygame.draw.line(self.image, (150, 0, 0), (18, 45), (18, 55), 3)
         pygame.draw.line(self.image, (150, 0, 0), (32, 45), (32, 55), 3)
 
-    def move_left(self):
-        self.velocity_x = -self.speed
+    def move_left(self) -> None:
+        self.velocity_x: int = -self.speed
 
-    def move_right(self):
-        self.velocity_x = self.speed
+    def move_right(self) -> None:
+        self.velocity_x: int = self.speed
 
-    def update(self, screen_width):
+    def update(self, screen_width) -> None:
         # Apply velocity
         self.x += self.velocity_x / 60  # Divide by FPS
 
         # Clamp to screen
-        self.x = max(self.width // 2, min(self.x, screen_width - self.width // 2))
+        self.x: int = max(self.width // 2, min(self.x, screen_width - self.width // 2))
 
         # Reset velocity
         self.velocity_x = 0
@@ -171,16 +176,16 @@ class Player(pygame.sprite.Sprite):
         # Update rect
         self.rect.center = (self.x, self.y)
 
-    def take_damage(self, damage):
+    def take_damage(self, damage) -> None:
         actual_damage = damage * self.damage_reduction_multiplier
-        self.health = max(0, self.health - actual_damage)
+        self.health: int = max(0, self.health - actual_damage)
 
-    def gain_xp(self, amount):
+    def gain_xp(self, amount) -> None:
         self.xp += amount
         if self.xp >= self.xp_to_next_level:
             self.level_up()
 
-    def level_up(self):
+    def level_up(self) -> None:
         self.level += 1
         self.xp -= self.xp_to_next_level
         self.xp_to_next_level = int(
@@ -188,18 +193,18 @@ class Player(pygame.sprite.Sprite):
         )  # Increase XP requirement
         # Note: Upgrade selection will be handled in the game class
 
-    def draw(self, screen, shake_x=0, shake_y=0, anim_frame=0, is_moving=False):
+    def draw(self, screen, shake_x=0, shake_y=0, anim_frame=0, is_moving=False) -> None:
         # Apply shake offset
-        draw_x = self.rect.x + shake_x
-        draw_y = self.rect.y + shake_y
+        draw_x: float | int = self.rect.x + shake_x
+        draw_y: float | int = self.rect.y + shake_y
 
         # Apply bobbing effect if moving
         bob_offset = 0
-        current_image = self.image
+        current_image: pygame.Surface | None = self.image
 
         if is_moving and self.walk_frames:
             # Create bobbing effect (up and down movement)
-            bob_cycle = anim_frame % 4
+            bob_cycle: int = anim_frame % 4
             if bob_cycle == 1:
                 bob_offset = -1
             elif bob_cycle == 3:
@@ -208,7 +213,7 @@ class Player(pygame.sprite.Sprite):
                 bob_offset = 0
 
             # Use walking frames
-            frame_index = anim_frame % 8  # 8 frames total (4 normal + 4 flipped)
+            frame_index: int = anim_frame % 8  # 8 frames total (4 normal + 4 flipped)
             if frame_index < len(self.walk_frames):
                 current_image = self.walk_frames[frame_index]
 
@@ -217,14 +222,14 @@ class Player(pygame.sprite.Sprite):
         # Draw health bar with shake offset
         bar_width = 40
         bar_height = 5
-        bar_x = self.rect.centerx - bar_width // 2 + shake_x
-        bar_y = self.rect.bottom + 5 + shake_y
+        bar_x: float | int = self.rect.centerx - bar_width // 2 + shake_x
+        bar_y: float | int = self.rect.bottom + 5 + shake_y
 
         # Health bar background
         pygame.draw.rect(screen, (100, 0, 0), (bar_x, bar_y, bar_width, bar_height))
 
         # Health bar fill
-        health_ratio = max(0, self.health / self.max_health)
+        health_ratio: float = max(0, self.health / self.max_health)
         pygame.draw.rect(
             screen, (0, 200, 0), (bar_x, bar_y, bar_width * health_ratio, bar_height)
         )

@@ -37,7 +37,7 @@ Debug CLI flags (developer shortcuts):
 
 The project uses a modular Pygame architecture with separate components:
 
-- `src/player.py` - Player character logic
+- `src/entities/player.py` - Player character logic (moved from `src/player.py`)
 - `src/game.py` - Core game mechanics
 - `src/enemy.py` - Enemy spawning and AI
 - `src/projectile.py` - Weapon and projectile systems

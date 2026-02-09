@@ -31,9 +31,9 @@ def test_big_enemy_timer_decrements_once():
         game.awaiting_upgrade = False
         # Call update once and assert it decremented by exactly 1
         game.update_game()
-        assert game.big_enemy_timer == 49, (
-            f"Expected big_enemy_timer==49, got {game.big_enemy_timer}"
-        )
+        assert (
+            game.big_enemy_timer == 49
+        ), f"Expected big_enemy_timer==49, got {game.big_enemy_timer}"
     finally:
         teardown_game(game, root)
 
@@ -52,15 +52,15 @@ def test_wave_increments_once_on_period_boundary():
 
         # First update should cross the boundary and increment wave once
         game.update_game()
-        assert game.wave == 1, (
-            f"Expected wave==1 after crossing boundary, got {game.wave}"
-        )
+        assert (
+            game.wave == 1
+        ), f"Expected wave==1 after crossing boundary, got {game.wave}"
 
         # Immediate second update should NOT increment wave again
         game.update_game()
-        assert game.wave == 1, (
-            f"Wave incremented more than once; current wave {game.wave}"
-        )
+        assert (
+            game.wave == 1
+        ), f"Wave incremented more than once; current wave {game.wave}"
     finally:
         teardown_game(game, root)
 
@@ -103,8 +103,8 @@ def test_limbo_statues_spawn_once_each():
         game.update_game()
 
         # Expect two statue projectiles (one left, one right) to have been spawned
-        assert len(game.statue_projectiles) == 2, (
-            f"Expected 2 statue projectiles, got {len(game.statue_projectiles)}"
-        )
+        assert (
+            len(game.statue_projectiles) == 2
+        ), f"Expected 2 statue projectiles, got {len(game.statue_projectiles)}"
     finally:
         teardown_game(game, root)

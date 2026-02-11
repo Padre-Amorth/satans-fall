@@ -31,20 +31,20 @@ STAGE_SETTINGS = {
         "building_color": None,
     },
     "purgatory": {
-        "bg_color": (10, 5, 20),
-        "floor_color": (70, 40, 80),
+        "bg_color": (0, 0, 0),  # external area: black
+        "floor_color": (40, 40, 40),  # inside walls: dark gray
         "wall_color": (80, 50, 60),
         "building_color": None,
     },
     "purgatory_2": {
-        "bg_color": (10, 5, 20),
-        "floor_color": (90, 50, 120),
+        "bg_color": (0, 0, 0),
+        "floor_color": (40, 40, 40),
         "wall_color": (80, 50, 60),
         "building_color": None,
     },
     "purgatory_3": {
-        "bg_color": (10, 5, 20),
-        "floor_color": (120, 60, 140),
+        "bg_color": (0, 0, 0),
+        "floor_color": (40, 40, 40),
         "wall_color": (80, 50, 60),
         "building_color": None,
     },

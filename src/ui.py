@@ -636,6 +636,25 @@ class PygameUIManager:
                 [(p[0] + shake_x, p[1] + shake_y) for p in inside_points],
             )
 
+        # Fill inside battlefield with dark gray for purgatory variants
+        elif (
+            getattr(self.game, "selected_stage", None)
+            and str(self.game.selected_stage).startswith("purgatory")
+            and self.game.left_wall_points
+            and self.game.right_wall_points
+        ):
+            inside_points = (
+                self.game.left_wall_points + self.game.right_wall_points[::-1]
+            )
+            # Use floor_color from stage settings when available, fallback to dark gray
+            settings = self.game.stage_settings.get(self.game.selected_stage, {})
+            inside_color = settings.get("floor_color", (40, 40, 40))
+            pygame.draw.polygon(
+                self.screen,
+                inside_color,
+                [(p[0] + shake_x, p[1] + shake_y) for p in inside_points],
+            )
+
         # Draw walls
         wall_color = settings["wall_color"]
         wall_thickness = WALL_THICKNESS

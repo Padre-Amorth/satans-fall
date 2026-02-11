@@ -799,6 +799,12 @@ class Game:
         return None
 
     def draw_permanent_upgrades(self, shake_x=0, shake_y=0) -> None:
+        """Backward-compatible wrapper that delegates to UI manager."""
+        if hasattr(self, "ui") and hasattr(self.ui, "draw_permanent_upgrades"):
+            return self.ui.draw_permanent_upgrades(shake_x, shake_y)
+        return None
+
+    def _draw_permanent_upgrades_impl(self, shake_x=0, shake_y=0) -> None:
         """Draw the permanent upgrades menu"""
         font_large = pygame.font.Font(None, 36)
         font_medium = pygame.font.Font(None, 24)
@@ -1167,6 +1173,12 @@ class Game:
         )
 
     def draw_pause_menu(self, shake_x=0, shake_y=0) -> None:
+        """Backward-compatible wrapper that delegates to UI manager."""
+        if hasattr(self, 'ui') and hasattr(self.ui, 'draw_pause_menu'):
+            return self.ui.draw_pause_menu(shake_x, shake_y)
+        return None
+
+    def _draw_pause_menu_impl(self, shake_x=0, shake_y=0) -> None:
         """Draw the pause menu"""
         from src.assets.text_cache import get_font, get_text
         font_large = get_font(36)
@@ -1414,6 +1426,12 @@ class Game:
             cur_y += s.get_height() + 4
 
     def draw_player_stats(self, shake_x=0, shake_y=0) -> None:
+        """Backward-compatible wrapper that delegates to UI manager."""
+        if hasattr(self, 'ui') and hasattr(self.ui, 'draw_player_stats'):
+            return self.ui.draw_player_stats(shake_x, shake_y)
+        return None
+
+    def _draw_player_stats_impl(self, shake_x=0, shake_y=0) -> None:
         """Draw a player stats sheet overlay showing current stats and progress."""
         from src.assets.text_cache import get_font, get_text
         font_huge = get_font(36)

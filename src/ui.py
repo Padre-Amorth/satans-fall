@@ -944,7 +944,7 @@ class PygameUIManager:
                 name_text = rendered_names[i] if i < len(rendered_names) else font_medium.render(stat["name"], True, name_color)
 
             # Lower slightly the name to better align with the bar and center vertically
-            name_y = int(stat["y"] + 17 - (name_text.get_height() // 2)) + shake_y
+            name_y = int(stat["y"] + 22 - (name_text.get_height() // 2)) + shake_y  # moved down 5px
             self.screen.blit(name_text, (left_x + shake_x, name_y))
 
             # Stat value

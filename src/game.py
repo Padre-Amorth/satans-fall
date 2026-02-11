@@ -246,6 +246,8 @@ class Game:
 
         # Menu state (submenu for Limbo)
         self.showing_limbo_menu = False
+        # Menu state (submenu for Purgatory)
+        self.showing_purgatory_menu = False
 
         # Load assets
         self.load_assets()
@@ -901,9 +903,24 @@ class Game:
             ),
         )
 
-        # Permanent Upgrades button
+        # Purgatory main button (opens second menu)
+        purgatory_rect = pygame.Rect(self.width // 2 - 100, self.height // 2 + 70, 200, 40)
+        purgatory_hovered: bool = purgatory_rect.collidepoint(self.mouse_x, self.mouse_y)
+        purgatory_color: tuple[Literal[137], Literal[78], Literal[136]] | tuple[Literal[107], Literal[58], Literal[106]] = (137, 78, 136) if purgatory_hovered else (107, 58, 106)
+        pygame.draw.rect(self.screen, purgatory_color, purgatory_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), purgatory_rect, 2)
+        purgatory_text: pygame.Surface = font_medium.render("PURGATORY", True, (255, 255, 255))
+        self.screen.blit(
+            purgatory_text,
+            (
+                self.width // 2 - purgatory_text.get_width() // 2 + shake_x,
+                self.height // 2 + 80 + shake_y,
+            ),
+        )
+
+        # Permanent Upgrades button (moved down)
         upgrades_rect = pygame.Rect(
-            self.width // 2 - 125, self.height // 2 + 70, 250, 35
+            self.width // 2 - 125, self.height // 2 + 130, 250, 35
         )
         upgrades_hovered: bool = upgrades_rect.collidepoint(self.mouse_x, self.mouse_y)
         upgrades_bg_color: tuple[Literal[94], Literal[36], Literal[94]] | tuple[Literal[74], Literal[26], Literal[74]] = (
@@ -1758,6 +1775,15 @@ class Game:
             elif key == pygame.K_l:
                 # Open the Limbo second menu (keyboard shortcut)
                 self.showing_limbo_menu = True
+            elif key == pygame.K_g:
+                # Open the Purgatory second menu (keyboard shortcut)
+                self.showing_purgatory_menu = True
+            elif key == pygame.K_ESCAPE:
+                # Close any open submenu
+                if self.showing_limbo_menu:
+                    self.showing_limbo_menu = False
+                elif self.showing_purgatory_menu:
+                    self.showing_purgatory_menu = False
             elif key == pygame.K_u:
                 self.show_permanent_upgrades()
         elif self.showing_permanent_upgrades:
@@ -1768,6 +1794,12 @@ class Game:
                 self.continue_to_limbo()
             elif key == pygame.K_ESCAPE:
                 self.reset_game()
+        elif self.showing_stage_menu and self.showing_limbo_menu:
+            if key == pygame.K_ESCAPE:
+                self.showing_limbo_menu = False
+        elif self.showing_stage_menu and self.showing_purgatory_menu:
+            if key == pygame.K_ESCAPE:
+                self.showing_purgatory_menu = False
         elif self.showing_game_over:
             # When the game-over overlay is active:
             # Enter/Space restarts the current stage, ESC returns to the main menu.
@@ -1919,11 +1951,14 @@ class Game:
                 limbo_rect = pygame.Rect(
                     self.width // 2 - 100, self.height // 2 + 10, 200, 40
                 )
+                purgatory_rect = pygame.Rect(
+                    self.width // 2 - 100, self.height // 2 + 70, 200, 40
+                )
                 upgrades_rect = pygame.Rect(
-                    self.width // 2 - 125, self.height // 2 + 70, 250, 35
+                    self.width // 2 - 125, self.height // 2 + 130, 250, 35
                 )
 
-                if self.showing_limbo_menu:
+                if self.showing_limbo_menu or self.showing_purgatory_menu:
                     # Coordinates should match draw_stage_menu limbo layout
                     option_w = 320
                     option_h = 48
@@ -1950,12 +1985,38 @@ class Game:
                         self.select_stage("limbo_3")
                     elif back_rect.collidepoint(pos):
                         self.showing_limbo_menu = False
+                if self.showing_purgatory_menu:
+                    option_w = 320
+                    option_h = 48
+                    start_x: int = self.width // 2 - option_w // 2
+                    start_y: int = self.height // 2 - 40
+                    spacing = 60
+
+                    purg1_rect = pygame.Rect(start_x, start_y, option_w, option_h)
+                    purg2_rect = pygame.Rect(start_x, start_y + spacing, option_w, option_h)
+                    purg3_rect = pygame.Rect(start_x, start_y + spacing * 2, option_w, option_h)
+                    purg_back_rect = pygame.Rect(self.width // 2 - 60, start_y + spacing * 3 + 10, 120, 36)
+
+                    if purg1_rect.collidepoint(pos):
+                        self.select_stage("purgatory")
+                        self.showing_purgatory_menu = False
+                    elif purg2_rect.collidepoint(pos):
+                        self.select_stage("purgatory_2")
+                        self.showing_purgatory_menu = False
+                    elif purg3_rect.collidepoint(pos):
+                        self.select_stage("purgatory_3")
+                        self.showing_purgatory_menu = False
+                    elif purg_back_rect.collidepoint(pos):
+                        self.showing_purgatory_menu = False
                 else:
                     if prologo_rect.collidepoint(pos):
                         self.select_stage("prologo")
                     elif limbo_rect.collidepoint(pos):
                         # Open the limbo submenu (second menu)
                         self.showing_limbo_menu = True
+                    elif purgatory_rect.collidepoint(pos):
+                        # Open the purgatory submenu (second menu)
+                        self.showing_purgatory_menu = True
                     elif upgrades_rect.collidepoint(pos):
                         self.show_permanent_upgrades()
             elif self.showing_permanent_upgrades:
@@ -2212,6 +2273,20 @@ class Game:
                 # Limbo 3 -> Ice
                 self.left_tower = Tower(320, 530, fire_rate=self.statue_fire_rate, tower_type="ice")
                 self.right_tower = Tower(960, 530, fire_rate=self.statue_fire_rate, tower_type="ice")
+        elif str(stage).startswith("purgatory"):
+            # Purgatory is a new stage category with three variants. For parity with Limbo,
+            # we set up no buildings and trigger an initial weapon choice.
+            self.buildings = []  # No buildings in purgatory for now
+            # Configure towers for Purgatory variants (use themed tower types)
+            if stage == "purgatory":
+                self.left_tower = Tower(320, 530, fire_rate=self.statue_fire_rate, tower_type="fire")
+                self.right_tower = Tower(960, 530, fire_rate=self.statue_fire_rate, tower_type="fire")
+            elif stage == "purgatory_2":
+                self.left_tower = Tower(320, 530, fire_rate=self.statue_fire_rate, tower_type="storm")
+                self.right_tower = Tower(960, 530, fire_rate=self.statue_fire_rate, tower_type="storm")
+            elif stage == "purgatory_3":
+                self.left_tower = Tower(320, 530, fire_rate=self.statue_fire_rate, tower_type="ice")
+                self.right_tower = Tower(960, 530, fire_rate=self.statue_fire_rate, tower_type="ice")
         self.generate_walls()
 
         # Reset game state for new run
@@ -2234,6 +2309,20 @@ class Game:
                 self.selected_weapon_index = self.game_state.weapon_choice_index
             except Exception:
                 # Fallback behavior (in case GS isn't available)
+                self.awaiting_weapon_choice = True
+                self.weapon_choices = self.generate_initial_weapon_choices()
+                self.selected_weapon_index = 0
+
+            # Do not start countdown yet
+        elif str(stage).startswith("purgatory"):
+            # For Purgatory, we mimic Limbo's initial weapon selection behavior
+            self.is_initial_weapon_choice = True
+            try:
+                self.game_state.show_initial_weapon_choice()
+                self.awaiting_weapon_choice = self.game_state.awaiting_weapon_choice
+                self.weapon_choices = list(self.game_state.weapon_choices)
+                self.selected_weapon_index = self.game_state.weapon_choice_index
+            except Exception:
                 self.awaiting_weapon_choice = True
                 self.weapon_choices = self.generate_initial_weapon_choices()
                 self.selected_weapon_index = 0

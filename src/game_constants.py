@@ -30,6 +30,24 @@ STAGE_SETTINGS = {
         "wall_color": (42, 18, 8),
         "building_color": None,
     },
+    "purgatory": {
+        "bg_color": (10, 5, 20),
+        "floor_color": (70, 40, 80),
+        "wall_color": (80, 50, 60),
+        "building_color": None,
+    },
+    "purgatory_2": {
+        "bg_color": (10, 5, 20),
+        "floor_color": (90, 50, 120),
+        "wall_color": (80, 50, 60),
+        "building_color": None,
+    },
+    "purgatory_3": {
+        "bg_color": (10, 5, 20),
+        "floor_color": (120, 60, 140),
+        "wall_color": (80, 50, 60),
+        "building_color": None,
+    },
 }
 
 __all__ = [

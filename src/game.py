@@ -918,9 +918,10 @@ class Game:
             ),
         )
 
-        # Permanent Upgrades button (moved down)
+        # Permanent Upgrades button (moved to the bottom of the screen)
+        upgrades_y = max(20, self.height - 80)
         upgrades_rect = pygame.Rect(
-            self.width // 2 - 125, self.height // 2 + 130, 250, 35
+            self.width // 2 - 125, upgrades_y, 250, 35
         )
         upgrades_hovered: bool = upgrades_rect.collidepoint(self.mouse_x, self.mouse_y)
         upgrades_bg_color: tuple[Literal[94], Literal[36], Literal[94]] | tuple[Literal[74], Literal[26], Literal[74]] = (
@@ -938,7 +939,7 @@ class Game:
             upgrades_text,
             (
                 self.width // 2 - upgrades_text.get_width() // 2 + shake_x,
-                self.height // 2 + 80 + shake_y,
+                upgrades_y + (upgrades_rect.height - upgrades_text.get_height()) // 2 + shake_y,
             ),
         )
 
@@ -1954,8 +1955,9 @@ class Game:
                 purgatory_rect = pygame.Rect(
                     self.width // 2 - 100, self.height // 2 + 70, 200, 40
                 )
+                # Upgrades button moved to bottom of screen to avoid overlap and be more accessible
                 upgrades_rect = pygame.Rect(
-                    self.width // 2 - 125, self.height // 2 + 130, 250, 35
+                    self.width // 2 - 125, max(20, self.height - 80), 250, 35
                 )
 
                 if self.showing_limbo_menu or self.showing_purgatory_menu:

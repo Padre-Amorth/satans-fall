@@ -859,6 +859,70 @@ class Game:
             # Return early so main menu doesn't draw beneath it
             return
 
+        # If we're showing the Purgatory submenu as a separate menu, draw it and return
+        if self.showing_purgatory_menu:
+            logger.debug("Drawing Purgatory submenu")
+            try:
+                self._last_drawn_menu = "purgatory"
+            except Exception:
+                pass
+
+            # Purgatory menu title
+            title_p = get_text("PURGATORY", font_large, (255, 215, 0))
+            self.screen.blit(
+                title_p,
+                (
+                    self.width // 2 - title_p.get_width() // 2 + shake_x,
+                    self.height // 2 - 120 + shake_y,
+                ),
+            )
+
+            # Purgatory options (simple, separated menu)
+            option_w = 320
+            option_h = 48
+            start_x: int = self.width // 2 - option_w // 2
+            start_y: int = self.height // 2 - 40
+            spacing = 60
+
+            labels: List[str] = ["PURGATORY 1", "PURGATORY 2", "PURGATORY 3"]
+            for i, label in enumerate(labels):
+                rect = pygame.Rect(start_x, start_y + i * spacing, option_w, option_h)
+                hovered: bool = rect.collidepoint(self.mouse_x, self.mouse_y)
+                bg: tuple[int, int, int] = (137, 78, 136) if hovered else (107, 58, 106)
+                pygame.draw.rect(self.screen, bg, rect)
+                pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
+                text: pygame.Surface = font_medium.render(label, True, (255, 255, 255))
+                self.screen.blit(
+                    text,
+                    (
+                        self.width // 2 - text.get_width() // 2 + shake_x,
+                        start_y
+                        + i * spacing
+                        + (option_h - text.get_height()) // 2
+                        + shake_y,
+                    ),
+                )
+
+            # Back button
+            back_rect = pygame.Rect(
+                self.width // 2 - 60, start_x + len(labels) * spacing + 10, 120, 36
+            )
+            back_hover: bool = back_rect.collidepoint(self.mouse_x, self.mouse_y)
+            back_color: tuple[int, int, int] = (80, 80, 80) if back_hover else (60, 60, 60)
+            pygame.draw.rect(self.screen, back_color, back_rect)
+            pygame.draw.rect(self.screen, (255, 255, 255), back_rect, 2)
+            back_text: pygame.Surface = font_small.render("BACK", True, (255, 255, 255))
+            self.screen.blit(
+                back_text,
+                (
+                    self.width // 2 - back_text.get_width() // 2 + shake_x,
+                    start_x + len(labels) * spacing + 14 + shake_y,
+                ),
+            )
+
+            # Return early so main menu doesn't draw beneath it
+            return
+
         # Title
         title = font_large.render("SATANS FALL", True, (255, 100, 100))
         self.screen.blit(
@@ -2010,6 +2074,8 @@ class Game:
                         self.showing_purgatory_menu = False
                     elif purg_back_rect.collidepoint(pos):
                         self.showing_purgatory_menu = False
+                    # Defensive logging in case user reports that submenu doesn't show
+                    logger.debug("Purgatory submenu click handling: purgatory_menu=%s, pos=%s", self.showing_purgatory_menu, pos)
                 else:
                     if prologo_rect.collidepoint(pos):
                         self.select_stage("prologo")
@@ -2018,7 +2084,11 @@ class Game:
                         self.showing_limbo_menu = True
                     elif purgatory_rect.collidepoint(pos):
                         # Open the purgatory submenu (second menu)
+                        logger.debug("Mouse click: opening Purgatory submenu")
                         self.showing_purgatory_menu = True
+                        self.showing_limbo_menu = False
+                        # Keep stage menu visible while showing submenu
+                        self.showing_stage_menu = True
                     elif upgrades_rect.collidepoint(pos):
                         self.show_permanent_upgrades()
             elif self.showing_permanent_upgrades:

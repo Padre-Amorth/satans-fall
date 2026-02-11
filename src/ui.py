@@ -954,11 +954,13 @@ class PygameUIManager:
                 max_text: pygame.Surface = font_small.render("MAX", True, (255, 215, 0))
                 self.screen.blit(max_text, (left_x + 270 + shake_x, stat["y"] + shake_y))
 
-            # Bar (symmetric placement)
+            # Bar (symmetric placement) with hover highlight
             bar_x = bar_x_base
             bar_y = stat["y"] + 15
-            pygame.draw.rect(self.screen, (26, 26, 26), (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height))
-            pygame.draw.rect(self.screen, (68, 68, 68), (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height), 1)
+            bar_bg_color = (26, 26, 26)
+            bar_border_color = (255, 224, 20) if is_hovered else (68, 68, 68)
+            pygame.draw.rect(self.screen, bar_bg_color, (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height))
+            pygame.draw.rect(self.screen, bar_border_color, (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height), 1)
             if stat_value > 0:
                 fill_width = min(bar_width, (stat_value / 10) * bar_width)
                 pygame.draw.rect(self.screen, stat["color"], (bar_x + shake_x, bar_y + shake_y, fill_width, bar_height))
@@ -1025,31 +1027,43 @@ class PygameUIManager:
                 right_bg = color if right_active else (26, 26, 26)
                 left_border = tuple(min(255, c + 20) for c in color) if left_active else (51, 51, 51)
                 right_border = tuple(min(255, c + 20) for c in color) if right_active else (51, 51, 51)
+
+                # Hover detection for visual highlight
+                try:
+                    mouse_point = (self.game.mouse_x, self.game.mouse_y)
+                except Exception:
+                    mouse_point = (0, 0)
+
+                left_hovered = pygame.Rect(*left_rect).collidepoint(mouse_point)
+                right_hovered = pygame.Rect(*right_rect).collidepoint(mouse_point)
+
+                if left_hovered:
+                    # Gold border and slight background brighten
+                    left_border = (255, 224, 20)
+                    left_bg = tuple(min(255, v + 30) for v in left_bg)
+                if right_hovered:
+                    right_border = (255, 224, 20)
+                    right_bg = tuple(min(255, v + 30) for v in right_bg)
+
                 pygame.draw.rect(self.screen, left_bg, left_rect)
                 pygame.draw.rect(self.screen, left_border, left_rect, 1)
                 pygame.draw.rect(self.screen, right_bg, right_rect)
                 pygame.draw.rect(self.screen, right_border, right_rect, 1)
 
                 # Tooltip when hovering over left or right rects (use Game helpers for text)
-                try:
-                    mouse_point = (self.game.mouse_x, self.game.mouse_y)
-                except Exception:
-                    mouse_point = (0, 0)
-
-                if pygame.Rect(*left_rect).collidepoint(mouse_point):
+                if left_hovered:
                     tooltip_lines = self.game._skill_tooltip_lines(key_prefix, row + 1)
                     if tooltip_lines:
                         tooltip_x = col_x
                         tooltip_y = tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
                         self.game._draw_tooltip(tooltip_lines, tooltip_x, tooltip_y, pygame.font.Font(None, 18), anchor_center=True)
 
-                if pygame.Rect(*right_rect).collidepoint(mouse_point):
+                if right_hovered:
                     tooltip_lines = self.game._skill_tooltip_lines(key_prefix, 4 + row)
                     if tooltip_lines:
                         tooltip_x = col_x
                         tooltip_y = tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
                         self.game._draw_tooltip(tooltip_lines, tooltip_x, tooltip_y, pygame.font.Font(None, 18), anchor_center=True)
-
             # Center bottom tier (7)
             center_y = tree_top_y + 3 * tree_v_spacing
             center_key = f"{key_prefix}_7"

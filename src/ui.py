@@ -954,11 +954,11 @@ class PygameUIManager:
                 max_text: pygame.Surface = font_small.render("MAX", True, (255, 215, 0))
                 self.screen.blit(max_text, (left_x + 270 + shake_x, stat["y"] + shake_y))
 
-            # Bar (symmetric placement) with hover highlight
+            # Bar (symmetric placement) — highlight only on name (name hover controls text colour already)
             bar_x = bar_x_base
             bar_y = stat["y"] + 15
             bar_bg_color = (26, 26, 26)
-            bar_border_color = (255, 224, 20) if is_hovered else (68, 68, 68)
+            bar_border_color = (68, 68, 68)  # always default border; no gold here
             pygame.draw.rect(self.screen, bar_bg_color, (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height))
             pygame.draw.rect(self.screen, bar_border_color, (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height), 1)
             if stat_value > 0:
@@ -1071,10 +1071,22 @@ class PygameUIManager:
             center_bg = color if center_active else (26, 26, 26)
             center_border = tuple(min(255, c + 20) for c in color) if center_active else (51, 51, 51)
             center_rect = (col_x - tree_box_w // 2 + shake_x, center_y + shake_y, tree_box_w, tree_box_h)
+
+            # Center hover detection and highlight
+            try:
+                mouse_point = (self.game.mouse_x, self.game.mouse_y)
+            except Exception:
+                mouse_point = (0, 0)
+
+            center_hovered = pygame.Rect(*center_rect).collidepoint(mouse_point)
+            if center_hovered:
+                center_border = (255, 224, 20)
+                center_bg = tuple(min(255, v + 30) for v in center_bg)
+
             pygame.draw.rect(self.screen, center_bg, center_rect)
             pygame.draw.rect(self.screen, center_border, center_rect, 1)
 
-            if pygame.Rect(*center_rect).collidepoint((self.game.mouse_x, self.game.mouse_y)):
+            if center_hovered:
                 tooltip_lines = self.game._skill_tooltip_lines(key_prefix, 7)
                 if tooltip_lines:
                     tooltip_x = col_x

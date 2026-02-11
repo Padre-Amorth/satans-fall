@@ -889,6 +889,188 @@ class PygameUIManager:
             self.game._last_drawn_menu = "stage_main"
         except Exception:
             pass
+
+    def draw_permanent_upgrades(self, shake_x=0, shake_y=0) -> None:
+        """Draw the permanent upgrades menu (migrated from Game).
+
+        Uses direct pygame fonts to avoid text_cache dependencies during menu overlay draws.
+        """
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return
+        font_large = pygame.font.Font(None, 36)
+        font_medium = pygame.font.Font(None, 24)
+        font_small = pygame.font.Font(None, 18)
+
+        # Title and layout
+        left_x: int = self.width // 2 - 420
+        title: pygame.Surface = font_large.render("PERMANENT UPGRADES", True, (255, 255, 0))
+        self.screen.blit(title, (self.width // 2 - title.get_width() // 2 + shake_x, 40 + shake_y))
+
+        stat_configs = [
+            {"name": "POWER", "key": "power", "color": (255, 68, 68), "y": 140},
+            {"name": "VIGOR", "key": "vigor", "color": (255, 204, 0), "y": 185},
+            {"name": "ADRENALINE", "key": "adrenaline", "color": (170, 68, 255), "y": 230},
+            {"name": "STRUCTURE", "key": "structure", "color": (139, 105, 20), "y": 275},
+        ]
+
+        for stat in stat_configs:
+            name_text = font_medium.render(stat["name"], True, stat["color"])
+            self.screen.blit(name_text, (left_x + shake_x, stat["y"] + shake_y))
+
+            value = self.game.permanent_stats.get(stat["key"], 0)
+            val_text = font_small.render(f"Level: {value}", True, (255, 255, 255))
+            self.screen.blit(val_text, (left_x + 200 + shake_x, stat["y"] + shake_y))
+
+            bar_x = left_x + 120
+            bar_y = stat["y"] + 15
+            bar_width = 200
+            bar_height = 12
+            pygame.draw.rect(self.screen, (26, 26, 26), (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height))
+            pygame.draw.rect(self.screen, (68, 68, 68), (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height), 1)
+            if value > 0:
+                fill_width = min(bar_width, (value / 10) * bar_width)
+                pygame.draw.rect(self.screen, stat["color"], (bar_x + shake_x, bar_y + shake_y, fill_width, bar_height))
+
+        # Separator & Classic Upgrades section (migrated from legacy Game impl)
+        separator_y = 320
+        classic_text: pygame.Surface = font_medium.render("CLASSIC UPGRADES", True, (136, 136, 136))
+        self.screen.blit(
+            classic_text,
+            (left_x + shake_x, separator_y + 30 + shake_y),
+        )
+
+        # Placeholder boxes for classic upgrades (2 rows of 5)
+        box_width = 80
+        box_height = 60
+        box_spacing = 100
+        start_x: int = left_x + box_spacing // 2 - 40
+
+        box_y1: int = separator_y + 60
+        for i in range(5):
+            box_x = start_x + (i * box_spacing)
+            pygame.draw.rect(self.screen, (26, 26, 26), (box_x - box_width // 2 + shake_x, box_y1 + shake_y, box_width, box_height))
+            pygame.draw.rect(self.screen, (51, 51, 51), (box_x - box_width // 2 + shake_x, box_y1 + shake_y, box_width, box_height), 1)
+
+        box_y2: int = box_y1 + box_height + 20
+        for i in range(5):
+            box_x = start_x + (i * box_spacing)
+            pygame.draw.rect(self.screen, (26, 26, 26), (box_x - box_width // 2 + shake_x, box_y2 + shake_y, box_width, box_height))
+            pygame.draw.rect(self.screen, (51, 51, 51), (box_x - box_width // 2 + shake_x, box_y2 + shake_y, box_width, box_height), 1)
+
+        # Skill trees (FIRE, STORM, ICE) on the right side
+        tree_types = [("FIRE", "fire", (255, 68, 68)), ("STORM", "storm", (170, 68, 255)), ("ICE", "ice", (100, 200, 255))]
+        tree_box_w = 50
+        tree_box_h = 36
+        tree_v_spacing = 46
+        tree_col_spacing = 120
+        tree_base_x: int = left_x + 680
+        tree_top_y: int = separator_y - 150
+
+        for col, (label, key_prefix, color) in enumerate(tree_types):
+            col_x = tree_base_x + col * tree_col_spacing
+            lbl_surf: pygame.Surface = font_small.render(label, True, color)
+            self.screen.blit(lbl_surf, (col_x - lbl_surf.get_width() // 2 + shake_x, tree_top_y - 28 + shake_y))
+
+            # Draw simple 3x2 boxes layout similar to legacy view
+            inner_col_offset = tree_box_w // 2 + 1
+            left_col_x = col_x - inner_col_offset
+            right_col_x = col_x + inner_col_offset
+            for row in range(3):
+                y = tree_top_y + row * tree_v_spacing
+                left_rect = (left_col_x - tree_box_w // 2 + shake_x, y + shake_y, tree_box_w, tree_box_h)
+                right_rect = (right_col_x - tree_box_w // 2 + shake_x, y + shake_y, tree_box_w, tree_box_h)
+                left_bg = color if bool(self.game.permanent_stats.get(f"{key_prefix}_{row+1}", 0)) else (26, 26, 26)
+                right_bg = color if bool(self.game.permanent_stats.get(f"{key_prefix}_{4+row}", 0)) else (26, 26, 26)
+                left_border = tuple(min(255, c + 20) for c in color) if left_bg != (26, 26, 26) else (51, 51, 51)
+                right_border = tuple(min(255, c + 20) for c in color) if right_bg != (26, 26, 26) else (51, 51, 51)
+                pygame.draw.rect(self.screen, left_bg, left_rect)
+                pygame.draw.rect(self.screen, left_border, left_rect, 1)
+                pygame.draw.rect(self.screen, right_bg, right_rect)
+                pygame.draw.rect(self.screen, right_border, right_rect, 1)
+
+        # Instructions
+        instructions = font_medium.render("Left click to upgrade | Right click to downgrade | ESC to return", True, (200, 200, 200))
+        self.screen.blit(instructions, (left_x + shake_x, self.height - 50 + shake_y))
+
+        try:
+            self.game._last_drawn_menu = "permanent_upgrades"
+        except Exception:
+            pass
+
+    def draw_pause_menu(self, shake_x=0, shake_y=0) -> None:
+        """Draw the pause menu (migrated from Game)."""
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return
+        from src.assets.text_cache import get_font, get_text
+        font_large = get_font(36)
+        font_medium = get_font(28)
+
+        overlay = pygame.Surface((self.width, self.height))
+        overlay.set_alpha(128)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+
+        title: pygame.Surface = get_text("PAUSED", font_large, (255, 255, 255))
+        self.screen.blit(title, (self.width // 2 - title.get_width() // 2 + shake_x, self.height // 2 - 100 + shake_y))
+
+        options = ["Resume", "Restart", "Quit to Menu"]
+        option_height = 40
+        for i, option in enumerate(options):
+            y_pos = self.height // 2 - 20 + i * option_height
+            text_width = len(option) * 14
+            option_rect = pygame.Rect(self.width // 2 - text_width // 2, y_pos, text_width, option_height)
+            is_hovered = option_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+            if is_hovered:
+                self.game.pause_menu_option = i
+            is_selected = i == self.game.pause_menu_option
+            color = (255, 255, 0) if is_selected else ((200, 200, 0) if is_hovered else (255, 255, 255))
+            text = font_medium.render(option, True, color)
+            self.screen.blit(text, (self.width // 2 - text.get_width() // 2 + shake_x, y_pos + shake_y))
+
+        try:
+            self.game._last_drawn_menu = "pause"
+        except Exception:
+            pass
+
+    def draw_player_stats(self, shake_x=0, shake_y=0) -> None:
+        """Draw the player stats panel (migrated from Game)."""
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return
+        from src.assets.text_cache import get_font, get_text
+        font_huge = get_font(48)
+        font_medium = get_font(32)
+        font_small = get_font(20)
+
+        title = get_text("PLAYER STATS", font_huge, (255, 215, 0))
+        self.screen.blit(title, (self.width // 2 - title.get_width() // 2 + shake_x, 60 + shake_y))
+
+        mid_col_x = self.width // 2 - 200
+        w_y = 140
+        self.screen.blit(get_text("Weapons", font_medium, (255, 215, 0)), (mid_col_x, w_y - 30))
+        for i, (name, lvl) in enumerate([(n, self.game.weapon_levels.get(n, 0)) for n in self.game.player_weapons]):
+            txt = get_text(f"{name} Lv{lvl}", font_small, (220, 220, 220))
+            self.screen.blit(txt, (mid_col_x, w_y + i * 26))
+
+        right_col_x = self.width // 2 + 60
+        u_y = 140
+        self.screen.blit(get_text("Upgrades", font_medium, (255, 215, 0)), (right_col_x, u_y - 30))
+        for i, (k, v) in enumerate(self.game.upgrade_levels.items()):
+            txt = get_text(f"{k}: {v}", font_small, (220, 220, 220))
+            self.screen.blit(txt, (right_col_x, u_y + i * 26))
+
+        ps_y = 340
+        self.screen.blit(get_text("Permanent Stats", font_medium, (255, 215, 0)), (right_col_x, ps_y - 30))
+        for i, (k, v) in enumerate(self.game.permanent_stats.items()):
+            txt = get_text(f"{k}: {v}", font_small, (220, 220, 220))
+            self.screen.blit(txt, (right_col_x, ps_y + i * 26))
+
+        try:
+            self.game._last_drawn_menu = "player_stats"
+        except Exception:
+            pass
     def draw_dead_trees(self, shake_x=0, shake_y=0) -> None:
         # Debugging hook: log when drawing dead trees to help visibility issues
         try:

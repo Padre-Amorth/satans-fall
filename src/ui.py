@@ -4,6 +4,9 @@ import random
 import logging
 from typing import Any, Literal
 
+from src.weapons import WEAPON_DEFS
+from src.game_constants import WALL_THICKNESS
+
 logger: logging.Logger = logging.getLogger(__name__)
 
 class UIManager:
@@ -140,12 +143,8 @@ class UIManager:
 
         # Extra weapons
         if getattr(self.game.game_state, "player_weapons", None):
-            name_map: dict[str, str] = {
-                "shotgun": "Hellgun",
-                "orbital": "Orbitals",
-                "spear": "Spear",
-                "beast": "The number of the beast",
-            }
+            # Use centralized weapon names
+            name_map: dict[str, str] = {wid: d["name"] for wid, d in WEAPON_DEFS.items()}
             for i, wid in enumerate(self.game.game_state.player_weapons):
                 lvl = self.game.game_state.weapon_levels.get(wid, 0)
                 display_name: str | None = name_map.get(wid, wid.capitalize())
@@ -225,8 +224,8 @@ class UIManager:
             )
 
         # Falling light beam from above (replaces bolt)
-        t: math.Any | int = getattr(self.game.game_state, "prologo_lightning_timer", 0)
-        pts: math.Any | None = getattr(self.game.game_state, "lightning_points", None)
+        t: Any | int = getattr(self.game.game_state, "prologo_lightning_timer", 0)
+        pts: Any | None = getattr(self.game.game_state, "lightning_points", None)
         if pts and len(pts) > 0:
             end_x, end_y = pts[-1]
         else:
@@ -354,7 +353,7 @@ class UIManager:
 
         # Weapon options
         weapon_options: list[tuple[str, str]] = [
-            ("Shotgun", "Powerful close-range spread weapon"),
+            ("Hellgun", "Powerful close-range spread weapon"),
             ("Orbitals", "Orbiting projectiles around you"),
             ("Spear", "Piercing projectile with chain lightning"),
         ]
@@ -591,9 +590,9 @@ class PygameUIManager:
         except Exception:
             self.pygame = None
         self.game: Any = game
-        self.screen: math.Any | None = getattr(game, "screen", None)
-        self.width: math.Any | int = getattr(game, "width", 0)
-        self.height: math.Any | int = getattr(game, "height", 0)
+        self.screen: Any | None = getattr(game, "screen", None)
+        self.width: Any | int = getattr(game, "width", 0)
+        self.height: Any | int = getattr(game, "height", 0)
 
     def draw_game_world(self, shake_x=0, shake_y=0) -> None:
         """Draw walls, buildings and background following the original implementation."""
@@ -604,7 +603,7 @@ class PygameUIManager:
         ):
             return
 
-        pygame: Any | None = self.pygame
+        pygame = self.pygame
         settings = self.game.stage_settings[self.game.selected_stage]
 
         # Fill inside battlefield with dark green
@@ -639,7 +638,7 @@ class PygameUIManager:
 
         # Draw walls
         wall_color = settings["wall_color"]
-        wall_thickness = 25
+        wall_thickness = WALL_THICKNESS
         # Left wall
         if self.game.left_wall_points:
             left_wall_exterior = [
@@ -696,7 +695,7 @@ class PygameUIManager:
                 )
         except Exception:
             pass
-        pygame: Any | None = self.pygame
+        pygame = self.pygame
         for tree in self.game.dead_trees:
             x = tree["x"] + shake_x
             y = tree["y"] + shake_y
@@ -747,7 +746,7 @@ class PygameUIManager:
             if getattr(self.game, "debug", False):
                 print("[DEBUG] draw_pedestals: not in limbo")
             return
-        pygame: Any | None = self.pygame
+        pygame = self.pygame
         if getattr(self.game, "debug", False):
             print("[DEBUG] draw_pedestals: drawing pedestals")
         # Two pedestals at the sides of the play area
@@ -783,47 +782,72 @@ class PygameUIManager:
             # Slimmer demonic statue on top with pitchfork
             statue_base_y: int = y - 10
 
-            # Statue body (slimmer triangular/demonic shape - dark red)
+            # Choose statue colors based on stage/tower type
+            if getattr(self.game, "selected_stage", None) == "limbo_2":
+                # Storm - blueish statue
+                body_color = (18, 36, 120)
+                outline_color = (8, 18, 80)
+                horn_color = (60, 100, 200)
+                eye_color = (100, 150, 255)
+                glow_color = (40, 70, 180)
+            elif getattr(self.game, "selected_stage", None) == "limbo_3":
+                # Ice - icy pale statue (keep similar to previous but cooler)
+                body_color = (120, 140, 180)
+                outline_color = (80, 100, 140)
+                horn_color = (160, 180, 200)
+                eye_color = (180, 220, 255)
+                glow_color = (140, 180, 220)
+            else:
+                # Default: Fire/limbo - demonic red
+                body_color = (58, 10, 10)
+                outline_color = (26, 0, 0)
+                horn_color = (138, 32, 32)
+                eye_color = (255, 48, 48)
+                glow_color = (200, 150, 60)
+
+            # Statue body (slimmer triangular/demonic shape)
             body_points: list[tuple[int, int]] = [
                 (x, statue_base_y - 60),  # Neck point (head connects here)
-                (x - 12, statue_base_y - 40),  # Left shoulder (narrower)
-                (x - 15, statue_base_y),  # Left base (narrower)
-                (x + 15, statue_base_y),  # Right base (narrower)
-                (x + 12, statue_base_y - 40),  # Right shoulder (narrower)
+                (x - 12, statue_base_y - 40),  # Left shoulder
+                (x - 15, statue_base_y),  # Left base
+                (x + 15, statue_base_y),  # Right base
+                (x + 12, statue_base_y - 40),  # Right shoulder
             ]
-            pygame.draw.polygon(self.screen, (58, 10, 10), body_points)
-            pygame.draw.polygon(self.screen, (26, 0, 0), body_points, 2)
+            pygame.draw.polygon(self.screen, body_color, body_points)
+            pygame.draw.polygon(self.screen, outline_color, body_points, 2)
 
             # Head (larger and round)
             head_y: int = statue_base_y - 70
             head_radius = 15
-            pygame.draw.circle(self.screen, (58, 10, 10), (x, head_y), head_radius)
-            pygame.draw.circle(self.screen, (26, 0, 0), (x, head_y), head_radius, 2)
+            pygame.draw.circle(self.screen, body_color, (x, head_y), head_radius)
+            pygame.draw.circle(self.screen, outline_color, (x, head_y), head_radius, 2)
 
             # Larger horns (from head)
             pygame.draw.line(
                 self.screen,
-                (138, 32, 32),
+                horn_color,
                 (x - 10, head_y - 10),
                 (x - 20, head_y - 30),
                 4,
             )
             pygame.draw.line(
                 self.screen,
-                (138, 32, 32),
+                horn_color,
                 (x + 10, head_y - 10),
                 (x + 20, head_y - 30),
                 4,
             )
 
             # Glowing eyes (on head)
-            pygame.draw.circle(self.screen, (255, 48, 48), (x - 7, head_y), 3)
-            pygame.draw.circle(self.screen, (255, 48, 48), (x + 7, head_y), 3)
+            pygame.draw.circle(self.screen, eye_color, (x - 7, head_y), 3)
+            pygame.draw.circle(self.screen, eye_color, (x + 7, head_y), 3)
 
             # Subtle glow ring around head for visibility
             pygame.draw.circle(
-                self.screen, (200, 150, 60), (x, head_y), head_radius + 4, 2
+                self.screen, glow_color, (x, head_y), head_radius + 4, 2
             )
+
+            # Chest badge removed (no per-tower firing symbols)
 
             # Pitchfork in hand
             # Handle (long pole)
@@ -892,14 +916,124 @@ class PygameUIManager:
             pygame.draw.polygon(self.screen, (74, 16, 16), right_wing_points)
             pygame.draw.polygon(self.screen, (42, 0, 0), right_wing_points, 1)
 
+    def _build_fog_cache(self) -> None:
+        """Pre-render fog layers into cached surfaces.
+
+        Cache is invalidated when wall points change or when stage is not Limbo.
+        """
+        if not self.game.is_limbo_stage():
+            self._fog_cache = None
+            self._fog_cache_signature = None
+            return
+        if not self.game.left_wall_points or not self.game.right_wall_points:
+            self._fog_cache = None
+            self._fog_cache_signature = None
+            return
+
+        # Create a signature from wall points to detect changes
+        sig_left = tuple((int(x), int(y)) for (x, y) in self.game.left_wall_points)
+        sig_right = tuple((int(x), int(y)) for (x, y) in self.game.right_wall_points)
+        sig = (sig_left, sig_right, self.width, self.height)
+        if getattr(self, "_fog_cache_signature", None) == sig and getattr(self, "_fog_cache", None):
+            return  # Cache still valid
+
+        # Build cache
+        pygame = self.pygame
+        wall_thickness = 40
+        num_layers = 5
+        base_r, base_g, base_b = 60, 60, 60
+
+        cache: list[pygame.Surface] = []
+
+        for i in range(num_layers):
+            opacity: float = (num_layers - i) / num_layers
+            layer_offset: int = 250 * (i + 1) // num_layers
+            r = int(base_r * (1 - opacity * 0.6))
+            g = int(base_g * (1 - opacity * 0.6))
+            b = int(base_b * (1 - opacity * 0.6))
+            color: tuple[int, int, int] = (r, g, b)
+
+            # Left fog polygon
+            left_fog_points = []
+            for point in self.game.left_wall_points:
+                left_fog_points.append((0, point[1]))
+            for point in reversed(self.game.left_wall_points):
+                left_fog_points.append(
+                    (
+                        point[0] - wall_thickness - layer_offset,
+                        point[1],
+                    )
+                )
+            if len(left_fog_points) > 2:
+                fog_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+                pygame.draw.polygon(
+                    fog_surface, color + (int(128 * opacity),), left_fog_points
+                )
+                cache.append(fog_surface)
+            else:
+                cache.append(None)
+
+            # Right fog polygon
+            right_fog_points = []
+            for point in self.game.right_wall_points:
+                right_fog_points.append(
+                    (
+                        point[0] + wall_thickness + layer_offset,
+                        point[1],
+                    )
+                )
+            for point in reversed(self.game.right_wall_points):
+                right_fog_points.append((self.width, point[1]))
+            if len(right_fog_points) > 2:
+                fog_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+                pygame.draw.polygon(
+                    fog_surface, color + (int(128 * opacity),), right_fog_points
+                )
+                cache.append(fog_surface)
+            else:
+                cache.append(None)
+
+        self._fog_cache = cache
+        self._fog_cache_signature = sig
+
     def draw_fog(self, shake_x=0, shake_y=0) -> None:
         if not self.game.is_limbo_stage():
             return
+        if not self.screen:
+            return
         if not self.game.left_wall_points or not self.game.right_wall_points:
             return
-        pygame: Any | None = self.pygame
+
+        # Ensure cache is built and up-to-date
+        try:
+            self._build_fog_cache()
+        except Exception:
+            # If caching fails, fall back to original drawing
+            self._fog_cache = None
+            self._fog_cache_signature = None
+
+        pygame = self.pygame
         wall_thickness = 40
         num_layers = 5
+
+        if getattr(self, "_fog_cache", None):
+            # Blit pre-rendered fog layers with per-frame shake offsets
+            idx = 0
+            for i in range(num_layers):
+                left_surf = self._fog_cache[idx]
+                idx += 1
+                right_surf = self._fog_cache[idx]
+                idx += 1
+                if left_surf:
+                    # blit with shake offset
+                    self.screen.blit(left_surf, (shake_x, shake_y))
+                if right_surf:
+                    self.screen.blit(right_surf, (shake_x, shake_y))
+            return
+
+        # Fallback to dynamic drawing if cache absent
+        pygame = self.pygame
+        wall_thickness = 40
         base_r, base_g, base_b = 60, 60, 60
         for i in range(num_layers):
             opacity: float = (num_layers - i) / num_layers
@@ -947,10 +1081,85 @@ class PygameUIManager:
                 self.screen.blit(fog_surface, (0, 0))
 
     def draw_game_objects(self, shake_x=0, shake_y=0) -> None:
-        pygame: Any | None = self.pygame
+        if not self.screen:
+            return
+        pygame = self.pygame
         # Draw enemies
         for enemy in self.game.enemies:
-            enemy.draw(self.screen, shake_x, shake_y)
+            if isinstance(enemy, dict):
+                # Dict-based enemies (tests/back-compat) - draw simple circle
+                ex = int(enemy.get("x", 0) + shake_x)
+                ey = int(enemy.get("y", 0) + shake_y)
+                er = int(enemy.get("radius", 12))
+                pygame.draw.circle(self.screen, (200, 50, 50), (ex, ey), er)
+
+                # Draw burn status for dict-based enemies
+                try:
+                    if enemy.get("burn_timer", 0) > 0:
+                        # Spawn and update simple burn particles for dict enemies (visual only)
+                        flame_y = ey - er - 8
+                        try:
+                            parts = enemy.setdefault("burn_particles", [])
+                            # spawn 2-4 particles (increased visibility)
+                            for _ in range(random.randint(2, 4)):
+                                parts.append({
+                                    "x": ex + random.uniform(-er/2, er/2),
+                                    "y": flame_y + random.uniform(-4, 4),
+                                    "vx": random.uniform(-30, 30),
+                                    "vy": random.uniform(15, 40),
+                                    "life": random.randint(18, 44),
+                                    "size": random.randint(3, 5),
+                                })
+                            # update and draw
+                            for p in list(parts):
+                                p["x"] += p["vx"] / 60
+                                p["y"] -= p["vy"] / 60
+                                p["vy"] = max(0, p["vy"] - 0.6)
+                                p["life"] -= 1
+                                # draw particle with alpha based on life
+                                try:
+                                    surf = pygame.Surface((p["size"] * 2 + 2, p["size"] * 2 + 2), pygame.SRCALPHA)
+                                    alpha = max(60, int(255 * (p["life"] / 44)))
+                                    pygame.draw.circle(surf, (255, 140, 0, alpha), (p["size"] + 1, p["size"] + 1), p["size"])
+                                    self.screen.blit(surf, (int(p["x"] - p["size"]), int(p["y"] - p["size"])) )
+                                except Exception:
+                                    pass
+                                if p["life"] <= 0:
+                                    try:
+                                        parts.remove(p)
+                                    except Exception:
+                                        pass
+                        except Exception:
+                            pass
+
+                        # Draw ice particles for dict enemies
+                        try:
+                            ice_parts = enemy.get("ice_particles", [])
+                            for p in list(ice_parts):
+                                p["x"] += p["vx"] / 60
+                                p["y"] += p["vy"] / 60
+                                p["vy"] += 0.1
+                                p["life"] -= 1
+                                # draw particle with alpha based on life
+                                try:
+                                    surf = pygame.Surface((p["size"] * 2 + 2, p["size"] * 2 + 2), pygame.SRCALPHA)
+                                    alpha = max(50, int(255 * (p["life"] / 25)))
+                                    pygame.draw.circle(surf, (200, 240, 255, alpha), (p["size"] + 1, p["size"] + 1), p["size"])
+                                    self.screen.blit(surf, (int(p["x"] - p["size"]), int(p["y"] - p["size"])) )
+                                except Exception:
+                                    pass
+                                if p["life"] <= 0:
+                                    try:
+                                        ice_parts.remove(p)
+                                    except Exception:
+                                        pass
+                        except Exception:
+                            pass
+
+                except Exception:
+                    pass
+            else:
+                enemy.draw(self.screen, shake_x, shake_y)
 
         # Draw bosses
         for boss in self.game.bosses:
@@ -964,22 +1173,7 @@ class PygameUIManager:
         for projectile in self.game.enemy_projectiles:
             projectile.draw(self.screen, shake_x, shake_y)
 
-        # Draw statue projectiles (Limbo only)
-        for proj in self.game.statue_projectiles:
-            # Red outer ring
-            pygame.draw.circle(
-                self.screen,
-                (255, 0, 0),
-                (int(proj["x"] + shake_x), int(proj["y"] + shake_y)),
-                proj["radius"],
-            )
-            # Yellow core
-            pygame.draw.circle(
-                self.screen,
-                (255, 255, 0),
-                (int(proj["x"] + shake_x), int(proj["y"] + shake_y)),
-                proj["radius"] // 2,
-            )
+        # NOTE: statue projectile visual indicators removed (kept internal data for logic/tests)
 
         # Draw player
         self.game.player.draw(
@@ -989,6 +1183,21 @@ class PygameUIManager:
             self.game.player_anim_frame,
             self.game.player_is_moving,
         )
+
+        # Draw player burn particles (if any)
+        try:
+            if getattr(self.game.player, "burn_particles", None):
+                for p in list(self.game.player.burn_particles):
+                    try:
+                        # p is a BurnParticle object
+                        surf = pygame.Surface((p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA)
+                        alpha = max(60, int(255 * (p.life / 44)))
+                        pygame.draw.circle(surf, (255, 140, 0, alpha), (p.size + 1, p.size + 1), p.size)
+                        self.screen.blit(surf, (int(p.x + shake_x - p.size), int(p.y + shake_y - p.size)))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
         # Draw orbitals
         for orb in self.game.orbitals:
@@ -1013,10 +1222,11 @@ class PygameUIManager:
     def draw_special_effects(self, shake_x=0, shake_y=0) -> None:
         if self.game.selected_stage == "prologo" and self.game.prologo_lightning_strike:
             self.draw_lightning_effect(shake_x, shake_y)
+        self.draw_chain_lightning_effects(shake_x, shake_y)
         self.draw_spine_effect(shake_x, shake_y)
 
     def draw_lightning_effect(self, shake_x=0, shake_y=0):
-        pygame: Any | None = self.pygame
+        pygame = self.pygame
         try:
             # Screen flash based on a pulsing alpha (use frame_count)
             flash_alpha: float = abs(math.sin(self.game.frame_count * 0.18))
@@ -1027,13 +1237,13 @@ class PygameUIManager:
                 self.screen.blit(overlay, (0, 0))
 
             # Draw falling light beam (replaces bolt) and keep explosion
-            pts: math.Any | None = getattr(self.game, "lightning_points", None)
+            pts: Any | None = getattr(self.game, "lightning_points", None)
             if pts and len(pts) > 0:
                 end_x, end_y = pts[-1]
             else:
                 end_x = int(getattr(self.game.player, "x", self.width // 2))
                 end_y = int(getattr(self.game.player, "y", self.height - 80))
-            t: math.Any | int = getattr(self.game, "prologo_lightning_timer", 0)
+            t: Any | int = getattr(self.game, "prologo_lightning_timer", 0)
             # Beam fall progress (fast initial fall)
             fall_frames = 30
             progress: float = min(1.0, t / float(fall_frames))
@@ -1138,8 +1348,8 @@ class PygameUIManager:
             # Flash star lines
             for ang in range(0, 360, 45):
                 rad: float = math.radians(ang)
-                lx: math.Any | float = end_x + math.cos(rad) * (radius * 0.9)
-                ly: math.Any | float = end_y + math.sin(rad) * (radius * 0.9)
+                lx: Any | float = end_x + math.cos(rad) * (radius * 0.9)
+                ly: Any | float = end_y + math.sin(rad) * (radius * 0.9)
                 pygame.draw.line(
                     self.screen,
                     (255, 255, 230),
@@ -1149,10 +1359,10 @@ class PygameUIManager:
                 )
             else:
                 # Fallback: vertical beam above player like old behavior
-                player_x: math.Any | int = getattr(self.game.player, "x", self.width // 2)
-                player_y: math.Any | int = getattr(self.game.player, "y", self.height - 80)
+                player_x: Any | int = getattr(self.game.player, "x", self.width // 2)
+                player_y: Any | int = getattr(self.game.player, "y", self.height - 80)
                 beam_width = 8
-                beam_x: math.Any | int = player_x
+                beam_x: Any | int = player_x
                 pygame.draw.line(
                     self.screen,
                     (255, 255, 200),
@@ -1164,8 +1374,88 @@ class PygameUIManager:
             # Avoid breaking the game if drawing fails
             logger.exception("draw_lightning_effect failed")
 
+    def draw_chain_lightning_effects(self, shake_x=0, shake_y=0) -> None:
+        """Draw chain lightning effects between enemies"""
+        pygame = self.pygame
+        try:
+            for effect in getattr(self.game.game_state, "chain_lightning_effects", []):
+                points = effect.get("points", [])
+                timer = effect.get("timer", 0)
+                if len(points) < 2 or timer <= 0:
+                    continue
+                
+                # Calculate alpha based on remaining timer (fade out)
+                alpha = min(180, int(180 * (timer / 8.0)))  # Max 180 alpha, fade to 0
+                
+                # Draw jagged lines between consecutive points
+                for i in range(len(points) - 1):
+                    start_x, start_y = points[i]
+                    end_x, end_y = points[i + 1]
+                    
+                    # Create jagged lightning path
+                    lightning_points = self._generate_lightning_path(
+                        start_x + shake_x, start_y + shake_y,
+                        end_x + shake_x, end_y + shake_y,
+                        segments=6, max_offset=8
+                    )
+                    
+                    # Draw the jagged line segments
+                    color = (150, 200, 255, alpha)
+                    for j in range(len(lightning_points) - 1):
+                        pygame.draw.line(
+                            self.screen,
+                            color,
+                            lightning_points[j],
+                            lightning_points[j + 1],
+                            2
+                        )
+        except Exception:
+            logger.exception("draw_chain_lightning_effects failed")
+
+    def _generate_lightning_path(self, start_x, start_y, end_x, end_y, segments=6, max_offset=8):
+        """Generate a jagged lightning path between two points"""
+        import math
+        import random
+        
+        points = [(start_x, start_y)]
+        
+        # Calculate direction vector
+        dx = end_x - start_x
+        dy = end_y - start_y
+        distance = math.hypot(dx, dy)
+        
+        if distance == 0:
+            return points
+        
+        # Normalize direction
+        dir_x = dx / distance
+        dir_y = dy / distance
+        
+        # Create perpendicular vector for offset
+        perp_x = -dir_y
+        perp_y = dir_x
+        
+        # Generate intermediate points
+        for i in range(1, segments):
+            # Position along the line (0 to 1)
+            t = i / segments
+            
+            # Base position
+            base_x = start_x + dx * t
+            base_y = start_y + dy * t
+            
+            # Add random offset perpendicular to direction
+            offset = (random.random() - 0.5) * 2 * max_offset
+            point_x = base_x + perp_x * offset
+            point_y = base_y + perp_y * offset
+            
+            points.append((point_x, point_y))
+        
+        points.append((end_x, end_y))
+        return points
+
     def draw_spine_effect(self, shake_x=0, shake_y=0):
-        pygame: Any | None = self.pygame
+        pygame = self.pygame
         for enemy in self.game.enemies:
             if (
                 hasattr(enemy, "spine_timer")

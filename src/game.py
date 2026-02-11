@@ -905,7 +905,7 @@ class Game:
 
             # Back button
             back_rect = pygame.Rect(
-                self.width // 2 - 60, start_x + len(labels) * spacing + 10, 120, 36
+                self.width // 2 - 60, start_y + len(labels) * spacing + 10, 120, 36
             )
             back_hover: bool = back_rect.collidepoint(self.mouse_x, self.mouse_y)
             back_color: tuple[int, int, int] = (80, 80, 80) if back_hover else (60, 60, 60)
@@ -916,7 +916,7 @@ class Game:
                 back_text,
                 (
                     self.width // 2 - back_text.get_width() // 2 + shake_x,
-                    start_x + len(labels) * spacing + 14 + shake_y,
+                    start_y + len(labels) * spacing + 14 + shake_y,
                 ),
             )
 

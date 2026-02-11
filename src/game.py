@@ -599,6 +599,10 @@ class Game:
             width_at_y: float = 0.0
             if self.is_limbo_stage():
                 width_at_y = 680 - (progress * 280)
+            elif self.selected_stage and str(self.selected_stage).startswith("purgatory"):
+                # Wider layout for Purgatory: more horizontal space both at top and bottom
+                # Top: ~720px, Bottom: ~480px (wider than Limbo's top 680/bottom 400)
+                width_at_y = 720 - (progress * 240)
             else:
                 width_at_y = 560 - (progress * 240)
 

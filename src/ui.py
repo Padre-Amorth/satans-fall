@@ -921,8 +921,8 @@ class PygameUIManager:
         bar_width = 180  # slightly shorter for symmetry and visual balance
         bar_height = 12
 
-        # Prepare a slightly larger font for hover effect on names
-        font_name_hover = pygame.font.Font(None, 28)
+        # Prepare a slightly larger font for hover effect on names (reduced grow)
+        font_name_hover = pygame.font.Font(None, 26)
 
         for i, stat in enumerate(stat_configs):
             # Hover and max state handling for stat names
@@ -937,14 +937,14 @@ class PygameUIManager:
             elif stat_value >= 10:
                 name_color = (100, 100, 100)
 
-            # Use larger font when hovered for a gentle "grow" effect
+            # Use slightly larger font when hovered for a gentle "grow" effect
             if is_hovered:
                 name_text = font_name_hover.render(stat["name"], True, name_color)
             else:
                 name_text = rendered_names[i] if i < len(rendered_names) else font_medium.render(stat["name"], True, name_color)
 
-            # Center name vertically relative to bar (robust across font sizes)
-            name_y = int(stat["y"] + 15 - (name_text.get_height() // 2)) + shake_y
+            # Lower slightly the name to better align with the bar and center vertically
+            name_y = int(stat["y"] + 17 - (name_text.get_height() // 2)) + shake_y
             self.screen.blit(name_text, (left_x + shake_x, name_y))
 
             # Stat value

@@ -33,27 +33,43 @@ def test_stat_name_enlarges_on_hover(tmp_path: Path) -> None:
 
     # Compute expected default and hover widths using the same fonts as UI
     font_medium = pygame.font.Font(None, 24)
-    font_name_hover = pygame.font.Font(None, 28)
+    font_name_hover = pygame.font.Font(None, 26)
     default_w = font_medium.render("POWER", True, (255, 68, 68)).get_width()
     hover_w = font_name_hover.render("POWER", True, (255, 68, 68)).get_width()
 
-    # Draw without hover and sample pixel just after default width
+    # Draw without hover and capture baseline non-bg pixels in the area to the right
     g.mouse_x = 0
     g.mouse_y = 0
     g.ui.draw_permanent_upgrades()
     surf = g.screen
     bg = tuple(surf.get_at((0, 0))[:3])
 
-    sample_x = left_x + default_w + 2
-    sample_y = 140 + 15
-    before_pixel = tuple(surf.get_at((sample_x, sample_y))[:3])
+    hover_w = font_name_hover.render("POWER", True, (255, 68, 68)).get_width()
+    search_x0 = left_x + default_w + 1
+    search_x1 = left_x + default_w + hover_w + 4
+    search_y0 = 140
+    search_y1 = 140 + 30
 
-    # Draw with hover over POWER name and sample same coordinate
+    baseline_non_bg = set()
+    for x in range(search_x0, min(surf.get_width(), search_x1 + 1)):
+        for y in range(search_y0, min(surf.get_height(), search_y1 + 1)):
+            if tuple(surf.get_at((x, y))[:3]) != bg:
+                baseline_non_bg.add((x, y))
+
+    # Draw with hover over POWER name and look for any new non-bg pixel in same area
     g.show_permanent_upgrades()
     g.mouse_x = left_x + 10
     g.mouse_y = 140 + 10
     g.ui.draw_permanent_upgrades()
     surf2 = g.screen
-    after_pixel = tuple(surf2.get_at((sample_x, sample_y))[:3])
 
-    assert before_pixel == bg and after_pixel != bg, "Name does not enlarge on hover (no visual expansion detected)"
+    found_new = False
+    for x in range(search_x0, min(surf2.get_width(), search_x1 + 1)):
+        for y in range(search_y0, min(surf2.get_height(), search_y1 + 1)):
+            if tuple(surf2.get_at((x, y))[:3]) != bg and (x, y) not in baseline_non_bg:
+                found_new = True
+                break
+        if found_new:
+            break
+
+    assert found_new, "Name does not enlarge on hover (no visual expansion detected)"

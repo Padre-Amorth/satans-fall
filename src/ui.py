@@ -695,6 +695,200 @@ class PygameUIManager:
         elif hasattr(self.game, "draw_fog"):
             self.game.draw_fog(shake_x, shake_y)
 
+    def draw_stage_menu(self, shake_x=0, shake_y=0) -> None:
+        """Draw the stage selection menu and submenus.
+
+        Delegates drawing of the main stage menu and the Limbo/Purgatory submenus that
+        were previously located in `Game`. Uses `self.game` for state and writes a
+        diagnostic `self.game._last_drawn_menu` for tests.
+        """
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return
+
+        from src.assets.text_cache import get_font, get_text
+        font_large = get_font(48)
+        font_medium = get_font(32)
+        font_small = get_font(20)
+
+        # Limbo submenu
+        if getattr(self.game, "showing_limbo_menu", False):
+            title = get_text("LIMBO", font_large, (255, 215, 0))
+            self.screen.blit(
+                title,
+                (
+                    self.width // 2 - title.get_width() // 2 + shake_x,
+                    self.height // 2 - 120 + shake_y,
+                ),
+            )
+
+            option_w = 320
+            option_h = 48
+            start_x: int = self.width // 2 - option_w // 2
+            start_y: int = self.height // 2 - 40
+            spacing = 60
+
+            labels: List[str] = ["LIMBO 1", "LIMBO 2", "LIMBO 3"]
+            for i, label in enumerate(labels):
+                rect = pygame.Rect(start_x, start_y + i * spacing, option_w, option_h)
+                hovered: bool = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+                bg: tuple[int, int, int] = (137, 78, 36) if hovered else (107, 58, 26)
+                pygame.draw.rect(self.screen, bg, rect)
+                pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
+                text: pygame.Surface = font_medium.render(label, True, (255, 255, 255))
+                self.screen.blit(
+                    text,
+                    (
+                        self.width // 2 - text.get_width() // 2 + shake_x,
+                        start_y + i * spacing + (option_h - text.get_height()) // 2 + shake_y,
+                    ),
+                )
+
+            back_rect = pygame.Rect(self.width // 2 - 60, start_y + len(labels) * spacing + 10, 120, 36)
+            back_hover: bool = back_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+            back_color: tuple[int, int, int] = (80, 80, 80) if back_hover else (60, 60, 60)
+            pygame.draw.rect(self.screen, back_color, back_rect)
+            pygame.draw.rect(self.screen, (255, 255, 255), back_rect, 2)
+            back_text: pygame.Surface = font_small.render("BACK", True, (255, 255, 255))
+            self.screen.blit(
+                back_text,
+                (self.width // 2 - back_text.get_width() // 2 + shake_x, start_y + len(labels) * spacing + 14 + shake_y),
+            )
+
+            try:
+                self.game._last_drawn_menu = "limbo"
+            except Exception:
+                pass
+            return
+
+        # Purgatory submenu
+        if getattr(self.game, "showing_purgatory_menu", False):
+            title_p = get_text("PURGATORY", font_large, (255, 215, 0))
+            self.screen.blit(
+                title_p,
+                (
+                    self.width // 2 - title_p.get_width() // 2 + shake_x,
+                    self.height // 2 - 120 + shake_y,
+                ),
+            )
+
+            option_w = 320
+            option_h = 48
+            start_x: int = self.width // 2 - option_w // 2
+            start_y: int = self.height // 2 - 40
+            spacing = 60
+
+            labels: List[str] = ["PURGATORY 1", "PURGATORY 2", "PURGATORY 3"]
+            for i, label in enumerate(labels):
+                rect = pygame.Rect(start_x, start_y + i * spacing, option_w, option_h)
+                hovered: bool = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+                bg: tuple[int, int, int] = (137, 78, 136) if hovered else (107, 58, 106)
+                pygame.draw.rect(self.screen, bg, rect)
+                pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
+                text: pygame.Surface = font_medium.render(label, True, (255, 255, 255))
+                self.screen.blit(
+                    text,
+                    (
+                        self.width // 2 - text.get_width() // 2 + shake_x,
+                        start_y + i * spacing + (option_h - text.get_height()) // 2 + shake_y,
+                    ),
+                )
+
+            back_rect = pygame.Rect(self.width // 2 - 60, start_y + len(labels) * spacing + 10, 120, 36)
+            back_hover: bool = back_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+            back_color: tuple[int, int, int] = (80, 80, 80) if back_hover else (60, 60, 60)
+            pygame.draw.rect(self.screen, back_color, back_rect)
+            pygame.draw.rect(self.screen, (255, 255, 255), back_rect, 2)
+            back_text: pygame.Surface = font_small.render("BACK", True, (255, 255, 255))
+            self.screen.blit(
+                back_text,
+                (self.width // 2 - back_text.get_width() // 2 + shake_x, start_y + len(labels) * spacing + 14 + shake_y),
+            )
+
+            try:
+                self.game._last_drawn_menu = "purgatory"
+            except Exception:
+                pass
+            return
+
+        # Main title and stage buttons
+        title = font_large.render("SATANS FALL", True, (255, 100, 100))
+        self.screen.blit(
+            title,
+            (
+                self.width // 2 - title.get_width() // 2 + shake_x,
+                self.height // 2 - 150 + shake_y,
+            ),
+        )
+
+        # Prologo button
+        prologo_rect = pygame.Rect(self.width // 2 - 100, self.height // 2 - 50, 200, 40)
+        prologo_hovered: bool = prologo_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+        prologo_color: tuple[Literal[189], Literal[89], Literal[89]] | tuple[Literal[139], Literal[69], Literal[69]] = (
+            (189, 89, 89) if prologo_hovered else (139, 69, 69)
+        )  # Lighter red when hovered
+        pygame.draw.rect(self.screen, prologo_color, prologo_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), prologo_rect, 2)  # White border
+        prologo_text: pygame.Surface = font_medium.render("PROLOGUE", True, (255, 255, 255))
+        self.screen.blit(
+            prologo_text,
+            (
+                self.width // 2 - prologo_text.get_width() // 2 + shake_x,
+                self.height // 2 - 40 + shake_y,
+            ),
+        )
+
+        # Limbo main button (opens second menu)
+        limbo_rect = pygame.Rect(self.width // 2 - 100, self.height // 2 + 10, 200, 40)
+        limbo_hovered: bool = limbo_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+        limbo_color: tuple[Literal[137], Literal[78], Literal[36]] | tuple[Literal[107], Literal[58], Literal[26]] = (137, 78, 36) if limbo_hovered else (107, 58, 26)
+        pygame.draw.rect(self.screen, limbo_color, limbo_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), limbo_rect, 2)
+        limbo_text: pygame.Surface = font_medium.render("LIMBO", True, (255, 255, 255))
+        self.screen.blit(
+            limbo_text,
+            (
+                self.width // 2 - limbo_text.get_width() // 2 + shake_x,
+                self.height // 2 + 20 + shake_y,
+            ),
+        )
+
+        # Purgatory main button (opens second menu)
+        purgatory_rect = pygame.Rect(self.width // 2 - 100, self.height // 2 + 70, 200, 40)
+        purgatory_hovered: bool = purgatory_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+        purgatory_color: tuple[Literal[137], Literal[78], Literal[136]] | tuple[Literal[107], Literal[58], Literal[106]] = (137, 78, 136) if purgatory_hovered else (107, 58, 106)
+        pygame.draw.rect(self.screen, purgatory_color, purgatory_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), purgatory_rect, 2)
+        purgatory_text: pygame.Surface = font_medium.render("PURGATORY", True, (255, 255, 255))
+        self.screen.blit(
+            purgatory_text,
+            (
+                self.width // 2 - purgatory_text.get_width() // 2 + shake_x,
+                self.height // 2 + 80 + shake_y,
+            ),
+        )
+
+        # Upgrades button moved to bottom of screen to avoid overlap and be more accessible
+        upgrades_rect = pygame.Rect(self.width // 2 - 125, max(20, self.height - 80), 250, 35)
+        upgrades_hovered: bool = upgrades_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+        upgrades_bg_color: tuple[Literal[94], Literal[36], Literal[94]] | tuple[Literal[74], Literal[26], Literal[74]] = (
+            (94, 36, 94) if upgrades_hovered else (74, 26, 74)
+        )  # Lighter purple when hovered
+        upgrades_border_color: tuple[Literal[255], Literal[224], Literal[20]] | tuple[Literal[255], Literal[204], Literal[0]] = (
+            (255, 224, 20) if upgrades_hovered else (255, 204, 0)
+        )  # Brighter gold when hovered
+        pygame.draw.rect(self.screen, upgrades_bg_color, upgrades_rect)
+        pygame.draw.rect(self.screen, upgrades_border_color, upgrades_rect, 2)
+        upgrades_text: pygame.Surface = font_small.render("PERMANENT UPGRADES", True, upgrades_border_color)
+        self.screen.blit(
+            upgrades_text,
+            (self.width // 2 - upgrades_text.get_width() // 2 + shake_x, upgrades_rect.y + (upgrades_rect.height - upgrades_text.get_height()) // 2 + shake_y),
+        )
+
+        try:
+            self.game._last_drawn_menu = "stage_main"
+        except Exception:
+            pass
     def draw_dead_trees(self, shake_x=0, shake_y=0) -> None:
         # Debugging hook: log when drawing dead trees to help visibility issues
         try:

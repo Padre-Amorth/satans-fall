@@ -1833,7 +1833,7 @@ class Game:
                     self.width // 2 - 125, max(20, self.height - 80), 250, 35
                 )
 
-                if self.showing_limbo_menu or self.showing_purgatory_menu:
+                if self.showing_limbo_menu:
                     # Coordinates should match draw_stage_menu limbo layout
                     option_w = 320
                     option_h = 48
@@ -1853,13 +1853,21 @@ class Game:
                     )
 
                     if limbo1_rect.collidepoint(pos):
+                        self.showing_limbo_menu = False
                         self.select_stage("limbo")
+                        return
                     elif limbo2_rect.collidepoint(pos):
+                        self.showing_limbo_menu = False
                         self.select_stage("limbo_2")
+                        return
                     elif limbo3_rect.collidepoint(pos):
+                        self.showing_limbo_menu = False
                         self.select_stage("limbo_3")
+                        return
                     elif back_rect.collidepoint(pos):
                         self.showing_limbo_menu = False
+                        return
+
                 if self.showing_purgatory_menu:
                     option_w = 320
                     option_h = 48
@@ -1875,31 +1883,36 @@ class Game:
                     if purg1_rect.collidepoint(pos):
                         self.select_stage("purgatory")
                         self.showing_purgatory_menu = False
+                        return
                     elif purg2_rect.collidepoint(pos):
                         self.select_stage("purgatory_2")
                         self.showing_purgatory_menu = False
+                        return
                     elif purg3_rect.collidepoint(pos):
                         self.select_stage("purgatory_3")
                         self.showing_purgatory_menu = False
+                        return
                     elif purg_back_rect.collidepoint(pos):
                         self.showing_purgatory_menu = False
+                        return
                     # Defensive logging in case user reports that submenu doesn't show
                     logger.debug("Purgatory submenu click handling: purgatory_menu=%s, pos=%s", self.showing_purgatory_menu, pos)
-                else:
-                    if prologo_rect.collidepoint(pos):
-                        self.select_stage("prologo")
-                    elif limbo_rect.collidepoint(pos):
-                        # Open the limbo submenu (second menu)
-                        self.showing_limbo_menu = True
-                    elif purgatory_rect.collidepoint(pos):
-                        # Open the purgatory submenu (second menu)
-                        logger.debug("Mouse click: opening Purgatory submenu")
-                        self.showing_purgatory_menu = True
-                        self.showing_limbo_menu = False
-                        # Keep stage menu visible while showing submenu
-                        self.showing_stage_menu = True
-                    elif upgrades_rect.collidepoint(pos):
-                        self.show_permanent_upgrades()
+
+                # If no submenu handled the click, proceed to main menu handling
+                if prologo_rect.collidepoint(pos):
+                    self.select_stage("prologo")
+                elif limbo_rect.collidepoint(pos):
+                    # Open the limbo submenu (second menu)
+                    self.showing_limbo_menu = True
+                elif purgatory_rect.collidepoint(pos):
+                    # Open the purgatory submenu (second menu)
+                    logger.debug("Mouse click: opening Purgatory submenu")
+                    self.showing_purgatory_menu = True
+                    self.showing_limbo_menu = False
+                    # Keep stage menu visible while showing submenu
+                    self.showing_stage_menu = True
+                elif upgrades_rect.collidepoint(pos):
+                    self.show_permanent_upgrades()
             elif self.showing_permanent_upgrades:
                 # Handle clicks on permanent stat upgrades
                 stat_configs = [

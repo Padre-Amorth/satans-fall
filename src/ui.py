@@ -914,7 +914,14 @@ class PygameUIManager:
             {"name": "STRUCTURE", "key": "structure", "color": (139, 105, 20), "y": 275},
         ]
 
-        for stat in stat_configs:
+        # Precompute max name width to align bars symmetrically
+        rendered_names = [font_medium.render(s["name"], True, s["color"]) for s in stat_configs]
+        max_name_w = max(s.get_width() for s in rendered_names)
+        bar_x_base = left_x + max(120, max_name_w + 24)
+        bar_width = 180  # slightly shorter for symmetry and visual balance
+        bar_height = 12
+
+        for i, stat in enumerate(stat_configs):
             # Hover and max state handling for stat names
             name_rect = pygame.Rect(left_x, stat["y"], 120, 30)
             is_hovered: bool = name_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
@@ -927,7 +934,7 @@ class PygameUIManager:
             elif stat_value >= 10:
                 name_color = (100, 100, 100)
 
-            name_text = font_medium.render(stat["name"], True, name_color)
+            name_text = rendered_names[i] if i < len(rendered_names) else font_medium.render(stat["name"], True, name_color)
             name_y = stat["y"] + 13 + shake_y
             self.screen.blit(name_text, (left_x + shake_x, name_y))
 
@@ -939,7 +946,7 @@ class PygameUIManager:
             effect_text = self.game.permanent_stat_effect_text(stat["key"], stat_value)
             if effect_text:
                 eff_surf: pygame.Surface = font_small.render(effect_text, True, (180, 180, 180))
-                eff_y = stat["y"] + 15 + (12 // 2) - (eff_surf.get_height() // 2) + shake_y
+                eff_y = stat["y"] + 15 + (bar_height // 2) - (eff_surf.get_height() // 2) + shake_y
                 self.screen.blit(eff_surf, (left_x + 340 + shake_x, eff_y))
 
             # MAX indicator if at max level
@@ -947,12 +954,9 @@ class PygameUIManager:
                 max_text: pygame.Surface = font_small.render("MAX", True, (255, 215, 0))
                 self.screen.blit(max_text, (left_x + 270 + shake_x, stat["y"] + shake_y))
 
-            # Bar alignment: base on name width (ensures bar doesn't overlap long names)
-            name_w = name_text.get_width()
-            bar_x = left_x + max(120, name_w + 24)
+            # Bar (symmetric placement)
+            bar_x = bar_x_base
             bar_y = stat["y"] + 15
-            bar_width = 200
-            bar_height = 12
             pygame.draw.rect(self.screen, (26, 26, 26), (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height))
             pygame.draw.rect(self.screen, (68, 68, 68), (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height), 1)
             if stat_value > 0:

@@ -44,12 +44,12 @@ def test_permanent_upgrades_show_effect_text_and_alignment(tmp_path: Path) -> No
 
     # Check bar alignment: compute name width and expected bar_x per UI logic
     font_medium = pygame.font.Font(None, 24)
-    name_surf = font_medium.render("POWER", True, (255, 68, 68))
-    name_w = name_surf.get_width()
-    expected_bar_x = left_x + max(120, name_w + 24)
+    names = ["POWER", "VIGOR", "ADRENALINE", "STRUCTURE"]
+    max_name_w = max(font_medium.render(n, True, (255, 255, 255)).get_width() for n in names)
+    expected_bar_x = left_x + max(120, max_name_w + 24)
 
     # Compute expected fill width for the current level and sample a pixel just after the filled area
-    bar_width = 200
+    bar_width = 180  # matches UI implementation
     fill_width = min(bar_width, (g.permanent_stats["power"] / 10) * bar_width)
     sample_x = expected_bar_x + int(fill_width) + 2
     sample_y = 140 + 15

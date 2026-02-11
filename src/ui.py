@@ -932,6 +932,10 @@ class PygameUIManager:
                 fill_width = min(bar_width, (value / 10) * bar_width)
                 pygame.draw.rect(self.screen, stat["color"], (bar_x + shake_x, bar_y + shake_y, fill_width, bar_height))
 
+        # Subtitle (closer to original layout)
+        subtitle: pygame.Surface = font_small.render("Upgrade your demonic powers", True, (136, 136, 136))
+        self.screen.blit(subtitle, (left_x + shake_x, 85 + shake_y))
+
         # Separator & Classic Upgrades section (migrated from legacy Game impl)
         separator_y = 320
         classic_text: pygame.Surface = font_medium.render("CLASSIC UPGRADES", True, (136, 136, 136))
@@ -949,14 +953,16 @@ class PygameUIManager:
         box_y1: int = separator_y + 60
         for i in range(5):
             box_x = start_x + (i * box_spacing)
-            pygame.draw.rect(self.screen, (26, 26, 26), (box_x - box_width // 2 + shake_x, box_y1 + shake_y, box_width, box_height))
-            pygame.draw.rect(self.screen, (51, 51, 51), (box_x - box_width // 2 + shake_x, box_y1 + shake_y, box_width, box_height), 1)
+            rect = (box_x - box_width // 2 + shake_x, box_y1 + shake_y, box_width, box_height)
+            pygame.draw.rect(self.screen, (26, 26, 26), rect)
+            pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
 
         box_y2: int = box_y1 + box_height + 20
         for i in range(5):
             box_x = start_x + (i * box_spacing)
-            pygame.draw.rect(self.screen, (26, 26, 26), (box_x - box_width // 2 + shake_x, box_y2 + shake_y, box_width, box_height))
-            pygame.draw.rect(self.screen, (51, 51, 51), (box_x - box_width // 2 + shake_x, box_y2 + shake_y, box_width, box_height), 1)
+            rect = (box_x - box_width // 2 + shake_x, box_y2 + shake_y, box_width, box_height)
+            pygame.draw.rect(self.screen, (26, 26, 26), rect)
+            pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
 
         # Skill trees (FIRE, STORM, ICE) on the right side
         tree_types = [("FIRE", "fire", (255, 68, 68)), ("STORM", "storm", (170, 68, 255)), ("ICE", "ice", (100, 200, 255))]
@@ -972,7 +978,7 @@ class PygameUIManager:
             lbl_surf: pygame.Surface = font_small.render(label, True, color)
             self.screen.blit(lbl_surf, (col_x - lbl_surf.get_width() // 2 + shake_x, tree_top_y - 28 + shake_y))
 
-            # Draw simple 3x2 boxes layout similar to legacy view
+            # Draw 3x2 boxes layout similar to legacy view and add hover/tooltips
             inner_col_offset = tree_box_w // 2 + 1
             left_col_x = col_x - inner_col_offset
             right_col_x = col_x + inner_col_offset
@@ -980,14 +986,55 @@ class PygameUIManager:
                 y = tree_top_y + row * tree_v_spacing
                 left_rect = (left_col_x - tree_box_w // 2 + shake_x, y + shake_y, tree_box_w, tree_box_h)
                 right_rect = (right_col_x - tree_box_w // 2 + shake_x, y + shake_y, tree_box_w, tree_box_h)
-                left_bg = color if bool(self.game.permanent_stats.get(f"{key_prefix}_{row+1}", 0)) else (26, 26, 26)
-                right_bg = color if bool(self.game.permanent_stats.get(f"{key_prefix}_{4+row}", 0)) else (26, 26, 26)
-                left_border = tuple(min(255, c + 20) for c in color) if left_bg != (26, 26, 26) else (51, 51, 51)
-                right_border = tuple(min(255, c + 20) for c in color) if right_bg != (26, 26, 26) else (51, 51, 51)
+
+                left_active = bool(self.game.permanent_stats.get(f"{key_prefix}_{row+1}", 0))
+                right_active = bool(self.game.permanent_stats.get(f"{key_prefix}_{4+row}", 0))
+
+                left_bg = color if left_active else (26, 26, 26)
+                right_bg = color if right_active else (26, 26, 26)
+                left_border = tuple(min(255, c + 20) for c in color) if left_active else (51, 51, 51)
+                right_border = tuple(min(255, c + 20) for c in color) if right_active else (51, 51, 51)
                 pygame.draw.rect(self.screen, left_bg, left_rect)
                 pygame.draw.rect(self.screen, left_border, left_rect, 1)
                 pygame.draw.rect(self.screen, right_bg, right_rect)
                 pygame.draw.rect(self.screen, right_border, right_rect, 1)
+
+                # Tooltip when hovering over left or right rects (use Game helpers for text)
+                try:
+                    mouse_point = (self.game.mouse_x, self.game.mouse_y)
+                except Exception:
+                    mouse_point = (0, 0)
+
+                if pygame.Rect(*left_rect).collidepoint(mouse_point):
+                    tooltip_lines = self.game._skill_tooltip_lines(key_prefix, row + 1)
+                    if tooltip_lines:
+                        tooltip_x = col_x
+                        tooltip_y = tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
+                        self.game._draw_tooltip(tooltip_lines, tooltip_x, tooltip_y, pygame.font.Font(None, 18), anchor_center=True)
+
+                if pygame.Rect(*right_rect).collidepoint(mouse_point):
+                    tooltip_lines = self.game._skill_tooltip_lines(key_prefix, 4 + row)
+                    if tooltip_lines:
+                        tooltip_x = col_x
+                        tooltip_y = tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
+                        self.game._draw_tooltip(tooltip_lines, tooltip_x, tooltip_y, pygame.font.Font(None, 18), anchor_center=True)
+
+            # Center bottom tier (7)
+            center_y = tree_top_y + 3 * tree_v_spacing
+            center_key = f"{key_prefix}_7"
+            center_active = bool(self.game.permanent_stats.get(center_key, 0))
+            center_bg = color if center_active else (26, 26, 26)
+            center_border = tuple(min(255, c + 20) for c in color) if center_active else (51, 51, 51)
+            center_rect = (col_x - tree_box_w // 2 + shake_x, center_y + shake_y, tree_box_w, tree_box_h)
+            pygame.draw.rect(self.screen, center_bg, center_rect)
+            pygame.draw.rect(self.screen, center_border, center_rect, 1)
+
+            if pygame.Rect(*center_rect).collidepoint((self.game.mouse_x, self.game.mouse_y)):
+                tooltip_lines = self.game._skill_tooltip_lines(key_prefix, 7)
+                if tooltip_lines:
+                    tooltip_x = col_x
+                    tooltip_y = tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
+                    self.game._draw_tooltip(tooltip_lines, tooltip_x, tooltip_y, pygame.font.Font(None, 18), anchor_center=True)
 
         # Instructions
         instructions = font_medium.render("Left click to upgrade | Right click to downgrade | ESC to return", True, (200, 200, 200))

@@ -120,6 +120,8 @@ class Enemy(BaseSprite):
             self.width = 80
             self.height = 80
             self.damage = 18
+            # Toggle used to alternate firing pattern (3-shot, then single)
+            self.inquisitor_fire_single_next: bool = False
         elif enemy_type == "boss_big":
             # Make boss_big significantly larger (at least 3x the normal size)
             # Base enemies end up at ~40px after default growth, so 3x yields >=120.
@@ -767,31 +769,61 @@ class Enemy(BaseSprite):
                 self.shoot_cooldown: int = random.randint(90, 150)
 
             elif self.enemy_type == "boss_inquisitor":
-                # Inquisitor: 3-shot orange spread that applies a slow to the player
+                # Inquisitor: alternate between a 3-shot spread and a single aimed shot
                 dx = player.x - self.x
                 dy = player.y - self.y
                 base_angle = math.atan2(dy, dx)
                 speed = 260
-                angles = [base_angle - 0.2, base_angle, base_angle + 0.2]
-                for ang in angles:
-                    vel_x = math.cos(ang) * speed
-                    vel_y = math.sin(ang) * speed
+
+                # Alternate pattern: if flag is True -> single shot, else -> 3-shot spread
+                if getattr(self, "inquisitor_fire_single_next", False):
+                    # Single aimed shot (center)
+                    vel_x = math.cos(base_angle) * speed
+                    vel_y = math.sin(base_angle) * speed
                     proj = Projectile(
                         self.x,
                         self.y,
                         vel_x,
                         vel_y,
-                        damage=12,
-                        radius=6,
+                        damage=14,
+                        radius=7,
                         is_enemy_projectile=True,
                         appearance="inquisitor",
                     )
-                            # Mark slow metadata so collision handler can apply effect to player
                     proj.effect = "slow"
-                    proj.slow_duration = 180  # 3s at 60 FPS (increased)
-                    proj.slow_factor = 0.4   # stronger slow (60% reduction)
+                    proj.slow_duration = 180
+                    proj.slow_factor = 0.4
                     game.enemy_projectiles.add(proj)
-                self.shoot_cooldown = random.randint(110, 150)
+                else:
+                    # 3-shot spread
+                    angles = [base_angle - 0.2, base_angle, base_angle + 0.2]
+                    for ang in angles:
+                        vel_x = math.cos(ang) * speed
+                        vel_y = math.sin(ang) * speed
+                        proj = Projectile(
+                            self.x,
+                            self.y,
+                            vel_x,
+                            vel_y,
+                            damage=12,
+                            radius=6,
+                            is_enemy_projectile=True,
+                            appearance="inquisitor",
+                        )
+                        proj.effect = "slow"
+                        proj.slow_duration = 180
+                        proj.slow_factor = 0.4
+                        game.enemy_projectiles.add(proj)
+
+                # Toggle for next shot
+                self.inquisitor_fire_single_next = not getattr(self, "inquisitor_fire_single_next", False)
+                # Slightly longer cooldown after a single shot to balance rhythm
+                if getattr(self, "inquisitor_fire_single_next", False):
+                    # next will be single -> use normal cooldown
+                    self.shoot_cooldown = random.randint(110, 150)
+                else:
+                    # next will be 3-shot -> keep cooldown slightly shorter for pattern
+                    self.shoot_cooldown = random.randint(100, 140)
 
             elif self.enemy_type == "boss_final":
                 # Single aimed shot for final boss

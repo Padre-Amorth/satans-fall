@@ -56,3 +56,49 @@ def test_inquisitor_projectile_slows_player_on_hit():
     assert g.player.speed == orig_speed * getattr(g.player, "slow_factor", 1.0)
     # Verify slow strength was increased to the expected value
     assert getattr(g.player, "slow_factor", 1.0) == 0.4
+
+
+def test_inquisitor_alternates_fire_pattern():
+    pygame.init()
+    g = Game(debug=True)
+    boss = g.enemy_manager.spawn_boss("inquisitor")
+    boss.x = g.player.x
+    boss.y = g.player.y - 120
+
+    # clear any existing projectiles
+    try:
+        g.enemy_projectiles.empty()
+    except Exception:
+        g.enemy_projectiles = []
+
+    # First shot -> should be a 3-shot spread
+    boss.shoot_at_player(g.player, g)
+    count_first = 0
+    for p in g.enemy_projectiles:
+        if getattr(p, "appearance", None) == "inquisitor" or getattr(p, "effect", None) == "slow":
+            count_first += 1
+    assert count_first == 3
+
+    # Clear and shoot again -> should be a single shot
+    try:
+        g.enemy_projectiles.empty()
+    except Exception:
+        g.enemy_projectiles = []
+    boss.shoot_at_player(g.player, g)
+    count_second = 0
+    for p in g.enemy_projectiles:
+        if getattr(p, "appearance", None) == "inquisitor" or getattr(p, "effect", None) == "slow":
+            count_second += 1
+    assert count_second == 1
+
+    # Third shot -> should alternate back to 3
+    try:
+        g.enemy_projectiles.empty()
+    except Exception:
+        g.enemy_projectiles = []
+    boss.shoot_at_player(g.player, g)
+    count_third = 0
+    for p in g.enemy_projectiles:
+        if getattr(p, "appearance", None) == "inquisitor" or getattr(p, "effect", None) == "slow":
+            count_third += 1
+    assert count_third == 3

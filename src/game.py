@@ -4914,13 +4914,16 @@ class Game:
                     boss.take_damage(projectile.damage)
 
                 # Handle projectile piercing for bosses too
-                if projectile.pierce_all:
-                    pass  # Spear pierces through everything
-                elif projectile.pierce_count > 0:
+                # NOTE: Spears should not pierce bosses — treat spear as single-hit for bosses
+                if getattr(projectile, "pierce_all", False) and getattr(projectile, "weapon_type", None) != "spear":
+                    # Non-spear projectiles that pierce may continue through bosses
+                    pass
+                elif getattr(projectile, "pierce_count", 0) > 0:
                     projectile.pierce_count -= 1
                     if projectile.pierce_count <= 0:
                         projectile.kill()
                 else:
+                    # Default: remove projectile after hitting a boss (also covers spear)
                     projectile.kill()
 
                 if boss.health <= 0:

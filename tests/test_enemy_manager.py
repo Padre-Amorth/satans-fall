@@ -46,31 +46,56 @@ def test_spawn_via_game_spawn_enemy():
         assert len(g.enemy_manager.active) >= 1
 
 
-def test_normal_spawn_effective_speed():
-    """Normal spawn should have effective speed ≈30 after global ×0.8 tuning."""
-    import random
+def test_non_boss_spawn_effective_speed():
+    """Non-boss spawns (weak, normal, strong, angel, giant) should have effective speed ≈30."""
     from unittest.mock import patch
 
     pygame.init()
     g = Game(debug=True)
 
-    # Force the 'normal' branch by patching random.random to return < 0.3
+    # Test each non-boss type by forcing spawn logic or calling manager helper
+    # 1) Force the 'normal' branch
     with patch('random.random', return_value=0.1):
         g.spawn_enemy()
-
-    # Find a spawned normal enemy
-    spawned = None
-    try:
-        for en in g.enemies:
-            if getattr(en, 'enemy_type', None) == 'normal':
-                spawned = en
-                break
-    except Exception:
-        for en in list(g.enemies):
-            if getattr(en, 'enemy_type', None) == 'normal':
-                spawned = en
-                break
-
+    spawned = next((en for en in g.enemies if getattr(en, 'enemy_type', None) == 'normal'), None)
     assert spawned is not None
-    # Effective speed should be 38 * 0.8 = 30.4 (allow small tolerance)
     assert abs(spawned.speed - 30.4) < 0.001
+
+    # 2) Spawn reinforcements covering weak/strong/angel
+    # Clear game's enemy container in a safe, container‑agnostic way
+    try:
+        for _e in list(g.enemies):
+            try:
+                g.enemies.remove(_e)
+            except Exception:
+                pass
+    except Exception:
+        try:
+            g.enemies = []
+        except Exception:
+            pass
+
+    g.spawn_reinforcements(x=200, y=80, count=6)
+    for etype in ('weak', 'strong', 'angel'):
+        found = next((en for en in g.enemies if getattr(en, 'enemy_type', None) == etype), None)
+        assert found is not None
+        assert abs(found.speed - 30.4) < 0.001
+
+    # 3) Spawn a giant via manager/fallback
+    # Clear container safely
+    try:
+        for _e in list(g.enemies):
+            try:
+                g.enemies.remove(_e)
+            except Exception:
+                pass
+    except Exception:
+        try:
+            g.enemies = []
+        except Exception:
+            pass
+
+    g.spawn_giant_enemy()
+    giant = next((en for en in g.enemies if getattr(en, 'enemy_type', None) == 'giant'), None)
+    assert giant is not None
+    assert abs(giant.speed - 30.4) < 0.001

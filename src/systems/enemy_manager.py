@@ -147,7 +147,8 @@ class EnemyManager:
             y = -30
 
         health = 100 * getattr(self.game, "difficulty_multiplier", 1.0)
-        speed = 60
+        # Align with non-boss effective speed ≈30
+        speed = 38
         e = self.spawn(x, y, "giant", health, speed)
         return e
 

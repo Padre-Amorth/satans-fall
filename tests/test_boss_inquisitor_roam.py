@@ -9,8 +9,8 @@ def test_inquisitor_roams_in_top_half_and_speed():
     boss = g.enemy_manager.spawn_boss("inquisitor")
 
     # speed was slightly increased (spawned value)
-    # Verify slight speed increase applied
-    assert getattr(boss, "speed", 0) >= 34
+    # Verify slight speed increase applied (after global -20% speed tuning)
+    assert getattr(boss, "speed", 0) >= 27  # 34 * 0.8 = 27.2 (allow floor)
     # Initial shoot cooldown should be in the reduced-rate range
     assert getattr(boss, "shoot_cooldown", 0) >= 100
 

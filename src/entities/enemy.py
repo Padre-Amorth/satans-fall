@@ -93,7 +93,9 @@ class Enemy(BaseSprite):
         self.enemy_type: str = enemy_type
         self.max_health: int = health
         self.health: int = health
-        self.speed: int = speed
+        # Global tuning: reduce base movement speed for all enemies by 20%
+        # (applies to normals and bosses spawned with the `speed` parameter)
+        self.speed: float = float(speed) * 0.8
         self.width = 30
         self.height = 30
         self.damage = 10
@@ -795,8 +797,8 @@ class Enemy(BaseSprite):
                     proj.slow_factor = 0.4
                     game.enemy_projectiles.add(proj)
                 else:
-                    # 3-shot spread
-                    angles = [base_angle - 0.2, base_angle, base_angle + 0.2]
+                    # 3-shot spread (slightly wider)
+                    angles = [base_angle - 0.35, base_angle, base_angle + 0.35]
                     for ang in angles:
                         vel_x = math.cos(ang) * speed
                         vel_y = math.sin(ang) * speed

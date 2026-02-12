@@ -21,7 +21,7 @@ BASE_SPAWN_RATE: int = 72
 SPAWN_MIN_RATE: int = 30
 SPAWN_RAMP_START_WAVE: int = 3
 SPAWN_RAMP_SLOPE_PRE: int = 3
-SPAWN_RAMP_SLOPE_POST: int = 6
+SPAWN_RAMP_SLOPE_POST: float = 4.2  # more gradual ramp so spawn_min_rate is reached ~wave 10
 
 # Reinforcements
 REINFORCEMENT_DELAY_MS: int = 2000

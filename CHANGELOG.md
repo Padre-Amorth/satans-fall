@@ -9,7 +9,7 @@ All notable changes to this project are documented in this file.
   - Slightly higher movement speed and 50% increased HP vs. previous mid-boss baseline.
   - Fires a 3‑shot orange projectile spread; projectiles apply a slow to the player (stronger and longer than Ice tower slow).
 - **Gameplay tuning:** reduced Inquisitor fire rate and tuned projectile slow (duration and strength).
-- **Gameplay tuning:** tuned movement speed of **non‑boss** enemies — `weak`, `normal`, `strong`, `angel`, `giant` now have an effective movement speed of **~60** (spawn `speed` set to **75**; global ×0.8 applies).  Regular enemies are now noticeably slower than pre‑tuning, but significantly more mobile than the earlier 30‑speed setting.
+- **Gameplay tuning:** tuned movement speed of **non‑boss** enemies — `weak`, `normal`, `strong`, `angel`, `giant` now have an effective movement speed of **~60** (spawn `speed` set to **75**). Regular enemies are now noticeably slower than pre‑tuning, but significantly more mobile than the earlier 30‑speed setting.
 - **Spawn rate tuning:** made spawn-rate increase more gradual so the minimum spawn rate (`SPAWN_MIN_RATE = 30`) is reached around **wave 10** (reduced `SPAWN_RAMP_SLOPE_POST` to ~4.2).- **Fixes & safety:** Inquisitor movement respects wall clamps; projectiles and pooling behavior covered by tests.
 - **Tests added/updated:** spawn, slow-on-hit, roaming confined to top-half, confinement to walls, and fire-rate assertions.
 

@@ -93,9 +93,8 @@ class Enemy(BaseSprite):
         self.enemy_type: str = enemy_type
         self.max_health: int = health
         self.health: int = health
-        # Global tuning: reduce base movement speed for all enemies by 20%
-        # (applies to normals and bosses spawned with the `speed` parameter)
-        self.speed: float = float(speed) * 0.8
+        # Use the provided `speed` directly — no global reduction applied
+        self.speed: float = float(speed)
         self.width = 30
         self.height = 30
         self.damage = 10

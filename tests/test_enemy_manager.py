@@ -46,20 +46,20 @@ def test_spawn_via_game_spawn_enemy():
         assert len(g.enemy_manager.active) >= 1
 
 
-def test_non_boss_spawn_effective_speed():
-    """Non-boss spawns (weak, normal, strong, angel, giant) should have effective speed ≈60."""
+def test_non_boss_spawn_speed_matches_spawn_value():
+    """Non-boss spawns (weak, normal, strong, angel, giant) should use the spawn `speed` directly (no global modifier)."""
     from unittest.mock import patch
 
     pygame.init()
     g = Game(debug=True)
 
-    # Test each non-boss type by forcing spawn logic or calling manager helper
     # 1) Force the 'normal' branch
     with patch('random.random', return_value=0.1):
         g.spawn_enemy()
     spawned = next((en for en in g.enemies if getattr(en, 'enemy_type', None) == 'normal'), None)
     assert spawned is not None
-    assert abs(spawned.speed - 60.0) < 0.001
+    # spawn speed for normal is currently 75 in spawn logic
+    assert abs(spawned.speed - 75.0) < 0.001
 
     # 2) Spawn reinforcements covering weak/strong/angel
     # Clear game's enemy container in a safe, container‑agnostic way
@@ -76,11 +76,11 @@ def test_non_boss_spawn_effective_speed():
             pass
 
     g.spawn_reinforcements(x=200, y=80, count=6)
-    # Ensure at least one non-boss enemy spawned and all non-boss enemies have the target effective speed
+    # Ensure at least one non-boss enemy spawned and all non-boss enemies use spawn speed
     non_bosses = [en for en in g.enemies if getattr(en, 'enemy_type', '').startswith(('weak','normal','strong','angel','giant'))]
     assert len(non_bosses) >= 1
     for en in non_bosses:
-        assert abs(en.speed - 60.0) < 0.001
+        assert abs(en.speed - 75.0) < 0.001
 
     # 3) Spawn a giant via manager/fallback
     # Clear container safely
@@ -99,4 +99,5 @@ def test_non_boss_spawn_effective_speed():
     g.spawn_giant_enemy()
     giant = next((en for en in g.enemies if getattr(en, 'enemy_type', None) == 'giant'), None)
     assert giant is not None
-    assert abs(giant.speed - 60.0) < 0.001
+    # giant spawn speed aligned to non-boss spawn speed (75)
+    assert abs(giant.speed - 75.0) < 0.001

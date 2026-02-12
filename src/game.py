@@ -6106,7 +6106,7 @@ class Game:
         elif rand < 0.3:  # 30% chance for normal
             enemy_type = "normal"
             health = 25 * self.difficulty_multiplier
-            # Target effective movement ≈60 (spawn speed 75 × 0.8 = 60.0)
+            # Target movement ≈75 (spawn speed 75)
             speed = 75
         elif rand < 0.5:  # 20% chance for angel
             enemy_type = "angel"

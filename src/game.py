@@ -6106,8 +6106,8 @@ class Game:
         elif rand < 0.3:  # 30% chance for normal
             enemy_type = "normal"
             health = 25 * self.difficulty_multiplier
-            # Target effective movement ≈50 (spawn speed 62.5 × 0.8 = 50.0)
-            speed = 62.5
+            # Target effective movement ≈60 (spawn speed 75 × 0.8 = 60.0)
+            speed = 75
         elif rand < 0.5:  # 20% chance for angel
             enemy_type = "angel"
             health = 20 * self.difficulty_multiplier
@@ -6283,19 +6283,19 @@ class Game:
                 if etype == "weak":
                     enemy_type = "weak"
                     health = int(15 * self.difficulty_multiplier * 1.1)
-                    speed = 62.5
+                    speed = 75
                 elif etype == "normal":
                     enemy_type = "normal"
                     health = int(25 * self.difficulty_multiplier * 1.1)
-                    speed = 62.5
+                    speed = 75
                 elif etype == "strong":
                     enemy_type = "strong"
                     health = int(45 * self.difficulty_multiplier * 1.1)
-                    speed = 62.5
+                    speed = 75
                 else:  # angel
                     enemy_type = "angel"
                     health = int(30 * self.difficulty_multiplier * 1.1)
-                    speed = 62.5
+                    speed = 75
 
                 enemy: Enemy = Enemy(rx, ry, enemy_type, health, speed)
                 self.enemies.add(enemy)

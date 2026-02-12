@@ -797,8 +797,8 @@ class Enemy(BaseSprite):
                     proj.slow_factor = 0.4
                     game.enemy_projectiles.add(proj)
                 else:
-                    # 3-shot spread (slightly wider)
-                    angles = [base_angle - 0.35, base_angle, base_angle + 0.35]
+                    # 3-shot spread (slightly narrower than before)
+                    angles = [base_angle - 0.25, base_angle, base_angle + 0.25]
                     for ang in angles:
                         vel_x = math.cos(ang) * speed
                         vel_y = math.sin(ang) * speed

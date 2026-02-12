@@ -58,8 +58,8 @@ def test_non_boss_spawn_speed_matches_spawn_value():
         g.spawn_enemy()
     spawned = next((en for en in g.enemies if getattr(en, 'enemy_type', None) == 'normal'), None)
     assert spawned is not None
-    # spawn speed for normal is currently 75 in spawn logic
-    assert abs(spawned.speed - 75.0) < 0.001
+    # spawn speed for normal is currently 60 in spawn logic
+    assert abs(spawned.speed - 60.0) < 0.001
 
     # 2) Spawn reinforcements covering weak/strong/angel
     # Clear game's enemy container in a safe, container‑agnostic way
@@ -80,7 +80,7 @@ def test_non_boss_spawn_speed_matches_spawn_value():
     non_bosses = [en for en in g.enemies if getattr(en, 'enemy_type', '').startswith(('weak','normal','strong','angel','giant'))]
     assert len(non_bosses) >= 1
     for en in non_bosses:
-        assert abs(en.speed - 75.0) < 0.001
+        assert abs(en.speed - 60.0) < 0.001
 
     # 3) Spawn a giant via manager/fallback
     # Clear container safely
@@ -99,5 +99,5 @@ def test_non_boss_spawn_speed_matches_spawn_value():
     g.spawn_giant_enemy()
     giant = next((en for en in g.enemies if getattr(en, 'enemy_type', None) == 'giant'), None)
     assert giant is not None
-    # giant spawn speed aligned to non-boss spawn speed (75)
-    assert abs(giant.speed - 75.0) < 0.001
+    # giant spawn speed aligned to non-boss spawn speed (60)
+    assert abs(giant.speed - 60.0) < 0.001

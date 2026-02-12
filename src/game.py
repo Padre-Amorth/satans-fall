@@ -6097,25 +6097,25 @@ class Game:
         if self.wave >= 5 and rand < 0.05:  # 5% chance for giant after wave 5
             enemy_type = "giant"
             health = 80 * self.difficulty_multiplier
-            # Reduce non-boss spawn speeds so effective movement ≈30
-            speed = 38
+            # Base non-boss spawn speed (default)
+            speed = 60
         elif self.wave >= 3 and rand < 0.15:  # 15% chance for strong after wave 3
             enemy_type = "strong"
             health = 35 * self.difficulty_multiplier
-            speed = 38
+            speed = 60
         elif rand < 0.3:  # 30% chance for normal
             enemy_type = "normal"
             health = 25 * self.difficulty_multiplier
-            # Target movement ≈75 (spawn speed 75)
-            speed = 75
+            # Base non-boss spawn speed
+            speed = 60
         elif rand < 0.5:  # 20% chance for angel
             enemy_type = "angel"
             health = 20 * self.difficulty_multiplier
-            speed = 38
+            speed = 60
         else:  # 25% chance for weak
             enemy_type = "weak"
             health = 15 * self.difficulty_multiplier
-            speed = 38
+            speed = 60
 
         # Use EnemyManager when available
         if getattr(self, "enemy_manager", None) is not None:
@@ -6283,19 +6283,19 @@ class Game:
                 if etype == "weak":
                     enemy_type = "weak"
                     health = int(15 * self.difficulty_multiplier * 1.1)
-                    speed = 75
+                    speed = 60
                 elif etype == "normal":
                     enemy_type = "normal"
                     health = int(25 * self.difficulty_multiplier * 1.1)
-                    speed = 75
+                    speed = 60
                 elif etype == "strong":
                     enemy_type = "strong"
                     health = int(45 * self.difficulty_multiplier * 1.1)
-                    speed = 75
+                    speed = 60
                 else:  # angel
                     enemy_type = "angel"
                     health = int(30 * self.difficulty_multiplier * 1.1)
-                    speed = 75
+                    speed = 60
 
                 enemy: Enemy = Enemy(rx, ry, enemy_type, health, speed)
                 self.enemies.add(enemy)

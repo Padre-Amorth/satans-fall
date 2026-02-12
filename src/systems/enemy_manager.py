@@ -250,9 +250,10 @@ class EnemyManager:
             health = 600 * getattr(self.game, "difficulty_multiplier", 1.0)
             speed = 16
         elif boss_type == "inquisitor":
-            # Special Limbo boss (HP increased by 50%)
+            # Special Limbo boss (HP increased by 50%, now reduced by 10%)
             enemy_type = "boss_inquisitor"
-            health = 525 * getattr(self.game, "difficulty_multiplier", 1.0)  # 350 * 1.5
+            # Base HP: 525 -> apply -10% for tuning
+            health = int(525 * 0.9 * getattr(self.game, "difficulty_multiplier", 1.0))  # -> 472
             speed = 34  # slightly increased movement speed
         else:
             enemy_type = "boss_medium"

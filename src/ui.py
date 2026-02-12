@@ -1496,9 +1496,22 @@ class PygameUIManager:
             # Effect description (e.g., "+3% dmg/level (15% total)")
             effect_text = self.game.permanent_stat_effect_text(stat["key"], stat_value)
             if effect_text:
-                eff_surf: pygame.Surface = font_small.render(effect_text, True, (180, 180, 180))
-                eff_y = stat["y"] + 15 + (bar_height // 2) - (eff_surf.get_height() // 2) + shake_y
-                self.screen.blit(eff_surf, (left_x + 340 + shake_x, eff_y))
+                # Support multi-line effect text separated by ';' (used for VIGOR description)
+                lines = [s.strip() for s in effect_text.split(";") if s.strip()]
+                if len(lines) == 1:
+                    eff_surf: pygame.Surface = font_small.render(lines[0], True, (180, 180, 180))
+                    eff_y = stat["y"] + 15 + (bar_height // 2) - (eff_surf.get_height() // 2) + shake_y
+                    self.screen.blit(eff_surf, (left_x + 340 + shake_x, eff_y))
+                else:
+                    # Render multiple lines stacked and vertically centered in the same area
+                    rendered = [font_small.render(l, True, (180, 180, 180)) for l in lines]
+                    spacing = 2
+                    total_h = sum(s.get_height() for s in rendered) + spacing * (len(rendered) - 1)
+                    start_y = stat["y"] + 15 + (bar_height // 2) - (total_h // 2) + shake_y
+                    y = start_y
+                    for surf in rendered:
+                        self.screen.blit(surf, (left_x + 340 + shake_x, y))
+                        y += surf.get_height() + spacing
 
             # MAX indicator if at max level
             if stat_value >= 10:

@@ -86,7 +86,7 @@ class IceParticle:
 
 
 class Enemy(BaseSprite):
-    def __init__(self, x, y, enemy_type="basic", health=20, speed=100) -> None:
+    def __init__(self, x, y, enemy_type="basic", health=20, speed=75) -> None:
         super().__init__()
         self.x: Any = x
         self.y: Any = y

@@ -47,7 +47,7 @@ def test_spawn_via_game_spawn_enemy():
 
 
 def test_normal_spawn_effective_speed():
-    """Normal spawn should have effective speed 60 after global ×0.8 tuning."""
+    """Normal spawn should have effective speed ≈30 after global ×0.8 tuning."""
     import random
     from unittest.mock import patch
 
@@ -72,5 +72,5 @@ def test_normal_spawn_effective_speed():
                 break
 
     assert spawned is not None
-    # Effective speed should be 75 * 0.8 = 60
-    assert abs(spawned.speed - 60) < 0.0001
+    # Effective speed should be 38 * 0.8 = 30.4 (allow small tolerance)
+    assert abs(spawned.speed - 30.4) < 0.001

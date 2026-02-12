@@ -53,6 +53,7 @@ from src.balance import (
     DEFAULT_DAMAGE_REDUCTION_MULTIPLIER,
     MAX_EXTRA_WEAPONS,
     GAME_OVER_FADE_DURATION_MS,
+    ENEMY_BASE_SPEEDS,
 )
 
 from src.game_constants import (
@@ -1606,7 +1607,7 @@ class Game:
     def permanent_stat_effect_text(self, key: str, level: int) -> str:
         """Return a human-friendly description of the per-level and total effect for a permanent stat."""
         if key == "power":
-            per = 2.0
+            per = 3.0
             total = per * level
             return f"+{per:.0f}% dmg/level ({total:.0f}% total)"
         if key == "vigor":
@@ -1641,8 +1642,8 @@ class Game:
         This should be called when permanent stats change so the in-game values reflect
         the upgrades immediately (not only after reset_game()).
         """
-        # Damage multiplier: 'power' gives +2% per level
-        self.damage_multiplier = 1.0 + (self.permanent_stats.get("power", 0) * 0.02)
+        # Damage multiplier: 'power' gives +3% per level
+        self.damage_multiplier = 1.0 + (self.permanent_stats.get("power", 0) * 0.03)
         # Fire rate multiplier: 'adrenaline' gives +5% per level
         self.fire_rate_multiplier = 1.0 + (self.permanent_stats.get("adrenaline", 0) * 0.05)
         # Apply other effects for consistency
@@ -2517,9 +2518,11 @@ class Game:
         # Set stage-specific buildings/spawn points
         if stage == "prologo":
             self.buildings = [
-                {"x": 520, "y": 80},
-                {"x": 640, "y": 60},
-                {"x": 760, "y": 80},
+                {"x": 460, "y": 70},   # Outer left church - raised 5 pixels
+                {"x": 520, "y": 75},   # Left church
+                {"x": 640, "y": 60},   # Center cathedral
+                {"x": 760, "y": 75},   # Right church
+                {"x": 820, "y": 70},   # Outer right church - raised 5 pixels
             ]
         else:  # limbo
             self.buildings = []  # No buildings in limbo
@@ -2773,8 +2776,8 @@ class Game:
         self.player.level = 1
         self.player.xp_to_next_level = XP_BASE
         # Permanent upgrade application:
-        # 'power' gives +2% damage per level
-        self.player.damage_multiplier = 1.0 + (self.permanent_stats["power"] * 0.02)
+        # 'power' gives +3% damage per level
+        self.player.damage_multiplier = 1.0 + (self.permanent_stats["power"] * 0.03)
         # 'adrenaline' gives +5% fire rate per level
         self.player.fire_rate_multiplier = 1.0 + (
             self.permanent_stats["adrenaline"] * 0.05
@@ -3454,7 +3457,7 @@ class Game:
                 self.player.y,
                 vx,
                 vy,
-                damage=int(5 * damage_mult),
+                damage=int(WEAPON_DEFS.get("Soul Drain", {}).get("base_damage", 10) * damage_mult),
                 heal_amount=int(2 * heal_mult),
                 level=slevel,
             )
@@ -6096,26 +6099,29 @@ class Game:
         health: float = 0.0
         if self.wave >= 5 and rand < 0.05:  # 5% chance for giant after wave 5
             enemy_type = "giant"
-            health = 80 * self.difficulty_multiplier
-            # Base non-boss spawn speed (default)
-            speed = 60
+            health = 160 * self.difficulty_multiplier  # Doubled from 80
+            # Base non-boss giant speed (from balance)
+            speed = ENEMY_BASE_SPEEDS.get('giant', 45)
         elif self.wave >= 3 and rand < 0.15:  # 15% chance for strong after wave 3
             enemy_type = "strong"
-            health = 35 * self.difficulty_multiplier
-            speed = 60
+            health = 70 * self.difficulty_multiplier  # Doubled from 35
+            # Strong enemies (from balance)
+            speed = ENEMY_BASE_SPEEDS.get('strong', 60)
         elif rand < 0.3:  # 30% chance for normal
             enemy_type = "normal"
-            health = 25 * self.difficulty_multiplier
-            # Base non-boss spawn speed
-            speed = 60
+            health = 50 * self.difficulty_multiplier  # Doubled from 25
+            # Normal enemies (from balance)
+            speed = ENEMY_BASE_SPEEDS.get('normal', 75)
         elif rand < 0.5:  # 20% chance for angel
             enemy_type = "angel"
-            health = 20 * self.difficulty_multiplier
-            speed = 60
+            health = 40 * self.difficulty_multiplier  # Doubled from 20
+            # Angel speed (from balance)
+            speed = ENEMY_BASE_SPEEDS.get('angel', 60)
         else:  # 25% chance for weak
             enemy_type = "weak"
-            health = 15 * self.difficulty_multiplier
-            speed = 60
+            health = 30 * self.difficulty_multiplier  # Doubled from 15
+            # Weak enemies (from balance)
+            speed = ENEMY_BASE_SPEEDS.get('weak', 35)
 
         # Use EnemyManager when available
         if getattr(self, "enemy_manager", None) is not None:
@@ -6198,8 +6204,8 @@ class Game:
 
         enemy_type = "giant"
         health: float = 100 * self.difficulty_multiplier
-        # Align non-boss giant with reduced effective speed ≈30
-        speed = 38
+        # Base non-boss giant speed (from balance)
+        speed = ENEMY_BASE_SPEEDS.get('giant', 45)
         enemy: Enemy = Enemy(x, y, enemy_type, health, speed)
         if hasattr(self.enemies, "add"):
             self.enemies.add(enemy)
@@ -6222,8 +6228,8 @@ class Game:
 
         enemy_type = "giant"
         health: float = 100 * self.difficulty_multiplier
-        # Align non-boss giant with reduced effective speed ≈30
-        speed = 38
+        # Base non-boss giant speed (spawn fallback)
+        speed = ENEMY_BASE_SPEEDS.get('giant', 45)
         enemy: Enemy = Enemy(x, y, enemy_type, health, speed)
         if hasattr(self.enemies, "add"):
             self.enemies.add(enemy)
@@ -6283,19 +6289,19 @@ class Game:
                 if etype == "weak":
                     enemy_type = "weak"
                     health = int(15 * self.difficulty_multiplier * 1.1)
-                    speed = 60
+                    speed = ENEMY_BASE_SPEEDS.get('weak', 35)
                 elif etype == "normal":
                     enemy_type = "normal"
                     health = int(25 * self.difficulty_multiplier * 1.1)
-                    speed = 60
+                    speed = ENEMY_BASE_SPEEDS.get('normal', 75)
                 elif etype == "strong":
                     enemy_type = "strong"
                     health = int(45 * self.difficulty_multiplier * 1.1)
-                    speed = 60
+                    speed = ENEMY_BASE_SPEEDS.get('strong', 60)
                 else:  # angel
                     enemy_type = "angel"
                     health = int(30 * self.difficulty_multiplier * 1.1)
-                    speed = 60
+                    speed = ENEMY_BASE_SPEEDS.get('angel', 60)
 
                 enemy: Enemy = Enemy(rx, ry, enemy_type, health, speed)
                 self.enemies.add(enemy)
@@ -6323,15 +6329,15 @@ class Game:
         if boss_type == "final":
             enemy_type = "boss_final"
             health = 1000 * self.difficulty_multiplier
-            speed = 18
+            speed = ENEMY_BASE_SPEEDS.get('boss_final', 40)
         elif boss_type == "big":
             enemy_type = "boss_big"
             health = 600 * self.difficulty_multiplier
-            speed = 16
+            speed = ENEMY_BASE_SPEEDS.get('boss_big', 40)
         else:  # mid
             enemy_type = "boss_medium"
             health = 300 * self.difficulty_multiplier
-            speed = 60
+            speed = ENEMY_BASE_SPEEDS.get('boss_medium', 45)
 
         boss: Enemy = Enemy(x, y, enemy_type, health, speed)
         self.bosses.add(boss)

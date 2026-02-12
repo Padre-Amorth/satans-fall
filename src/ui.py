@@ -4,7 +4,7 @@ import random
 import logging
 from typing import Any, Literal
 
-from src.weapons import WEAPON_DEFS
+from src.weapons import WEAPON_DEFS, shotgun_pellets, soul_drain_projectile_count, skull_bomb_damage
 from src.game_constants import WALL_THICKNESS
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -166,6 +166,57 @@ class UIManager:
                     fill="#c8c8c8",
                     font=("Arial", 10, "bold"),
                 )
+
+                # Compute & show exact damage info per weapon (safe — wrapped in try)
+                dmg_text = ""
+                try:
+                    # Basic effective player damage
+                    basic_damage = int(getattr(self.game, "player_damage", 0) * getattr(self.game, "damage_multiplier", 1.0))
+
+                    if wid == "shotgun":
+                        slevel = self.game.weapon_levels.get("shotgun", 0)
+                        pellets = shotgun_pellets(slevel)
+                        dmg_mult = 1.0 + (slevel >= 3) * 0.1 + (slevel >= 5) * 0.1
+                        pellet_dmg = int(basic_damage * WEAPON_DEFS.get("shotgun", {}).get("damage_mult", 0.55) * dmg_mult)
+                        dmg_text = f"{pellet_dmg} dmg ×{pellets} pellets"
+                    elif wid == "orbital":
+                        olevel = self.game.weapon_levels.get("orbital", 0)
+                        o_dmg = int(8 * getattr(self.game, "damage_multiplier", 1.0) * (1.0 + (olevel >= 3) * 0.1 + (olevel >= 5) * 0.1))
+                        dmg_text = f"{o_dmg} dmg (per orbital)"
+                    elif wid == "spear":
+                        slevel = self.game.weapon_levels.get("spear", 0)
+                        spear_dmg = max(2, int(basic_damage * getattr(self.game, "damage_multiplier", 1.0) * 0.5 + slevel * 2))
+                        dmg_text = f"{spear_dmg} dmg (piercing)"
+                    elif wid == "Soul Drain":
+                        slevel = self.game.weapon_levels.get("Soul Drain", 0)
+                        proj_count = soul_drain_projectile_count(slevel)
+                        base_sd = WEAPON_DEFS.get("Soul Drain", {}).get("base_damage", 10)
+                        dmg_mult = 1.0 + (slevel >= 3) * 0.1 + (slevel >= 5) * 0.1
+                        sd_dmg = int(base_sd * dmg_mult)
+                        dmg_text = f"{sd_dmg} dmg ×{proj_count} proj"
+                    elif wid == "beast":
+                        blevel = self.game.weapon_levels.get("beast", 0)
+                        mult = 1 + blevel * 0.05
+                        dmg_text = f"Basic dmg: {int(basic_damage * mult)} ({int(mult*100)}%)"
+                    elif wid == "skull_bomb":
+                        slevel = self.game.weapon_levels.get("skull_bomb", 0)
+                        kb_dmg = skull_bomb_damage(slevel)
+                        dmg_text = f"{kb_dmg} explosion dmg"
+                    else:
+                        # Fallback: show player's basic damage
+                        dmg_text = f"Base dmg: {basic_damage}"
+                except Exception:
+                    dmg_text = ""
+
+                if dmg_text:
+                    self.canvas.create_text(
+                        hud_x - box_w // 2,
+                        y + 7,
+                        text=dmg_text,
+                        fill="#9aa9b2",
+                        font=("Arial", 8),
+                    )
+
                 # MAX indicator
                 if lvl >= getattr(self.game.game_state, "max_weapon_level", 6):
                     self.canvas.create_text(
@@ -353,9 +404,9 @@ class UIManager:
 
         # Weapon options
         weapon_options: list[tuple[str, str]] = [
-            ("Hellgun", "Powerful close-range spread weapon"),
-            ("Orbitals", "Orbiting projectiles around you"),
-            ("Spear", "Piercing projectile with chain lightning"),
+            ("Hellgun", "Powerful close-range spread. Pellets use player base damage (30)."),
+            ("Orbitals", "Orbiting sentinels that auto-fire (damage scales with player base damage)."),
+            ("Spear", "Piercing projectile — damage scales with player damage; +2 per level."),
         ]
 
         start_y = 200
@@ -683,6 +734,388 @@ class PygameUIManager:
                 [(p[0] + shake_x, p[1] + shake_y) for p in right_wall_all],
             )
 
+        # Draw buildings for stages that have them
+        if (
+            self.game.selected_stage == "prologo"
+            and self.game.buildings
+            and settings.get("building_color")
+        ):
+            building_color = settings["building_color"]
+
+            # Sort buildings by x position for consistent left/center/right assignment
+            sorted_buildings = sorted(self.game.buildings, key=lambda b: b["x"])
+
+            for i, building in enumerate(sorted_buildings):
+                base_x = building["x"] + shake_x
+                base_y = building["y"] + shake_y - 40  # Position above spawn point
+
+                # Try to load external assets first
+                asset_loaded = False
+
+                if i == 0:  # Outer left church
+                    asset_name = "church_outer_left.png"
+                    scale_factor = 0.3  # Same size as other side churches
+                elif i == 1:  # Left church
+                    asset_name = "church_left.png"
+                    scale_factor = 0.3  # Reduced proportionally
+                elif i == 2:  # Center cathedral
+                    asset_name = "cathedral_center.png"
+                    scale_factor = 0.4  # Scaled to 200x200 pixels (500*0.4=200)
+                elif i == 3:  # Right church
+                    asset_name = "church_right.png"
+                    scale_factor = 0.3  # Reduced proportionally
+                else:  # i == 4: Outer right church
+                    asset_name = "church_outer_right.png"
+                    scale_factor = 0.3  # Same size as other side churches
+
+                # Try to load the asset
+                try:
+                    from src.assets.manager import get_image
+                    building_image = get_image(asset_name)
+                    if building_image:
+                        # Scale the image
+                        original_size = building_image.get_size()
+                        scaled_size = (int(original_size[0] * scale_factor), int(original_size[1] * scale_factor))
+                        building_image = pygame.transform.scale(building_image, scaled_size)
+
+                        # Position the image (centered on the spawn point, above it)
+                        image_rect = building_image.get_rect()
+                        image_rect.centerx = base_x
+                        # Position lower to avoid being cut off at the top
+                        image_rect.centery = base_y + scaled_size[1] // 4  # Position lower
+
+                        self.screen.blit(building_image, image_rect)
+                        asset_loaded = True
+                except (ImportError, pygame.error, AttributeError):
+                    pass  # Fall back to procedural drawing
+
+                # Fallback: procedural drawing if asset not found
+                if not asset_loaded:
+                    if i == 1:  # Center cathedral - larger
+                        # Adjust Y position (lower by 20 pixels)
+                        cathedral_y = base_y + 50
+
+                        # Cathedral foundation/base (dark stone)
+                        foundation_color = (60, 45, 35)
+                        pygame.draw.rect(
+                            self.screen,
+                            foundation_color,
+                            (base_x - 42, cathedral_y + 40, 84, 12)
+                        )
+
+                        # Main cathedral body (rectangular base) - light stone
+                        stone_color = (140, 120, 100)
+                        pygame.draw.rect(
+                            self.screen,
+                            stone_color,
+                            (base_x - 35, cathedral_y, 70, 50)
+                        )
+
+                        # Central entrance doors (large, ornate)
+                        door_color = (80, 60, 45)
+                        pygame.draw.rect(
+                            self.screen,
+                            door_color,
+                            (base_x - 12, cathedral_y + 25, 24, 25)
+                        )
+
+                        # Door frame/details (gold accents)
+                        gold_color = (180, 150, 50)
+                        pygame.draw.rect(
+                            self.screen,
+                            gold_color,
+                            (base_x - 14, cathedral_y + 23, 28, 3)  # Top frame
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            gold_color,
+                            (base_x - 14, cathedral_y + 47, 28, 3)  # Bottom frame
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            gold_color,
+                            (base_x - 14, cathedral_y + 23, 3, 27)  # Left frame
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            gold_color,
+                            (base_x + 11, cathedral_y + 23, 3, 27)  # Right frame
+                        )
+
+                        # Rose window above entrance (stained glass)
+                        rose_window_color = (100, 150, 200)
+                        pygame.draw.circle(
+                            self.screen,
+                            rose_window_color,
+                            (base_x, cathedral_y + 15),
+                            8
+                        )
+
+                        # Side windows (stained glass)
+                        window_color = (120, 160, 210)
+                        # Left side windows
+                        pygame.draw.rect(
+                            self.screen,
+                            window_color,
+                            (base_x - 28, cathedral_y + 12, 8, 12)
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            window_color,
+                            (base_x - 28, cathedral_y + 28, 8, 12)
+                        )
+                        # Right side windows
+                        pygame.draw.rect(
+                            self.screen,
+                            window_color,
+                            (base_x + 20, cathedral_y + 12, 8, 12)
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            window_color,
+                            (base_x + 20, cathedral_y + 28, 8, 12)
+                        )
+
+                        # Window frames (stone)
+                        frame_color = (100, 85, 70)
+                        # Left frames
+                        pygame.draw.rect(self.screen, frame_color, (base_x - 29, cathedral_y + 11, 10, 1))
+                        pygame.draw.rect(self.screen, frame_color, (base_x - 29, cathedral_y + 24, 10, 1))
+                        pygame.draw.rect(self.screen, frame_color, (base_x - 29, cathedral_y + 11, 1, 14))
+                        pygame.draw.rect(self.screen, frame_color, (base_x - 20, cathedral_y + 11, 1, 14))
+                        pygame.draw.rect(self.screen, frame_color, (base_x - 29, cathedral_y + 39, 10, 1))
+                        pygame.draw.rect(self.screen, frame_color, (base_x - 29, cathedral_y + 27, 1, 14))
+                        pygame.draw.rect(self.screen, frame_color, (base_x - 20, cathedral_y + 27, 1, 14))
+                        # Right frames
+                        pygame.draw.rect(self.screen, frame_color, (base_x + 19, cathedral_y + 11, 10, 1))
+                        pygame.draw.rect(self.screen, frame_color, (base_x + 19, cathedral_y + 24, 10, 1))
+                        pygame.draw.rect(self.screen, frame_color, (base_x + 19, cathedral_y + 11, 1, 14))
+                        pygame.draw.rect(self.screen, frame_color, (base_x + 28, cathedral_y + 11, 1, 14))
+                        pygame.draw.rect(self.screen, frame_color, (base_x + 19, cathedral_y + 39, 10, 1))
+                        pygame.draw.rect(self.screen, frame_color, (base_x + 19, cathedral_y + 27, 1, 14))
+                        pygame.draw.rect(self.screen, frame_color, (base_x + 28, cathedral_y + 27, 1, 14))
+
+                        # Cathedral roof (triangular) - dark tile
+                        roof_color = (70, 55, 45)
+                        roof_points = [
+                            (base_x - 40, cathedral_y),      # Left base
+                            (base_x, cathedral_y - 30),      # Top peak
+                            (base_x + 40, cathedral_y),      # Right base
+                        ]
+                        pygame.draw.polygon(self.screen, roof_color, roof_points)
+
+                        # Roof ridge details
+                        ridge_color = (90, 75, 60)
+                        pygame.draw.line(
+                            self.screen,
+                            ridge_color,
+                            (base_x - 35, cathedral_y - 5),
+                            (base_x + 35, cathedral_y - 5),
+                            2
+                        )
+
+                        # Central spire - stone
+                        pygame.draw.rect(
+                            self.screen,
+                            stone_color,
+                            (base_x - 5, cathedral_y - 55, 10, 25)
+                        )
+
+                        # Spire cross (large gold cross)
+                        pygame.draw.rect(
+                            self.screen,
+                            gold_color,
+                            (base_x - 3, cathedral_y - 57, 6, 10)  # Vertical
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            gold_color,
+                            (base_x - 6, cathedral_y - 54, 12, 4)  # Horizontal
+                        )
+
+                        # Side towers (larger than before)
+                        tower_color = (130, 110, 90)
+                        # Left tower
+                        pygame.draw.rect(
+                            self.screen,
+                            tower_color,
+                            (base_x - 50, cathedral_y - 15, 15, 35)
+                        )
+                        # Left tower roof
+                        pygame.draw.polygon(
+                            self.screen,
+                            roof_color,
+                            [
+                                (base_x - 52, cathedral_y - 15),
+                                (base_x - 42, cathedral_y - 25),
+                                (base_x - 35, cathedral_y - 15)
+                            ]
+                        )
+                        # Left tower spire
+                        pygame.draw.rect(
+                            self.screen,
+                            tower_color,
+                            (base_x - 45, cathedral_y - 35, 5, 10)
+                        )
+
+                        # Right tower
+                        pygame.draw.rect(
+                            self.screen,
+                            tower_color,
+                            (base_x + 35, cathedral_y - 15, 15, 35)
+                        )
+                        # Right tower roof
+                        pygame.draw.polygon(
+                            self.screen,
+                            roof_color,
+                            [
+                                (base_x + 35, cathedral_y - 15),
+                                (base_x + 42, cathedral_y - 25),
+                                (base_x + 47, cathedral_y - 15)
+                            ]
+                        )
+                        # Right tower spire
+                        pygame.draw.rect(
+                            self.screen,
+                            tower_color,
+                            (base_x + 40, cathedral_y - 35, 5, 10)
+                        )
+
+                        # Tower windows
+                        pygame.draw.rect(
+                            self.screen,
+                            window_color,
+                            (base_x - 47, cathedral_y - 5, 4, 6)  # Left tower window
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            window_color,
+                            (base_x + 39, cathedral_y - 5, 4, 6)  # Right tower window
+                        )
+
+                    else:  # Side churches - smaller
+                        # Adjust Y position (lower by 20 pixels)
+                        church_y = base_y + 50
+
+                        # Main church body (rectangular base) - stone color
+                        stone_color = (120, 100, 80)  # Brownish stone
+                        pygame.draw.rect(
+                            self.screen,
+                            stone_color,
+                            (base_x - 20, church_y, 40, 28)
+                        )
+
+                        # Church foundation/base (darker stone)
+                        foundation_color = (80, 60, 50)
+                        pygame.draw.rect(
+                            self.screen,
+                            foundation_color,
+                            (base_x - 22, church_y + 25, 44, 8)
+                        )
+
+                        # Central door (darker rectangle)
+                        door_color = (60, 40, 30)
+                        pygame.draw.rect(
+                            self.screen,
+                            door_color,
+                            (base_x - 6, church_y + 12, 12, 16)
+                        )
+
+                        # Door frame/details
+                        pygame.draw.rect(
+                            self.screen,
+                            (100, 80, 60),
+                            (base_x - 7, church_y + 11, 14, 2)  # Top frame
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            (100, 80, 60),
+                            (base_x - 7, church_y + 27, 14, 2)  # Bottom frame
+                        )
+
+                        # Side windows
+                        window_color = (150, 180, 200)  # Light blue stained glass
+                        # Left window
+                        pygame.draw.rect(
+                            self.screen,
+                            window_color,
+                            (base_x - 16, church_y + 8, 6, 8)
+                        )
+                        # Right window
+                        pygame.draw.rect(
+                            self.screen,
+                            window_color,
+                            (base_x + 10, church_y + 8, 6, 8)
+                        )
+
+                        # Window frames (stone)
+                        pygame.draw.rect(
+                            self.screen,
+                            stone_color,
+                            (base_x - 17, church_y + 7, 8, 1)  # Left top
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            stone_color,
+                            (base_x - 17, church_y + 16, 8, 1)  # Left bottom
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            stone_color,
+                            (base_x + 9, church_y + 7, 8, 1)  # Right top
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            stone_color,
+                            (base_x + 9, church_y + 16, 8, 1)  # Right bottom
+                        )
+
+                        # Church roof (triangular) - darker tile color
+                        roof_color = (80, 60, 50)
+                        roof_points = [
+                            (base_x - 24, church_y),      # Left base
+                            (base_x, church_y - 16),      # Top peak
+                            (base_x + 24, church_y),      # Right base
+                        ]
+                        pygame.draw.polygon(self.screen, roof_color, roof_points)
+
+                        # Roof ridge detail
+                        ridge_color = (100, 80, 60)
+                        pygame.draw.line(
+                            self.screen,
+                            ridge_color,
+                            (base_x - 20, church_y - 2),
+                            (base_x + 20, church_y - 2),
+                            2
+                        )
+
+                        # Central spire - stone color
+                        pygame.draw.rect(
+                            self.screen,
+                            stone_color,
+                            (base_x - 2, church_y - 28, 4, 12)
+                        )
+
+                        # Spire cross (gold color)
+                        cross_color = (200, 180, 50)
+                        pygame.draw.rect(
+                            self.screen,
+                            cross_color,
+                            (base_x - 1, church_y - 30, 2, 6)  # Vertical
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            cross_color,
+                            (base_x - 2, church_y - 28, 4, 2)  # Horizontal
+                        )
+
+                        # Small bell tower windows
+                        pygame.draw.rect(
+                            self.screen,
+                            window_color,
+                            (base_x - 1, church_y - 22, 2, 3)
+                        )
+
         # Fading and buildings use the original Game methods to avoid code duplication
         # Reuse UI manager for Limbo features
         if hasattr(self, "draw_dead_trees"):
@@ -885,13 +1318,122 @@ class PygameUIManager:
             (self.width // 2 - upgrades_text.get_width() // 2 + shake_x, upgrades_rect.y + (upgrades_rect.height - upgrades_text.get_height()) // 2 + shake_y),
         )
 
+        # Draw small options (gear) button in bottom-right corner
+        opt_size = 40
+        opt_x = self.width - (opt_size + 14)
+        opt_y = max(20, self.height - (opt_size + 14))
+        options_rect = pygame.Rect(opt_x, opt_y, opt_size, opt_size)
+        options_hovered: bool = options_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+        bg = (60, 60, 60) if not options_hovered else (90, 90, 90)
+        border = (200, 200, 200) if options_hovered else (160, 160, 160)
+        pygame.draw.rect(self.screen, bg, options_rect)
+        pygame.draw.rect(self.screen, border, options_rect, 2)
+        # Draw a gear-like icon: center circle and 8 spokes
+        cx = opt_x + opt_size // 2
+        cy = opt_y + opt_size // 2
+        pygame.draw.circle(self.screen, border, (cx, cy), 8, 1)
+        for i in range(8):
+            ang = math.radians(i * 45)
+            x2 = int(cx + math.cos(ang) * (opt_size // 2 - 6))
+            y2 = int(cy + math.sin(ang) * (opt_size // 2 - 6))
+            pygame.draw.line(self.screen, border, (cx, cy), (x2, y2), 2)
+
         try:
             self.game._last_drawn_menu = "stage_main"
         except Exception:
             pass
 
+        try:
+            self.game._last_drawn_menu = "stage_main"
+        except Exception:
+            pass
+
+        # If options overlay requested, draw it on top
+        if getattr(self.game, "showing_options", False):
+            self.draw_options_menu(shake_x, shake_y)
+
+    def draw_options_menu(self, shake_x=0, shake_y=0) -> None:
+        """Simple options overlay with a CLOSE button."""
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return
+        # Semi-transparent overlay
+        overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 160))
+        self.screen.blit(overlay, (0, 0))
+
+        # Dialog box
+        dialog_w, dialog_h = 360, 220
+        dx = self.width // 2 - dialog_w // 2
+        dy = self.height // 2 - dialog_h // 2
+        pygame.draw.rect(self.screen, (40, 40, 40), (dx, dy, dialog_w, dialog_h))
+        pygame.draw.rect(self.screen, (220, 220, 220), (dx, dy, dialog_w, dialog_h), 2)
+
+        # Title
+        try:
+            from src.assets.text_cache import get_font, get_text
+            font = get_font(28)
+            title = get_text("OPTIONS", font, (255, 255, 255))
+            self.screen.blit(title, (self.width // 2 - title.get_width() // 2 + shake_x, dy + 12 + shake_y))
+        except Exception:
+            font_large = pygame.font.Font(None, 28)
+            title = font_large.render("OPTIONS", True, (255, 255, 255))
+            self.screen.blit(title, (self.width // 2 - title.get_width() // 2 + shake_x, dy + 12 + shake_y))
+
+        # Placeholder options (toggles like mute/music/volume go here)
+        font_med = pygame.font.Font(None, 20)
+
+        # Damage numbers toggle (compact, right-aligned)
+        dmg_label = font_med.render("Show Damage Numbers:", True, (220, 220, 220))
+        self.screen.blit(dmg_label, (dx + 24 + shake_x, dy + 56 + shake_y))
+
+        # Compact toggle box on the right side of the dialog so the label remains readable
+        toggle_w, toggle_h = 48, 24
+        toggle_x = dx + dialog_w - 24 - toggle_w
+        toggle_y = dy + 56
+        toggle_rect = pygame.Rect(toggle_x, toggle_y, toggle_w, toggle_h)
+        hovered_toggle = toggle_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+        toggle_bg = (80, 160, 80) if getattr(self.game, 'show_damage_numbers', True) else (160, 80, 80)
+        if hovered_toggle:
+            toggle_bg = tuple(min(255, c + 20) for c in toggle_bg)
+        pygame.draw.rect(self.screen, toggle_bg, toggle_rect)
+        pygame.draw.rect(self.screen, (160, 160, 160), toggle_rect, 1)
+        status_text = "On" if getattr(self.game, 'show_damage_numbers', True) else "Off"
+        status_surf = font_med.render(status_text, True, (255, 255, 255))
+        self.screen.blit(status_surf, (toggle_x + (toggle_w - status_surf.get_width()) // 2 + shake_x, toggle_y + (toggle_h - status_surf.get_height()) // 2 + shake_y))
+
+        # Additional placeholders (e.g., music/sound) below
+        opt2 = font_med.render("Music: On", True, (220, 220, 220))
+        self.screen.blit(opt2, (dx + 24 + shake_x, dy + 90 + shake_y))
+
+        # Close button
+        btn_w, btn_h = 120, 36
+        btn_x = dx + (dialog_w - btn_w) // 2
+        btn_y = dy + dialog_h - 50
+        close_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
+        hovered = close_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+        bg = (100, 100, 100) if not hovered else (140, 140, 140)
+        border = (255, 255, 255) if hovered else (200, 200, 200)
+        pygame.draw.rect(self.screen, bg, close_rect)
+        pygame.draw.rect(self.screen, border, close_rect, 2)
+        btn_text = font_med.render("CLOSE", True, (255, 255, 255))
+        self.screen.blit(btn_text, (btn_x + (btn_w - btn_text.get_width()) // 2 + shake_x, btn_y + (btn_h - btn_text.get_height()) // 2 + shake_y))
+
+        # Close button
+        btn_w, btn_h = 120, 36
+        btn_x = dx + (dialog_w - btn_w) // 2
+        btn_y = dy + dialog_h - 50
+        close_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
+        hovered = close_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+        bg = (100, 100, 100) if not hovered else (140, 140, 140)
+        border = (255, 255, 255) if hovered else (200, 200, 200)
+        pygame.draw.rect(self.screen, bg, close_rect)
+        pygame.draw.rect(self.screen, border, close_rect, 2)
+        btn_text = font_med.render("CLOSE", True, (255, 255, 255))
+        self.screen.blit(btn_text, (btn_x + (btn_w - btn_text.get_width()) // 2 + shake_x, btn_y + (btn_h - btn_text.get_height()) // 2 + shake_y))
     def draw_permanent_upgrades(self, shake_x=0, shake_y=0) -> None:
-        """Draw the permanent upgrades menu (migrated from Game).
+        """
+        Draw the permanent upgrades menu (migrated from Game).
 
         Uses direct pygame fonts to avoid text_cache dependencies during menu overlay draws.
         """
@@ -951,7 +1493,7 @@ class PygameUIManager:
             val_text = font_small.render(f"Level: {stat_value}", True, (255, 255, 255))
             self.screen.blit(val_text, (left_x + 200 + shake_x, stat["y"] + shake_y))
 
-            # Effect description (e.g., "+2% dmg/level (10% total)")
+            # Effect description (e.g., "+3% dmg/level (15% total)")
             effect_text = self.game.permanent_stat_effect_text(stat["key"], stat_value)
             if effect_text:
                 eff_surf: pygame.Surface = font_small.render(effect_text, True, (180, 180, 180))
@@ -1128,7 +1670,7 @@ class PygameUIManager:
         title: pygame.Surface = get_text("PAUSED", font_large, (255, 255, 255))
         self.screen.blit(title, (self.width // 2 - title.get_width() // 2 + shake_x, self.height // 2 - 100 + shake_y))
 
-        options = ["Resume", "Restart", "Quit to Menu"]
+        options = ["Resume", "Quit to Menu"]
         option_height = 40
         for i, option in enumerate(options):
             y_pos = self.height // 2 - 20 + i * option_height
@@ -1147,6 +1689,62 @@ class PygameUIManager:
         except Exception:
             pass
 
+        # If a pause confirmation is active, draw Yes/No dialog
+        try:
+            if getattr(self.game, 'pause_confirmation', None):
+                pc = self.game.pause_confirmation
+                dialog_w, dialog_h = 260, 70
+                dx = self.width // 2 - dialog_w // 2
+                dy = self.height // 2 - dialog_h // 2
+
+                # dialog background
+                dlg_surf = pygame.Surface((dialog_w, dialog_h))
+                dlg_surf.set_alpha(220)
+                dlg_surf.fill((30, 30, 30))
+                pygame.draw.rect(dlg_surf, (120, 120, 120), (0, 0, dialog_w, dialog_h), 2)
+                self.screen.blit(dlg_surf, (dx, dy))
+
+                from src.assets.text_cache import get_text, get_font
+                font = get_font(18)
+                msg = "Quit to menu?"
+                msg_surf = get_text(msg, font, (255, 255, 255))
+                self.screen.blit(msg_surf, (dx + (dialog_w - msg_surf.get_width()) // 2, dy + 6))
+
+                # Buttons (clearly boxed and highlight on hover)
+                btn_w = 80
+                btn_h = 28
+                yes_rect = pygame.Rect(dx + 10, dy + 30, btn_w, btn_h)
+                no_rect = pygame.Rect(dx + dialog_w - btn_w - 10, dy + 30, btn_w, btn_h)
+
+                # Detect hover and set selection accordingly
+                try:
+                    if yes_rect.collidepoint(self.game.mouse_x, self.game.mouse_y):
+                        pc['selection'] = 0
+                    elif no_rect.collidepoint(self.game.mouse_x, self.game.mouse_y):
+                        pc['selection'] = 1
+                except Exception:
+                    pass
+
+                sel = pc.get('selection', 0)
+
+                # Draw yes button
+                yes_bg = (255, 215, 0) if sel == 0 else (60, 60, 60)
+                yes_border = (200, 160, 20) if sel == 0 else (120, 120, 120)
+                pygame.draw.rect(self.screen, yes_bg, yes_rect)
+                pygame.draw.rect(self.screen, yes_border, yes_rect, 2)
+                yes_s = get_text("Yes", font, (0, 0, 0) if sel == 0 else (200, 200, 200))
+                self.screen.blit(yes_s, (yes_rect.x + (btn_w - yes_s.get_width()) // 2 + shake_x, yes_rect.y + shake_y + (btn_h - yes_s.get_height()) // 2))
+
+                # Draw no button
+                no_bg = (255, 215, 0) if sel == 1 else (60, 60, 60)
+                no_border = (200, 160, 20) if sel == 1 else (120, 120, 120)
+                pygame.draw.rect(self.screen, no_bg, no_rect)
+                pygame.draw.rect(self.screen, no_border, no_rect, 2)
+                no_s = get_text("No", font, (0, 0, 0) if sel == 1 else (200, 200, 200))
+                self.screen.blit(no_s, (no_rect.x + (btn_w - no_s.get_width()) // 2 + shake_x, no_rect.y + shake_y + (btn_h - no_s.get_height()) // 2))
+        except Exception:
+            pass
+
     def draw_player_stats(self, shake_x=0, shake_y=0) -> None:
         """Draw the player stats panel (migrated from Game)."""
         pygame = self.pygame
@@ -1157,28 +1755,79 @@ class PygameUIManager:
         font_medium = get_font(32)
         font_small = get_font(20)
 
+        # Use the game's player stats layout for consistent alignment
+        font_huge = get_font(36)
+        font_large = get_font(28)
+        font_medium = get_font(20)
+        font_small = get_font(16)
+
+        # Overlay
+        overlay = pygame.Surface((self.width, self.height))
+        overlay.set_alpha(200)
+        overlay.fill((10, 10, 10))
+        self.screen.blit(overlay, (0, 0))
+
         title = get_text("PLAYER STATS", font_huge, (255, 215, 0))
-        self.screen.blit(title, (self.width // 2 - title.get_width() // 2 + shake_x, 60 + shake_y))
+        self.screen.blit(title, (self.width // 2 - title.get_width() // 2 + shake_x, 40 + shake_y))
 
-        mid_col_x = self.width // 2 - 200
-        w_y = 140
-        self.screen.blit(get_text("Weapons", font_medium, (255, 215, 0)), (mid_col_x, w_y - 30))
-        for i, (name, lvl) in enumerate([(n, self.game.weapon_levels.get(n, 0)) for n in self.game.player_weapons]):
-            txt = get_text(f"{name} Lv{lvl}", font_small, (220, 220, 220))
-            self.screen.blit(txt, (mid_col_x, w_y + i * 26))
+        left_col_x = self.width // 2 - 420 + shake_x
+        mid_col_x = self.width // 2 - 80 + shake_x
+        right_col_x = self.width // 2 + 260 + shake_x
+        start_y = 100 + shake_y
+        line_h = 28
 
-        right_col_x = self.width // 2 + 60
-        u_y = 140
-        self.screen.blit(get_text("Upgrades", font_medium, (255, 215, 0)), (right_col_x, u_y - 30))
+        # Core info
+        core_lines = [
+            ("Level", str(self.game.player_level)),
+            ("XP", f"{int(self.game.player_xp)}/{int(self.game.xp_to_next_level)}"),
+            ("Score", str(int(self.game.score))),
+            ("Damage %", f"{(self.game.damage_multiplier - 1.0) * 100:.0f}%"),
+            ("Fire rate %", f"{(1.0 - self.game.fire_rate_multiplier) * -100:.0f}%"),
+            ("Projectile size %", f"{(self.game.projectile_size_multiplier - 1.0) * 100:.0f}%"),
+            ("Damage reduction %", f"{(1.0 - self.game.damage_reduction_multiplier) * 100:.0f}%"),
+        ]
+
+        for i, (label, val) in enumerate(core_lines):
+            y = start_y + i * line_h
+            lab = get_text(f"{label}:", font_medium, (200, 200, 200))
+            val_s = get_text(val, font_medium, (255, 255, 255))
+            self.screen.blit(lab, (left_col_x, y))
+            self.screen.blit(val_s, (left_col_x + 160, y))
+
+        # Health
+        y = start_y + len(core_lines) * line_h + 10
+        health_label = get_text("Health:", font_medium, (200, 200, 200))
+        health_val = get_text(f"{int(self.game.player.health)}/{int(self.game.player.max_health)}", font_medium, (255, 255, 255))
+        self.screen.blit(health_label, (left_col_x, y))
+        self.screen.blit(health_val, (left_col_x + 160, y))
+
+        # Weapons and levels
+        w_y = start_y
+        self.screen.blit(get_text("Weapons", font_large, (255, 215, 0)), (mid_col_x, w_y - 30))
+        for i, wid in enumerate(self.game.player_weapons):
+            lvl = self.game.weapon_levels.get(wid, 0)
+            name = WEAPON_DEFS.get(wid, {}).get("name", wid.replace("_", " ").title())
+            txt = get_text(f"{name} Lv{lvl}", font_medium, (220, 220, 220))
+            self.screen.blit(txt, (mid_col_x, w_y + i * line_h))
+
+        # Upgrade levels
+        u_y = start_y
+        self.screen.blit(get_text("Upgrades", font_large, (255, 215, 0)), (right_col_x, u_y - 30))
         for i, (k, v) in enumerate(self.game.upgrade_levels.items()):
-            txt = get_text(f"{k}: {v}", font_small, (220, 220, 220))
-            self.screen.blit(txt, (right_col_x, u_y + i * 26))
+            txt = get_text(f"{k}: {v}", font_medium, (220, 220, 220))
+            self.screen.blit(txt, (right_col_x, u_y + i * line_h))
 
-        ps_y = 340
-        self.screen.blit(get_text("Permanent Stats", font_medium, (255, 215, 0)), (right_col_x, ps_y - 30))
-        for i, (k, v) in enumerate(self.game.permanent_stats.items()):
-            txt = get_text(f"{k}: {v}", font_small, (220, 220, 220))
-            self.screen.blit(txt, (right_col_x, ps_y + i * 26))
+        # Permanent stats (excluding tower/statue and elemental keys)
+        ps_y = u_y + len(self.game.upgrade_levels) * line_h + 20
+        self.screen.blit(get_text("Permanent Stats", font_large, (255, 215, 0)), (right_col_x, ps_y - 30))
+        display_stats = self.game._player_stats_display_items()
+        for i, (k, v) in enumerate(display_stats):
+            txt = get_text(f"{k}: {v}", font_small, (200, 200, 200))
+            self.screen.blit(txt, (right_col_x, ps_y + i * (line_h - 6)))
+
+        # Close instructions (Tab instead of I)
+        inst = get_text("Press Tab or ESC to close", font_small, (180, 180, 180))
+        self.screen.blit(inst, (self.width // 2 - inst.get_width() // 2 + shake_x, self.height - 50 + shake_y))
 
         try:
             self.game._last_drawn_menu = "player_stats"
@@ -1248,6 +1897,174 @@ class PygameUIManager:
                         1,
                     )
 
+    def _draw_pedestal(self, x: int, statue_base_y: int) -> None:
+        """Draw a pedestal/platform beneath a statue centered at X. Accepts statue_base_y
+        (which is the same coordinate used by _draw_statue_model).
+        """
+        pygame = self.pygame
+        # Convert statue_base_y back to pedestal 'y' (top of pedestal platform is statue_base_y + 10)
+        y = statue_base_y + 10
+
+        # Pedestal base (wide)
+        pygame.draw.rect(self.screen, (58, 32, 16), (x - 25, y + 50, 50, 10))
+        pygame.draw.rect(self.screen, (42, 16, 8), (x - 25, y + 50, 50, 10), 2)
+
+        # Pedestal column (shorter - half height)
+        pygame.draw.rect(self.screen, (74, 48, 32), (x - 15, y, 30, 50))
+        pygame.draw.rect(self.screen, (58, 32, 16), (x - 15, y, 30, 50), 2)
+
+        # Column details (horizontal lines)
+        for detail_y in [y + 15, y + 35]:
+            pygame.draw.line(self.screen, (42, 16, 8), (x - 15, detail_y), (x + 15, detail_y), 2)
+
+        # Pedestal top (platform for statue)
+        pygame.draw.rect(self.screen, (58, 32, 16), (x - 20, y - 10, 40, 10))
+        pygame.draw.rect(self.screen, (42, 16, 8), (x - 20, y - 10, 40, 10), 2)
+        # Highlight outline for visibility
+        pygame.draw.rect(self.screen, (200, 170, 100), (x - 20, y - 10, 40, 10), 1)
+
+        return
+
+    def _draw_statue_model(self, x: int, statue_base_y: int, tower_type: str | None) -> None:
+        """Draw a statue model centered at X using a provided statue base Y.
+
+        This helper is reused by both pedestals (Limbo) and dynamic towers (Purgatory).
+        The `tower_type` controls coloring similarly to the old logic (fire/storm/ice).
+        """
+        pygame = self.pygame
+
+        # Choose statue colors based on provided tower_type (or current stage)
+        tt = tower_type or getattr(self.game, "selected_stage", None)
+        if tt == "storm" or tt == "limbo_2":
+            # Storm - blueish statue
+            body_color = (18, 36, 120)
+            outline_color = (8, 18, 80)
+            horn_color = (60, 100, 200)
+            eye_color = (100, 150, 255)
+            glow_color = (40, 70, 180)
+        elif tt == "ice" or tt == "limbo_3":
+            # Ice - icy pale statue
+            body_color = (120, 140, 180)
+            outline_color = (80, 100, 140)
+            horn_color = (160, 180, 200)
+            eye_color = (180, 220, 255)
+            glow_color = (140, 180, 220)
+        else:
+            # Default: Fire/limbo - demonic red
+            body_color = (58, 10, 10)
+            outline_color = (26, 0, 0)
+            horn_color = (138, 32, 32)
+            eye_color = (255, 48, 48)
+            glow_color = (200, 150, 60)
+
+        # Statue body (slimmer triangular/demonic shape)
+        body_points: list[tuple[int, int]] = [
+            (x, statue_base_y - 60),  # Neck point (head connects here)
+            (x - 12, statue_base_y - 40),  # Left shoulder
+            (x - 15, statue_base_y),  # Left base
+            (x + 15, statue_base_y),  # Right base
+            (x + 12, statue_base_y - 40),  # Right shoulder
+        ]
+        pygame.draw.polygon(self.screen, body_color, body_points)
+        pygame.draw.polygon(self.screen, outline_color, body_points, 2)
+
+        # Head (larger and round)
+        head_y: int = statue_base_y - 70
+        head_radius = 15
+        pygame.draw.circle(self.screen, body_color, (x, head_y), head_radius)
+        pygame.draw.circle(self.screen, outline_color, (x, head_y), head_radius, 2)
+
+        # Larger horns (from head)
+        pygame.draw.line(
+            self.screen,
+            horn_color,
+            (x - 10, head_y - 10),
+            (x - 20, head_y - 30),
+            4,
+        )
+        pygame.draw.line(
+            self.screen,
+            horn_color,
+            (x + 10, head_y - 10),
+            (x + 20, head_y - 30),
+            4,
+        )
+
+        # Glowing eyes (on head)
+        pygame.draw.circle(self.screen, eye_color, (x - 7, head_y), 3)
+        pygame.draw.circle(self.screen, eye_color, (x + 7, head_y), 3)
+
+        # Subtle glow ring around head for visibility
+        pygame.draw.circle(self.screen, glow_color, (x, head_y), head_radius + 4, 2)
+
+        # Pitchfork in hand
+        fork_x: int = x + 20  # Held to the right side
+        fork_top_y: int = statue_base_y - 100
+        fork_bottom_y: int = statue_base_y - 20
+        pygame.draw.line(
+            self.screen,
+            (42, 42, 42),
+            (fork_x, fork_bottom_y),
+            (fork_x, fork_top_y),
+            3,
+        )
+
+        # Pitchfork prongs (3 prongs)
+        prong_length = 15
+        # Center prong
+        pygame.draw.line(
+            self.screen,
+            (74, 74, 74),
+            (fork_x, fork_top_y),
+            (fork_x, fork_top_y - prong_length),
+            2,
+        )
+        # Left prong
+        pygame.draw.line(
+            self.screen,
+            (74, 74, 74),
+            (fork_x - 6, fork_top_y),
+            (fork_x - 6, fork_top_y - prong_length),
+            2,
+        )
+        # Right prong
+        pygame.draw.line(
+            self.screen,
+            (74, 74, 74),
+            (fork_x + 6, fork_top_y),
+            (fork_x + 6, fork_top_y - prong_length),
+            2,
+        )
+        # Connecting bar
+        pygame.draw.line(
+            self.screen,
+            (74, 74, 74),
+            (fork_x - 6, fork_top_y),
+            (fork_x + 6, fork_top_y),
+            2,
+        )
+
+        # Smaller wings (simple angular shapes)
+        # Left wing
+        left_wing_points: list[tuple[int, int]] = [
+            (x - 12, statue_base_y - 40),
+            (x - 30, statue_base_y - 45),
+            (x - 25, statue_base_y - 30),
+        ]
+        pygame.draw.polygon(self.screen, (74, 16, 16), left_wing_points)
+        pygame.draw.polygon(self.screen, (42, 0, 0), left_wing_points, 1)
+
+        # Right wing (smaller to not interfere with pitchfork)
+        right_wing_points: list[tuple[int, int]] = [
+            (x + 12, statue_base_y - 40),
+            (x + 28, statue_base_y - 45),
+            (x + 23, statue_base_y - 30),
+        ]
+        pygame.draw.polygon(self.screen, (74, 16, 16), right_wing_points)
+        pygame.draw.polygon(self.screen, (42, 0, 0), right_wing_points, 1)
+
+        return
+
     def draw_pedestals(self, shake_x=0, shake_y=0) -> None:
         """Draw tall pedestals with demonic statues for Limbo stage"""
         if not self.game.is_limbo_stage():
@@ -1267,28 +2084,23 @@ class PygameUIManager:
             x: int = pedestal["x"] + shake_x
             y: int = pedestal["y"] + shake_y
 
-            # Pedestal base (wide)
-            pygame.draw.rect(self.screen, (58, 32, 16), (x - 25, y + 50, 50, 10))
-            pygame.draw.rect(self.screen, (42, 16, 8), (x - 25, y + 50, 50, 10), 2)
-
-            # Pedestal column (shorter - half height)
-            pygame.draw.rect(self.screen, (74, 48, 32), (x - 15, y, 30, 50))
-            pygame.draw.rect(self.screen, (58, 32, 16), (x - 15, y, 30, 50), 2)
-
-            # Column details (horizontal lines)
-            for detail_y in [y + 15, y + 35]:
-                pygame.draw.line(
-                    self.screen, (42, 16, 8), (x - 15, detail_y), (x + 15, detail_y), 2
-                )
-
-            # Pedestal top (platform for statue)
-            pygame.draw.rect(self.screen, (58, 32, 16), (x - 20, y - 10, 40, 10))
-            pygame.draw.rect(self.screen, (42, 16, 8), (x - 20, y - 10, 40, 10), 2)
-            # Highlight outline for visibility
-            pygame.draw.rect(self.screen, (200, 170, 100), (x - 20, y - 10, 40, 10), 1)
-
-            # Slimmer demonic statue on top with pitchfork
+            # Draw pedestal for statue using shared helper.
             statue_base_y: int = y - 10
+            try:
+                self._draw_pedestal(x, statue_base_y)
+            except Exception:
+                # Fallback: draw pedestal inline if helper unavailable
+                pygame.draw.rect(self.screen, (58, 32, 16), (x - 25, y + 50, 50, 10))
+                pygame.draw.rect(self.screen, (42, 16, 8), (x - 25, y + 50, 50, 10), 2)
+                pygame.draw.rect(self.screen, (74, 48, 32), (x - 15, y, 30, 50))
+                pygame.draw.rect(self.screen, (58, 32, 16), (x - 15, y, 30, 50), 2)
+                for detail_y in [y + 15, y + 35]:
+                    pygame.draw.line(
+                        self.screen, (42, 16, 8), (x - 15, detail_y), (x + 15, detail_y), 2
+                    )
+                pygame.draw.rect(self.screen, (58, 32, 16), (x - 20, y - 10, 40, 10))
+                pygame.draw.rect(self.screen, (42, 16, 8), (x - 20, y - 10, 40, 10), 2)
+                pygame.draw.rect(self.screen, (200, 170, 100), (x - 20, y - 10, 40, 10), 1)
 
             # Choose statue colors based on stage/tower type
             if getattr(self.game, "selected_stage", None) == "limbo_2":
@@ -1312,117 +2124,123 @@ class PygameUIManager:
                 horn_color = (138, 32, 32)
                 eye_color = (255, 48, 48)
                 glow_color = (200, 150, 60)
+            # Reuse centralized statue model renderer (defined on PygameUIManager)
+            try:
+                # The pedestal version of the statue provides statue_base_y (y - 10), so we
+                # call the shared painter with the same coordinates for consistency.
+                self._draw_statue_model(x, statue_base_y, getattr(self.game, "selected_stage", None))
+            except Exception:
+                # Fallback to old inlined rendering if helper is not present for some reason
+                # (preserves backwards compatibility in tests)
+                body_points: list[tuple[int, int]] = [
+                    (x, statue_base_y - 60),  # Neck point (head connects here)
+                    (x - 12, statue_base_y - 40),  # Left shoulder
+                    (x - 15, statue_base_y),  # Left base
+                    (x + 15, statue_base_y),  # Right base
+                    (x + 12, statue_base_y - 40),  # Right shoulder
+                ]
+                pygame.draw.polygon(self.screen, body_color, body_points)
+                pygame.draw.polygon(self.screen, outline_color, body_points, 2)
 
-            # Statue body (slimmer triangular/demonic shape)
-            body_points: list[tuple[int, int]] = [
-                (x, statue_base_y - 60),  # Neck point (head connects here)
-                (x - 12, statue_base_y - 40),  # Left shoulder
-                (x - 15, statue_base_y),  # Left base
-                (x + 15, statue_base_y),  # Right base
-                (x + 12, statue_base_y - 40),  # Right shoulder
-            ]
-            pygame.draw.polygon(self.screen, body_color, body_points)
-            pygame.draw.polygon(self.screen, outline_color, body_points, 2)
+                # Head (larger and round)
+                head_y: int = statue_base_y - 70
+                head_radius = 15
+                pygame.draw.circle(self.screen, body_color, (x, head_y), head_radius)
+                pygame.draw.circle(self.screen, outline_color, (x, head_y), head_radius, 2)
 
-            # Head (larger and round)
-            head_y: int = statue_base_y - 70
-            head_radius = 15
-            pygame.draw.circle(self.screen, body_color, (x, head_y), head_radius)
-            pygame.draw.circle(self.screen, outline_color, (x, head_y), head_radius, 2)
+                # Larger horns (from head)
+                pygame.draw.line(
+                    self.screen,
+                    horn_color,
+                    (x - 10, head_y - 10),
+                    (x - 20, head_y - 30),
+                    4,
+                )
+                pygame.draw.line(
+                    self.screen,
+                    horn_color,
+                    (x + 10, head_y - 10),
+                    (x + 20, head_y - 30),
+                    4,
+                )
 
-            # Larger horns (from head)
-            pygame.draw.line(
-                self.screen,
-                horn_color,
-                (x - 10, head_y - 10),
-                (x - 20, head_y - 30),
-                4,
-            )
-            pygame.draw.line(
-                self.screen,
-                horn_color,
-                (x + 10, head_y - 10),
-                (x + 20, head_y - 30),
-                4,
-            )
+                # Glowing eyes (on head)
+                pygame.draw.circle(self.screen, eye_color, (x - 7, head_y), 3)
+                pygame.draw.circle(self.screen, eye_color, (x + 7, head_y), 3)
 
-            # Glowing eyes (on head)
-            pygame.draw.circle(self.screen, eye_color, (x - 7, head_y), 3)
-            pygame.draw.circle(self.screen, eye_color, (x + 7, head_y), 3)
+                # Subtle glow ring around head for visibility
+                pygame.draw.circle(
+                    self.screen, glow_color, (x, head_y), head_radius + 4, 2
+                )
 
-            # Subtle glow ring around head for visibility
-            pygame.draw.circle(
-                self.screen, glow_color, (x, head_y), head_radius + 4, 2
-            )
+                # Chest badge removed (no per-tower firing symbols)
 
-            # Chest badge removed (no per-tower firing symbols)
+                # Pitchfork in hand
+                # Handle (long pole)
+                fork_x: int = x + 20  # Held to the right side
+                fork_top_y: int = statue_base_y - 100
+                fork_bottom_y: int = statue_base_y - 20
+                pygame.draw.line(
+                    self.screen,
+                    (42, 42, 42),
+                    (fork_x, fork_bottom_y),
+                    (fork_x, fork_top_y),
+                    3,
+                )
 
-            # Pitchfork in hand
-            # Handle (long pole)
-            fork_x: int = x + 20  # Held to the right side
-            fork_top_y: int = statue_base_y - 100
-            fork_bottom_y: int = statue_base_y - 20
-            pygame.draw.line(
-                self.screen,
-                (42, 42, 42),
-                (fork_x, fork_bottom_y),
-                (fork_x, fork_top_y),
-                3,
-            )
+                # Pitchfork prongs (3 prongs)
+                prong_length = 15
+                # Center prong
+                pygame.draw.line(
+                    self.screen,
+                    (74, 74, 74),
+                    (fork_x, fork_top_y),
+                    (fork_x, fork_top_y - prong_length),
+                    2,
+                )
+                # Left prong
+                pygame.draw.line(
+                    self.screen,
+                    (74, 74, 74),
+                    (fork_x - 6, fork_top_y),
+                    (fork_x - 6, fork_top_y - prong_length),
+                    2,
+                )
+                # Right prong
+                pygame.draw.line(
+                    self.screen,
+                    (74, 74, 74),
+                    (fork_x + 6, fork_top_y),
+                    (fork_x + 6, fork_top_y - prong_length),
+                    2,
+                )
+                # Connecting bar
+                pygame.draw.line(
+                    self.screen,
+                    (74, 74, 74),
+                    (fork_x - 6, fork_top_y),
+                    (fork_x + 6, fork_top_y),
+                    2,
+                )
 
-            # Pitchfork prongs (3 prongs)
-            prong_length = 15
-            # Center prong
-            pygame.draw.line(
-                self.screen,
-                (74, 74, 74),
-                (fork_x, fork_top_y),
-                (fork_x, fork_top_y - prong_length),
-                2,
-            )
-            # Left prong
-            pygame.draw.line(
-                self.screen,
-                (74, 74, 74),
-                (fork_x - 6, fork_top_y),
-                (fork_x - 6, fork_top_y - prong_length),
-                2,
-            )
-            # Right prong
-            pygame.draw.line(
-                self.screen,
-                (74, 74, 74),
-                (fork_x + 6, fork_top_y),
-                (fork_x + 6, fork_top_y - prong_length),
-                2,
-            )
-            # Connecting bar
-            pygame.draw.line(
-                self.screen,
-                (74, 74, 74),
-                (fork_x - 6, fork_top_y),
-                (fork_x + 6, fork_top_y),
-                2,
-            )
+                # Smaller wings (simple angular shapes)
+                # Left wing
+                left_wing_points: list[tuple[int, int]] = [
+                    (x - 12, statue_base_y - 40),
+                    (x - 30, statue_base_y - 45),
+                    (x - 25, statue_base_y - 30),
+                ]
+                pygame.draw.polygon(self.screen, (74, 16, 16), left_wing_points)
+                pygame.draw.polygon(self.screen, (42, 0, 0), left_wing_points, 1)
 
-            # Smaller wings (simple angular shapes)
-            # Left wing
-            left_wing_points: list[tuple[int, int]] = [
-                (x - 12, statue_base_y - 40),
-                (x - 30, statue_base_y - 45),
-                (x - 25, statue_base_y - 30),
-            ]
-            pygame.draw.polygon(self.screen, (74, 16, 16), left_wing_points)
-            pygame.draw.polygon(self.screen, (42, 0, 0), left_wing_points, 1)
-
-            # Right wing (smaller to not interfere with pitchfork)
-            right_wing_points: list[tuple[int, int]] = [
-                (x + 12, statue_base_y - 40),
-                (x + 28, statue_base_y - 45),
-                (x + 23, statue_base_y - 30),
-            ]
-            pygame.draw.polygon(self.screen, (74, 16, 16), right_wing_points)
-            pygame.draw.polygon(self.screen, (42, 0, 0), right_wing_points, 1)
+                # Right wing (smaller to not interfere with pitchfork)
+                right_wing_points: list[tuple[int, int]] = [
+                    (x + 12, statue_base_y - 40),
+                    (x + 28, statue_base_y - 45),
+                    (x + 23, statue_base_y - 30),
+                ]
+                pygame.draw.polygon(self.screen, (74, 16, 16), right_wing_points)
+                pygame.draw.polygon(self.screen, (42, 0, 0), right_wing_points, 1)
 
     def _build_fog_cache(self) -> None:
         """Pre-render fog layers into cached surfaces.
@@ -1726,6 +2544,27 @@ class PygameUIManager:
 
         # Draw special effects
         self.draw_special_effects(shake_x, shake_y)
+
+        # Draw dynamic towers/statues for Purgatory when they exist and are marked visible
+        try:
+            if (
+                getattr(self.game, "selected_stage", None)
+                and str(self.game.selected_stage).startswith("purgatory")
+            ):
+                lt = getattr(self.game, "left_tower", None)
+                rt = getattr(self.game, "right_tower", None)
+                if lt and getattr(lt, "visible", False):
+                    # Draw pedestal first, then statue model above it
+                    statue_base_y = int(lt.y - 20 + shake_y)
+                    self._draw_pedestal(int(lt.x + shake_x), statue_base_y)
+                    self._draw_statue_model(int(lt.x + shake_x), statue_base_y, getattr(lt, "tower_type", None))
+                if rt and getattr(rt, "visible", False):
+                    statue_base_y = int(rt.y - 20 + shake_y)
+                    self._draw_pedestal(int(rt.x + shake_x), statue_base_y)
+                    self._draw_statue_model(int(rt.x + shake_x), statue_base_y, getattr(rt, "tower_type", None))
+        except Exception:
+            # Don't break rendering if statue drawing throws
+            pass
 
     def draw_special_effects(self, shake_x=0, shake_y=0) -> None:
         if self.game.selected_stage == "prologo" and self.game.prologo_lightning_strike:

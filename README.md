@@ -20,7 +20,7 @@ pip install -r requirements.txt
 - Stay at the bottom of the screen and dodge incoming demons
 - Automatically shoot holy fire at enemies above you
 - Survive as many waves as possible to increase your score
-- Each wave gets harder with more enemies and increased enemy health/speed
+- Each wave gets harder with more enemies and increased enemy health (movement speeds are controlled by `ENEMY_BASE_SPEEDS` in `src/balance.py`)
 
 ## Running the Game
 
@@ -92,6 +92,8 @@ The included `.pre-commit-config.yaml` will run `ruff --fix` on changed files so
   - Damage Reduction +10% (piercing icon)
   - Max Health +20 (bounce icon)
   - Speed +20% (speed icon)
+
+  - **Permanent Upgrades — POWER:** increases player damage **+3% per level** (was +2%); reflected in UI and tests.
 - **Multiple Enemy Types**: 
   - Weak demons (blue angels)
   - Normal demons (white angels)
@@ -120,6 +122,8 @@ The included `.pre-commit-config.yaml` will run `ruff --fix` on changed files so
 - Move left: LEFT ARROW or A
 - Move right: RIGHT ARROW or D
 - Pause: ESC
+  - Note: The **Restart** option has been removed from the Pause menu (only Resume and Quit remain).
+- Game Over behavior: Pressing ENTER/SPACE no longer restarts a level; press **ESC** to return to the stage menu.
 - During upgrade selection:
   - LEFT/RIGHT arrows: Select upgrade (shown with icons)
   - ENTER: Confirm selection

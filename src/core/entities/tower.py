@@ -22,7 +22,7 @@ class Tower:
         self,
         x: float,
         y: float,
-        fire_rate: int = 146,
+        fire_rate: int = 85,
         projectile_speed: float = 320.0,
         inaccuracy: float = 0.5,
         damage: int = 5,

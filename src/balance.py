@@ -14,7 +14,7 @@ BURST_MAX: int = 3
 BURST_PAUSE: int = 60
 
 # Statue (limbo) defaults
-STATUE_FIRE_RATE: int = 98  # increased fire rate by 50% (cooldown reduced)
+STATUE_FIRE_RATE: int = 85  # cooldown set to 85 (applied to both statues and towers)
 
 # Spawning / waves
 BASE_SPAWN_RATE: int = 72

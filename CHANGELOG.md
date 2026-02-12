@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-02-12 — Add Inquisitor Limbo boss (new feature + tuning) ✨
+
+- **New enemy:** `Inquisitor` — a Limbo end-of-wave boss that roams the top half of the battlefield instead of chasing the player.
+  - Roaming AI confined to arena walls and the top half of the stage.
+  - Slightly higher movement speed and 50% increased HP vs. previous mid-boss baseline.
+  - Fires a 3‑shot orange projectile spread; projectiles apply a slow to the player (stronger and longer than Ice tower slow).
+- **Gameplay tuning:** reduced Inquisitor fire rate and tuned projectile slow (duration and strength).
+- **Fixes & safety:** Inquisitor movement respects wall clamps; projectiles and pooling behavior covered by tests.
+- **Tests added/updated:** spawn, slow-on-hit, roaming confined to top-half, confinement to walls, and fire-rate assertions.
+
+## 2026-02-11 — Removed restart option ⚠️
+
+- **Gameplay:** The in-game **Restart** option has been removed.
+  - The **Pause** menu no longer shows a "Restart" choice (only **Resume** and **Quit** remain).
+  - The **Game Over** screen no longer accepts ENTER/SPACE to restart; press **ESC** to return to the stage menu.
+  - Related confirmation flows and the internal `restart` action have been removed from game logic and tests were disabled/updated accordingly.
+
 ## 2026-02-10 — Recent changes ✅
 
 ### Weapons

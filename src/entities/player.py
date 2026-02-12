@@ -3,48 +3,67 @@ import os
 
 from numpy import ndarray
 import pygame
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+from src.balance import XP_BASE, XP_GROWTH, PLAYER_BASE_HEALTH, DEFAULT_PROJECTILE_SIZE_MULTIPLIER, DEFAULT_DAMAGE_REDUCTION_MULTIPLIER, DEFAULT_FIRE_RATE_MULTIPLIER
+
+if TYPE_CHECKING:
+    from pygame.sprite import Sprite as SpriteType  # type: ignore
+else:
+    SpriteType = Any
+
+# Use an explicit runtime base variable to avoid reassigning a TYPE_CHECKING
+# name and to give mypy a concrete variable type.
+BaseSprite: type
+try:
+    BaseSprite = pygame.sprite.Sprite  # type: ignore
+except Exception:
+    BaseSprite = object
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-class Player(pygame.sprite.Sprite):
+class Player(BaseSprite):
     def __init__(self, x, y) -> None:
         super().__init__()
         self.x: Any = x
         self.y: Any = y
         self.width = 61  # Increased by another 10%
         self.height = 73  # Increased by another 10%
-        self.max_health = 100
+        self.max_health = PLAYER_BASE_HEALTH
         self.health: int = self.max_health
         self.speed = 300
         self.velocity_x = 0
 
+        # Slow status (can be applied by enemy projectiles)
+        self.slow_timer: int = 0
+        self.slow_factor: float = 1.0
+
+        self.base_image: pygame.Surface | None = None
+
         # XP and Level system
         self.xp = 0
         self.level = 1
-        self.xp_to_next_level = 100
+        self.xp_to_next_level = XP_BASE
         self.damage_multiplier = 1.0
-        self.fire_rate_multiplier = 1.0
-        self.projectile_size_multiplier = 1.0
-        self.damage_reduction_multiplier = 1.0
+        self.fire_rate_multiplier = DEFAULT_FIRE_RATE_MULTIPLIER
+        self.projectile_size_multiplier = DEFAULT_PROJECTILE_SIZE_MULTIPLIER
+        self.damage_reduction_multiplier = DEFAULT_DAMAGE_REDUCTION_MULTIPLIER
 
-        # Load image
+        # Load image (use shared AssetManager cache when possible)
         try:
-            # Robust assets path: two levels up from src/entities -> project root 'assets'
-            assets_dir: str = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "assets")
-            )
-            self.base_image: pygame.Surface = pygame.image.load(
-                os.path.join(assets_dir, "satan.png")
-            ).convert_alpha()
-            self.base_image: pygame.Surface = pygame.transform.scale(
-                self.base_image, (self.width, self.height)
-            )
+            from src.assets.manager import get_image
+
+            loaded = get_image("satan.png", (self.width, self.height))
+            if loaded is None:
+                raise RuntimeError("satan.png not available")
+
+            # Work on a copy so the cached surface isn't modified in-place
+            self.base_image = loaded.copy()
             self.image = self.base_image.copy()
 
             # Create walking animation frames
-            self.walk_frames = []
+            self.walk_frames: list[pygame.Surface] = []
             try:
                 self.create_walk_frames()
             except Exception as e:
@@ -57,7 +76,9 @@ class Player(pygame.sprite.Sprite):
             self.image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
             self.draw_satan()
             self.walk_frames = []
-        self.rect = self.image.get_rect(center=(self.x, self.y))
+        self.rect: pygame.Rect = self.image.get_rect(center=(self.x, self.y))
+        # Visual particles for burn effect on player
+        self.burn_particles: list = []
 
     def create_walk_frames(self) -> None:
         """Create walking animation frames by shifting pixels"""
@@ -92,24 +113,20 @@ class Player(pygame.sprite.Sprite):
 
             for y in range(height):
                 for x in range(width):
+                    src_x: int
                     if x < width // 2:
                         # Left side (left leg)
-                        src_x: int = x - offset_left
-                        if 0 <= src_x < width:
-                            new_pixels[x, y] = pixels[src_x, y]
-                            new_alpha[x, y] = alpha_pixels[src_x, y]
-                        else:
-                            new_pixels[x, y] = [0, 0, 0]
-                            new_alpha[x, y] = 0
+                        src_x = x - offset_left
                     else:
                         # Right side (right leg)
-                        src_x: int = x - offset_right
-                        if 0 <= src_x < width:
-                            new_pixels[x, y] = pixels[src_x, y]
-                            new_alpha[x, y] = alpha_pixels[src_x, y]
-                        else:
-                            new_pixels[x, y] = [0, 0, 0]
-                            new_alpha[x, y] = 0
+                        src_x = x - offset_right
+
+                    if 0 <= src_x < width:
+                        new_pixels[x, y] = pixels[src_x, y]
+                        new_alpha[x, y] = alpha_pixels[src_x, y]
+                    else:
+                        new_pixels[x, y] = [0, 0, 0]
+                        new_alpha[x, y] = 0
 
             # Unlock surface arrays
             del pixels
@@ -158,27 +175,53 @@ class Player(pygame.sprite.Sprite):
         pygame.draw.line(self.image, (150, 0, 0), (32, 45), (32, 55), 3)
 
     def move_left(self) -> None:
-        self.velocity_x: int = -self.speed
+        self.velocity_x = -self.speed
 
     def move_right(self) -> None:
-        self.velocity_x: int = self.speed
+        self.velocity_x = self.speed
 
     def update(self, screen_width) -> None:
         # Apply velocity
         self.x += self.velocity_x / 60  # Divide by FPS
 
         # Clamp to screen
-        self.x: int = max(self.width // 2, min(self.x, screen_width - self.width // 2))
+        self.x = max(self.width // 2, min(self.x, screen_width - self.width // 2))
 
         # Reset velocity
         self.velocity_x = 0
 
+        # Handle slow status timer
+        if getattr(self, "slow_timer", 0) > 0:
+            try:
+                self.slow_timer -= 1
+                if self.slow_timer <= 0 and hasattr(self, "original_speed"):
+                    # restore original speed when slow expires
+                    self.speed = getattr(self, "original_speed", self.speed)
+            except Exception:
+                pass
+
         # Update rect
         self.rect.center = (self.x, self.y)
 
+        # Update and cull burn particles (visual only)
+        if getattr(self, "burn_particles", None):
+            for p in list(self.burn_particles):
+                try:
+                    p.update()
+                    if not getattr(p, "alive", True):
+                        try:
+                            self.burn_particles.remove(p)
+                        except Exception:
+                            pass
+                except Exception:
+                    try:
+                        self.burn_particles.remove(p)
+                    except Exception:
+                        pass
+
     def take_damage(self, damage) -> None:
         actual_damage = damage * self.damage_reduction_multiplier
-        self.health: int = max(0, self.health - actual_damage)
+        self.health = max(0, self.health - actual_damage)
 
     def gain_xp(self, amount) -> None:
         self.xp += amount
@@ -188,9 +231,8 @@ class Player(pygame.sprite.Sprite):
     def level_up(self) -> None:
         self.level += 1
         self.xp -= self.xp_to_next_level
-        self.xp_to_next_level = int(
-            self.xp_to_next_level * 1.2
-        )  # Increase XP requirement
+        # Recalculate XP requirement using centralized curve
+        self.xp_to_next_level = int(XP_BASE * (XP_GROWTH ** (self.level - 1)))  # Increase XP requirement
         # Note: Upgrade selection will be handled in the game class
 
     def draw(self, screen, shake_x=0, shake_y=0, anim_frame=0, is_moving=False) -> None:
@@ -200,7 +242,7 @@ class Player(pygame.sprite.Sprite):
 
         # Apply bobbing effect if moving
         bob_offset = 0
-        current_image: pygame.Surface | None = self.image
+        current_image: pygame.Surface = self.image
 
         if is_moving and self.walk_frames:
             # Create bobbing effect (up and down movement)

@@ -1,16 +1,33 @@
 import importlib
 from typing import TYPE_CHECKING, Any
 
-from pygame import Rect, Surface
-
 if TYPE_CHECKING:
-    import pygame  # type: ignore
+    from pygame import Rect, Surface  # type: ignore
+    from pygame.sprite import Sprite as SpriteType  # type: ignore
+else:
+    Rect = Any
+    Surface = Any
+    SpriteType = Any
 
+# Ensure a runtime base class reference without assigning to the type name
 try:
-    pygame: importlib.ModuleType = importlib.import_module("pygame")
+    PygameSprite = pygame.sprite.Sprite  # type: ignore
 except Exception:
-    # Fallback to pygame-ce when running in environments where SDL is available
-    pygame: importlib.ModuleType = importlib.import_module("pygame_ce")  # type: ignore
+    PygameSprite = object
+
+from types import ModuleType
+try:
+    pygame: ModuleType = importlib.import_module("pygame")
+except Exception:
+    pygame: ModuleType = importlib.import_module("pygame_ce")  # type: ignore
+
+# Use an explicit runtime base variable so mypy does not confuse a TYPE_CHECKING
+# alias with a runtime assignment.
+BaseSprite: type
+try:
+    BaseSprite = pygame.sprite.Sprite  # type: ignore
+except Exception:
+    BaseSprite = object
 
 import logging
 import math
@@ -23,7 +40,52 @@ from src.projectile import Projectile
 logger: logging.Logger = logging.getLogger(__name__) 
 
 
-class Enemy(pygame.sprite.Sprite):
+class BurnParticle:
+    """Simple particle for burn visual effect"""
+
+    def __init__(self, x: float, y: float, vx: float, vy: float, life: int = 30, size: int = 3):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.life = life
+        self.size = size
+
+    def update(self) -> None:
+        self.x += self.vx / 60
+        self.y += self.vy / 60
+        self.vy -= 0.2  # slight upward acceleration
+        self.life -= 1
+
+    @property
+    def alive(self) -> bool:
+        return self.life > 0
+
+
+
+class IceParticle:
+    """Simple particle for ice explosion visual effect"""
+
+    def __init__(self, x: float, y: float, vx: float, vy: float, life: int = 20, size: int = 2):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.life = life
+        self.size = size
+
+    def update(self) -> None:
+        self.x += self.vx / 60
+        self.y += self.vy / 60
+        self.vy += 0.1  # slight downward acceleration for ice shards
+        self.life -= 1
+
+    @property
+    def alive(self) -> bool:
+        return self.life > 0
+
+
+class Enemy(BaseSprite):
     def __init__(self, x, y, enemy_type="basic", health=20, speed=100) -> None:
         super().__init__()
         self.x: Any = x
@@ -53,6 +115,18 @@ class Enemy(pygame.sprite.Sprite):
             self.width = 60
             self.height = 60
             self.damage = 25
+        elif enemy_type == "boss_inquisitor":
+            # Inquisitor: mid-sized Limbo boss (orange projectiles + player slow)
+            self.width = 80
+            self.height = 80
+            self.damage = 18
+        elif enemy_type == "boss_big":
+            # Make boss_big significantly larger (at least 3x the normal size)
+            # Base enemies end up at ~40px after default growth, so 3x yields >=120.
+            self.width = 120
+            self.height = 120
+            # Increase damage to reflect larger boss
+            self.damage = 40
         elif enemy_type == "boss_final":
             # Set final boss size explicitly to 100x100
             self.width = 100
@@ -66,18 +140,22 @@ class Enemy(pygame.sprite.Sprite):
 
         # Increase health by 20% for all enemies
         self.max_health = int(self.max_health * 1.2)
-        self.health: int = self.max_health
+        self.health = self.max_health
 
         # Calculate radius from width/height (average)
         self.radius: int = (self.width + self.height) // 4
 
-        # Shooting cooldown for enemies that shoot
+        # Shooting cooldown for enemies that shoot (None when not applicable)
+        self.shoot_cooldown: int | None = None
         if enemy_type == "normal":
-            self.shoot_cooldown: int = random.randint(60, 120)
+            self.shoot_cooldown = random.randint(60, 120)
         elif enemy_type == "boss_medium":
-            self.shoot_cooldown: int = random.randint(60, 120)
+            self.shoot_cooldown = random.randint(60, 120)
+        elif enemy_type == "boss_inquisitor":
+            # Inquisitor fires a 3-shot spread periodically (slightly reduced fire rate)
+            self.shoot_cooldown = random.randint(100, 140)
         elif enemy_type == "boss_final":
-            self.shoot_cooldown: int = random.randint(60, 110)
+            self.shoot_cooldown = random.randint(60, 110)
         elif enemy_type in ["boss_big"]:
             # Boss_big doesn't have regular shooting, only special attacks
             self.shoot_cooldown = None
@@ -85,23 +163,30 @@ class Enemy(pygame.sprite.Sprite):
             self.shoot_cooldown = None
 
         # Boss pattern timers
+        # Boss pattern timers (None when not applicable)
+        self.pattern_timer: int | None = None
+        self.big_shot_cooldown: int | None = None
         if enemy_type == "boss_big":
-            self.pattern_timer: int = random.randint(100, 180)
-            self.big_shot_cooldown: int = random.randint(200, 320)
+            self.pattern_timer = random.randint(100, 180)
+            self.big_shot_cooldown = random.randint(200, 320)
         elif enemy_type == "boss_final":
-            self.pattern_timer: int = random.randint(80, 150)
+            self.pattern_timer = random.randint(80, 150)
         else:
             self.pattern_timer = None
             self.big_shot_cooldown = None
 
+        # Particle effects
+        self.burn_particles: List["BurnParticle"] = []
+        self.ice_particles: List["IceParticle"] = []
+
         # Create image
         self.image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         self.draw_enemy()
-        self.rect: Rect | logging.Any = self.image.get_rect(center=(self.x, self.y))
+        self.rect: Rect | Any = self.image.get_rect(center=(self.x, self.y))
 
         # Keep a copy of the base image so we can add temporary effects (glow/shine)
         try:
-            self.base_image: Surface | logging.Any = self.image.copy()
+            self.base_image: Surface | Any = self.image.copy()
         except Exception:
             self.base_image = None
         # Shine state for final boss phase
@@ -110,25 +195,29 @@ class Enemy(pygame.sprite.Sprite):
 
         self.shake_timer = 0
 
+        # Visual particles for burn effect
+        self.burn_particles: List["BurnParticle"] = []
+
     def draw_enemy(self) -> None:
         """Draw enemy based on type, try to load image first"""
         # Map enemy types to asset names
-        asset_name: str = f"enemy_{self.enemy_type}.png"
+        asset_name = f"enemy_{self.enemy_type}.png"
         if self.enemy_type.startswith("boss_"):
             # For bosses, remove the 'boss_' prefix
             boss_type: str = self.enemy_type.replace("boss_", "")
-            asset_name: str = f"boss_{boss_type}.png"
+            asset_name = f"boss_{boss_type}.png"
 
         try:
-            # Robust assets path: two levels up from src/entities -> project root 'assets'
-            assets_dir: str = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "assets")
-            )
-            image_path: str = os.path.join(assets_dir, asset_name)
-            loaded_image: Surface | logging.Any = pygame.image.load(image_path).convert_alpha()
-            self.image: Surface | logging.Any = pygame.transform.scale(loaded_image, (self.width, self.height))
+            from src.assets.manager import get_image
+
+            loaded = get_image(asset_name, (self.width, self.height))
+            if loaded is None:
+                raise RuntimeError(f"Asset {asset_name} not available")
+            self.image = loaded.copy()
         except Exception as e:
-            logger.warning(
+            # Asset loading already logs warnings; avoid repeating the same warning
+            # for each enemy instance to reduce console spam. Log at debug level here.
+            logger.debug(
                 "Could not load %s, using fallback drawing: %s", asset_name, e
             )
             # Fallback to drawing
@@ -275,7 +364,7 @@ class Enemy(pygame.sprite.Sprite):
 
                     # Scale the base image to new size
                     if getattr(self, "base_image", None) is not None:
-                        self.image: Surface | logging.Any = pygame.transform.scale(
+                        self.image: Surface | Any = pygame.transform.scale(
                             self.base_image, (self.width, self.height)
                         )
                     else:
@@ -300,7 +389,7 @@ class Enemy(pygame.sprite.Sprite):
                         pygame.draw.circle(
                             overlay, (255, 220, 120, pulse), center, glow_radius
                         )
-                        overlay_rect: Rect | logging.Any = overlay.get_rect(
+                        overlay_rect: Rect | Any = overlay.get_rect(
                             center=(self.width // 2, self.height // 2)
                         )
                         # Additive blit for glow effect
@@ -335,19 +424,180 @@ class Enemy(pygame.sprite.Sprite):
                     # Keep within screen bounds
                     self.x = max(50, min(game.width - 50, self.x))
             else:
-                # Normal enemy behavior - move towards player
-                dx = player.x - self.x
-                dy = player.y - self.y
-                distance: float = math.sqrt(dx * dx + dy * dy)
+                # Normal enemy behavior - sometimes stop in middle instead of chasing player
+                if self.enemy_type == "normal" and game is not None:
+                    # Lazily initialize a stop point/time near the center of the battlefield
+                    if not hasattr(self, "stop_point"):
+                        center_x = game.width / 2
+                        center_y = game.height / 2
+                        jitter_x = game.width * 0.2
+                        jitter_y = game.height * 0.2
+                        spx = center_x + random.uniform(-jitter_x, jitter_x)
+                        spy = center_y + random.uniform(-jitter_y, jitter_y)
+                        # Ensure the chosen stop point is within the playable walls
+                        spx = game.clamp_to_walls(spx)
+                        self.stop_point = (spx, spy)
+                        self.stop_timer = 0
+                        self.stop_threshold = max(10, min(game.width, game.height) * 0.05)
 
-                if distance > 1:  # Avoid division by very small numbers
-                    # Move towards player
-                    self.x += (dx / distance) * self.speed / 60
-                    self.y += (dy / distance) * self.speed / 60
+                    # If currently stopped, count down and do not move
+                    if getattr(self, "stop_timer", 0) > 0:
+                        # While stopped, make sure the enemy remains within walls
+                        if game:
+                            self.x = game.clamp_to_walls(self.x)
+                        self.stop_timer -= 1
+                    else:
+                        # Move towards the chosen stop point
+                        spx, spy = self.stop_point
+                        dx = spx - self.x
+                        dy = spy - self.y
+                        distance = math.hypot(dx, dy)
+                        if distance > 1:
+                            self.x += (dx / distance) * self.speed / 60
+                            self.y += (dy / distance) * self.speed / 60
+                        else:
+                            # Arrived: stay stopped for a random duration then pick a new stop point
+                            self.stop_timer = random.randint(60, 180)
+                            center_x = game.width / 2
+                            center_y = game.height / 2
+                            jitter_x = game.width * 0.2
+                            jitter_y = game.height * 0.2
+                            spx = center_x + random.uniform(-jitter_x, jitter_x)
+                            spy = center_y + random.uniform(-jitter_y, jitter_y)
+                            spx = game.clamp_to_walls(spx)
+                            self.stop_point = (spx, spy)
 
-            # Clamp to walls if game reference is provided
-            if game:
-                self.x = game.clamp_to_walls(self.x)
+                elif self.enemy_type == "boss_inquisitor" and game is not None:
+                    # Inquisitor roams randomly within the top half of the playfield
+                    # Do not chase the player directly; pick random roam targets and move there
+                    top_margin = 50
+                    bottom_limit = int(game.height / 2) - 40  # do not cross halfway
+                    left_limit = 50
+                    right_limit = game.width - 50
+
+                    if not hasattr(self, "roam_target"):
+                        # Use game's clamp_to_walls so roam stays within arena walls
+                        rx = random.uniform(game.clamp_to_walls(0), game.clamp_to_walls(game.width))
+                        ry = random.uniform(top_margin, max(top_margin + 10, bottom_limit))
+                        # Ensure x respects wall clamps explicitly
+                        rx = game.clamp_to_walls(rx)
+                        self.roam_target = (rx, ry)
+                        self.roam_timer = random.randint(60, 180)
+
+                    # Move toward roam target with slight speed variation
+                    tx, ty = self.roam_target
+                    dx = tx - self.x
+                    dy = ty - self.y
+                    dist = math.hypot(dx, dy)
+                    if dist > 4:
+                        vx = (dx / dist) * (self.speed * random.uniform(0.9, 1.1)) / 60
+                        vy = (dy / dist) * (self.speed * random.uniform(0.9, 1.1)) / 60
+                        self.x += vx
+                        self.y += vy
+                    else:
+                        # Reached target -> pick a new one within top half and inside walls
+                        self.roam_timer = random.randint(60, 240)
+                        rx = random.uniform(game.clamp_to_walls(0), game.clamp_to_walls(game.width))
+                        ry = random.uniform(top_margin, max(top_margin + 10, bottom_limit))
+                        rx = game.clamp_to_walls(rx)
+                        self.roam_target = (rx, ry)
+
+                    # Slight random jitter so movement looks organic
+                    if random.random() < 0.02:
+                        self.x += random.uniform(-1.5, 1.5)
+                        self.y += random.uniform(-1.0, 1.0)
+
+                    # Clamp to arena walls and top-half limit (never cross halfway line)
+                    try:
+                        self.x = game.clamp_to_walls(self.x)
+                    except Exception:
+                        # Fallback to previous clamp
+                        self.x = max(left_limit, min(right_limit, self.x))
+                    self.y = max(top_margin, min(bottom_limit, self.y))
+
+                else:
+                    # Move towards player (default behaviour for other enemy types)
+                    dx = player.x - self.x
+                    dy = player.y - self.y
+                    distance: float = math.sqrt(dx * dx + dy * dy)
+
+                    if distance > 1:  # Avoid division by very small numbers
+                        # Move towards player
+                        self.x += (dx / distance) * self.speed / 60
+                        self.y += (dy / distance) * self.speed / 60
+
+            # Handle slow effect timer
+            if hasattr(self, "slow_timer") and getattr(self, "slow_timer", 0) > 0:
+                self.slow_timer -= 1
+                if self.slow_timer <= 0:
+                    # Restore original speed
+                    if hasattr(self, "original_speed"):
+                        self.speed = getattr(self, "original_speed", self.speed)
+                        try:
+                            del self.original_speed
+                        except Exception:
+                            pass
+
+            # Handle burn (damage over time)
+            if hasattr(self, "burn_timer") and getattr(self, "burn_timer", 0) > 0:
+                # Per-frame decrement
+                self.burn_timer -= 1
+                # Initialize tick timer if missing
+                if not hasattr(self, "burn_tick_timer") or getattr(self, "burn_tick_timer", 0) <= 0:
+                    self.burn_tick_timer = getattr(game, "fps", 60)
+                self.burn_tick_timer -= 1
+                if self.burn_tick_timer <= 0:
+                    # Apply damage per second as an integer per tick
+                    damage = getattr(self, "burn_damage_per_second", 1.0)
+                    try:
+                        # Use take_damage so effects like shake are applied
+                        self.take_damage(damage)
+                    except Exception:
+                        try:
+                            self.health -= damage
+                        except Exception:
+                            pass
+                    # Reset tick timer
+                    self.burn_tick_timer = getattr(game, "fps", 60)
+
+                # Emit particles while burning
+                try:
+                    # spawn 2-4 small particles per frame (increased visibility)
+                    for _ in range(random.randint(2, 4)):
+                        px = self.x + random.uniform(-8, 8)
+                        py = self.y - 8 + random.uniform(-4, 4)
+                        vx = random.uniform(-15, 15)
+                        vy = random.uniform(12, 36)
+                        p = BurnParticle(px, py, vx, vy, life=random.randint(20, 44), size=random.randint(3, 5))
+                        self.burn_particles.append(p)
+                except Exception:
+                    pass
+
+            # Update and cull burn particles (run regardless of burn state)
+            if self.burn_particles:
+                for p in list(self.burn_particles):
+                    try:
+                        p.update()
+                        if not p.alive:
+                            self.burn_particles.remove(p)
+                    except Exception:
+                        try:
+                            self.burn_particles.remove(p)
+                        except Exception:
+                            pass
+
+            # Update and cull ice particles
+            if self.ice_particles:
+                for p in list(self.ice_particles):
+                    try:
+                        p.update()
+                        if not p.alive:
+                            self.ice_particles.remove(p)
+                    except Exception:
+                        try:
+                            self.ice_particles.remove(p)
+                        except Exception:
+                            pass
 
             self.rect.center = (self.x, self.y)
 
@@ -377,7 +627,7 @@ class Enemy(pygame.sprite.Sprite):
                             speed = 220
                             vel_x: float = math.cos(rad) * speed
                             vel_y: float = math.sin(rad) * speed
-                            projectile: Projectile[Any | float | Any, Any | Any | int, float, float] = Projectile(
+                            projectile: Projectile = Projectile(
                                 self.x,
                                 self.y,
                                 vel_x,
@@ -396,17 +646,20 @@ class Enemy(pygame.sprite.Sprite):
                         if distance > 0:
                             speed = 360
                             base_angle: float = math.atan2(dy, dx)
-                            for angle_offset in [-10, 0, 10]:
+                            # Use a slightly narrower spread between the three projectiles
+                            # Change offsets to [-15, 0, 15] (~30° between outer shots)
+                            for angle_offset in [-15, 0, 15]:
                                 rad: float = base_angle + math.radians(angle_offset)
                                 vel_x: float = math.cos(rad) * speed
                                 vel_y: float = math.sin(rad) * speed
-                                projectile: Projectile[Any | float | Any, Any | Any | int, float, float] = Projectile(
+                                projectile: Projectile = Projectile(
                                     self.x,
                                     self.y,
                                     vel_x,
                                     vel_y,
                                     damage=22,
-                                    radius=11,
+                                    # Slightly smaller hitbox for triple shots to make them harder to hit
+                                    radius=8,
                                     is_enemy_projectile=True,
                                 )
                                 game.enemy_projectiles.add(projectile)
@@ -419,7 +672,7 @@ class Enemy(pygame.sprite.Sprite):
                             speed = 250
                             vel_x: float = math.cos(rad) * speed
                             vel_y: float = math.sin(rad) * speed
-                            projectile: Projectile[Any | float | Any, Any | Any | int, float, float] = Projectile(
+                            projectile: Projectile = Projectile(
                                 self.x,
                                 self.y,
                                 vel_x,
@@ -476,7 +729,7 @@ class Enemy(pygame.sprite.Sprite):
                     vel_x = 0
                     vel_y = 220
 
-                projectile: Projectile[Any | Any | float, Any | Any | int, Any | int, Any | int] = Projectile(
+                projectile: Projectile = Projectile(
                     self.x,
                     self.y,
                     vel_x,
@@ -513,6 +766,33 @@ class Enemy(pygame.sprite.Sprite):
                 game.enemy_projectiles.add(projectile)
                 self.shoot_cooldown: int = random.randint(90, 150)
 
+            elif self.enemy_type == "boss_inquisitor":
+                # Inquisitor: 3-shot orange spread that applies a slow to the player
+                dx = player.x - self.x
+                dy = player.y - self.y
+                base_angle = math.atan2(dy, dx)
+                speed = 260
+                angles = [base_angle - 0.2, base_angle, base_angle + 0.2]
+                for ang in angles:
+                    vel_x = math.cos(ang) * speed
+                    vel_y = math.sin(ang) * speed
+                    proj = Projectile(
+                        self.x,
+                        self.y,
+                        vel_x,
+                        vel_y,
+                        damage=12,
+                        radius=6,
+                        is_enemy_projectile=True,
+                        appearance="inquisitor",
+                    )
+                            # Mark slow metadata so collision handler can apply effect to player
+                    proj.effect = "slow"
+                    proj.slow_duration = 180  # 3s at 60 FPS (increased)
+                    proj.slow_factor = 0.4   # stronger slow (60% reduction)
+                    game.enemy_projectiles.add(proj)
+                self.shoot_cooldown = random.randint(110, 150)
+
             elif self.enemy_type == "boss_final":
                 # Single aimed shot for final boss
                 dx = player.x - self.x
@@ -540,15 +820,44 @@ class Enemy(pygame.sprite.Sprite):
         except Exception as e:
             logger.exception("Error in enemy shooting %s: %s", self.enemy_type, e)
 
-    def take_damage(self, damage) -> None:
+    def take_damage(self, damage, *, show_floating: bool = True) -> None:
+        """Apply damage to this enemy.
+
+        show_floating: when False suppresses the floating damage text (used for contact
+        damage and other silent effects).
+        """
         self.health -= damage
         self.shake_timer = 10
+        # Try to show floating damage number via centralized game instance (unless suppressed)
+        if not show_floating:
+            return
+        try:
+            dmg = int(damage)
+        except Exception:
+            try:
+                dmg = int(round(float(damage)))
+            except Exception:
+                dmg = damage
+        try:
+            # Lazy import CURRENT_GAME to avoid circular imports at module load
+            from src.game import CURRENT_GAME
+            if CURRENT_GAME is not None:
+                try:
+                    x = getattr(self, 'x', None) or (self.rect.centerx if getattr(self, 'rect', None) is not None else 0)
+                    y = getattr(self, 'y', None) or (self.rect.top if getattr(self, 'rect', None) is not None else 0)
+                    # Position above enemy
+                    pos_y = (getattr(self, 'rect', None) and self.rect.top - 8) or (getattr(self, 'y', 0) - getattr(self, 'height', 0) // 2 - 8)
+                    CURRENT_GAME.spawn_floating_text(str(dmg), x, pos_y)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def draw(self, screen, shake_x=0, shake_y=0) -> None:
         try:
             # Apply shake offset
-            draw_x: int | logging.Any = self.rect.x + shake_x
-            draw_y: int | logging.Any = self.rect.y + shake_y
+            draw_x: int | Any = self.rect.x + shake_x
+            draw_y: int | Any = self.rect.y + shake_y
 
             if self.shake_timer > 0:
                 draw_x += random.randint(-1, 1)
@@ -559,8 +868,8 @@ class Enemy(pygame.sprite.Sprite):
             # Draw health bar with shake offset
             bar_width = 25
             bar_height = 3
-            bar_x: int | logging.Any = self.rect.centerx - bar_width // 2 + shake_x
-            bar_y: int | logging.Any = self.rect.top - 5 + shake_y
+            bar_x: int | Any = self.rect.centerx - bar_width // 2 + shake_x
+            bar_y: int | Any = self.rect.top - 5 + shake_y
 
             if self.shake_timer > 0:
                 bar_x += random.randint(-1, 1)
@@ -573,5 +882,34 @@ class Enemy(pygame.sprite.Sprite):
                 (255, 100, 100),
                 (bar_x, bar_y, bar_width * health_ratio, bar_height),
             )
+
+            # Draw burn status indicator (flame + optional text) if enemy is burning
+            try:
+                # Draw particles behind the flame
+                if self.burn_particles:
+                    for p in list(self.burn_particles):
+                        try:
+                            surf = pygame.Surface((p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA)
+                            alpha = max(60, int(255 * (p.life / 44)))
+                            pygame.draw.circle(surf, (255, 120, 0, alpha), (p.size + 1, p.size + 1), p.size)
+                            screen.blit(surf, (int(p.x - p.size), int(p.y - p.size)))
+                        except Exception:
+                            pass
+
+                # Draw ice particles
+                if self.ice_particles:
+                    for p in list(self.ice_particles):
+                        try:
+                            surf = pygame.Surface((p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA)
+                            alpha = max(50, int(255 * (p.life / 25)))
+                            pygame.draw.circle(surf, (200, 240, 255, alpha), (p.size + 1, p.size + 1), p.size)
+                            screen.blit(surf, (int(p.x - p.size), int(p.y - p.size)))
+                        except Exception:
+                            pass
+
+                # Burn status: particles are drawn above; legacy flame/text removed (particles retained)
+
+            except Exception as e:
+                logger.exception("Error drawing burn effect for enemy %s: %s", self.enemy_type, e)
         except Exception as e:
             logger.exception("Error drawing enemy %s: %s", self.enemy_type, e)

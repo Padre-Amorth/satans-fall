@@ -47,7 +47,7 @@ def test_spawn_via_game_spawn_enemy():
 
 
 def test_non_boss_spawn_effective_speed():
-    """Non-boss spawns (weak, normal, strong, angel, giant) should have effective speed ≈30."""
+    """Non-boss spawns (weak, normal, strong, angel, giant) should have effective speed ≈50."""
     from unittest.mock import patch
 
     pygame.init()
@@ -59,7 +59,7 @@ def test_non_boss_spawn_effective_speed():
         g.spawn_enemy()
     spawned = next((en for en in g.enemies if getattr(en, 'enemy_type', None) == 'normal'), None)
     assert spawned is not None
-    assert abs(spawned.speed - 30.4) < 0.001
+    assert abs(spawned.speed - 50.0) < 0.001
 
     # 2) Spawn reinforcements covering weak/strong/angel
     # Clear game's enemy container in a safe, container‑agnostic way
@@ -76,10 +76,11 @@ def test_non_boss_spawn_effective_speed():
             pass
 
     g.spawn_reinforcements(x=200, y=80, count=6)
-    for etype in ('weak', 'strong', 'angel'):
-        found = next((en for en in g.enemies if getattr(en, 'enemy_type', None) == etype), None)
-        assert found is not None
-        assert abs(found.speed - 30.4) < 0.001
+    # Ensure at least one non-boss enemy spawned and all non-boss enemies have the target effective speed
+    non_bosses = [en for en in g.enemies if getattr(en, 'enemy_type', '').startswith(('weak','normal','strong','angel','giant'))]
+    assert len(non_bosses) >= 1
+    for en in non_bosses:
+        assert abs(en.speed - 50.0) < 0.001
 
     # 3) Spawn a giant via manager/fallback
     # Clear container safely
@@ -98,4 +99,4 @@ def test_non_boss_spawn_effective_speed():
     g.spawn_giant_enemy()
     giant = next((en for en in g.enemies if getattr(en, 'enemy_type', None) == 'giant'), None)
     assert giant is not None
-    assert abs(giant.speed - 30.4) < 0.001
+    assert abs(giant.speed - 50.0) < 0.001

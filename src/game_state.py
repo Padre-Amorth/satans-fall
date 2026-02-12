@@ -349,11 +349,15 @@ class GameStateManager:
         self.weapon_choice_index = 0
 
     def generate_initial_tower_choices(self) -> list[dict[str, Any]]:
-        """Return the three tower choices for Purgatory: Fire, Storm, Ice."""
+        """Return the three tower choices for Purgatory: Fire, Storm, Ice.
+
+        Descriptions include the current base damage and a short note about the
+        secondary effect so players see the actual numbers in the selection UI.
+        """
         return [
-            {"id": "fire", "name": "Fire Tower", "description": "Burn nearby enemies"},
-            {"id": "storm", "name": "Storm Tower", "description": "Strike lightning at enemies"},
-            {"id": "ice", "name": "Ice Tower", "description": "Slow enemies with frost"},
+            {"id": "fire", "name": "Fire Tower", "description": "Damage: 10 — Burn nearby enemies (4 DPS, 3s)"},
+            {"id": "storm", "name": "Storm Tower", "description": "Damage: 10 (projectile ~9) — Chains to multiple enemies"},
+            {"id": "ice", "name": "Ice Tower", "description": "Damage: 10 — Slows enemies 50% for 2s"},
         ]
 
     def show_initial_tower_choice(self) -> None:

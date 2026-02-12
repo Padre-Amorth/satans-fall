@@ -2611,9 +2611,9 @@ class Game:
             except Exception:
                 self.awaiting_tower_choice = True
                 self.tower_choices = self.game_state.generate_initial_tower_choices() if hasattr(self, 'game_state') else [
-                    {"id": "fire", "name": "Fire Tower", "description": "Burn nearby enemies"},
-                    {"id": "storm", "name": "Storm Tower", "description": "Strike lightning at enemies"},
-                    {"id": "ice", "name": "Ice Tower", "description": "Slow enemies with frost"},
+                    {"id": "fire", "name": "Fire Tower", "description": "Damage: 10 — Burn nearby enemies (4 DPS, 3s)"},
+                    {"id": "storm", "name": "Storm Tower", "description": "Damage: 10 (projectile ~9) — Chains to multiple enemies"},
+                    {"id": "ice", "name": "Ice Tower", "description": "Damage: 10 — Slows enemies 50% for 2s"},
                 ]
                 self.selected_tower_index = 0
 
@@ -5644,9 +5644,9 @@ class Game:
     def generate_initial_tower_choices(self) -> list[dict[str, Any]]:
         """Fallback generator for tower choices (mirrors GameStateManager)."""
         return [
-            {"id": "fire", "name": "Fire Tower", "description": "Burn nearby enemies"},
-            {"id": "storm", "name": "Storm Tower", "description": "Strike lightning at enemies"},
-            {"id": "ice", "name": "Ice Tower", "description": "Slow enemies with frost"},
+            {"id": "fire", "name": "Fire Tower", "description": "Damage: 10 — Burn nearby enemies (4 DPS, 3s)"},
+            {"id": "storm", "name": "Storm Tower", "description": "Damage: 10 (projectile ~9) — Chains to multiple enemies"},
+            {"id": "ice", "name": "Ice Tower", "description": "Damage: 10 — Slows enemies 50% for 2s"},
         ]
 
     def _wall_x_at(self, side: str, y: float) -> float:

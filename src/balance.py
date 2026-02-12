@@ -1,0 +1,37 @@
+"""Centralized balance and gameplay tuning parameters."""
+
+# XP progression
+XP_BASE: int = 100
+XP_GROWTH: float = 1.2
+
+# Player defaults
+PLAYER_BASE_DAMAGE: int = 15
+PLAYER_BASE_HEALTH: int = 100
+
+# Burst / Beast weapon defaults
+BURST_FIRE_RATE: int = 15
+BURST_MAX: int = 3
+BURST_PAUSE: int = 60
+
+# Statue (limbo) defaults
+STATUE_FIRE_RATE: int = 98  # increased fire rate by 50% (cooldown reduced)
+
+# Spawning / waves
+BASE_SPAWN_RATE: int = 72
+SPAWN_MIN_RATE: int = 30
+SPAWN_RAMP_START_WAVE: int = 3
+SPAWN_RAMP_SLOPE_PRE: int = 3
+SPAWN_RAMP_SLOPE_POST: int = 6
+
+# Reinforcements
+REINFORCEMENT_DELAY_MS: int = 2000
+REINFORCEMENT_COUNT: int = 8
+
+# Projectile / game scaling defaults
+DEFAULT_PROJECTILE_SIZE_MULTIPLIER: float = 1.0
+DEFAULT_FIRE_RATE_MULTIPLIER: float = 1.0
+DEFAULT_DAMAGE_REDUCTION_MULTIPLIER: float = 1.0
+
+# Misc
+MAX_EXTRA_WEAPONS: int = 3
+GAME_OVER_FADE_DURATION_MS: int = 900

@@ -25,7 +25,7 @@ class Tower:
         fire_rate: int = 85,
         projectile_speed: float = 320.0,
         inaccuracy: float = 0.5,
-        damage: int = 5,
+        damage: int = 10,
         radius: int = 6,
         tower_type: str = "fire",
     ) -> None:

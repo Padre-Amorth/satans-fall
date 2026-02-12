@@ -32,6 +32,26 @@ def test_clicking_power_updates_damage_multiplier():
     assert g.player.damage_multiplier == pytest.approx(g.damage_multiplier)
 
 
+def test_vigor_regenerates_health_every_3s_per_level():
+    g = Game()
+    # Apply permanent vigor and start a run
+    g.permanent_stats["vigor"] = 2
+    g.reset_game()
+
+    max_hp = g.player.max_health
+    # simulate player being wounded
+    g.player.health = max_hp * 0.5
+
+    # Advance exactly 3 seconds of game time (use update_game to force in-game updates)
+    frames = 3 * g.fps
+    for _ in range(frames):
+        g.update_game()
+
+    # Expected heal = 1% max HP per level -> 2% of max HP
+    expected_heal = max_hp * 0.01 * 2
+    assert g.player.health == pytest.approx(min(max_hp, max_hp * 0.5 + expected_heal), rel=1e-6)
+
+
 def test_clicking_adrenaline_updates_fire_rate_multiplier():
     g = Game()
     g.showing_stage_menu = False

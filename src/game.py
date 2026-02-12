@@ -1613,7 +1613,7 @@ class Game:
         if key == "vigor":
             per = 10
             total = per * level
-            return f"+{per:d} HP/level ({total:d} HP total)"
+            return f"+{per:d} HP/level ({total:d} HP total); +1% max HP regen every 3s/level"
         if key == "adrenaline":
             per = 5.0
             total = per * level
@@ -3021,6 +3021,12 @@ class Game:
         # Update player
         self.player.update(self.width)
         self.player.x = self.clamp_to_walls(self.player.x)
+
+        # VIGOR: periodic regeneration (1% max HP every 3s * per-level)
+        vigor_level = self.permanent_stats.get("vigor", 0)
+        if vigor_level and (self.frame_count % (3 * self.fps) == 0):
+            heal = self.player.max_health * (0.01 * vigor_level)
+            self.player.health = min(self.player.max_health, self.player.health + heal)
 
         # Check for level up
         if self.player_xp >= self.xp_to_next_level:

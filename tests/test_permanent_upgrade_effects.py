@@ -29,6 +29,6 @@ def test_adrenaline_gives_five_percent_fire_rate_per_level():
 def test_permanent_stat_effect_texts():
     g = Game()
     assert g.permanent_stat_effect_text("power", 5) == "+3% dmg/level (15% total)"
-    assert g.permanent_stat_effect_text("vigor", 3) == "+10 HP/level (30 HP total)"
+    assert g.permanent_stat_effect_text("vigor", 3) == "+10 HP/level (30 HP total); +1% max HP regen every 3s/level"
     assert g.permanent_stat_effect_text("adrenaline", 2) == "+5% fire rate/level (10% total)"
     assert g.permanent_stat_effect_text("structure", 4) == "-5% dmg taken/level (20% total)"

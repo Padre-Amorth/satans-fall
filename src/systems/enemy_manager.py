@@ -175,8 +175,17 @@ class EnemyManager:
                 and self.prologo_final_boss_spawned
             ):
                 # If we're in a Limbo stage, spawn the special Inquisitor boss instead
+                # Limbo: always Inquisitor
                 if getattr(self.game, "is_limbo_stage", lambda: False)():
                     self.spawn_boss("inquisitor")
+                # Purgatory: alternate end-of-wave boss between medium and inquisitor
+                elif getattr(self.game, "selected_stage", "").startswith("purgatory"):
+                    # Use wave parity to alternate: odd waves -> medium, even waves -> inquisitor
+                    current_wave = getattr(self.game, "wave", 0)
+                    if current_wave % 2 == 1:
+                        self.spawn_boss("mid")
+                    else:
+                        self.spawn_boss("inquisitor")
                 elif getattr(self.game, "wave", 0) % 3 == 0 and getattr(self.game, "wave", 0) > 0:
                     self.spawn_boss("big")
                 else:

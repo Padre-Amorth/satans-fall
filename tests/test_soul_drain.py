@@ -22,6 +22,24 @@ def test_soul_drain_targets_boss():
     assert sd.target is boss
 
 
+def test_soul_drain_availability_by_stage():
+    g = __import__("src.game", fromlist=["Game"]).Game()
+
+    # Prologo: Soul Drain must NOT be offered
+    g.selected_stage = "prologo"
+    choices = g.generate_weapon_choices()
+    assert all(c["id"].replace("acquire_", "") != "Soul Drain" for c in choices)
+
+    # Limbo: Soul Drain should be available in definitions (generate may or may not include it randomly)
+    g.selected_stage = "limbo"
+    all_defs = [w["id"] for w in __import__("src.weapons", fromlist=["get_weapon_definitions"]).get_weapon_definitions()]
+    assert "Soul Drain" in all_defs
+
+    # Purgatory: Soul Drain also available
+    g.selected_stage = "purgatory"
+    assert "Soul Drain" in all_defs
+
+
 def test_soul_drain_prefers_boss_over_closer_enemy():
     sd = SoulDrainProjectile(300, 300, 0, 0, damage=5, heal_amount=2, level=1)
     # Place a weak enemy closer than the boss but both within homing range

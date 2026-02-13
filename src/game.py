@@ -6148,9 +6148,15 @@ class Game:
             wdef = WEAPON_DEFS.get(wid, {})
             available_from = wdef.get("available_from")
             if available_from:
-                # if weapon requires Purgatory and we're not in a Purgatory stage, skip
-                if str(available_from).lower() == "purgatory":
+                af = str(available_from).lower()
+                # Purgatory-only weapons
+                if af == "purgatory":
                     if not (self.selected_stage and str(self.selected_stage).startswith("purgatory")):
+                        continue
+                # Limbo-or-later weapons (not available in Prologo)
+                if af == "limbo":
+                    # require that we're NOT in prologo; accept limbo, limbo_2, purgatory, etc.
+                    if not (self.selected_stage and str(self.selected_stage) != "prologo"):
                         continue
             available_weapons.append(w)
 

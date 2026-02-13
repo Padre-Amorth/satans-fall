@@ -1,33 +1,44 @@
 import random
+import logging
+from typing import Any
 
+from src.weapons import (
+    WEAPON_DEFS,
+    get_weapon_definitions,
+    get_weapon_upgrade_description,
+    get_orbital_count,
+)
+from src.balance import XP_BASE, XP_GROWTH, BASE_SPAWN_RATE, SPAWN_MIN_RATE, SPAWN_RAMP_START_WAVE, SPAWN_RAMP_SLOPE_PRE, SPAWN_RAMP_SLOPE_POST
+
+logger: logging.Logger = logging.getLogger(__name__)
 
 class GameStateManager:
-    def __init__(self, game):
-        self.game = game
+    def __init__(self, game) -> None:
+        self.game: Any = game
 
         # Wave management
         self.wave = 0
         self.wave_time = 0
-        self.wave_duration = 30  # 30 seconds per wave
+        self.wave_duration = 40  # 40 seconds per wave
         self.wave_boss_spawned = False
         self.big_spawned_this_wave = False
 
         # Level and XP management
         self.player_level = 1
         self.player_xp = 0
-        self.xp_to_next_level = 100
+        self.xp_to_next_level = XP_BASE
 
         # Score and difficulty
-        self.score = 0
-        self.difficulty_multiplier = 1.0
+        self.score: int = 0
+        self.difficulty_multiplier: float = 1.0
 
         # Weapon system
-        self.player_weapons = []
-        self.weapon_levels = {}
-        self.max_weapon_level = 6
+        self.player_weapons: list[str] = []
+        self.weapon_levels: dict[str, int] = {}
+        self.max_weapon_level: int = 6
 
         # Upgrade system
-        self.upgrade_levels = {
+        self.upgrade_levels: dict[str, int] = {
             "damage": 0,
             "max_health": 0,
             "armor": 0,
@@ -37,36 +48,40 @@ class GameStateManager:
 
         # Selection screens
         self.awaiting_weapon_choice = False
+        self.awaiting_tower_choice = False
         self.awaiting_upgrade = False
         self.weapon_choice_index = 0
+        self.tower_choice_index = 0
         self.upgrade_choice_index = 0
         self.pause_menu_index = 0
 
-        # Weapon and upgrade choices
-        self.weapon_choices = []
-        self.upgrade_choices = []
+        # Weapon, tower and upgrade choices
+        self.weapon_choices: list[dict[str, Any]] = []
+        self.tower_choices: list[dict[str, Any]] = []
+        self.upgrade_choices: list[dict[str, Any]] = []
 
         # Stage management
-        self.selected_stage = "limbo"  # Default stage
+        self.selected_stage: str = "limbo"  # Default stage
 
         # Messages
-        self.center_messages = []
+        self.center_messages: list[dict[str, Any]] = []
 
         # Special effects
         self.selected_stage = "limbo"  # Default stage
-        self.prologo_final_boss_spawned = False
-        self.prologo_final_boss_defeated = False
-        self.prologo_final_boss_immortal = False
-        self.prologo_lightning_timer = 0
-        self.prologo_lightning_strike = False
-        self.lightning_points = []
-        self.showing_prologo_end = False
+        self.prologo_final_boss_spawned: bool = False
+        self.prologo_final_boss_defeated: bool = False
+        self.prologo_final_boss_immortal: bool = False
+        self.prologo_lightning_timer: int = 0
+        self.prologo_lightning_strike: bool = False
+        self.lightning_points: list[tuple[int, int]] = []
+        self.chain_lightning_effects: list[dict] = []  # List of chain effects with timer and points
+        self.showing_prologo_end: bool = False
 
         # Game state
         self.paused = False
         self.time_elapsed = 0
 
-    def update(self):
+    def update(self) -> None:
         """Update game state logic"""
         if not self.paused:
             self.time_elapsed += 1 / self.game.fps
@@ -80,7 +95,7 @@ class GameStateManager:
             # Check for weapon/upgrade selections
             self.check_for_selections()
 
-    def update_wave_progression(self):
+    def update_wave_progression(self) -> None:
         """Handle wave timing and progression"""
         # Update wave time
         self.wave_time = self.time_elapsed % self.wave_duration
@@ -95,7 +110,7 @@ class GameStateManager:
         # Update difficulty multiplier
         self.difficulty_multiplier = 1.0 + (self.wave * 0.12)
 
-    def advance_wave(self):
+    def advance_wave(self) -> None:
         """Advance to the next wave"""
         self.wave += 1
 
@@ -104,36 +119,36 @@ class GameStateManager:
         self.big_spawned_this_wave = False
 
         # Ramp spawn rate: gentler early, steeper after configured ramp wave
-        if self.wave < 3:  # spawn_ramp_start_wave
+        if self.wave < SPAWN_RAMP_START_WAVE:  # spawn_ramp_start_wave
             self.game.enemy_manager.enemy_spawn_rate = max(
-                30, int(72 - self.wave * 3)
+                SPAWN_MIN_RATE, int(BASE_SPAWN_RATE - self.wave * SPAWN_RAMP_SLOPE_PRE)
             )  # base_spawn_rate - wave * slope_pre
         else:
             self.game.enemy_manager.enemy_spawn_rate = max(
-                30, int(72 - self.wave * 6)
+                SPAWN_MIN_RATE, int(BASE_SPAWN_RATE - self.wave * SPAWN_RAMP_SLOPE_POST)
             )  # base_spawn_rate - wave * slope_post
 
         # Show wave message
         self.add_center_message(
-            f"Wave {self.wave}", 120, "#ffff00", ("Arial", 24, "bold")
+            f"Wave {self.wave}", 120, "#dcb414", ("Arial", 24, "bold")
         )
 
-    def check_level_up(self):
+    def check_level_up(self) -> None:
         """Check if player should level up"""
         if self.player_xp >= self.xp_to_next_level:
             self.level_up()
 
-    def level_up(self):
+    def level_up(self) -> None:
         """Handle player level up"""
         self.player_xp -= self.xp_to_next_level
         self.player_level += 1
 
         # Calculate new XP requirement
-        self.xp_to_next_level = int(100 * (1.2 ** (self.player_level - 1)))
+        self.xp_to_next_level = int(XP_BASE * (XP_GROWTH ** (self.player_level - 1)))
 
         # Show level up message
         self.add_center_message(
-            f"Level {self.player_level}!", 120, "#ffd700", ("Arial", 20, "bold")
+            f"Level {self.player_level}!", 120, "#dcb414", ("Arial", 20, "bold")
         )
 
         # Check if weapon or upgrade selection should be shown
@@ -142,7 +157,7 @@ class GameStateManager:
         else:
             self.show_upgrade_choice()
 
-    def check_for_selections(self):
+    def check_for_selections(self) -> None:
         """Check if selections should be shown"""
         # Weapon choice every 3 levels
         if (
@@ -160,19 +175,19 @@ class GameStateManager:
             if self.player_level > 1 and self.player_level % 3 != 0:
                 self.show_upgrade_choice()
 
-    def show_weapon_choice(self):
+    def show_weapon_choice(self) -> None:
         """Show weapon selection screen"""
         self.awaiting_weapon_choice = True
         self.weapon_choices = self.generate_weapon_choices()
         self.weapon_choice_index = 0
 
-    def show_upgrade_choice(self):
+    def show_upgrade_choice(self) -> None:
         """Show upgrade selection screen"""
         self.awaiting_upgrade = True
         self.upgrade_choices = self.generate_upgrade_choices()
         self.upgrade_choice_index = 0
 
-    def select_weapon(self, index):
+    def select_weapon(self, index) -> None:
         """Apply selected weapon choice"""
         if 0 <= index < len(self.weapon_choices):
             weapon = self.weapon_choices[index]
@@ -193,7 +208,7 @@ class GameStateManager:
 
                     # Special handling for orbital acquisition
                     if actual_weapon == "orbital":
-                        self.game.orbital_count = 3
+                        self.game.orbital_count = get_orbital_count(self.weapon_levels.get("orbital", 1))
                         self.game.create_orbitals()
             else:
                 # Upgrade existing weapon
@@ -218,7 +233,7 @@ class GameStateManager:
             self.awaiting_weapon_choice = False
             self.weapon_choices = []
 
-    def select_upgrade(self, index):
+    def select_upgrade(self, index) -> None:
         """Apply selected upgrade"""
         if 0 <= index < len(self.upgrade_choices):
             upgrade = self.upgrade_choices[index]
@@ -249,45 +264,59 @@ class GameStateManager:
         choices = []
 
         # Offer weapon acquisitions if player has fewer than 3 weapons
-        available_weapons = ["shotgun", "orbital", "spear", "beast"]
-        unowned_weapons = [w for w in available_weapons if w not in self.player_weapons]
+        all_weapon_ids = list(WEAPON_DEFS.keys())
+        unowned_weapons: list[str] = [w for w in all_weapon_ids if w not in self.player_weapons]
+
+        # At player level 6 we must propose 3 new weapons only (no upgrades)
+        if getattr(self, "player_level", None) == 6:
+            import random
+            if unowned_weapons:
+                if len(unowned_weapons) >= 3:
+                    selected = random.sample(unowned_weapons, 3)
+                else:
+                    selected = [random.choice(unowned_weapons) for _ in range(3)]
+                for weapon in selected:
+                    choices.append(
+                        {
+                            "id": f"acquire_{weapon}",
+                            "name": WEAPON_DEFS[weapon]["name"],
+                            "description": WEAPON_DEFS[weapon]["description"],
+                        }
+                    )
+            else:
+                # No unowned weapons: fallback to sampling any weapons
+                selected = [random.choice(all_weapon_ids) for _ in range(3)]
+                for weapon in selected:
+                    choices.append(
+                        {
+                            "id": f"acquire_{weapon}",
+                            "name": WEAPON_DEFS.get(weapon, {}).get('name', weapon),
+                            "description": WEAPON_DEFS.get(weapon, {}).get('description', ''),
+                        }
+                    )
+            return choices[:3]
 
         if len(self.player_weapons) < 3 and unowned_weapons:
-            weapon = random.choice(unowned_weapons)
-            weapon_names = {
-                "shotgun": "Hellgun",
-                "orbital": "Orbitals",
-                "spear": "Spear",
-                "beast": "The number of the beast",
-            }
-            weapon_descs = {
-                "shotgun": "Powerful close-range spread weapon",
-                "orbital": "Orbiting projectiles around you",
-                "spear": "Piercing projectile with chain lightning",
-                "beast": "Normal weapon with damage bonuses",
-            }
+            weapon: str = random.choice(unowned_weapons)
             choices.append(
                 {
                     "id": f"acquire_{weapon}",
-                    "name": f"Acquire {weapon_names[weapon]}",
-                    "description": weapon_descs[weapon],
+                    "name": WEAPON_DEFS[weapon]["name"],
+                    "description": WEAPON_DEFS[weapon]["description"],
                 }
             )
 
         # Offer weapon upgrades for owned weapons
         for weapon in self.player_weapons:
             if self.weapon_levels.get(weapon, 0) < self.max_weapon_level:
-                weapon_names = {
-                    "shotgun": "Hellgun",
-                    "orbital": "Orbitals",
-                    "spear": "Spear",
-                    "beast": "The number of the beast",
-                }
+                display_name = WEAPON_DEFS.get(weapon, {}).get("name", weapon.replace("_", " ").title())
+                next_level = self.weapon_levels.get(weapon, 0) + 1
+                description = get_weapon_upgrade_description(weapon, next_level)
                 choices.append(
                     {
                         "id": f"{weapon}_upgrade",
-                        "name": f"{weapon_names[weapon]} Upgrade",
-                        "description": f"Upgrade {weapon_names[weapon]} to level {self.weapon_levels[weapon] + 1}",
+                        "name": f"{display_name} Upgrade",
+                        "description": description,
                     }
                 )
 
@@ -306,6 +335,63 @@ class GameStateManager:
                 )
 
         return choices[:3]
+
+    def generate_initial_weapon_choices(self):
+        """Generate initial weapon choices for stages like Limbo.
+
+        Filter out weapons whose `available_from` requirement is not met by the
+        current `selected_stage` (e.g. Purgatory-only weapons are excluded from
+        Prologo/Limbo initial choices).
+        """
+        import random
+        # Start from full definitions, then filter by availability for this stage
+        defs = get_weapon_definitions()
+        filtered: list[dict] = []
+        for w in defs:
+            wid = w.get("id")
+            wdef = WEAPON_DEFS.get(wid, {})
+            available_from = wdef.get("available_from")
+            if available_from:
+                af = str(available_from).lower()
+                if af == "purgatory":
+                    # only allow in purgatory stages
+                    if not (self.selected_stage and str(self.selected_stage).startswith("purgatory")):
+                        continue
+                elif af == "limbo":
+                    # allow in limbo and purgatory but not in prologo
+                    if not (self.selected_stage and str(self.selected_stage) != "prologo"):
+                        continue
+            filtered.append(w)
+
+        if not filtered:
+            filtered = defs
+
+        choices = random.sample(filtered, min(3, len(filtered)))
+        return [{"id": c["id"], "name": c["name"], "description": c["description"]} for c in choices]
+
+    def show_initial_weapon_choice(self) -> None:
+        """Enable initial weapon selection screen and populate choices."""
+        self.awaiting_weapon_choice = True
+        self.weapon_choices = self.generate_initial_weapon_choices()
+        self.weapon_choice_index = 0
+
+    def generate_initial_tower_choices(self) -> list[dict[str, Any]]:
+        """Return the three tower choices for Purgatory: Fire, Storm, Ice.
+
+        Descriptions include the current base damage and a short note about the
+        secondary effect so players see the actual numbers in the selection UI.
+        """
+        return [
+            {"id": "fire", "name": "Fire Tower", "description": "Damage: 10 — Burn nearby enemies (4 DPS, 3s)"},
+            {"id": "storm", "name": "Storm Tower", "description": "Damage: 10 (projectile ~9) — Chains to multiple enemies"},
+            {"id": "ice", "name": "Ice Tower", "description": "Damage: 15 — Slows enemies 50% for 2s"},
+        ]
+
+    def show_initial_tower_choice(self) -> None:
+        """Enable initial tower selection screen and populate choices."""
+        self.awaiting_tower_choice = True
+        self.tower_choices = self.generate_initial_tower_choices()
+        self.tower_choice_index = 0
 
     def generate_upgrade_choices(self):
         """Generate upgrade choices"""
@@ -339,20 +425,26 @@ class GameStateManager:
             choices.append(upgrade)
 
         # Weapon upgrades for owned weapons
+        weapon_names: dict[str, str] = {
+            "shotgun": "Hellgun",
+            "orbital": "Orbitals",
+            "spear": "Spear",
+            "Soul Drain": "Soul Drain",
+            "beast": "The number of the beast",
+        }
         for weapon in self.player_weapons:
             if self.weapon_levels.get(weapon, 0) < self.max_weapon_level:
-                weapon_names = {
-                    "shotgun": "Hellgun",
-                    "orbital": "Orbitals",
-                    "spear": "Spear",
-                }
+                display_name = weapon_names.get(weapon, weapon.replace('_', ' ').title())
+                current_level = self.weapon_levels.get(weapon, 0)
+                next_level = current_level + 1
+                description = self.get_weapon_upgrade_description(weapon, next_level)
                 choices.append(
                     {
                         "id": f"{weapon}_upgrade",
-                        "name": f"{weapon_names[weapon]} Upgrade",
-                        "description": f"Upgrade {weapon_names[weapon]}",
+                        "name": f"{display_name} Upgrade",
+                        "description": description,
                         "apply": lambda w=weapon: self.apply_weapon_upgrade(w),
-                        "level": self.weapon_levels.get(weapon, 0),
+                        "level": current_level,
                     }
                 )
 
@@ -362,47 +454,81 @@ class GameStateManager:
         else:
             return random.sample(choices, 3)
 
-    def apply_damage_upgrade(self):
+    def get_weapon_upgrade_description(self, weapon, level):
+        """Delegate to centralized weapon descriptions."""
+        return get_weapon_upgrade_description(weapon, level)
+
+    def apply_damage_upgrade(self) -> None:
         """Apply damage upgrade"""
         # This would modify the game's damage multiplier
         pass
 
-    def apply_health_upgrade(self):
+    def apply_health_upgrade(self) -> None:
         """Apply health upgrade"""
         # This would increase max health
         pass
 
-    def apply_speed_upgrade(self):
+    def apply_speed_upgrade(self) -> None:
         """Apply speed upgrade"""
         # This would increase movement speed
         pass
 
-    def apply_weapon_upgrade(self, weapon):
+    def apply_weapon_upgrade(self, weapon) -> None:
         """Apply weapon-specific upgrade"""
         if weapon in self.weapon_levels:
             self.weapon_levels[weapon] += 1
 
-    def add_center_message(self, text, frames, color, font):
+    def add_center_message(self, text, frames, color, font) -> None:
         """Add a centered message to display"""
         self.center_messages.append(
             {"text": text, "frames": frames, "color": color, "font": font}
         )
 
-    def update_center_messages(self):
+    def update_center_messages(self) -> None:
         """Update center messages (called by UI manager)"""
         for m in self.center_messages[:]:
             m["frames"] -= 1
             if m["frames"] <= 0:
                 self.center_messages.remove(m)
 
-    def toggle_pause(self):
+    # --- Backwards-compatible aliases for legacy Game field names ---
+    @property
+    def selected_weapon_index(self):
+        return getattr(self, "weapon_choice_index", 0)
+
+    @selected_weapon_index.setter
+    def selected_weapon_index(self, v):
+        self.weapon_choice_index = v
+
+    @property
+    def selected_upgrade_index(self):
+        return getattr(self, "upgrade_choice_index", 0)
+
+    @selected_upgrade_index.setter
+    def selected_upgrade_index(self, v):
+        self.upgrade_choice_index = v
+
+    def toggle_pause(self) -> None:
         """Toggle pause state"""
         self.paused = not self.paused
 
-    def add_score(self, points):
-        """Add points to score"""
-        self.score += points
+    def add_score(self, points) -> None:
+        """Add points to score (respects `game.score_multiplier` if present).
 
-    def add_xp(self, xp_amount):
+        Keeps `GameStateManager.score` and `Game.score` synchronized.
+        """
+        try:
+            mult = getattr(self.game, "score_multiplier", 1.0)
+            amt = int(points * mult)
+            self.score += amt
+            try:
+                if hasattr(self, "game") and getattr(self.game, "score", None) is not None:
+                    self.game.score += amt
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def add_xp(self, xp_amount) -> None:
         """Add XP to player"""
         self.player_xp += xp_amount

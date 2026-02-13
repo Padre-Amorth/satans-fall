@@ -101,7 +101,7 @@ def test_game_reset():
     else:
         print("\n💥 Some reset checks failed! Game state not properly reset.")
 
-    return success
+    assert success
 
 
 if __name__ == "__main__":

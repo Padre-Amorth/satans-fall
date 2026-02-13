@@ -88,7 +88,7 @@ The included `.pre-commit-config.yaml` will run `ruff --fix` on changed files so
 
 - **Statues / Towers (Limbo / Purgatory)**: Base projectile damage **10** —
   - **Fire**: deals 10 damage and applies Burn (4 DPS for 3s)
-  - **Storm**: deals ~9 projectile damage and chains between enemies
+  - **Storm**: deals ~9 projectile damage and chains between enemies. Left-column STORM permanents add +1 chained target per active slot (stacks up to +3 when all three left slots are active).
   - **Ice**: deals 10 damage and applies a 50% slow for 2s
 
 - **Upgrade System**: Choose from 6 different upgrades every level with visual icons:

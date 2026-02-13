@@ -1,10 +1,9 @@
 import logging
 import math
-import os
 import random
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Self, TypedDict, Optional
+from typing import Any, Dict, List, TypedDict, Optional
 
 import pygame
 from pygame.key import ScancodeWrapper
@@ -25,9 +24,9 @@ from src.weapons import (
     shotgun_pellets,
     shotgun_cooldown,
     spear_cooldown,
+    DemonStrike_cooldown,
     soul_drain_cd,
     soul_drain_projectile_count,
-    soul_drain_damage_heal_mult,
     skull_bomb_cooldown,
     skull_bomb_damage,
     skull_bomb_explosion_radius,
@@ -41,7 +40,6 @@ from src.balance import (
     BURST_MAX,
     BURST_PAUSE,
     STATUE_FIRE_RATE,
-    BASE_SPAWN_RATE,
     SPAWN_MIN_RATE,
     SPAWN_RAMP_START_WAVE,
     SPAWN_RAMP_SLOPE_PRE,
@@ -49,7 +47,6 @@ from src.balance import (
     REINFORCEMENT_DELAY_MS,
     REINFORCEMENT_COUNT,
     DEFAULT_PROJECTILE_SIZE_MULTIPLIER,
-    DEFAULT_FIRE_RATE_MULTIPLIER,
     DEFAULT_DAMAGE_REDUCTION_MULTIPLIER,
     MAX_EXTRA_WEAPONS,
     GAME_OVER_FADE_DURATION_MS,
@@ -219,6 +216,7 @@ class Game:
         self.fire_rate_multiplier = 1.0
         self.hellgun_cooldown_timer = 0
         self.spear_cooldown_timer = 0
+        self.DemonStrike_cooldown_timer = 0
         self.soul_drain_cooldown_timer = 0
         self.skull_bomb_cooldown_timer = 0
         # Skull bomb particles and explosion effects
@@ -323,7 +321,12 @@ class Game:
 
         # Towers (statues) manager instances (left/right)
         self.left_tower = Tower(320, 530, fire_rate=self.statue_fire_rate)
+        # record base stats so permanent modifiers can be reapplied cleanly
+        self.left_tower._base_damage = self.left_tower.damage
+        self.left_tower._base_fire_rate = self.left_tower.fire_rate
         self.right_tower = Tower(960, 530, fire_rate=self.statue_fire_rate)
+        self.right_tower._base_damage = self.right_tower.damage
+        self.right_tower._base_fire_rate = self.right_tower.fire_rate
         # Tower selection state (Purgatory)
         self.awaiting_tower_choice = False
         self.tower_choices: List[Dict[str, Any]] = []
@@ -656,6 +659,7 @@ class Game:
             "enemy_strong.png",
             "enemy_angel.png",
             "enemy_giant.png",
+            "enemy_inquisitor.png",  # optional custom sprite for non-boss inquisitor
             "boss_small.png",
             "boss_medium.png",
             "boss_big.png",
@@ -732,6 +736,135 @@ class Game:
         if isinstance(e, dict):
             return e.get("radius", 12)
         return getattr(e, "radius", 12)
+
+    def _propagate_burn(self, source_enemy):
+        """Propagate a burn from source_enemy to nearby enemies.
+
+        - Uses propagation parameters set on the source (radius, dps, duration).
+        - Applies burn to nearby enemies but does NOT schedule further propagation
+          (prevents infinite chaining).
+        - Handles both dict-based and sprite-based enemies.
+        """
+        # Support both dict-based and sprite/object-based enemies as the source.
+        try:
+            if isinstance(source_enemy, dict):
+                radius = float(source_enemy.get("burn_propagate_radius", 0))
+                dps = float(source_enemy.get("burn_propagate_dps", 0))
+                duration = int(source_enemy.get("burn_propagate_duration", 0))
+                source_hops = int(source_enemy.get("burn_propagate_hops", 0))
+            else:
+                radius = float(getattr(source_enemy, "burn_propagate_radius", 0))
+                dps = float(getattr(source_enemy, "burn_propagate_dps", 0))
+                duration = int(getattr(source_enemy, "burn_propagate_duration", 0))
+                source_hops = int(getattr(source_enemy, "burn_propagate_hops", 0))
+        except Exception:
+            return
+
+        if radius <= 0 or dps <= 0 or duration <= 0:
+            return
+
+        # Find nearby enemies and apply burn to them (excluding the source)
+        for other in self._enemies_iter():
+            # Skip the source itself
+            if other is source_enemy:
+                continue
+
+            ox, oy = self._enemy_pos(other)
+            sx, sy = self._enemy_pos(source_enemy)
+            dist_sq = (ox - sx) ** 2 + (oy - sy) ** 2
+            if dist_sq <= radius * radius:
+                # Apply burn to dict-based enemies
+                if isinstance(other, dict):
+                    # only apply if not already burning
+                    if other.get("burn_timer", 0) <= 0:
+                        other["burn_timer"] = duration
+                        other["burn_damage_per_second"] = dps
+                        other["burn_tick_counter"] = getattr(self, "fps", 60)
+                        # If the source has hops remaining, allow this propagated burn to
+                        # further propagate when that enemy dies (chain behavior).
+                        if source_hops > 0:
+                            new_hops = max(0, source_hops - 1)
+                            other["burn_propagate_hops"] = new_hops
+                            if new_hops > 0:
+                                other["burn_propagate_on_death"] = True
+                                other["burn_propagate_radius"] = radius
+                                other["burn_propagate_dps"] = dps
+                                other["burn_propagate_duration"] = duration
+                        # Spawn a small floating text to indicate propagation (best-effort)
+                        try:
+                            ex, ey = self._enemy_pos(other)
+                            self.spawn_floating_text("burn", ex, ey - other.get("radius", 12) - 8)
+                        except Exception:
+                            pass
+                else:
+                    # sprite-based enemy objects
+                    if not hasattr(other, "burn_timer") or getattr(other, "burn_timer", 0) <= 0:
+                        other.burn_timer = duration
+                        other.burn_damage_per_second = dps
+                        other.burn_tick_timer = getattr(self, "fps", 60)
+                        # If the source has hops remaining, allow chaining for sprite enemies too
+                        if source_hops > 0:
+                            new_hops = max(0, source_hops - 1)
+                            try:
+                                other.burn_propagate_hops = new_hops
+                                if new_hops > 0:
+                                    other.burn_propagate_on_death = True
+                                    other.burn_propagate_radius = radius
+                                    other.burn_propagate_dps = dps
+                                    other.burn_propagate_duration = duration
+                            except Exception:
+                                pass
+                        try:
+                            self.spawn_floating_text("burn", other.x, other.y - getattr(other, "radius", 12) - 8)
+                        except Exception:
+                            pass
+                        # Visual: orange chain from source -> target
+                        try:
+                            sx, sy = self._enemy_pos(source_enemy)
+                            ex, ey = self._enemy_pos(other)
+                            self.game_state.chain_lightning_effects.append({"points": [(sx, sy), (ex, ey)], "timer": 6, "color": (255, 140, 0)})
+                        except Exception:
+                            pass
+        # Also consider boss sprites separately (they're stored in self.bosses).
+        # Bosses are sprite-based; apply the same propagation logic as above.
+        if hasattr(self, "bosses") and getattr(self, "bosses", None):
+            try:
+                boss_list = self.bosses.sprites() if hasattr(self.bosses, "sprites") else list(self.bosses)
+                for other in boss_list:
+                    # Skip source if it's the same object/dict
+                    if other is source_enemy:
+                        continue
+                    ox, oy = self._enemy_pos(other)
+                    sx, sy = self._enemy_pos(source_enemy)
+                    dist_sq = (ox - sx) ** 2 + (oy - sy) ** 2
+                    if dist_sq <= radius * radius:
+                        # Apply burn to boss sprites (if not already burning)
+                        if not hasattr(other, "burn_timer") or getattr(other, "burn_timer", 0) <= 0:
+                            other.burn_timer = duration
+                            other.burn_damage_per_second = dps
+                            other.burn_tick_timer = getattr(self, "fps", 60)
+                            if source_hops > 0:
+                                new_hops = max(0, source_hops - 1)
+                                try:
+                                    other.burn_propagate_hops = new_hops
+                                    if new_hops > 0:
+                                        other.burn_propagate_on_death = True
+                                        other.burn_propagate_radius = radius
+                                        other.burn_propagate_dps = dps
+                                        other.burn_propagate_duration = duration
+                                except Exception:
+                                    pass
+                            try:
+                                self.spawn_floating_text("burn", other.x, other.y - getattr(other, "radius", 12) - 8)
+                            except Exception:
+                                pass
+                            # Visual: small orange chain effect boss <- source
+                            try:
+                                self.game_state.chain_lightning_effects.append({"points": [(sx, sy), (ox, oy)], "timer": 6, "color": (255, 140, 0)})
+                            except Exception:
+                                pass
+            except Exception:
+                pass
 
     def clamp_to_walls(self, x_pos):
         """Keep position within the walls"""
@@ -939,16 +1072,24 @@ class Game:
             return
         
         try:
-            for p in self.skull_bomb_particles:
-                # Draw as small red circles for explosion effect
-                screen_x = int(p.x + shake_x)
-                screen_y = int(p.y + shake_y)
-                # Use alpha blending for fade effect
-                alpha = min(255, p.life * 8)  # Fade out over time
-                color = (255, 100, 50, alpha)  # Orange-red explosion color
-                
-                # Draw the particle
-                pygame.draw.circle(self.screen, color[:3], (screen_x, screen_y), p.size)
+            pass
+        except Exception:
+            pass
+
+    def add_score(self, points) -> None:
+        """Add points to the game's score applying the global `score_multiplier`.
+
+        This keeps `Game.score` and `GameStateManager.score` in sync.
+        """
+        try:
+            mult = getattr(self, "score_multiplier", 1.0)
+            amt = int(points * mult)
+            self.score += amt
+            try:
+                if hasattr(self, "game_state") and getattr(self.game_state, "score", None) is not None:
+                    self.game_state.score += amt
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -1613,15 +1754,19 @@ class Game:
         if key == "vigor":
             per = 10
             total = per * level
-            return f"+{per:d} HP/level ({total:d} HP total); +1% max HP regen every 3s/level"
+            regen_per_tick = 0.5 * level
+            # format regen with no trailing .0 when integer, else one decimal
+            regen_str = f"{regen_per_tick:.1f}" if regen_per_tick % 1 else f"{int(regen_per_tick)}"
+            return f"+{per:d} HP/level ({total:d} HP total); +0.5 HP every 5s/level ({regen_str} HP every 5s)"
         if key == "adrenaline":
             per = 5.0
             total = per * level
             return f"+{per:.0f}% fire rate/level ({total:.0f}% total)"
         if key == "structure":
-            per = 5.0
+            per = 3.0
             total = per * level
-            return f"-{per:.0f}% dmg taken/level ({total:.0f}% total)"
+            xp_total_pct = int(round(per * level))
+            return f"-{per:.0f}% dmg taken/level ({total:.0f}% total); +3% XP/level (+{xp_total_pct}% XP total)"
         return ""
 
     def _enforce_center_requirement(self, key_prefix: str) -> None:
@@ -1648,7 +1793,10 @@ class Game:
         self.fire_rate_multiplier = 1.0 + (self.permanent_stats.get("adrenaline", 0) * 0.05)
         # Apply other effects for consistency
         self.projectile_size_multiplier = 1.0 + (self.permanent_stats.get("projectile_size", 0) * 0.0)
-        self.damage_reduction_multiplier = 1.0 - (self.permanent_stats.get("structure", 0) * 0.05)
+        # STRUCTURE: now -3% damage taken per level and +3% XP gained per level
+        self.damage_reduction_multiplier = 1.0 - (self.permanent_stats.get("structure", 0) * 0.03)
+        # XP multiplier used whenever the game awards XP to the player (default 1.0)
+        self.xp_multiplier = 1.0 + (self.permanent_stats.get("structure", 0) * 0.03)
 
         # Ensure the player object also reflects the new multipliers
         try:
@@ -1663,6 +1811,76 @@ class Game:
         for prefix in ("fire", "storm", "ice"):
             self._enforce_center_requirement(prefix)
 
+        # --- Apply skill-tree effects for towers/statues (right-column tiers 4..6) ---
+        # Right-column slots (4..6) give +10% damage and +10% fire rate per active slot.
+        self.tower_damage_multiplier = {"fire": 1.0, "storm": 1.0, "ice": 1.0}
+        self.tower_fire_rate_multiplier = {"fire": 1.0, "storm": 1.0, "ice": 1.0}
+        # Precompute left-column special effects for certain trees (e.g. STORM chain bonus)
+        storm_left_count = sum(self.permanent_stats.get(f"storm_{i}", 0) for i in (1, 2, 3))
+
+        for prefix in ("fire", "storm", "ice"):
+            right_count = sum(self.permanent_stats.get(f"{prefix}_{i}", 0) for i in (4, 5, 6))
+            # ICE right-column grants +20% damage per active slot; FIRE remains +10%
+            if prefix == "ice":
+                dmg_mult = 1.0 + (right_count * 0.20)
+            else:
+                dmg_mult = 1.0 + (right_count * 0.10)
+            # STORM right-column grants +20% fire rate per active slot (damage handled above)
+            if prefix == "storm":
+                fr_mult = 1.0 + (right_count * 0.20)
+            else:
+                fr_mult = 1.0 + (right_count * 0.10)
+            self.tower_damage_multiplier[prefix] = dmg_mult
+            self.tower_fire_rate_multiplier[prefix] = fr_mult
+
+            # Apply to existing tower instances (left/right) when types match
+            for t in (getattr(self, 'left_tower', None), getattr(self, 'right_tower', None)):
+                if t is None:
+                    continue
+                if getattr(t, 'tower_type', None) != prefix:
+                    continue
+                # ensure base values are recorded once
+                if not hasattr(t, '_base_damage'):
+                    t._base_damage = t.damage
+                if not hasattr(t, '_base_fire_rate'):
+                    t._base_fire_rate = t.fire_rate
+                # Record base chain_targets for storm towers so upgrades can stack from a known baseline
+                if prefix == 'storm' and not hasattr(t, '_base_chain_targets'):
+                    t._base_chain_targets = getattr(t, 'chain_targets', 3)
+                # Apply multipliers (damage scales up; fire_rate is cooldown so divide by multiplier)
+                t.damage = int(round(t._base_damage * dmg_mult))
+                t.fire_rate = max(1, int(round(t._base_fire_rate / fr_mult)))
+
+                # Apply STORM left-column chain bonus (+1 chain target per active left-slot)
+                if prefix == 'storm':
+                    extra_chain = storm_left_count
+                    t.chain_targets = getattr(t, '_base_chain_targets', 3) + extra_chain
+
+    def _player_damage_vs_burning(self, projectile, enemy, base_damage: int) -> int:
+        """Return adjusted damage for player projectiles against burning enemies.
+
+        Applies when `fire_3` permanent is active and the *source* of the projectile
+        is the player (not a statue/tower or enemy). Returns an int.
+        """
+        try:
+            # Only consider non-enemy projectiles that are not from statues
+            is_player_proj = (not getattr(projectile, "is_enemy_projectile", False)) and (getattr(projectile, "source", None) != "statue")
+            if not is_player_proj:
+                return base_damage
+            if not self.permanent_stats.get("fire_3", 0):
+                return base_damage
+            # Check whether the target is burning (supports dict or object enemies)
+            burning = False
+            if isinstance(enemy, dict):
+                burning = enemy.get("burn_timer", 0) > 0
+            else:
+                burning = getattr(enemy, "burn_timer", 0) > 0
+            if burning:
+                return int(round(base_damage * 1.25))
+        except Exception:
+            pass
+        return base_damage
+
     def _skill_tooltip_lines(self, key_prefix: str, tier: int) -> list:
         """Return list of text lines to show in a tooltip for a given skill tree tier.
 
@@ -1673,13 +1891,36 @@ class Game:
         key = f"{key_prefix}_{tier}"
         active = bool(self.permanent_stats.get(key, 0))
 
-        # Show only status and reserve a line for the (future) effect description.
-        # We intentionally omit requirement / unlock hints here to keep tooltip minimal;
-        # the 'Effect:' line is a placeholder that will be populated once we add per-tier properties.
+        # Show status and an effect description where available. For right-column
+        # skill tiers (4..6) we display the per-slot effect that applies to towers/statues.
         lines: list[str] = []
         lines.append("Status: Unlocked" if active else "Status: Locked")
-        # Placeholder for effect description; empty for now
-        lines.append("Effect: ")
+
+        # Right-column tiers (4-6) grant tower/statue bonuses per active slot.
+        if tier in (4, 5, 6):
+            # ICE: +20% damage per slot; STORM: +20% fire rate per slot; FIRE: +10% dmg & +10% FR
+            if key_prefix == "storm":
+                lines.append("Effect: +10% dmg, +20% fire rate")
+            elif key_prefix == "ice":
+                lines.append("Effect: +20% dmg, +10% fire rate")
+            else:
+                lines.append("Effect: +10% dmg, +10% fire rate")
+        else:
+            # Special text for FIRE left-column tier 1: burn propagation
+            if key_prefix == "fire" and tier == 1:
+                lines.append("Effect: Burn spreads to nearby enemies on death (chains up to 2)")
+            # FIRE left-column tier 2: double burn duration and burn DPS
+            elif key_prefix == "fire" and tier == 2:
+                lines.append("Effect: Burn duration ×2; burn DPS ×2")
+            # FIRE left-column tier 3: bonus vs burning enemies
+            elif key_prefix == "fire" and tier == 3:
+                lines.append("Effect: +25% damage to burning enemies")
+            # STORM left-column tiers (1..3) increase chain lightning reach (# of chained targets)
+            elif key_prefix == "storm" and tier in (1, 2, 3):
+                lines.append("Effect: Chain lightning +1 target per left-slot (stacks up to +3)")
+            else:
+                # Keep a generic placeholder for other tiers (keeps UI compact)
+                lines.append("Effect: ")
 
         return lines
 
@@ -2534,15 +2775,27 @@ class Game:
             if stage == "limbo":
                 # Limbo 1 -> Fire
                 self.left_tower = Tower(320, 530, fire_rate=self.statue_fire_rate, tower_type="fire")
+                self.left_tower._base_damage = self.left_tower.damage
+                self.left_tower._base_fire_rate = self.left_tower.fire_rate
                 self.right_tower = Tower(960, 530, fire_rate=self.statue_fire_rate, tower_type="fire")
+                self.right_tower._base_damage = self.right_tower.damage
+                self.right_tower._base_fire_rate = self.right_tower.fire_rate
             elif stage == "limbo_2":
                 # Limbo 2 -> Storm
                 self.left_tower = Tower(320, 530, fire_rate=self.statue_fire_rate, tower_type="storm")
+                self.left_tower._base_damage = self.left_tower.damage
+                self.left_tower._base_fire_rate = self.left_tower.fire_rate
                 self.right_tower = Tower(960, 530, fire_rate=self.statue_fire_rate, tower_type="storm")
+                self.right_tower._base_damage = self.right_tower.damage
+                self.right_tower._base_fire_rate = self.right_tower.fire_rate
             elif stage == "limbo_3":
                 # Limbo 3 -> Ice
                 self.left_tower = Tower(320, 530, fire_rate=self.statue_fire_rate, tower_type="ice")
+                self.left_tower._base_damage = self.left_tower.damage
+                self.left_tower._base_fire_rate = self.left_tower.fire_rate
                 self.right_tower = Tower(960, 530, fire_rate=self.statue_fire_rate, tower_type="ice")
+                self.right_tower._base_damage = self.right_tower.damage
+                self.right_tower._base_fire_rate = self.right_tower.fire_rate
         elif str(stage).startswith("purgatory"):
             # Purgatory is a new stage category with three variants. For parity with Limbo,
             # we set up no buildings and trigger an initial weapon choice.
@@ -2550,13 +2803,25 @@ class Game:
             # Configure towers for Purgatory variants (use themed tower types)
             if stage == "purgatory":
                 self.left_tower = Tower(320, 530, fire_rate=self.statue_fire_rate, tower_type="fire")
+                self.left_tower._base_damage = self.left_tower.damage
+                self.left_tower._base_fire_rate = self.left_tower.fire_rate
                 self.right_tower = Tower(960, 530, fire_rate=self.statue_fire_rate, tower_type="fire")
+                self.right_tower._base_damage = self.right_tower.damage
+                self.right_tower._base_fire_rate = self.right_tower.fire_rate
             elif stage == "purgatory_2":
                 self.left_tower = Tower(320, 530, fire_rate=self.statue_fire_rate, tower_type="storm")
+                self.left_tower._base_damage = self.left_tower.damage
+                self.left_tower._base_fire_rate = self.left_tower.fire_rate
                 self.right_tower = Tower(960, 530, fire_rate=self.statue_fire_rate, tower_type="storm")
+                self.right_tower._base_damage = self.right_tower.damage
+                self.right_tower._base_fire_rate = self.right_tower.fire_rate
             elif stage == "purgatory_3":
                 self.left_tower = Tower(320, 530, fire_rate=self.statue_fire_rate, tower_type="ice")
+                self.left_tower._base_damage = self.left_tower.damage
+                self.left_tower._base_fire_rate = self.left_tower.fire_rate
                 self.right_tower = Tower(960, 530, fire_rate=self.statue_fire_rate, tower_type="ice")
+                self.right_tower._base_damage = self.right_tower.damage
+                self.right_tower._base_fire_rate = self.right_tower.fire_rate
             # Keep towers hidden until the player confirms the tower selection
             # to avoid confusing pre-selection visuals.
             self.left_tower.visible = False
@@ -2613,7 +2878,7 @@ class Game:
                 self.tower_choices = self.game_state.generate_initial_tower_choices() if hasattr(self, 'game_state') else [
                     {"id": "fire", "name": "Fire Tower", "description": "Damage: 10 — Burn nearby enemies (4 DPS, 3s)"},
                     {"id": "storm", "name": "Storm Tower", "description": "Damage: 10 (projectile ~9) — Chains to multiple enemies"},
-                    {"id": "ice", "name": "Ice Tower", "description": "Damage: 10 — Slows enemies 50% for 2s"},
+                    {"id": "ice", "name": "Ice Tower", "description": "Damage: 15 — Slows enemies 50% for 2s"},
                 ]
                 self.selected_tower_index = 0
 
@@ -2636,7 +2901,7 @@ class Game:
             )
             # Set time beyond final-boss spawn time and process prologo events immediately
             self.time_elapsed = (
-                176  # > 175 so update_prologo_events spawns boss immediately
+                236  # > 235 so update_prologo_events spawns boss immediately
             )
             self.update_prologo_events()
 
@@ -2723,10 +2988,11 @@ class Game:
         self.damage_multiplier = 1.0
         self.fire_rate_multiplier = 1.0
         self.projectile_size_multiplier = 1.0
+        # Apply STRUCTURE effect (3% damage reduction per level)
         self.damage_reduction_multiplier = 1.0 - (
-            self.permanent_stats["structure"] * 0.05
+            self.permanent_stats["structure"] * 0.03
         )
-        # Ensure permanent stat effects are applied immediately
+        # Ensure permanent stat effects are applied immediately (also sets xp_multiplier)
         self.apply_permanent_stats()
 
         # Reset game state
@@ -2783,8 +3049,9 @@ class Game:
             self.permanent_stats["adrenaline"] * 0.05
         )
         self.player.projectile_size_multiplier = DEFAULT_PROJECTILE_SIZE_MULTIPLIER
+        # Apply permanent STRUCTURE effect to player (3% damage reduction per level)
         self.player.damage_reduction_multiplier = DEFAULT_DAMAGE_REDUCTION_MULTIPLIER - (
-            self.permanent_stats["structure"] * 0.05
+            self.permanent_stats["structure"] * 0.03
         )
         self.player.max_health = PLAYER_BASE_HEALTH + (self.permanent_stats["vigor"] * 10)
         self.player.health = self.player.max_health
@@ -3022,10 +3289,11 @@ class Game:
         self.player.update(self.width)
         self.player.x = self.clamp_to_walls(self.player.x)
 
-        # VIGOR: periodic regeneration (1% max HP every 3s * per-level)
+        # VIGOR: periodic regeneration (0.5 HP every 5s per level)
         vigor_level = self.permanent_stats.get("vigor", 0)
-        if vigor_level and (self.frame_count % (3 * self.fps) == 0):
-            heal = self.player.max_health * (0.01 * vigor_level)
+        # Heal a flat 0.5 HP per level every 5 seconds
+        if vigor_level and (self.frame_count % (5 * self.fps) == 0):
+            heal = 0.5 * vigor_level
             self.player.health = min(self.player.max_health, self.player.health + heal)
 
         # Check for level up
@@ -3070,20 +3338,35 @@ class Game:
         if hasattr(self.enemies, "sprites"):
             for enemy in list(self.enemies.sprites()):
                 if hasattr(enemy, "health") and enemy.health <= 0:
-                    self.score += int(enemy.max_health * 18 * self.difficulty_multiplier)
+                    self.add_score(enemy.max_health * 18 * self.difficulty_multiplier)
                     type_xp = {"weak": 10, "normal": 16, "strong": 25, "giant": 50, "angel": 22}
                     base_xp = type_xp.get(enemy.enemy_type, 12)
-                    self.player_xp += base_xp
+                    self.player_xp += int(round(base_xp * getattr(self, 'xp_multiplier', 1.0)))
                     if self.player_xp >= self.xp_to_next_level:
                         self.trigger_level_up()
+                    # If this enemy should propagate burn on death, do it now (before kill)
+                    try:
+                        if getattr(enemy, "burn_propagate_on_death", False) or getattr(enemy, "burn_propagate_hops", 0) > 0:
+                            try:
+                                self._propagate_burn(enemy)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
                     enemy.kill()  # Remove dead enemy
         else:
             for enemy in list(self.enemies):
                 if isinstance(enemy, dict) and enemy.get("health", 0) <= 0:
-                    self.score += int(enemy.get("max_health", 10) * 18 * self.difficulty_multiplier)
-                    type_xp = {"weak": 10, "normal": 16, "strong": 25, "giant": 50, "angel": 22}
-                    base_xp = type_xp.get(enemy.get("type"), 12)
-                    self.player_xp += base_xp
+                    self.add_score(enemy.get("max_health", 10) * 18 * self.difficulty_multiplier)
+                    # Propagate burn on death if flagged for dict-based enemies
+                    try:
+                        if enemy.get("burn_propagate_on_death", False) or enemy.get("burn_propagate_hops", 0) > 0:
+                            try:
+                                self._propagate_burn(enemy)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
                     if self.player_xp >= self.xp_to_next_level:
                         self.trigger_level_up()
                     try:
@@ -3117,22 +3400,37 @@ class Game:
                 if hasattr(boss, "health") and boss.health <= 0:
                     # Boss death handling (similar to enemy death but with different XP multiplier? Wait, bosses have their own handling elsewhere, but for burn we need this)
                     # For now, use enemy-like handling; adjust if bosses have special death logic
-                    self.score += int(boss.max_health * 25)  # Bosses give more score
+                    self.add_score(boss.max_health * 25)  # Bosses give more score
                     boss_xp_map = {"medium": 80, "big": 150, "final": 400}
                     boss_base_xp = boss_xp_map.get(boss.enemy_type.replace("boss_", ""), 100)
-                    self.player_xp += boss_base_xp
+                    self.player_xp += int(round(boss_base_xp * getattr(self, 'xp_multiplier', 1.0)))
                     if self.player_xp >= self.xp_to_next_level:
                         self.trigger_level_up()
+                    # Propagate burn on boss death if applicable
+                    try:
+                        if getattr(boss, "burn_propagate_on_death", False) or getattr(boss, "burn_propagate_hops", 0) > 0:
+                            try:
+                                self._propagate_burn(boss)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
                     boss.kill()  # Remove dead boss
         else:
             for boss in list(self.bosses):
                 if isinstance(boss, dict) and boss.get("health", 0) <= 0:
-                    self.score += int(boss.get("max_health", 100) * 25 * self.difficulty_multiplier)  # Assuming bosses have higher multiplier
-                    boss_xp_map = {"medium": 80, "big": 150, "final": 400}
-                    boss_base_xp = boss_xp_map.get(boss.get("type", "").replace("boss_", ""), 100)
-                    self.player_xp += boss_base_xp
+                    self.add_score(boss.get("max_health", 100) * 25 * self.difficulty_multiplier)  # Assuming bosses have higher multiplier
                     if self.player_xp >= self.xp_to_next_level:
                         self.trigger_level_up()
+                    # Propagate burn on boss death if applicable
+                    try:
+                        if boss.get("burn_propagate_on_death", False) or boss.get("burn_propagate_hops", 0) > 0:
+                            try:
+                                self._propagate_burn(boss)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
                     try:
                         self.bosses.remove(boss)
                     except Exception:
@@ -3143,6 +3441,8 @@ class Game:
             for enemy in list(self.enemies):
                 if isinstance(enemy, dict) and enemy.get("burn_timer", 0) > 0:
                     enemy["burn_timer"] -= 1
+
+                    # Burn tick handling
                     enemy.setdefault("burn_tick_counter", self.fps)
                     enemy["burn_tick_counter"] -= 1
                     if enemy["burn_tick_counter"] <= 0:
@@ -3158,6 +3458,12 @@ class Game:
                             pass
                         enemy["burn_tick_counter"] = self.fps
                         if enemy["health"] <= 0:
+                            # If this dying enemy should propagate its burn on death, do so
+                            if enemy.get("burn_propagate_on_death", False) or enemy.get("burn_propagate_hops", 0) > 0:
+                                try:
+                                    self._propagate_burn(enemy)
+                                except Exception:
+                                    pass
                             try:
                                 self.enemies.remove(enemy)
                             except Exception:
@@ -3336,6 +3642,13 @@ class Game:
             cd: float = spear_cooldown(slevel)
             self.spear_cooldown_timer = int(cd * self.fps)
 
+        # DemonStrike: vertical-only rolling ball, pierces and slows
+        if "DemonStrike" in self.player_weapons and getattr(self, "DemonStrike_cooldown_timer", 0) <= 0:
+            self.fire_demon_strike(aim_vel_x, aim_vel_y)
+            ds_level = self.weapon_levels.get("DemonStrike", 0)
+            cd_ds: float = DemonStrike_cooldown(ds_level)
+            self.DemonStrike_cooldown_timer = int(cd_ds * self.fps)
+
         if "Soul Drain" in self.player_weapons and self.soul_drain_cooldown_timer <= 0:
             self.fire_soul_drain(aim_vel_x, aim_vel_y)
             slevel = self.weapon_levels.get("Soul Drain", 0)
@@ -3347,6 +3660,8 @@ class Game:
             self.hellgun_cooldown_timer -= 1
         if self.spear_cooldown_timer > 0:
             self.spear_cooldown_timer -= 1
+        if getattr(self, "DemonStrike_cooldown_timer", 0) > 0:
+            self.DemonStrike_cooldown_timer -= 1
         if self.soul_drain_cooldown_timer > 0:
             self.soul_drain_cooldown_timer -= 1
 
@@ -3443,6 +3758,55 @@ class Game:
             except Exception:
                 pass
 
+    def fire_demon_strike(self, aim_x, aim_y) -> None:
+        """Fire DemonStrike: vertical-only rolling ball that pierces and slows enemies.
+
+        Behavior:
+        - Velocity constrained to perfectly vertical direction (vx = 0).
+        - Pierces every enemy hit (pierce_all = True) and deals one instance of damage per enemy (same damage formula as spear).
+        - Applies slow effect (50% speed) for 2 seconds on hit.
+        """
+        dlevel: int = self.weapon_levels.get("DemonStrike", 0)
+        # Damage scaling: keep player-damage component, add +10 damage per weapon level
+        dmg: int = max(2, int(self.player_damage * self.damage_multiplier * 0.5) + dlevel * 10)
+        # Read tuned speed from weapon defs so it's centrally configurable
+        speed_factor: float = WEAPON_DEFS.get("DemonStrike", {}).get("speed_factor", 120 / 500.0)
+
+        # Constrain horizontal velocity to zero so the ball travels perfectly vertical.
+        # Use constant speed for consistency, regardless of aim_y magnitude
+        vy = 250 if aim_y >= 0 else -250
+        vx = 0
+        # Radius: use requested base diameter (rounded) from WEAPON_DEFS, scaled by projectile_size_multiplier,
+        # then add per-level radius increases.
+        base_diam = WEAPON_DEFS.get("DemonStrike", {}).get("base_diameter", None)
+        if base_diam is not None:
+            base_r_calc = int(round((base_diam * self.projectile_size_multiplier) / 2.0))
+        else:
+            base_r_calc = int(WEAPON_DEFS.get("DemonStrike", {}).get("base_radius", 9) * self.projectile_size_multiplier)
+        per_level_inc = WEAPON_DEFS.get("DemonStrike", {}).get("radius_increase_per_level", 0)
+        radius: int = max(7, base_r_calc + dlevel * per_level_inc)
+
+        ball = Projectile(
+            self.player.x,
+            self.player.y,
+            vx,
+            vy,
+            damage=dmg,
+            radius=radius,
+            weapon_type="DemonStrike",
+        )
+        ball.pierce_all = True
+        # Slow metadata handled by collision system
+        ball.effect = "slow"
+        ball.slow_duration = int(2 * getattr(self, "fps", 60))
+        ball.slow_factor = 0.5
+
+        self.projectiles.add(ball)
+        if getattr(self, "projectile_manager", None) is not None:
+            try:
+                self.projectile_manager.register(ball)
+            except Exception:
+                pass
     def fire_soul_drain(self, aim_x, aim_y) -> None:
         """Fire homing soul drain projectiles"""
         slevel: int = self.weapon_levels.get("Soul Drain", 0)
@@ -3799,6 +4163,16 @@ class Game:
             slow_factor = projectile.get("slow_factor", 0.5) if isinstance(projectile, dict) else getattr(projectile, "slow_factor", 0.5)
             burn_duration = projectile.get("burn_duration", 180) if isinstance(projectile, dict) else getattr(projectile, "burn_duration", 180)
             burn_dps = projectile.get("burn_damage_per_second", 4.0) if isinstance(projectile, dict) else getattr(projectile, "burn_damage_per_second", 4.0)
+            # FIRE left-column tier 2: double burn duration and burn DPS
+            if getattr(self, 'permanent_stats', None) and self.permanent_stats.get("fire_2", 0):
+                try:
+                    burn_duration = int(burn_duration * 2)
+                except Exception:
+                    pass
+                try:
+                    burn_dps = burn_dps * 2
+                except Exception:
+                    pass
             # Flag to indicate we've processed this projectile via the spatial-grid branch
             processed_projectile = False
             # Ensure we always have an iterable for hit enemies
@@ -3865,6 +4239,7 @@ class Game:
                                 if dx * dx + dy * dy <= (pr + br) * (pr + br):
                                     hit_enemies.append(boss)
 
+
             # Prefer the nearest hit candidate to be processed as primary (avoid multiple targets in same frame)
             try:
                 if len(hit_enemies) > 1:
@@ -3899,38 +4274,75 @@ class Game:
                 try:
                     if isinstance(projectile, dict):
                         hit_ids = projectile.setdefault("_hit_ids", set())
+                        # also keep boss-type hits for dict-style projectiles
+                        projectile.setdefault("_hit_boss_types", set())
                     else:
                         if not hasattr(projectile, "_hit_ids"):
                             projectile._hit_ids = set()
                         hit_ids = projectile._hit_ids
+                        if not hasattr(projectile, "_hit_boss_types"):
+                            projectile._hit_boss_types = set()
+                    # If this exact enemy was already hit by this projectile, skip
                     if id(enemy) in hit_ids:
-                        # Already processed this enemy for this projectile
                         continue
+                    # If this is a boss (or boss part) and we've already hit a boss
+                    # of the same logical type with this projectile, skip further hits
+                    try:
+                        etype = getattr(enemy, "enemy_type", "")
+                        if isinstance(etype, str) and etype.startswith("boss_") and etype in getattr(projectile, "_hit_boss_types", set()):
+                            continue
+                    except Exception:
+                        pass
                 except Exception:
                     hit_ids = None
 
                 # Special handling for soul drain
                 if getattr(projectile, "weapon_type", None) == "Soul Drain":
 
-                    # Apply instant damage on contact
+                    # Apply instant damage on contact — use projectile.damage (and
+                    # respect FIRE tier-3 via the centralized helper) rather than a
+                    # fixed '2'. Also show the correct damage floating text.
+                    try:
+                        dmg_to_apply = self._player_damage_vs_burning(projectile, enemy, getattr(projectile, "damage", 0))
+                    except Exception:
+                        dmg_to_apply = getattr(projectile, "damage", 0)
+
                     if hasattr(enemy, "take_damage"):
-                        enemy.take_damage(2)
-                        # spawn centralized floating text
+                        try:
+                            enemy.take_damage(dmg_to_apply)
+                        except Exception:
+                            try:
+                                enemy.health = max(0, getattr(enemy, 'health', 0) - dmg_to_apply)
+                            except Exception:
+                                pass
+                        # spawn centralized floating text (yellow if FIRE tier-3 bonus applied)
                         try:
                             ex, ey = self._enemy_pos(enemy)
-                            self.spawn_floating_text("2", ex, ey - self._enemy_radius(enemy) - 8)
+                            try:
+                                base = projectile.get("damage", 0) if isinstance(projectile, dict) else getattr(projectile, "damage", 0)
+                                is_player_proj = (not getattr(projectile, "is_enemy_projectile", False)) and (getattr(projectile, "source", None) != "statue")
+                                color = (255, 200, 0) if (self.permanent_stats.get("fire_3", 0) and is_player_proj and dmg_to_apply > base) else (255, 255, 255)
+                            except Exception:
+                                color = (255, 255, 255)
+                            self.spawn_floating_text(str(int(dmg_to_apply)), ex, ey - self._enemy_radius(enemy) - 8, color=color)
                         except Exception:
                             pass
                     else:
                         # dict enemy
-                        enemy["health"] = enemy.get("health", 0) - 2
+                        enemy["health"] = max(0, enemy.get("health", 0) - int(dmg_to_apply))
                         try:
                             ex, ey = self._enemy_pos(enemy)
-                            self.spawn_floating_text("2", ex, ey - enemy.get("radius", 12) - 8)
+                            try:
+                                base = projectile.get("damage", 0) if isinstance(projectile, dict) else getattr(projectile, "damage", 0)
+                                is_player_proj = (not getattr(projectile, "is_enemy_projectile", False)) and (getattr(projectile, "source", None) != "statue")
+                                color = (255, 200, 0) if (self.permanent_stats.get("fire_3", 0) and is_player_proj and dmg_to_apply > base) else (255, 255, 255)
+                            except Exception:
+                                color = (255, 255, 255)
+                            self.spawn_floating_text(str(int(dmg_to_apply)), ex, ey - enemy.get("radius", 12) - 8, color=color)
                         except Exception:
                             pass
 
-                    # Apply drain effect instead of instant damage
+                    # Apply drain effect (secondary periodic damage/heal)
                     if not hasattr(enemy, "drain_timer") or getattr(enemy, "drain_timer", 0) <= 0:
                         try:
                             enemy.drain_timer = 4 * 60  # 4 seconds
@@ -3944,6 +4356,20 @@ class Game:
                                 enemy["drain_damage"] = projectile.damage
                                 enemy["drain_heal"] = projectile.heal_amount
                                 enemy["drain_source"] = projectile
+
+                    # Record this hit so the same projectile won't process the same enemy again
+                    try:
+                        if isinstance(projectile, dict):
+                            projectile.setdefault("_hit_ids", set()).add(id(enemy))
+                        else:
+                            if not hasattr(projectile, "_hit_ids"):
+                                projectile._hit_ids = set()
+                            projectile._hit_ids.add(id(enemy))
+                    except Exception:
+                        pass
+
+                    # We've handled Soul Drain for this contact — skip the normal damage path
+                    continue
                     try:
                         projectile.kill()  # Remove projectile after attaching
                     except Exception:
@@ -4019,18 +4445,33 @@ class Game:
                         distance = math.sqrt(dx * dx + dy * dy)
                         if distance <= explosion_radius:
                             try:
-                                enemy.take_damage(projectile.damage)
+                                dmg_to_apply = self._player_damage_vs_burning(projectile, enemy, getattr(projectile, "damage", 0))
+                                enemy.take_damage(dmg_to_apply)
                                 try:
                                     ex, ey = self._enemy_pos(enemy)
-                                    self.spawn_floating_text(str(projectile.damage), ex, ey - self._enemy_radius(enemy) - 8)
+                                    # Highlight numeric damage yellow if FIRE tier-3 bonus applied
+                                    try:
+                                        base = projectile.get("damage", 0) if isinstance(projectile, dict) else getattr(projectile, "damage", 0)
+                                        is_player_proj = (not getattr(projectile, "is_enemy_projectile", False)) and (getattr(projectile, "source", None) != "statue")
+                                        color = (255, 200, 0) if (self.permanent_stats.get("fire_3", 0) and is_player_proj and dmg_to_apply > base) else (255, 255, 255)
+                                    except Exception:
+                                        color = (255, 255, 255)
+                                    self.spawn_floating_text(str(dmg_to_apply), ex, ey - self._enemy_radius(enemy) - 8, color=color)
                                 except Exception:
                                     pass
                             except Exception:
                                 if isinstance(enemy, dict):
-                                    enemy["health"] = max(0, enemy.get("health", 0) - projectile.damage)
+                                    dmg_to_apply = self._player_damage_vs_burning(projectile, enemy, getattr(projectile, "damage", 0))
+                                    enemy["health"] = max(0, enemy.get("health", 0) - dmg_to_apply)
                                     try:
                                         ex, ey = self._enemy_pos(enemy)
-                                        self.spawn_floating_text(str(projectile.damage), ex, ey - enemy.get("radius", 12) - 8)
+                                        try:
+                                            base = projectile.get("damage", 0) if isinstance(projectile, dict) else getattr(projectile, "damage", 0)
+                                            is_player_proj = (not getattr(projectile, "is_enemy_projectile", False)) and (getattr(projectile, "source", None) != "statue")
+                                            color = (255, 200, 0) if (self.permanent_stats.get("fire_3", 0) and is_player_proj and dmg_to_apply > base) else (255, 255, 255)
+                                        except Exception:
+                                            color = (255, 255, 255)
+                                        self.spawn_floating_text(str(dmg_to_apply), ex, ey - enemy.get("radius", 12) - 8, color=color)
                                     except Exception:
                                         pass
                     
@@ -4052,13 +4493,24 @@ class Game:
                             ex, ey = self._enemy_pos(enemy)
                         except Exception:
                             pass
-                        enemy.take_damage(projectile.damage)
+                        # Apply possible FIRE tier-3 player bonus vs burning enemies
+                        dmg_to_apply = self._player_damage_vs_burning(projectile, enemy, getattr(projectile, "damage", 0))
+                        enemy.take_damage(dmg_to_apply)
                         try:
                             ex, ey = self._enemy_pos(enemy)
-                            self.spawn_floating_text(str(projectile.damage), ex, ey - self._enemy_radius(enemy) - 8)
+                            try:
+                                base = projectile.get("damage", 0) if isinstance(projectile, dict) else getattr(projectile, "damage", 0)
+                                is_player_proj = (not getattr(projectile, "is_enemy_projectile", False)) and (getattr(projectile, "source", None) != "statue")
+                                color = (255, 200, 0) if (self.permanent_stats.get("fire_3", 0) and is_player_proj and dmg_to_apply > base) else (255, 255, 255)
+                            except Exception:
+                                color = (255, 255, 255)
+                            try:
+                                ex, ey = self._enemy_pos(enemy)
+                                self.spawn_floating_text(str(dmg_to_apply), ex, ey - self._enemy_radius(enemy) - 8, color=color)
+                            except Exception:
+                                pass
                         except Exception:
                             pass
-
                         # Storm-statue projectiles should be removed on first contact (apply chain immediately)
                         if getattr(projectile, "appearance", None) == "storm_statue":
                             # Apply chain lightning to nearby enemies (primary already hit)
@@ -4112,10 +4564,17 @@ class Game:
                                     pass
                     except Exception:
                         if isinstance(enemy, dict):
-                            enemy["health"] = max(0, enemy.get("health", 0) - projectile.damage)
+                            dmg_to_apply = self._player_damage_vs_burning(projectile, enemy, projectile.damage if isinstance(projectile, dict) else getattr(projectile, "damage", 0))
+                            enemy["health"] = max(0, enemy.get("health", 0) - dmg_to_apply)
                             try:
                                 ex, ey = self._enemy_pos(enemy)
-                                self.spawn_floating_text(str(projectile.damage), ex, ey - enemy.get("radius", 12) - 8)
+                                try:
+                                    base = projectile.get("damage", 0) if isinstance(projectile, dict) else getattr(projectile, "damage", 0)
+                                    is_player_proj = (not getattr(projectile, "is_enemy_projectile", False)) and (getattr(projectile, "source", None) != "statue")
+                                    color = (255, 200, 0) if (self.permanent_stats.get("fire_3", 0) and is_player_proj and dmg_to_apply > base) else (255, 255, 255)
+                                except Exception:
+                                    color = (255, 255, 255)
+                                self.spawn_floating_text(str(dmg_to_apply), ex, ey - enemy.get("radius", 12) - 8, color=color)
                             except Exception:
                                 pass
 
@@ -4161,6 +4620,17 @@ class Game:
                         else:
                             hit_ids = getattr(projectile, "_hit_ids", set())
                     hit_ids.add(id(enemy))
+                    # For bosses, also remember the boss-type so multi-part bosses
+                    # or duplicate boss sub-sprites won't be damaged multiple times
+                    try:
+                        etype = getattr(enemy, "enemy_type", "")
+                        if isinstance(etype, str) and etype.startswith("boss_"):
+                            if isinstance(projectile, dict):
+                                projectile.setdefault("_hit_boss_types", set()).add(etype)
+                            else:
+                                projectile._hit_boss_types.add(etype)
+                    except Exception:
+                        pass
                 except Exception:
                     pass
 
@@ -4209,12 +4679,35 @@ class Game:
                                 enemy["burn_timer"] = burn_duration
                                 enemy["burn_damage_per_second"] = burn_dps
                                 enemy["burn_tick_counter"] = getattr(self, "fps", 60)
+                                # If FIRE tier 1 is active, mark this burn to propagate when the enemy dies
+                                # (do not rely on projectile.appearance — any burn source should be eligible).
+                                try:
+                                    if self.permanent_stats.get("fire_1", 0):
+                                        # Mark this burn to propagate when the enemy dies; allow
+                                        # chaining up to 3 additional enemies.
+                                        enemy["burn_propagate_on_death"] = True
+                                        enemy["burn_propagate_radius"] = 150
+                                        enemy["burn_propagate_dps"] = burn_dps
+                                        enemy["burn_propagate_duration"] = burn_duration
+                                        enemy["burn_propagate_hops"] = 2
+                                except Exception:
+                                    pass
                         else:
                             if not hasattr(enemy, "burn_timer") or getattr(enemy, "burn_timer", 0) <= 0:
                                 enemy.burn_timer = burn_duration
                                 enemy.burn_damage_per_second = burn_dps
                                 # Counter for per-second ticks
                                 enemy.burn_tick_timer = getattr(self, "fps", 60)
+                                # For sprite-based enemies, attach propagation-on-death attrs when applicable
+                                try:
+                                    if self.permanent_stats.get("fire_1", 0):
+                                        enemy.burn_propagate_on_death = True
+                                        enemy.burn_propagate_radius = 150
+                                        enemy.burn_propagate_dps = burn_dps
+                                        enemy.burn_propagate_duration = burn_duration
+                                        enemy.burn_propagate_hops = 2
+                                except Exception:
+                                    pass
                     except Exception:
                         pass
 
@@ -4264,7 +4757,7 @@ class Game:
                     # Death handling for dict-based enemies
                     if isinstance(enemy, dict):
                         if enemy.get("health", 0) <= 0:
-                            self.score += int(
+                            self.add_score(
                                 enemy.get("max_health", 10) * 18 * self.difficulty_multiplier
                             )
                             type_xp = {
@@ -4275,9 +4768,18 @@ class Game:
                                 "angel": 22,
                             }
                             base_xp = type_xp.get(enemy.get("type"), 12)
-                            self.player_xp += base_xp
+                            self.player_xp += int(round(base_xp * getattr(self, 'xp_multiplier', 1.0)))
                             if self.player_xp >= self.xp_to_next_level:
                                 self.trigger_level_up()
+                            # Propagate burn on death if flagged
+                            try:
+                                if enemy.get("burn_propagate_on_death", False) or enemy.get("burn_propagate_hops", 0) > 0:
+                                    try:
+                                        self._propagate_burn(enemy)
+                                    except Exception:
+                                        pass
+                            except Exception:
+                                pass
                             try:
                                 self.enemies.remove(enemy)
                             except Exception:
@@ -4287,7 +4789,7 @@ class Game:
                     # Death handling for object-based enemies
                     if getattr(enemy, "health", None) is not None:
                         if enemy.health <= 0:
-                            self.score += int(
+                            self.add_score(
                                 enemy.max_health * 18 * self.difficulty_multiplier
                             )
                             # Give XP on kill (per-type table, flat values)
@@ -4299,9 +4801,18 @@ class Game:
                                 "angel": 22,
                             }
                             base_xp: int = type_xp.get(enemy.enemy_type, 12)  # fallback XP
-                            self.player_xp += base_xp
+                            self.player_xp += int(round(base_xp * getattr(self, 'xp_multiplier', 1.0)))
                             if self.player_xp >= self.xp_to_next_level:
                                 self.trigger_level_up()
+                            # Ensure propagation fires even if killed by a weapon/projectile
+                            try:
+                                if getattr(enemy, "burn_propagate_on_death", False) or getattr(enemy, "burn_propagate_hops", 0) > 0:
+                                    try:
+                                        self._propagate_burn(enemy)
+                                    except Exception:
+                                        pass
+                            except Exception:
+                                pass
                             enemy.kill()  # Remove dead enemy
                         break
 
@@ -4405,7 +4916,7 @@ class Game:
                             
                             # death handling for chained-target sprites
                             if getattr(targ, "health", 0) <= 0:
-                                self.score += int(
+                                self.add_score(
                                     targ.max_health * 18 * self.difficulty_multiplier
                                 )
                                 type_xp = {
@@ -4416,9 +4927,18 @@ class Game:
                                     "angel": 22,
                                 }
                                 base_xp = type_xp.get(targ.enemy_type, 12)
-                                self.player_xp += base_xp
+                                self.player_xp += int(round(base_xp * getattr(self, 'xp_multiplier', 1.0)))
                                 if self.player_xp >= self.xp_to_next_level:
                                     self.trigger_level_up()
+                                # Propagate burn on death even if killed by a weapon/projectile
+                                try:
+                                    if getattr(targ, "burn_propagate_on_death", False) or getattr(targ, "burn_propagate_hops", 0) > 0:
+                                        try:
+                                            self._propagate_burn(targ)
+                                        except Exception:
+                                            pass
+                                except Exception:
+                                    pass
                                 try:
                                     targ.kill()
                                 except Exception:
@@ -4513,7 +5033,8 @@ class Game:
                         hit_ids = None
                     if isinstance(enemy, dict):
                             # Dict-based enemy
-                            enemy["health"] -= p_damage
+                            dmg_to_apply = self._player_damage_vs_burning(projectile, enemy, p_damage)
+                            enemy["health"] -= dmg_to_apply
 
                             # Record this hit so projectile won't hit the same enemy again
                             try:
@@ -4596,10 +5117,8 @@ class Game:
 
                             # Death handling for dict enemies
                             if enemy["health"] <= 0:
-                                self.score += int(
-                                    enemy.get("max_health", 10)
-                                    * 18
-                                    * self.difficulty_multiplier
+                                self.add_score(
+                                    enemy.get("max_health", 10) * 18 * self.difficulty_multiplier
                                 )
                                 type_xp = {
                                     "weak": 10,
@@ -4609,9 +5128,18 @@ class Game:
                                     "angel": 22,
                                 }
                                 base_xp = type_xp.get(enemy.get("type"), 12)
-                                self.player_xp += base_xp
+                                self.player_xp += int(round(base_xp * getattr(self, 'xp_multiplier', 1.0)))
                                 if self.player_xp >= self.xp_to_next_level:
                                     self.trigger_level_up()
+                                # Ensure burn propagation happens on death regardless of damage source
+                                try:
+                                    if enemy.get("burn_propagate_on_death", False) or enemy.get("burn_propagate_hops", 0) > 0:
+                                        try:
+                                            self._propagate_burn(enemy)
+                                        except Exception:
+                                            pass
+                                except Exception:
+                                    pass
                                 try:
                                     self.enemies.remove(enemy)
                                 except ValueError:
@@ -4646,7 +5174,8 @@ class Game:
                                         pass
                                     except Exception:
                                         pass
-                                    targ["health"] -= p_damage * 2
+                                    eff = self._player_damage_vs_burning(projectile, targ, p_damage)
+                                    targ["health"] -= eff * 2
                                     try:
                                         # dict chain: after damage
                                         pass
@@ -4665,11 +5194,20 @@ class Game:
                                     tx, ty = self._enemy_pos(targ)
                                     chain_points.append((tx, ty))
                                     if targ["health"] <= 0:
-                                        self.score += int(targ.get("max_health", 10) * 18 * self.difficulty_multiplier)
+                                        self.add_score(targ.get("max_health", 10) * 18 * self.difficulty_multiplier)
                                         base_xp = 12
-                                        self.player_xp += base_xp
+                                        self.player_xp += int(round(base_xp * getattr(self, 'xp_multiplier', 1.0)))
                                         if self.player_xp >= self.xp_to_next_level:
                                             self.trigger_level_up()
+                                        # Propagate burn on death even if killed by a weapon/projectile
+                                        try:
+                                            if targ.get("burn_propagate_on_death", False) or targ.get("burn_propagate_hops", 0) > 0:
+                                                try:
+                                                    self._propagate_burn(targ)
+                                                except Exception:
+                                                    pass
+                                        except Exception:
+                                            pass
                                         try:
                                             self.enemies.remove(targ)
                                         except Exception:
@@ -4688,7 +5226,8 @@ class Game:
                     else:
                         # Object-based enemy (sprite/instance)
                             try:
-                                enemy.take_damage(p_damage)
+                                dmg_to_apply = self._player_damage_vs_burning(projectile, enemy, p_damage)
+                                enemy.take_damage(dmg_to_apply)
 
                                 # Remove storm projectiles on contact (apply chain immediately)
                                 if getattr(projectile, "appearance", None) == "storm_statue":
@@ -4713,10 +5252,12 @@ class Game:
                                             for i in range(to_chain):
                                                 targ = others[i][1]
                                                 try:
-                                                    targ.take_damage(p_damage * 2)
+                                                    eff = self._player_damage_vs_burning(projectile, targ, p_damage)
+                                                    targ.take_damage(eff * 2)
                                                 except Exception:
                                                     try:
-                                                        targ.health -= p_damage * 2
+                                                        eff = self._player_damage_vs_burning(projectile, targ, p_damage)
+                                                        targ.health -= eff * 2
                                                     except Exception:
                                                         pass
                                                 tx, ty = self._enemy_pos(targ)
@@ -4742,7 +5283,7 @@ class Game:
                                             pass
                             except Exception:
                                 try:
-                                    enemy.health -= p_damage
+                                    enemy.health -= self._player_damage_vs_burning(projectile, enemy, p_damage)
                                 except Exception:
                                     pass
 
@@ -4802,7 +5343,7 @@ class Game:
 
                             # Death handling for object enemies
                             if getattr(enemy, "health", 0) <= 0:
-                                self.score += int(
+                                self.add_score(
                                     enemy.max_health * 18 * self.difficulty_multiplier
                                 )
                                 type_xp: Dict[str, int] = {
@@ -4813,9 +5354,20 @@ class Game:
                                     "angel": 22,
                                 }
                                 base_xp: int = type_xp.get(enemy.enemy_type, 12)  # fallback XP
-                                self.player_xp += base_xp
+                                self.player_xp += int(round(base_xp * getattr(self, 'xp_multiplier', 1.0)))
                                 if self.player_xp >= self.xp_to_next_level:
                                     self.trigger_level_up()
+                                # Ensure propagation fires even if enemy was killed by a weapon/projectile
+                                try:
+                                    if getattr(enemy, "burn_propagate_on_death", False) or getattr(enemy, "burn_propagate_hops", 0) > 0:
+                                        try:
+                                            # DIAG: log propagation call for sprite-based death
+                                            LOG.debug("_propagate_burn called from projectile-kill for sprite enemy; burn_propagate_on_death=%s, hops=%s", getattr(enemy, 'burn_propagate_on_death', False), getattr(enemy, 'burn_propagate_hops', 0))
+                                            self._propagate_burn(enemy)
+                                        except Exception:
+                                            pass
+                                except Exception:
+                                    pass
                                 enemy.kill()  # Remove dead enemy
 
                             # Chain hits: storm projectiles can hit additional distinct enemies
@@ -4844,9 +5396,10 @@ class Game:
                                 for i in range(to_chain):
                                     targ = others[i][1]
                                     if isinstance(targ, dict):
-                                        targ["health"] -= p_damage * 2  # Increased damage for secondary targets
+                                        eff = self._player_damage_vs_burning(projectile, targ, p_damage)
+                                        targ["health"] -= eff * 2  # Increased damage for secondary targets
                                         if targ["health"] <= 0:
-                                            self.score += int(
+                                            self.add_score(
                                                 targ.get("max_health", 10) * 18 * self.difficulty_multiplier
                                             )
                                             type_xp = {
@@ -4857,7 +5410,7 @@ class Game:
                                                 "angel": 22,
                                             }
                                             base_xp = type_xp.get(targ.get("type"), 12)
-                                            self.player_xp += base_xp
+                                            self.player_xp += int(round(base_xp * getattr(self, 'xp_multiplier', 1.0)))
                                             if self.player_xp >= self.xp_to_next_level:
                                                 self.trigger_level_up()
                                             try:
@@ -4866,14 +5419,16 @@ class Game:
                                                 pass
                                     else:
                                         try:
-                                            targ.take_damage(p_damage * 2)  # Increased damage for secondary targets
+                                            eff = self._player_damage_vs_burning(projectile, targ, p_damage)
+                                            targ.take_damage(eff * 2)  # Increased damage for secondary targets
                                         except Exception:
                                             try:
-                                                targ.health -= p_damage * 2  # Increased damage for secondary targets
+                                                eff = self._player_damage_vs_burning(projectile, targ, p_damage)
+                                                targ.health -= eff * 2  # Increased damage for secondary targets
                                             except Exception:
                                                 pass
                                         if getattr(targ, "health", 0) <= 0:
-                                            self.score += int(
+                                            self.add_score(
                                                 targ.max_health * 18 * self.difficulty_multiplier
                                             )
                                             type_xp: Dict[str, int] = {
@@ -4884,7 +5439,7 @@ class Game:
                                                 "angel": 22,
                                             }
                                             base_xp: int = type_xp.get(targ.enemy_type, 12)
-                                            self.player_xp += base_xp
+                                            self.player_xp += int(round(base_xp * getattr(self, 'xp_multiplier', 1.0)))
                                             if self.player_xp >= self.xp_to_next_level:
                                                 self.trigger_level_up()
                                             targ.kill()
@@ -4911,16 +5466,71 @@ class Game:
             if hasattr(projectile, "rect"):
                 hit_bosses = pygame.sprite.spritecollide(projectile, self.bosses, False)
             for boss in hit_bosses:
+                # Skip if this projectile already hit this exact boss instance
+                try:
+                    if isinstance(projectile, dict):
+                        hit_ids_local = projectile.setdefault("_hit_ids", set())
+                        hit_boss_types_local = projectile.setdefault("_hit_boss_types", set())
+                    else:
+                        hit_ids_local = getattr(projectile, "_hit_ids", set())
+                        hit_boss_types_local = getattr(projectile, "_hit_boss_types", set())
+                    if id(boss) in hit_ids_local or (getattr(boss, "enemy_type", "") in hit_boss_types_local):
+                        continue
+                except Exception:
+                    pass
+
                 if boss.enemy_type == "boss_final" and self.selected_stage == "prologo":
                     if self.prologo_final_boss_immortal:
                         continue  # Invulnerable
                     else:
-                        boss.take_damage(projectile.damage)
+                        bd = self._player_damage_vs_burning(projectile, boss, getattr(projectile, "damage", 0))
+                        boss.take_damage(bd)
                         if boss.health <= boss.max_health * 0.1:
                             self.prologo_final_boss_immortal = True
                             boss.health = boss.max_health * 0.1
                 else:
-                    boss.take_damage(projectile.damage)
+                    bd = self._player_damage_vs_burning(projectile, boss, getattr(projectile, "damage", 0))
+                    boss.take_damage(bd)
+
+                # Apply status effects (burn/slow) to bosses when projectile carries them.
+                # Previously bosses didn't receive burn/slow from projectiles; fix so all
+                # enemies and bosses consistently get effects.
+                try:
+                    if effect == "burn":
+                        # Only apply burn if not already burning
+                        if not hasattr(boss, "burn_timer") or getattr(boss, "burn_timer", 0) <= 0:
+                            boss.burn_timer = burn_duration
+                            boss.burn_damage_per_second = burn_dps
+                            boss.burn_tick_timer = getattr(self, "fps", 60)
+                            # If FIRE tier 1 is active, mark this burn to propagate on death
+                            try:
+                                if self.permanent_stats.get("fire_1", 0):
+                                    boss.burn_propagate_on_death = True
+                                    boss.burn_propagate_radius = 150
+                                    boss.burn_propagate_dps = burn_dps
+                                    boss.burn_propagate_duration = burn_duration
+                                    boss.burn_propagate_hops = 2
+                            except Exception:
+                                pass
+                    elif effect == "slow":
+                        if not hasattr(boss, "slow_timer") or getattr(boss, "slow_timer", 0) <= 0:
+                            boss.slow_timer = slow_duration
+                            boss.slow_factor = slow_factor
+                            if not hasattr(boss, "original_speed"):
+                                boss.original_speed = boss.speed
+                            boss.speed = boss.speed * boss.slow_factor
+                except Exception:
+                    pass
+                # Record that this projectile has hit this boss/type so it won't hit again
+                try:
+                    if isinstance(projectile, dict):
+                        projectile.setdefault("_hit_ids", set()).add(id(boss))
+                        projectile.setdefault("_hit_boss_types", set()).add(getattr(boss, "enemy_type", ""))
+                    else:
+                        projectile._hit_ids.add(id(boss))
+                        projectile._hit_boss_types.add(getattr(boss, "enemy_type", ""))
+                except Exception:
+                    pass
 
                 # Handle projectile piercing for bosses too
                 # NOTE: Spears should not pierce bosses — treat spear as single-hit for bosses
@@ -4936,13 +5546,13 @@ class Game:
                     projectile.kill()
 
                 if boss.health <= 0:
-                    self.score += int(boss.max_health * 25)
+                    self.add_score(boss.max_health * 25)
                     # Give XP for boss kill (per-type table, flat values)
                     boss_xp_map: Dict[str, int] = {"medium": 80, "big": 150, "final": 400}
                     boss_base_xp: int = boss_xp_map.get(
                         boss.enemy_type.replace("boss_", ""), 100
                     )
-                    self.player_xp += boss_base_xp
+                    self.player_xp += int(round(boss_base_xp * getattr(self, 'xp_multiplier', 1.0)))
                     if self.player_xp >= self.xp_to_next_level:
                         self.trigger_level_up()
                     boss.kill()  # Remove dead boss
@@ -5001,7 +5611,8 @@ class Game:
                     
                     for i in range(to_chain):
                         targ = others[i][1]
-                        targ.take_damage(projectile.damage * 2)  # Increased damage for secondary targets
+                        eff = self._player_damage_vs_burning(projectile, targ, getattr(projectile, "damage", 0))
+                        targ.take_damage(eff * 2)  # Increased damage for secondary targets
                         
                         # Add to chain points for visual effect
                         tx, ty = self._enemy_pos(targ)
@@ -5011,18 +5622,18 @@ class Game:
                         if targ.health <= 0:
                             if hasattr(targ, 'enemy_type') and targ.enemy_type.startswith('boss_'):
                                 # Boss death handling
-                                self.score += int(targ.max_health * 25)
+                                self.add_score(targ.max_health * 25)
                                 boss_xp_map: Dict[str, int] = {"medium": 80, "big": 150, "final": 400}
                                 boss_base_xp: int = boss_xp_map.get(
                                     targ.enemy_type.replace("boss_", ""), 100
                                 )
-                                self.player_xp += boss_base_xp
+                                self.player_xp += int(round(boss_base_xp * getattr(self, 'xp_multiplier', 1.0)))
                                 if self.player_xp >= self.xp_to_next_level:
                                     self.trigger_level_up()
                                 targ.kill()
                             else:
                                 # Regular enemy death handling
-                                self.score += int(
+                                self.add_score(
                                     targ.max_health * 18 * self.difficulty_multiplier
                                 )
                                 type_xp = {
@@ -5033,7 +5644,10 @@ class Game:
                                     "angel": 22,
                                 }
                                 base_xp = type_xp.get(targ.enemy_type, 12)
-                                self.player_xp += base_xp
+                                self.player_xp += int(round(base_xp * getattr(self, 'xp_multiplier', 1.0)))
+                                if self.player_xp >= self.xp_to_next_level:
+                                    self.trigger_level_up()
+                                targ.kill()
                                 if self.player_xp >= self.xp_to_next_level:
                                     self.trigger_level_up()
                                 targ.kill()
@@ -5525,9 +6139,20 @@ class Game:
         ]
 
         # Filter out weapons the player already has or if at max capacity
-        available_weapons: List[Dict[str, str]] = [
-            w for w in all_weapons if w["id"] not in self.player_weapons
-        ]
+        available_weapons: List[Dict[str, str]] = []
+        for w in all_weapons:
+            wid = w["id"]
+            if wid in self.player_weapons:
+                continue
+            # Respect optional 'available_from' in WEAPON_DEFS (e.g. Purgatory-only weapons)
+            wdef = WEAPON_DEFS.get(wid, {})
+            available_from = wdef.get("available_from")
+            if available_from:
+                # if weapon requires Purgatory and we're not in a Purgatory stage, skip
+                if str(available_from).lower() == "purgatory":
+                    if not (self.selected_stage and str(self.selected_stage).startswith("purgatory")):
+                        continue
+            available_weapons.append(w)
 
         # If player already has max weapons, don't offer new weapons
         if len(self.player_weapons) >= self.max_extra_weapons:
@@ -5646,7 +6271,7 @@ class Game:
         return [
             {"id": "fire", "name": "Fire Tower", "description": "Damage: 10 — Burn nearby enemies (4 DPS, 3s)"},
             {"id": "storm", "name": "Storm Tower", "description": "Damage: 10 (projectile ~9) — Chains to multiple enemies"},
-            {"id": "ice", "name": "Ice Tower", "description": "Damage: 10 — Slows enemies 50% for 2s"},
+            {"id": "ice", "name": "Ice Tower", "description": "Damage: 15 — Slows enemies 50% for 2s"},
         ]
 
     def _wall_x_at(self, side: str, y: float) -> float:
@@ -5679,10 +6304,19 @@ class Game:
 
         # Configure both left and right towers to the chosen type at computed positions
         self.left_tower = Tower(left_x, desired_y, fire_rate=self.statue_fire_rate, tower_type=tower_type)
+        self.left_tower._base_damage = self.left_tower.damage
+        self.left_tower._base_fire_rate = self.left_tower.fire_rate
         self.right_tower = Tower(right_x, desired_y, fire_rate=self.statue_fire_rate, tower_type=tower_type)
+        self.right_tower._base_damage = self.right_tower.damage
+        self.right_tower._base_fire_rate = self.right_tower.fire_rate
         # Ensure visibility after player actively chose towers
         self.left_tower.visible = True
         self.right_tower.visible = True
+        # Re-apply permanent stat effects so created towers immediately reflect skill-tree bonuses
+        try:
+            self.apply_permanent_stats()
+        except Exception:
+            pass
 
         # Resume game flow
         self.awaiting_tower_choice = False
@@ -5737,6 +6371,12 @@ class Game:
                         self.big_enemy_timer = self.big_enemy_fast_interval
                     else:
                         self.big_enemy_timer = 12 * self.fps
+
+            # Also allow EnemyManager to occasionally spawn non-boss inquisitors in Purgatory
+            try:
+                self.enemy_manager.update_inquisitor_spawns()
+            except Exception:
+                pass
         else:
             self.big_enemy_timer -= 1
             if self.big_enemy_timer <= 0 and not self.big_spawned_this_wave:
@@ -5829,13 +6469,13 @@ class Game:
 
             self.difficulty_multiplier = 1.0 + (self.wave * 0.12)
 
-        # Spawn boss at 28 seconds (delegate to manager when available)
+        # Spawn boss at 38 seconds (delegate to manager when available)
         if getattr(self, "enemy_manager", None) is not None:
             try:
                 self.enemy_manager.update_wave_boss(self.wave_time)
             except Exception:
                 # Fallback to legacy behavior
-                if not self.wave_boss_spawned and self.wave_time >= 28:
+                if not self.wave_boss_spawned and self.wave_time >= 38:
                     if not (
                         self.selected_stage == "prologo" and self.prologo_final_boss_spawned
                     ):
@@ -5845,7 +6485,7 @@ class Game:
                             self.spawn_boss("mid")
                     self.wave_boss_spawned = True
         else:
-            if not self.wave_boss_spawned and self.wave_time >= 28:
+            if not self.wave_boss_spawned and self.wave_time >= 38:
                 if not (
                     self.selected_stage == "prologo" and self.prologo_final_boss_spawned
                 ):
@@ -5881,7 +6521,7 @@ class Game:
                 # Fallback to legacy behavior below
                 pass
 
-        # Final boss at 2:55 (175 seconds) - delegate to manager when available
+        # Final boss at 3:55 (235 seconds) - delegate to manager when available
         if getattr(self, "enemy_manager", None) is not None:
             try:
                 self.enemy_manager.update_prologo_events()
@@ -5890,7 +6530,7 @@ class Game:
                 if (
                     self.selected_stage == "prologo"
                     and not self.prologo_final_boss_spawned
-                    and self.time_elapsed >= 175
+                    and self.time_elapsed >= 235
                 ):
                     logger.info("[PROLOGO] Spawning final boss at time %s", self.time_elapsed)
                     self.spawn_boss("final")
@@ -5899,7 +6539,7 @@ class Game:
             if (
                 self.selected_stage == "prologo"
                 and not self.prologo_final_boss_spawned
-                and self.time_elapsed >= 175
+                and self.time_elapsed >= 235
             ):
                 logger.info("[PROLOGO] Spawning final boss at time %s", self.time_elapsed)
                 self.spawn_boss("final")
@@ -6148,13 +6788,15 @@ class Game:
 
     def spawn_enemy_projectiles(self) -> None:
         """Have some enemies shoot projectiles at the player"""
-        # Only some enemies shoot (angels and bosses)
+        # Only some enemies shoot (angels, inquisitor-normal, and bosses)
         shooting_enemies = []
         for enemy in self.enemies:
-            if enemy.enemy_type in ["angel"]:
+            if enemy.enemy_type in ["angel"] or (
+                enemy.enemy_type == "normal" and getattr(enemy, "appearance", None) == "inquisitor"
+            ):
                 shooting_enemies.append(enemy)
         for boss in self.bosses:
-            if boss.enemy_type in ["boss_medium", "boss_big", "boss_final"]:
+            if boss.enemy_type in ["boss_medium", "boss_big", "boss_final", "boss_inquisitor"]:
                 shooting_enemies.append(boss)
 
         # Limit to 2-3 shooters at a time

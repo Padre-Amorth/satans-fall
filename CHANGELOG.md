@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-02-13 — STORM left-column: chain lightning range increased (+1 target per slot) ⚡
+
+- **Balance change — STORM (left column):** each left-column STORM permanent now grants **+1 chained target** for storm statue/projectile chain lightning (up to +3 total if `storm_1`, `storm_2`, `storm_3` are all active). Default storm chain targets remain 3; activating all three left slots sets it to 6.
+- **UI / Tooltip:** Skill-tree tooltips updated to describe the left-column STORM bonuses.
+- **Tests updated/added:** `tests/test_skill_tree_effects.py` and `tests/test_skill_tooltips.py` updated to verify chain-target stacking and tooltip text.
+- **Notes:** Applies to statue/projectile `chain_targets` only; visual chain effects automatically reflect the increased hops.
+
 ## 2026-02-12 — Add Inquisitor Limbo boss (new feature + tuning) ✨
 
 - **New enemy:** `Inquisitor` — a Limbo end-of-wave boss that roams the top half of the battlefield instead of chasing the player.

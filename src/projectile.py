@@ -56,7 +56,10 @@ class Projectile(BaseSprite):
         self.is_enemy_projectile: bool = is_enemy_projectile
         self.weapon_type = weapon_type  # 'spear', 'shotgun', or None for regular
         self.source = source  # 'orbital' for orbital projectiles
-        self.appearance = appearance
+        # Default sentinel: if this is an enemy projectile and no appearance was
+        # provided, use `"enemy_default"` so draw_projectile renders the expected
+        # golden enemy projectile regardless of asset lookup.
+        self.appearance = appearance if appearance is not None else ("enemy_default" if is_enemy_projectile else None)
         self._appearance_cached = None
         self.pierce_all = False  # Default: projectiles don't pierce
         self.pierce_count = 0  # For limited piercing
@@ -65,6 +68,10 @@ class Projectile(BaseSprite):
         self._hit_ids: set[int] = set()
         # Prevent applying chain lightning effects multiple times per projectile
         self._chain_applied: bool = False
+        # Rotation angle used for rolling visuals (degrees)
+        self.rotation_angle: float = 0.0
+        # Trail positions for rolling projectile (list of (x, y) tuples)
+        self.trail: list[tuple[float, float]] = []
         self.manager = None  # Optional ProjectileManager reference
 
         # Create image
@@ -89,13 +96,17 @@ class Projectile(BaseSprite):
         self.is_enemy_projectile = is_enemy_projectile
         self.weapon_type = weapon_type
         self.source = source
-        self.appearance = appearance
+        # Preserve enemy_default sentinel when reusing projectiles from pool
+        self.appearance = appearance if appearance is not None else ("enemy_default" if is_enemy_projectile else None)
         self._appearance_cached = None
         self.pierce_all = False
         self.pierce_count = 0
         # Reset hit-tracking and chain flag when reusing projectile instances
         self._hit_ids = set()
         self._chain_applied = False
+        # Reset rotation and trail for visual consistency when reusing projectiles
+        self.rotation_angle = 0.0
+        self.trail = []
         try:
             self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
             self.draw_projectile()
@@ -242,6 +253,26 @@ class Projectile(BaseSprite):
                                      (int(fire_x + offset_x), int(fire_y + offset_y)), 
                                      particle_size)
 
+
+        elif self.weapon_type == "DemonStrike":
+            # DemonStrike: large black bowling ball with 3 white dots for finger holes that scroll vertically to simulate rotation
+            size = max(12, self.radius * 2 + 12)  # Make it larger
+            self.image = pygame.Surface((size, size), pygame.SRCALPHA)
+            cx, cy = size // 2, size // 2
+            # Main black ball
+            pygame.draw.circle(self.image, (0, 0, 0), (cx, cy), self.radius + 6)
+            # 3 white dots for finger holes, scrolling vertically
+            hole_r = max(1, int(self.radius * 0.15))
+            base_offsets = [(-int(self.radius*0.4), -int(self.radius*0.1)), (0, -int(self.radius*0.3)), (int(self.radius*0.4), -int(self.radius*0.1))]
+            angle = getattr(self, "rotation_angle", 0.0)
+            for i, (ox, oy) in enumerate(base_offsets):
+                # Scroll vertically with phase shift
+                scroll_y = math.sin(math.radians(angle + i * 120)) * self.radius * 0.3
+                pygame.draw.circle(self.image, (255, 255, 255), (cx + ox, cy + oy + int(scroll_y)), hole_r)
+            # Ensure rect matches center
+            self.rect = self.image.get_rect(center=(self.x, self.y))
+
+
         elif getattr(self, "appearance", None) == "storm_statue":
             # Storm statue projectile: dark blue outer and lighter blue core
             self.image = pygame.Surface((self.radius * 2 + 6, self.radius * 2 + 6), pygame.SRCALPHA)
@@ -302,7 +333,7 @@ class Projectile(BaseSprite):
             # Inner bright orange core
             inner_r = max(1, self.radius - 3)
             pygame.draw.circle(self.image, (255, 170, 60), center, inner_r)
-        elif self.source == "orbital":
+        elif getattr(self, "source", None) == "orbital":
             # Orbital projectiles: light blue circles
             self.image = pygame.Surface(
                 (self.radius * 2, self.radius * 2), pygame.SRCALPHA
@@ -372,6 +403,20 @@ class Projectile(BaseSprite):
     def update(self) -> None:
         self.x += self.vel_x / 60  # Divide by FPS
         self.y += self.vel_y / 60
+        # Update rotation for DemonStrike to simulate rolling
+        if getattr(self, "weapon_type", None) == "DemonStrike":
+            speed = math.hypot(self.vel_x, self.vel_y)
+            # Rotate based on speed; direction based on vertical movement
+            if getattr(self, "vel_y", 0) < 0:
+                self.rotation_angle = (self.rotation_angle + (speed * 0.1)) % 360
+            else:
+                self.rotation_angle = (self.rotation_angle - (speed * 0.1)) % 360
+            # Update trail for particles
+            self.trail.append((self.x, self.y))
+            if len(self.trail) > 25:  # Keep last 25 positions
+                self.trail.pop(0)
+            # Redraw image to animate holes
+            self.draw_projectile()
         self.rect.center = (self.x, self.y)
 
     def draw(self, screen, shake_x=0, shake_y=0) -> None:
@@ -428,12 +473,35 @@ class Projectile(BaseSprite):
                 center=(draw_x + self.radius, draw_y + self.radius)
             )
             screen.blit(rotated_image, rotated_rect)
+        elif getattr(self, "weapon_type", None) == "DemonStrike":
+            # Draw particle trail: wide at ball contact, narrowing and fading upward
+            try:
+                trail_len = len(getattr(self, "trail", []))
+                for i, (px, py) in enumerate(getattr(self, "trail", [])):
+                    # i=0 (start, above): small and transparent; i=trail_len-1 (end, below, at ball): large and opaque
+                    alpha = int(50 + (i / max(1, trail_len - 1)) * 205)  # Increase opacity toward end
+                    tr = max(2, int(self.radius * 0.5 + (i / max(1, trail_len - 1)) * self.radius * 0.8))  # Grow toward end
+                    # Yellow/orange particles at the end for variety
+                    if i >= trail_len - 8:
+                        color = (255, 165, 0, alpha) if i >= trail_len - 5 else (255, 255, 0, alpha)  # Orange for last 5, yellow for next 3
+                    else:
+                        color = (255, 255, 255, alpha)
+                    try:
+                        tsurf = pygame.Surface((tr * 2, tr * 2), pygame.SRCALPHA)
+                        pygame.draw.circle(tsurf, color, (tr, tr), tr)
+                        screen.blit(tsurf, (int(px - tr) + shake_x, int(py - tr) + shake_y))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            # Draw the ball
+            screen.blit(self.image, (draw_x, draw_y))
         else:
             screen.blit(self.image, (draw_x, draw_y))
 
 
 class SoulDrainProjectile(Projectile):
-    def __init__(self, x, y, vel_x, vel_y, damage=5, heal_amount=2, level=1) -> None:
+    def __init__(self, x, y, vel_x, vel_y, damage=10, heal_amount=2, level=1) -> None:
         super().__init__(x, y, vel_x, vel_y, damage=damage, radius=6, weapon_type="Soul Drain")
         self.heal_amount: int = heal_amount
         self.level: int = level
@@ -467,8 +535,12 @@ class SoulDrainProjectile(Projectile):
             if not self.target or not self.target.alive():
                 # Find nearest enemy (include bosses). Prefer health-based checks and support
                 # both Sprite-like enemy objects and dict-like enemies used in tests.
-                nearest = None
-                min_dist = float('inf')
+                # Prefer bosses when possible: find nearest boss within range, otherwise nearest non-boss
+                nearest_boss = None
+                nearest_boss_dist = float('inf')
+                nearest_other = None
+                nearest_other_dist = float('inf')
+
                 for enemy in enemies:
                     # Determine if enemy is alive/valid target
                     alive_flag = False
@@ -503,10 +575,31 @@ class SoulDrainProjectile(Projectile):
                         continue
 
                     dist: float = math.hypot(ex - self.x, ey - self.y)
-                    if dist < min_dist and dist < self.homing_range:
-                        min_dist: float = dist
-                        nearest = enemy
-                self.target = nearest
+                    if dist >= self.homing_range:
+                        continue
+
+                    # Detect boss enemy_type (support attr or dict)
+                    try:
+                        etype = getattr(enemy, 'enemy_type', None)
+                        if etype is None and hasattr(enemy, 'get'):
+                            etype = enemy.get('enemy_type')
+                    except Exception:
+                        etype = None
+
+                    is_boss = isinstance(etype, str) and etype.startswith('boss')
+
+                    if is_boss and dist < nearest_boss_dist:
+                        nearest_boss_dist = dist
+                        nearest_boss = enemy
+                    elif (not is_boss) and dist < nearest_other_dist:
+                        nearest_other_dist = dist
+                        nearest_other = enemy
+
+                # Prefer boss if available, otherwise fall back to nearest other
+                if nearest_boss is not None:
+                    self.target = nearest_boss
+                else:
+                    self.target = nearest_other
 
             if self.target:
                 # Home towards target

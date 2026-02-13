@@ -6097,14 +6097,30 @@ class Game:
 
         # At player level 6 we must *always* propose 3 new weapons (no upgrades)
         if getattr(self, "player_level", None) == 6:
+            # Respect `available_from` even when offering level‑6 acquisition choices.
             unowned = [w for w in all_weapon_ids if w not in self.player_weapons]
+            # Filter unowned list by availability for current stage
+            def _is_available_for_stage(wid: str) -> bool:
+                wdef = WEAPON_DEFS.get(wid, {})
+                available_from = wdef.get("available_from")
+                if not available_from:
+                    return True
+                af = str(available_from).lower()
+                if af == "purgatory":
+                    return bool(self.selected_stage and str(self.selected_stage).startswith("purgatory"))
+                if af == "limbo":
+                    return bool(self.selected_stage and str(self.selected_stage) != "prologo")
+                return True
+
+            filtered_unowned = [w for w in unowned if _is_available_for_stage(w)]
+
             choices: List[Dict[str, str]] = []
-            if unowned:
+            if filtered_unowned:
                 # If fewer than 3 unowned weapons, sample with replacement to reach 3
-                if len(unowned) >= 3:
-                    selected = random.sample(unowned, 3)
+                if len(filtered_unowned) >= 3:
+                    selected = random.sample(filtered_unowned, 3)
                 else:
-                    selected = [random.choice(unowned) for _ in range(3)]
+                    selected = [random.choice(filtered_unowned) for _ in range(3)]
                 for weapon in selected:
                     choices.append(
                         {
@@ -6114,8 +6130,12 @@ class Game:
                         }
                     )
             else:
-                # No unowned weapons: fallback to picking (with replacement) from all weapons
-                selected = [random.choice(all_weapon_ids) for _ in range(3)]
+                # No unowned weapons available for this stage: fallback to picking (with replacement)
+                # from the set of weapons that are allowed in this stage.
+                allowed = [w for w in all_weapon_ids if _is_available_for_stage(w)]
+                if not allowed:
+                    allowed = all_weapon_ids
+                selected = [random.choice(allowed) for _ in range(3)]
                 for weapon in selected:
                     choices.append(
                         {

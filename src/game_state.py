@@ -19,7 +19,7 @@ class GameStateManager:
         # Wave management
         self.wave = 0
         self.wave_time = 0
-        self.wave_duration = 30  # 30 seconds per wave
+        self.wave_duration = 40  # 40 seconds per wave
         self.wave_boss_spawned = False
         self.big_spawned_this_wave = False
 
@@ -337,9 +337,36 @@ class GameStateManager:
         return choices[:3]
 
     def generate_initial_weapon_choices(self):
-        """Generate initial weapon choices for stages like Limbo."""
+        """Generate initial weapon choices for stages like Limbo.
+
+        Filter out weapons whose `available_from` requirement is not met by the
+        current `selected_stage` (e.g. Purgatory-only weapons are excluded from
+        Prologo/Limbo initial choices).
+        """
         import random
-        choices = random.sample(get_weapon_definitions(), min(3, len(get_weapon_definitions())))
+        # Start from full definitions, then filter by availability for this stage
+        defs = get_weapon_definitions()
+        filtered: list[dict] = []
+        for w in defs:
+            wid = w.get("id")
+            wdef = WEAPON_DEFS.get(wid, {})
+            available_from = wdef.get("available_from")
+            if available_from:
+                af = str(available_from).lower()
+                if af == "purgatory":
+                    # only allow in purgatory stages
+                    if not (self.selected_stage and str(self.selected_stage).startswith("purgatory")):
+                        continue
+                elif af == "limbo":
+                    # allow in limbo and purgatory but not in prologo
+                    if not (self.selected_stage and str(self.selected_stage) != "prologo"):
+                        continue
+            filtered.append(w)
+
+        if not filtered:
+            filtered = defs
+
+        choices = random.sample(filtered, min(3, len(filtered)))
         return [{"id": c["id"], "name": c["name"], "description": c["description"]} for c in choices]
 
     def show_initial_weapon_choice(self) -> None:
@@ -357,7 +384,7 @@ class GameStateManager:
         return [
             {"id": "fire", "name": "Fire Tower", "description": "Damage: 10 — Burn nearby enemies (4 DPS, 3s)"},
             {"id": "storm", "name": "Storm Tower", "description": "Damage: 10 (projectile ~9) — Chains to multiple enemies"},
-            {"id": "ice", "name": "Ice Tower", "description": "Damage: 10 — Slows enemies 50% for 2s"},
+            {"id": "ice", "name": "Ice Tower", "description": "Damage: 15 — Slows enemies 50% for 2s"},
         ]
 
     def show_initial_tower_choice(self) -> None:
@@ -486,8 +513,21 @@ class GameStateManager:
         self.paused = not self.paused
 
     def add_score(self, points) -> None:
-        """Add points to score"""
-        self.score += points
+        """Add points to score (respects `game.score_multiplier` if present).
+
+        Keeps `GameStateManager.score` and `Game.score` synchronized.
+        """
+        try:
+            mult = getattr(self.game, "score_multiplier", 1.0)
+            amt = int(points * mult)
+            self.score += amt
+            try:
+                if hasattr(self, "game") and getattr(self.game, "score", None) is not None:
+                    self.game.score += amt
+            except Exception:
+                pass
+        except Exception:
+            pass
 
     def add_xp(self, xp_amount) -> None:
         """Add XP to player"""

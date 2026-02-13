@@ -86,7 +86,7 @@ class IceParticle:
 
 
 class Enemy(BaseSprite):
-    def __init__(self, x, y, enemy_type="basic", health=20, speed=75) -> None:
+    def __init__(self, x, y, enemy_type="basic", health=20, speed=60) -> None:
         super().__init__()
         self.x: Any = x
         self.y: Any = y
@@ -403,29 +403,43 @@ class Enemy(BaseSprite):
                         # If anything goes wrong (headless env), ignore and continue
                         pass
                 else:
-                    # Stay at top of screen, float horizontally
-                    self.y = 50  # Keep at top
+                    # Prologue boss entrance: walk down from top to position below cathedral
+                    if not hasattr(self, "entrance_complete"):
+                        # Find target position below cathedral
+                        target_y = 140  # Position below cathedral (cathedral ends around y=120)
+                        
+                        # Move down towards target
+                        if self.y < target_y:
+                            self.y += self.speed * 0.5 / 60  # Walk down at half speed
+                            # Keep centered horizontally
+                            self.x = game.width // 2
+                        else:
+                            # Reached target position
+                            self.entrance_complete = True
+                            self.y = target_y
+                            
+                            # Initialize floating movement for normal behavior
+                            self.float_center_x = self.x
+                            self.float_amplitude = 150
+                            self.float_speed = 0.015
+                            self.float_time = 0
+                    
+                    if hasattr(self, "entrance_complete") and self.entrance_complete:
+                        # Normal floating behavior after entrance
+                        # Stay at target height, float horizontally
+                        self.y = 140  # Keep at target position
 
-                    # Initialize floating movement
-                    if not hasattr(self, "float_center_x"):
-                        self.float_center_x = self.x  # Center point of oscillation
-                        self.float_amplitude = 150  # How far left/right to float
-                        self.float_speed = (
-                            0.015  # Speed of oscillation (reduced for slower movement)
+                        # Update oscillation time
+                        self.float_time += self.float_speed
+
+                        # Calculate new x position using sine wave for smooth floating
+                        self.x = (
+                            self.float_center_x
+                            + math.sin(self.float_time) * self.float_amplitude
                         )
-                        self.float_time = 0
 
-                    # Update oscillation time
-                    self.float_time += self.float_speed
-
-                    # Calculate new x position using sine wave for smooth floating
-                    self.x = (
-                        self.float_center_x
-                        + math.sin(self.float_time) * self.float_amplitude
-                    )
-
-                    # Keep within screen bounds
-                    self.x = max(50, min(game.width - 50, self.x))
+                        # Keep within screen bounds
+                        self.x = max(50, min(game.width - 50, self.x))
             else:
                 # Normal enemy behavior - sometimes stop in middle instead of chasing player
                 if self.enemy_type == "normal" and game is not None:
@@ -469,6 +483,52 @@ class Enemy(BaseSprite):
                             spy = center_y + random.uniform(-jitter_y, jitter_y)
                             spx = game.clamp_to_walls(spx)
                             self.stop_point = (spx, spy)
+
+                elif self.enemy_type == "boss_big" and game is not None and getattr(game, "selected_stage", None) == "limbo":
+                    # Boss Big (Limbo): roam randomly within the top half of the playfield
+                    # Do not chase the player directly; behave like a roaming boss within the upper area
+                    top_margin = 30
+                    bottom_limit = int(game.height / 2) - 40  # do not cross halfway
+                    left_limit = 50
+                    right_limit = game.width - 50
+
+                    if not hasattr(self, "roam_target"):
+                        rx = random.uniform(game.clamp_to_walls(0), game.clamp_to_walls(game.width))
+                        ry = random.uniform(top_margin, max(top_margin + 10, bottom_limit))
+                        rx = game.clamp_to_walls(rx)
+                        self.roam_target = (rx, ry)
+                        self.roam_timer = random.randint(80, 240)
+
+                    # Move toward roam target (slower, heavier movement for big boss)
+                    tx, ty = self.roam_target
+                    dx = tx - self.x
+                    dy = ty - self.y
+                    dist = math.hypot(dx, dy)
+                    if dist > 6:
+                        # big boss moves slightly slower and with less jitter
+                        vx = (dx / dist) * (self.speed * random.uniform(0.7, 0.95)) / 60
+                        vy = (dy / dist) * (self.speed * random.uniform(0.7, 0.95)) / 60
+                        self.x += vx
+                        self.y += vy
+                    else:
+                        # Reached target -> pick a new one within top half and inside walls
+                        self.roam_timer = random.randint(80, 300)
+                        rx = random.uniform(game.clamp_to_walls(0), game.clamp_to_walls(game.width))
+                        ry = random.uniform(top_margin, max(top_margin + 10, bottom_limit))
+                        rx = game.clamp_to_walls(rx)
+                        self.roam_target = (rx, ry)
+
+                    # Slight random jitter so movement looks organic but less than inquisitor
+                    if random.random() < 0.01:
+                        self.x += random.uniform(-1.0, 1.0)
+                        self.y += random.uniform(-0.6, 0.6)
+
+                    # Clamp to arena walls and top-half limit (never cross halfway line)
+                    try:
+                        self.x = game.clamp_to_walls(self.x)
+                    except Exception:
+                        self.x = max(left_limit, min(right_limit, self.x))
+                    self.y = max(top_margin, min(bottom_limit, self.y))
 
                 elif self.enemy_type == "boss_inquisitor" and game is not None:
                     # Inquisitor roams randomly within the top half of the playfield
@@ -694,7 +754,40 @@ class Enemy(BaseSprite):
     def shoot_at_player(self, player, game):
         """Handle shooting logic for different enemy types"""
         try:
-            if self.enemy_type == "normal":
+            # Mini‑Inquisitor (normal enemy with inquisitor appearance) fires only the single aimed slow projectile
+            if self.enemy_type == "normal" and getattr(self, "appearance", None) == "inquisitor":
+                dx = player.x - self.x
+                dy = player.y - self.y
+                distance: float = math.sqrt(dx * dx + dy * dy)
+                if distance > 0:
+                    speed = 260
+                    vel_x = (dx / distance) * speed
+                    vel_y = (dy / distance) * speed
+                else:
+                    vel_x = 0
+                    vel_y = 260
+
+                proj = Projectile(
+                    self.x,
+                    self.y,
+                    vel_x,
+                    vel_y,
+                    damage=14,
+                    radius=7,
+                    is_enemy_projectile=True,
+                    appearance="inquisitor",
+                )
+                proj.effect = "slow"
+                proj.slow_duration = 180
+                proj.slow_factor = 0.4
+                game.enemy_projectiles.add(proj)
+
+                # Keep same fire-rate as boss inquisitor
+                try:
+                    self.shoot_cooldown = random.randint(100, 140)
+                except Exception:
+                    self.shoot_cooldown = 120
+            elif self.enemy_type == "normal":
                 # Single aimed shot
                 dx = player.x - self.x
                 dy = player.y - self.y

@@ -1,13 +1,20 @@
+import logging
 import math
 import os
 import random
-import logging
-from typing import Any, Literal
+from typing import Any, Dict, List, Literal
 
-from src.weapons import WEAPON_DEFS, shotgun_pellets, soul_drain_projectile_count, skull_bomb_damage
+from src.assets.manager import get_image
 from src.game_constants import WALL_THICKNESS
+from src.weapons import (
+    WEAPON_DEFS,
+    shotgun_pellets,
+    skull_bomb_damage,
+    soul_drain_projectile_count,
+)
 
 logger: logging.Logger = logging.getLogger(__name__)
+
 
 class UIManager:
     def __init__(self, game) -> None:
@@ -144,7 +151,9 @@ class UIManager:
         # Extra weapons
         if getattr(self.game.game_state, "player_weapons", None):
             # Use centralized weapon names
-            name_map: dict[str, str] = {wid: d["name"] for wid, d in WEAPON_DEFS.items()}
+            name_map: dict[str, str] = {
+                wid: d["name"] for wid, d in WEAPON_DEFS.items()
+            }
             for i, wid in enumerate(self.game.game_state.player_weapons):
                 lvl = self.game.game_state.weapon_levels.get(wid, 0)
                 display_name: str | None = name_map.get(wid, wid.capitalize())
@@ -171,33 +180,56 @@ class UIManager:
                 dmg_text = ""
                 try:
                     # Basic effective player damage
-                    basic_damage = int(getattr(self.game, "player_damage", 0) * getattr(self.game, "damage_multiplier", 1.0))
+                    basic_damage = int(
+                        getattr(self.game, "player_damage", 0)
+                        * getattr(self.game, "damage_multiplier", 1.0)
+                    )
 
                     if wid == "shotgun":
                         slevel = self.game.weapon_levels.get("shotgun", 0)
                         pellets = shotgun_pellets(slevel)
                         dmg_mult = 1.0 + (slevel >= 3) * 0.1 + (slevel >= 5) * 0.1
-                        pellet_dmg = int(basic_damage * WEAPON_DEFS.get("shotgun", {}).get("damage_mult", 0.55) * dmg_mult)
+                        pellet_dmg = int(
+                            basic_damage
+                            * WEAPON_DEFS.get("shotgun", {}).get("damage_mult", 0.55)
+                            * dmg_mult
+                        )
                         dmg_text = f"{pellet_dmg} dmg ×{pellets} pellets"
                     elif wid == "orbital":
                         olevel = self.game.weapon_levels.get("orbital", 0)
-                        o_dmg = int(8 * getattr(self.game, "damage_multiplier", 1.0) * (1.0 + (olevel >= 3) * 0.1 + (olevel >= 5) * 0.1))
+                        o_dmg = int(
+                            8
+                            * getattr(self.game, "damage_multiplier", 1.0)
+                            * (1.0 + (olevel >= 3) * 0.1 + (olevel >= 5) * 0.1)
+                        )
                         dmg_text = f"{o_dmg} dmg (per orbital)"
                     elif wid == "spear":
                         slevel = self.game.weapon_levels.get("spear", 0)
-                        spear_dmg = max(2, int(basic_damage * getattr(self.game, "damage_multiplier", 1.0) * 0.5 + slevel * 2))
+                        spear_dmg = max(
+                            2,
+                            int(
+                                basic_damage
+                                * getattr(self.game, "damage_multiplier", 1.0)
+                                * 0.5
+                                + slevel * 2
+                            ),
+                        )
                         dmg_text = f"{spear_dmg} dmg (piercing)"
                     elif wid == "Soul Drain":
                         slevel = self.game.weapon_levels.get("Soul Drain", 0)
                         proj_count = soul_drain_projectile_count(slevel)
-                        base_sd = WEAPON_DEFS.get("Soul Drain", {}).get("base_damage", 10)
+                        base_sd = WEAPON_DEFS.get("Soul Drain", {}).get(
+                            "base_damage", 10
+                        )
                         dmg_mult = 1.0 + (slevel >= 3) * 0.1 + (slevel >= 5) * 0.1
                         sd_dmg = int(base_sd * dmg_mult)
                         dmg_text = f"{sd_dmg} dmg ×{proj_count} proj"
                     elif wid == "beast":
                         blevel = self.game.weapon_levels.get("beast", 0)
                         mult = 1 + blevel * 0.05
-                        dmg_text = f"Basic dmg: {int(basic_damage * mult)} ({int(mult*100)}%)"
+                        dmg_text = (
+                            f"Basic dmg: {int(basic_damage * mult)} ({int(mult*100)}%)"
+                        )
                     elif wid == "skull_bomb":
                         slevel = self.game.weapon_levels.get("skull_bomb", 0)
                         kb_dmg = skull_bomb_damage(slevel)
@@ -381,7 +413,7 @@ class UIManager:
                             width=3,
                         )
                 except Exception as e:
-                    print(f"[SPINE EFFECT ERROR] {e}")
+                    logger.exception("[SPINE EFFECT ERROR] %s", e)
                 enemy["spine_timer"] -= 1
                 if enemy["spine_timer"] <= 0:
                     enemy.pop("spine_from", None)
@@ -404,9 +436,18 @@ class UIManager:
 
         # Weapon options
         weapon_options: list[tuple[str, str]] = [
-            ("Hellgun", "Powerful close-range spread. Pellets use player base damage (30)."),
-            ("Orbitals", "Orbiting sentinels that auto-fire (damage scales with player base damage)."),
-            ("Spear", "Piercing projectile — damage scales with player damage; +2 per level."),
+            (
+                "Hellgun",
+                "Powerful close-range spread. Pellets use player base damage (30).",
+            ),
+            (
+                "Orbitals",
+                "Orbiting sentinels that auto-fire (damage scales with player base damage).",
+            ),
+            (
+                "Spear",
+                "Piercing projectile — damage scales with player damage; +2 per level.",
+            ),
         ]
 
         start_y = 200
@@ -645,6 +686,24 @@ class PygameUIManager:
         self.width: Any | int = getattr(game, "width", 0)
         self.height: Any | int = getattr(game, "height", 0)
 
+    def _cached_overlay(self, use_alpha: bool = False) -> Any:
+        """Return a cached overlay surface sized to the UI virtual resolution.
+        Uses a small per-instance cache to avoid allocating large surfaces every frame.
+        """
+        pygame = self.pygame
+        attr = "_overlay_alpha" if use_alpha else "_overlay"
+        surf = getattr(self, attr, None)
+        if surf is None or surf.get_size() != (self.width, self.height):
+            flags = pygame.SRCALPHA if use_alpha else 0
+            surf = pygame.Surface((self.width, self.height), flags)
+            setattr(self, attr, surf)
+        # Clear before reuse
+        if use_alpha:
+            surf.fill((0, 0, 0, 0))
+        else:
+            surf.fill((0, 0, 0))
+        return surf
+
     def draw_game_world(self, shake_x=0, shake_y=0) -> None:
         """Draw walls, buildings and background following the original implementation."""
         if (
@@ -657,18 +716,21 @@ class PygameUIManager:
         pygame = self.pygame
         settings = self.game.stage_settings[self.game.selected_stage]
 
-        # Fill inside battlefield with dark green
+        # Fill inside battlefield with dark green (use stage setting for Prologo)
         if (
             self.game.selected_stage == "prologo"
             and self.game.left_wall_points
             and self.game.right_wall_points
+            and not self.game.background_image_drawn  # Skip floor drawing if background image was drawn
         ):
             inside_points = (
                 self.game.left_wall_points + self.game.right_wall_points[::-1]
             )
+            # prefer stage setting so color changes stay centralized in STAGE_SETTINGS
+            prologo_floor = settings.get("floor_color", (0, 50, 0))
             pygame.draw.polygon(
                 self.screen,
-                (0, 50, 0),
+                prologo_floor,
                 [(p[0] + shake_x, p[1] + shake_y) for p in inside_points],
             )
 
@@ -687,10 +749,10 @@ class PygameUIManager:
                 [(p[0] + shake_x, p[1] + shake_y) for p in inside_points],
             )
 
-        # Fill inside battlefield with dark gray for purgatory variants
+        # Fill inside battlefield with dark gray for purgatory/HELL variants
         elif (
             getattr(self.game, "selected_stage", None)
-            and str(self.game.selected_stage).startswith("purgatory")
+            and str(self.game.selected_stage).startswith(("purgatory", "hell"))
             and self.game.left_wall_points
             and self.game.right_wall_points
         ):
@@ -703,36 +765,214 @@ class PygameUIManager:
             pygame.draw.polygon(
                 self.screen,
                 inside_color,
-                [(p[0] + shake_x, p[1] + shake_y) for p in inside_points],
+                [(p[0], p[1]) for p in inside_points],  # No shake for floor
             )
 
         # Draw walls
         wall_color = settings["wall_color"]
-        wall_thickness = WALL_THICKNESS
+
+        # Use double thickness and caps only for HELL variants; otherwise keep default thickness
+        # For prologue, use half thickness (doubled from quarter)
+        is_hell_stage = getattr(self.game, "selected_stage", "").startswith("hell")
+        is_prologo = getattr(self.game, "selected_stage", "") == "prologo"
+        render_wall_thickness = (
+            WALL_THICKNESS * 2
+            if is_hell_stage
+            else WALL_THICKNESS
+            if is_prologo
+            else WALL_THICKNESS
+        )
+        cap_extension = max(6, render_wall_thickness // 4) if is_hell_stage else 0
+
+        # For prologue, create irregular thickness by varying per section
+        if is_prologo:
+            section_size = 5
+            num_points = len(self.game.left_wall_points)
+            num_sections = (num_points + section_size - 1) // section_size
+            # Use a local RNG with fixed seed so wall-thickness variation is deterministic
+            # per run but does NOT alter the global random state (which other systems rely on).
+            rng = random.Random(42)
+            thickness_variations = [rng.randint(-2, 2) for _ in range(num_sections)]
+
         # Left wall
         if self.game.left_wall_points:
-            left_wall_exterior = [
-                (point[0] - wall_thickness, point[1])
-                for point in self.game.left_wall_points
-            ]
+            if is_prologo:
+                left_wall_exterior = []
+                for i, point in enumerate(self.game.left_wall_points):
+                    section = i // section_size
+                    variation = thickness_variations[section]
+                    thickness = WALL_THICKNESS + variation
+                    left_wall_exterior.append((point[0] - thickness, point[1]))
+            else:
+                left_wall_exterior = [
+                    (point[0] - render_wall_thickness, point[1])
+                    for point in self.game.left_wall_points
+                ]
+            # Add caps only for HELL stages
+            if cap_extension and left_wall_exterior:
+                tx, ty = left_wall_exterior[0]
+                left_wall_exterior.insert(0, (tx - cap_extension, ty - cap_extension))
+                bx, by = left_wall_exterior[-1]
+                left_wall_exterior.append((bx - cap_extension, by + cap_extension))
+
             left_wall_all = self.game.left_wall_points + left_wall_exterior[::-1]
             pygame.draw.polygon(
                 self.screen,
                 wall_color,
-                [(p[0] + shake_x, p[1] + shake_y) for p in left_wall_all],
+                [(p[0], p[1]) for p in left_wall_all],  # No shake for walls
             )
+
+            # Thin black border on inner and outer edges for HELL walls (thicker)
+            if is_hell_stage:
+                try:
+                    inner_edge = [
+                        (int(p[0]), int(p[1])) for p in self.game.left_wall_points
+                    ]
+                    outer_edge = [(int(p[0]), int(p[1])) for p in left_wall_exterior]
+                    pygame.draw.lines(
+                        self.screen, (0, 0, 0), False, inner_edge, width=4
+                    )
+                    pygame.draw.lines(
+                        self.screen, (0, 0, 0), False, outer_edge, width=4
+                    )
+                except Exception:
+                    pass
+
         # Right wall
         if self.game.right_wall_points:
-            right_wall_exterior = [
-                (point[0] + wall_thickness, point[1])
-                for point in self.game.right_wall_points
-            ]
+            if is_prologo:
+                right_wall_exterior = []
+                for i, point in enumerate(self.game.right_wall_points):
+                    section = i // section_size
+                    variation = thickness_variations[section]
+                    thickness = WALL_THICKNESS + variation
+                    right_wall_exterior.append((point[0] + thickness, point[1]))
+            else:
+                right_wall_exterior = [
+                    (point[0] + render_wall_thickness, point[1])
+                    for point in self.game.right_wall_points
+                ]
+            if cap_extension and right_wall_exterior:
+                tx, ty = right_wall_exterior[0]
+                right_wall_exterior.insert(0, (tx + cap_extension, ty - cap_extension))
+                bx, by = right_wall_exterior[-1]
+                right_wall_exterior.append((bx + cap_extension, by + cap_extension))
+
             right_wall_all = self.game.right_wall_points + right_wall_exterior[::-1]
             pygame.draw.polygon(
                 self.screen,
                 wall_color,
-                [(p[0] + shake_x, p[1] + shake_y) for p in right_wall_all],
+                [(p[0], p[1]) for p in right_wall_all],  # No shake for walls
             )
+
+            # Thin black border on inner and outer edges for HELL walls (thicker)
+            if is_hell_stage:
+                try:
+                    inner_edge = [
+                        (int(p[0]), int(p[1])) for p in self.game.right_wall_points
+                    ]
+                    outer_edge = [(int(p[0]), int(p[1])) for p in right_wall_exterior]
+                    pygame.draw.lines(
+                        self.screen, (0, 0, 0), False, inner_edge, width=4
+                    )
+                    pygame.draw.lines(
+                        self.screen, (0, 0, 0), False, outer_edge, width=4
+                    )
+                except Exception:
+                    pass
+
+        # Draw torches on walls for prologue
+        if is_prologo:
+            torch_image = get_image("torch.png", (40, 80))  # Size: 40x80 pixels
+            if torch_image:
+                torch_positions = [
+                    0.2,
+                    0.5,
+                    0.8,
+                ]  # fractions of height for regular spacing
+                for frac in torch_positions:
+                    y = int(frac * self.height)
+                    # Find closest wall points
+                    left_point = min(
+                        self.game.left_wall_points, key=lambda p: abs(p[1] - y)
+                    )
+                    right_point = min(
+                        self.game.right_wall_points, key=lambda p: abs(p[1] - y)
+                    )
+
+                    # Draw torch on left wall
+                    torch_x = (
+                        left_point[0] - 20
+                    )  # Center the 40-pixel wide image on the wall
+                    torch_y = left_point[1] - 80  # Bottom at wall level
+                    self.screen.blit(
+                        torch_image, (torch_x, torch_y)
+                    )  # No shake for torches on walls
+
+                    # Draw torch on right wall
+                    torch_x = right_point[0] - 20  # Center on the wall
+                    torch_y = right_point[1] - 80
+                    self.screen.blit(
+                        torch_image, (torch_x, torch_y)
+                    )  # No shake for torches on walls
+            else:
+                # Fallback to drawn torches if image not found (40x80 size)
+                torch_positions = [
+                    0.2,
+                    0.5,
+                    0.8,
+                ]  # fractions of height for regular spacing
+                for frac in torch_positions:
+                    y = int(frac * self.height)
+                    # Find closest wall points
+                    left_point = min(
+                        self.game.left_wall_points, key=lambda p: abs(p[1] - y)
+                    )
+                    right_point = min(
+                        self.game.right_wall_points, key=lambda p: abs(p[1] - y)
+                    )
+
+                    # Draw torch on left wall (40x80 size)
+                    torch_x = left_point[0] - 20  # Centered on wall
+                    torch_y = left_point[1]
+                    # Draw torch base (16x40)
+                    pygame.draw.rect(
+                        self.screen, (50, 25, 0), (torch_x, torch_y - 20, 16, 40)
+                    )  # No shake
+                    # Draw flame (radius 16)
+                    pygame.draw.circle(
+                        self.screen,
+                        (255, 100, 0),
+                        (int(torch_x + 8), int(torch_y - 20)),
+                        16,
+                    )  # No shake
+                    pygame.draw.circle(
+                        self.screen,
+                        (255, 200, 0),
+                        (int(torch_x + 8), int(torch_y - 20)),
+                        8,
+                    )  # No shake
+
+                    # Draw torch on right wall (40x80 size)
+                    torch_x = right_point[0] - 20  # Centered on wall
+                    torch_y = right_point[1]
+                    # Draw torch base
+                    pygame.draw.rect(
+                        self.screen, (50, 25, 0), (torch_x, torch_y - 20, 16, 40)
+                    )  # No shake
+                    # Draw flame
+                    pygame.draw.circle(
+                        self.screen,
+                        (255, 100, 0),
+                        (int(torch_x + 8), int(torch_y - 20)),
+                        16,
+                    )  # No shake
+                    pygame.draw.circle(
+                        self.screen,
+                        (255, 200, 0),
+                        (int(torch_x + 8), int(torch_y - 20)),
+                        8,
+                    )  # No shake
 
         # Draw buildings for stages that have them
         if (
@@ -740,8 +980,6 @@ class PygameUIManager:
             and self.game.buildings
             and settings.get("building_color")
         ):
-            building_color = settings["building_color"]
-
             # Sort buildings by x position for consistent left/center/right assignment
             sorted_buildings = sorted(self.game.buildings, key=lambda b: b["x"])
 
@@ -770,19 +1008,25 @@ class PygameUIManager:
 
                 # Try to load the asset
                 try:
-                    from src.assets.manager import get_image
                     building_image = get_image(asset_name)
                     if building_image:
                         # Scale the image
                         original_size = building_image.get_size()
-                        scaled_size = (int(original_size[0] * scale_factor), int(original_size[1] * scale_factor))
-                        building_image = pygame.transform.scale(building_image, scaled_size)
+                        scaled_size = (
+                            int(original_size[0] * scale_factor),
+                            int(original_size[1] * scale_factor),
+                        )
+                        building_image = pygame.transform.scale(
+                            building_image, scaled_size
+                        )
 
                         # Position the image (centered on the spawn point, above it)
                         image_rect = building_image.get_rect()
                         image_rect.centerx = base_x
                         # Position lower to avoid being cut off at the top
-                        image_rect.centery = base_y + scaled_size[1] // 4  # Position lower
+                        image_rect.centery = (
+                            base_y + scaled_size[1] // 4
+                        )  # Position lower
 
                         self.screen.blit(building_image, image_rect)
                         asset_loaded = True
@@ -800,15 +1044,13 @@ class PygameUIManager:
                         pygame.draw.rect(
                             self.screen,
                             foundation_color,
-                            (base_x - 42, cathedral_y + 40, 84, 12)
+                            (base_x - 42, cathedral_y + 40, 84, 12),
                         )
 
                         # Main cathedral body (rectangular base) - light stone
                         stone_color = (140, 120, 100)
                         pygame.draw.rect(
-                            self.screen,
-                            stone_color,
-                            (base_x - 35, cathedral_y, 70, 50)
+                            self.screen, stone_color, (base_x - 35, cathedral_y, 70, 50)
                         )
 
                         # Central entrance doors (large, ornate)
@@ -816,7 +1058,7 @@ class PygameUIManager:
                         pygame.draw.rect(
                             self.screen,
                             door_color,
-                            (base_x - 12, cathedral_y + 25, 24, 25)
+                            (base_x - 12, cathedral_y + 25, 24, 25),
                         )
 
                         # Door frame/details (gold accents)
@@ -824,22 +1066,22 @@ class PygameUIManager:
                         pygame.draw.rect(
                             self.screen,
                             gold_color,
-                            (base_x - 14, cathedral_y + 23, 28, 3)  # Top frame
+                            (base_x - 14, cathedral_y + 23, 28, 3),  # Top frame
                         )
                         pygame.draw.rect(
                             self.screen,
                             gold_color,
-                            (base_x - 14, cathedral_y + 47, 28, 3)  # Bottom frame
+                            (base_x - 14, cathedral_y + 47, 28, 3),  # Bottom frame
                         )
                         pygame.draw.rect(
                             self.screen,
                             gold_color,
-                            (base_x - 14, cathedral_y + 23, 3, 27)  # Left frame
+                            (base_x - 14, cathedral_y + 23, 3, 27),  # Left frame
                         )
                         pygame.draw.rect(
                             self.screen,
                             gold_color,
-                            (base_x + 11, cathedral_y + 23, 3, 27)  # Right frame
+                            (base_x + 11, cathedral_y + 23, 3, 27),  # Right frame
                         )
 
                         # Rose window above entrance (stained glass)
@@ -848,7 +1090,7 @@ class PygameUIManager:
                             self.screen,
                             rose_window_color,
                             (base_x, cathedral_y + 15),
-                            8
+                            8,
                         )
 
                         # Side windows (stained glass)
@@ -857,50 +1099,106 @@ class PygameUIManager:
                         pygame.draw.rect(
                             self.screen,
                             window_color,
-                            (base_x - 28, cathedral_y + 12, 8, 12)
+                            (base_x - 28, cathedral_y + 12, 8, 12),
                         )
                         pygame.draw.rect(
                             self.screen,
                             window_color,
-                            (base_x - 28, cathedral_y + 28, 8, 12)
+                            (base_x - 28, cathedral_y + 28, 8, 12),
                         )
                         # Right side windows
                         pygame.draw.rect(
                             self.screen,
                             window_color,
-                            (base_x + 20, cathedral_y + 12, 8, 12)
+                            (base_x + 20, cathedral_y + 12, 8, 12),
                         )
                         pygame.draw.rect(
                             self.screen,
                             window_color,
-                            (base_x + 20, cathedral_y + 28, 8, 12)
+                            (base_x + 20, cathedral_y + 28, 8, 12),
                         )
 
                         # Window frames (stone)
                         frame_color = (100, 85, 70)
                         # Left frames
-                        pygame.draw.rect(self.screen, frame_color, (base_x - 29, cathedral_y + 11, 10, 1))
-                        pygame.draw.rect(self.screen, frame_color, (base_x - 29, cathedral_y + 24, 10, 1))
-                        pygame.draw.rect(self.screen, frame_color, (base_x - 29, cathedral_y + 11, 1, 14))
-                        pygame.draw.rect(self.screen, frame_color, (base_x - 20, cathedral_y + 11, 1, 14))
-                        pygame.draw.rect(self.screen, frame_color, (base_x - 29, cathedral_y + 39, 10, 1))
-                        pygame.draw.rect(self.screen, frame_color, (base_x - 29, cathedral_y + 27, 1, 14))
-                        pygame.draw.rect(self.screen, frame_color, (base_x - 20, cathedral_y + 27, 1, 14))
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x - 29, cathedral_y + 11, 10, 1),
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x - 29, cathedral_y + 24, 10, 1),
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x - 29, cathedral_y + 11, 1, 14),
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x - 20, cathedral_y + 11, 1, 14),
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x - 29, cathedral_y + 39, 10, 1),
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x - 29, cathedral_y + 27, 1, 14),
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x - 20, cathedral_y + 27, 1, 14),
+                        )
                         # Right frames
-                        pygame.draw.rect(self.screen, frame_color, (base_x + 19, cathedral_y + 11, 10, 1))
-                        pygame.draw.rect(self.screen, frame_color, (base_x + 19, cathedral_y + 24, 10, 1))
-                        pygame.draw.rect(self.screen, frame_color, (base_x + 19, cathedral_y + 11, 1, 14))
-                        pygame.draw.rect(self.screen, frame_color, (base_x + 28, cathedral_y + 11, 1, 14))
-                        pygame.draw.rect(self.screen, frame_color, (base_x + 19, cathedral_y + 39, 10, 1))
-                        pygame.draw.rect(self.screen, frame_color, (base_x + 19, cathedral_y + 27, 1, 14))
-                        pygame.draw.rect(self.screen, frame_color, (base_x + 28, cathedral_y + 27, 1, 14))
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x + 19, cathedral_y + 11, 10, 1),
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x + 19, cathedral_y + 24, 10, 1),
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x + 19, cathedral_y + 11, 1, 14),
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x + 28, cathedral_y + 11, 1, 14),
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x + 19, cathedral_y + 39, 10, 1),
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x + 19, cathedral_y + 27, 1, 14),
+                        )
+                        pygame.draw.rect(
+                            self.screen,
+                            frame_color,
+                            (base_x + 28, cathedral_y + 27, 1, 14),
+                        )
 
                         # Cathedral roof (triangular) - dark tile
                         roof_color = (70, 55, 45)
                         roof_points = [
-                            (base_x - 40, cathedral_y),      # Left base
-                            (base_x, cathedral_y - 30),      # Top peak
-                            (base_x + 40, cathedral_y),      # Right base
+                            (base_x - 40, cathedral_y),  # Left base
+                            (base_x, cathedral_y - 30),  # Top peak
+                            (base_x + 40, cathedral_y),  # Right base
                         ]
                         pygame.draw.polygon(self.screen, roof_color, roof_points)
 
@@ -911,26 +1209,26 @@ class PygameUIManager:
                             ridge_color,
                             (base_x - 35, cathedral_y - 5),
                             (base_x + 35, cathedral_y - 5),
-                            2
+                            2,
                         )
 
                         # Central spire - stone
                         pygame.draw.rect(
                             self.screen,
                             stone_color,
-                            (base_x - 5, cathedral_y - 55, 10, 25)
+                            (base_x - 5, cathedral_y - 55, 10, 25),
                         )
 
                         # Spire cross (large gold cross)
                         pygame.draw.rect(
                             self.screen,
                             gold_color,
-                            (base_x - 3, cathedral_y - 57, 6, 10)  # Vertical
+                            (base_x - 3, cathedral_y - 57, 6, 10),  # Vertical
                         )
                         pygame.draw.rect(
                             self.screen,
                             gold_color,
-                            (base_x - 6, cathedral_y - 54, 12, 4)  # Horizontal
+                            (base_x - 6, cathedral_y - 54, 12, 4),  # Horizontal
                         )
 
                         # Side towers (larger than before)
@@ -939,7 +1237,7 @@ class PygameUIManager:
                         pygame.draw.rect(
                             self.screen,
                             tower_color,
-                            (base_x - 50, cathedral_y - 15, 15, 35)
+                            (base_x - 50, cathedral_y - 15, 15, 35),
                         )
                         # Left tower roof
                         pygame.draw.polygon(
@@ -948,21 +1246,21 @@ class PygameUIManager:
                             [
                                 (base_x - 52, cathedral_y - 15),
                                 (base_x - 42, cathedral_y - 25),
-                                (base_x - 35, cathedral_y - 15)
-                            ]
+                                (base_x - 35, cathedral_y - 15),
+                            ],
                         )
                         # Left tower spire
                         pygame.draw.rect(
                             self.screen,
                             tower_color,
-                            (base_x - 45, cathedral_y - 35, 5, 10)
+                            (base_x - 45, cathedral_y - 35, 5, 10),
                         )
 
                         # Right tower
                         pygame.draw.rect(
                             self.screen,
                             tower_color,
-                            (base_x + 35, cathedral_y - 15, 15, 35)
+                            (base_x + 35, cathedral_y - 15, 15, 35),
                         )
                         # Right tower roof
                         pygame.draw.polygon(
@@ -971,26 +1269,26 @@ class PygameUIManager:
                             [
                                 (base_x + 35, cathedral_y - 15),
                                 (base_x + 42, cathedral_y - 25),
-                                (base_x + 47, cathedral_y - 15)
-                            ]
+                                (base_x + 47, cathedral_y - 15),
+                            ],
                         )
                         # Right tower spire
                         pygame.draw.rect(
                             self.screen,
                             tower_color,
-                            (base_x + 40, cathedral_y - 35, 5, 10)
+                            (base_x + 40, cathedral_y - 35, 5, 10),
                         )
 
                         # Tower windows
                         pygame.draw.rect(
                             self.screen,
                             window_color,
-                            (base_x - 47, cathedral_y - 5, 4, 6)  # Left tower window
+                            (base_x - 47, cathedral_y - 5, 4, 6),  # Left tower window
                         )
                         pygame.draw.rect(
                             self.screen,
                             window_color,
-                            (base_x + 39, cathedral_y - 5, 4, 6)  # Right tower window
+                            (base_x + 39, cathedral_y - 5, 4, 6),  # Right tower window
                         )
 
                     else:  # Side churches - smaller
@@ -1000,9 +1298,7 @@ class PygameUIManager:
                         # Main church body (rectangular base) - stone color
                         stone_color = (120, 100, 80)  # Brownish stone
                         pygame.draw.rect(
-                            self.screen,
-                            stone_color,
-                            (base_x - 20, church_y, 40, 28)
+                            self.screen, stone_color, (base_x - 20, church_y, 40, 28)
                         )
 
                         # Church foundation/base (darker stone)
@@ -1010,72 +1306,66 @@ class PygameUIManager:
                         pygame.draw.rect(
                             self.screen,
                             foundation_color,
-                            (base_x - 22, church_y + 25, 44, 8)
+                            (base_x - 22, church_y + 25, 44, 8),
                         )
 
                         # Central door (darker rectangle)
                         door_color = (60, 40, 30)
                         pygame.draw.rect(
-                            self.screen,
-                            door_color,
-                            (base_x - 6, church_y + 12, 12, 16)
+                            self.screen, door_color, (base_x - 6, church_y + 12, 12, 16)
                         )
 
                         # Door frame/details
                         pygame.draw.rect(
                             self.screen,
                             (100, 80, 60),
-                            (base_x - 7, church_y + 11, 14, 2)  # Top frame
+                            (base_x - 7, church_y + 11, 14, 2),  # Top frame
                         )
                         pygame.draw.rect(
                             self.screen,
                             (100, 80, 60),
-                            (base_x - 7, church_y + 27, 14, 2)  # Bottom frame
+                            (base_x - 7, church_y + 27, 14, 2),  # Bottom frame
                         )
 
                         # Side windows
                         window_color = (150, 180, 200)  # Light blue stained glass
                         # Left window
                         pygame.draw.rect(
-                            self.screen,
-                            window_color,
-                            (base_x - 16, church_y + 8, 6, 8)
+                            self.screen, window_color, (base_x - 16, church_y + 8, 6, 8)
                         )
                         # Right window
                         pygame.draw.rect(
-                            self.screen,
-                            window_color,
-                            (base_x + 10, church_y + 8, 6, 8)
+                            self.screen, window_color, (base_x + 10, church_y + 8, 6, 8)
                         )
 
                         # Window frames (stone)
                         pygame.draw.rect(
                             self.screen,
                             stone_color,
-                            (base_x - 17, church_y + 7, 8, 1)  # Left top
+                            (base_x - 17, church_y + 7, 8, 1),  # Left top
                         )
                         pygame.draw.rect(
                             self.screen,
                             stone_color,
-                            (base_x - 17, church_y + 16, 8, 1)  # Left bottom
+                            (base_x - 17, church_y + 16, 8, 1),  # Left bottom
                         )
                         pygame.draw.rect(
                             self.screen,
                             stone_color,
-                            (base_x + 9, church_y + 7, 8, 1)  # Right top
+                            (base_x + 9, church_y + 7, 8, 1),  # Right top
                         )
                         pygame.draw.rect(
                             self.screen,
                             stone_color,
-                            (base_x + 9, church_y + 16, 8, 1)  # Right bottom
+                            (base_x + 9, church_y + 16, 8, 1),  # Right bottom
                         )
 
                         # Church roof (triangular) - darker tile color
                         roof_color = (80, 60, 50)
                         roof_points = [
-                            (base_x - 24, church_y),      # Left base
-                            (base_x, church_y - 16),      # Top peak
-                            (base_x + 24, church_y),      # Right base
+                            (base_x - 24, church_y),  # Left base
+                            (base_x, church_y - 16),  # Top peak
+                            (base_x + 24, church_y),  # Right base
                         ]
                         pygame.draw.polygon(self.screen, roof_color, roof_points)
 
@@ -1086,14 +1376,12 @@ class PygameUIManager:
                             ridge_color,
                             (base_x - 20, church_y - 2),
                             (base_x + 20, church_y - 2),
-                            2
+                            2,
                         )
 
                         # Central spire - stone color
                         pygame.draw.rect(
-                            self.screen,
-                            stone_color,
-                            (base_x - 2, church_y - 28, 4, 12)
+                            self.screen, stone_color, (base_x - 2, church_y - 28, 4, 12)
                         )
 
                         # Spire cross (gold color)
@@ -1101,20 +1389,73 @@ class PygameUIManager:
                         pygame.draw.rect(
                             self.screen,
                             cross_color,
-                            (base_x - 1, church_y - 30, 2, 6)  # Vertical
+                            (base_x - 1, church_y - 30, 2, 6),  # Vertical
                         )
                         pygame.draw.rect(
                             self.screen,
                             cross_color,
-                            (base_x - 2, church_y - 28, 4, 2)  # Horizontal
+                            (base_x - 2, church_y - 28, 4, 2),  # Horizontal
                         )
 
                         # Small bell tower windows
                         pygame.draw.rect(
-                            self.screen,
-                            window_color,
-                            (base_x - 1, church_y - 22, 2, 3)
+                            self.screen, window_color, (base_x - 1, church_y - 22, 2, 3)
                         )
+
+        # Draw battlefield crosses at bottom sides (only for prologue)
+        if (
+            self.game.selected_stage == "prologo"
+            and self.game.left_wall_points
+            and self.game.right_wall_points
+        ):
+            # Get battlefield cross image
+            battlefield_cross = self.game.assets.get("battlefield_cross.png")
+            if battlefield_cross is None:
+                # Create fallback bloody cross image for battlefield (80x100)
+                battlefield_cross = pygame.Surface((80, 100), pygame.SRCALPHA)
+                # Draw cross shape in brown/wood color
+                wood_color = (139, 69, 19)
+                blood_color = (139, 0, 0)
+                # Vertical bar (scaled for 80x100)
+                pygame.draw.rect(battlefield_cross, wood_color, (32, 20, 16, 60))
+                # Horizontal bar (scaled for 80x100)
+                pygame.draw.rect(battlefield_cross, wood_color, (16, 42, 48, 16))
+                # Add blood stains (scaled for 80x100)
+                pygame.draw.circle(battlefield_cross, blood_color, (40, 30), 6)
+                pygame.draw.circle(battlefield_cross, blood_color, (20, 45), 5)
+                pygame.draw.circle(battlefield_cross, blood_color, (60, 55), 5)
+            else:
+                # Scale the loaded image to 80x100 if it's not already that size
+                if battlefield_cross.get_size() != (80, 100):
+                    battlefield_cross = pygame.transform.scale(
+                        battlefield_cross, (80, 100)
+                    )
+
+            # Position crosses at bottom sides of battlefield
+            if self.game.left_wall_points and self.game.right_wall_points:
+                # Calculate battlefield height for better positioning
+                battlefield_height = self.game.height
+                cross_y_position = battlefield_height - 130  # Position for 80x100 size
+
+                # Left cross - positioned closer to left wall
+                left_bottom_x = (
+                    self.game.left_wall_points[-1][0] + 5
+                )  # Closer to left wall
+
+                # Right cross - positioned closer to right wall
+                right_bottom_x = (
+                    self.game.right_wall_points[-1][0] - 85
+                )  # Closer to right wall
+
+                # Draw the crosses at the calculated Y position
+                self.screen.blit(
+                    battlefield_cross,
+                    (left_bottom_x + shake_x, cross_y_position + shake_y),
+                )
+                self.screen.blit(
+                    battlefield_cross,
+                    (right_bottom_x + shake_x, cross_y_position + shake_y),
+                )
 
         # Fading and buildings use the original Game methods to avoid code duplication
         # Reuse UI manager for Limbo features
@@ -1140,6 +1481,7 @@ class PygameUIManager:
             return
 
         from src.assets.text_cache import get_font, get_text
+
         font_large = get_font(48)
         font_medium = get_font(32)
         font_small = get_font(20)
@@ -1173,19 +1515,31 @@ class PygameUIManager:
                     text,
                     (
                         self.width // 2 - text.get_width() // 2 + shake_x,
-                        start_y + i * spacing + (option_h - text.get_height()) // 2 + shake_y,
+                        start_y
+                        + i * spacing
+                        + (option_h - text.get_height()) // 2
+                        + shake_y,
                     ),
                 )
 
-            back_rect = pygame.Rect(self.width // 2 - 60, start_y + len(labels) * spacing + 10, 120, 36)
-            back_hover: bool = back_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-            back_color: tuple[int, int, int] = (80, 80, 80) if back_hover else (60, 60, 60)
+            back_rect = pygame.Rect(
+                self.width // 2 - 60, start_y + len(labels) * spacing + 10, 120, 36
+            )
+            back_hover: bool = back_rect.collidepoint(
+                self.game.mouse_x, self.game.mouse_y
+            )
+            back_color: tuple[int, int, int] = (
+                (80, 80, 80) if back_hover else (60, 60, 60)
+            )
             pygame.draw.rect(self.screen, back_color, back_rect)
             pygame.draw.rect(self.screen, (255, 255, 255), back_rect, 2)
             back_text: pygame.Surface = font_small.render("BACK", True, (255, 255, 255))
             self.screen.blit(
                 back_text,
-                (self.width // 2 - back_text.get_width() // 2 + shake_x, start_y + len(labels) * spacing + 14 + shake_y),
+                (
+                    self.width // 2 - back_text.get_width() // 2 + shake_x,
+                    start_y + len(labels) * spacing + 14 + shake_y,
+                ),
             )
 
             try:
@@ -1223,23 +1577,97 @@ class PygameUIManager:
                     text,
                     (
                         self.width // 2 - text.get_width() // 2 + shake_x,
-                        start_y + i * spacing + (option_h - text.get_height()) // 2 + shake_y,
+                        start_y
+                        + i * spacing
+                        + (option_h - text.get_height()) // 2
+                        + shake_y,
                     ),
                 )
 
-            back_rect = pygame.Rect(self.width // 2 - 60, start_y + len(labels) * spacing + 10, 120, 36)
-            back_hover: bool = back_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-            back_color: tuple[int, int, int] = (80, 80, 80) if back_hover else (60, 60, 60)
+            back_rect = pygame.Rect(
+                self.width // 2 - 60, start_y + len(labels) * spacing + 10, 120, 36
+            )
+            back_hover: bool = back_rect.collidepoint(
+                self.game.mouse_x, self.game.mouse_y
+            )
+            back_color: tuple[int, int, int] = (
+                (80, 80, 80) if back_hover else (60, 60, 60)
+            )
             pygame.draw.rect(self.screen, back_color, back_rect)
             pygame.draw.rect(self.screen, (255, 255, 255), back_rect, 2)
             back_text: pygame.Surface = font_small.render("BACK", True, (255, 255, 255))
             self.screen.blit(
                 back_text,
-                (self.width // 2 - back_text.get_width() // 2 + shake_x, start_y + len(labels) * spacing + 14 + shake_y),
+                (
+                    self.width // 2 - back_text.get_width() // 2 + shake_x,
+                    start_y + len(labels) * spacing + 14 + shake_y,
+                ),
             )
 
             try:
                 self.game._last_drawn_menu = "purgatory"
+            except Exception:
+                pass
+            return
+
+        # HELL submenu
+        if getattr(self.game, "showing_hell_menu", False):
+            title_h = get_text("HELL", font_large, (255, 215, 0))
+            self.screen.blit(
+                title_h,
+                (
+                    self.width // 2 - title_h.get_width() // 2 + shake_x,
+                    self.height // 2 - 120 + shake_y,
+                ),
+            )
+
+            option_w = 320
+            option_h = 48
+            start_x: int = self.width // 2 - option_w // 2
+            start_y: int = self.height // 2 - 40
+            spacing = 60
+
+            labels: List[str] = ["GEHENNA", "LAKE OF FIRE", "HADES"]
+            for i, label in enumerate(labels):
+                rect = pygame.Rect(start_x, start_y + i * spacing, option_w, option_h)
+                hovered: bool = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+                bg: tuple[int, int, int] = (189, 89, 89) if hovered else (139, 69, 69)
+                pygame.draw.rect(self.screen, bg, rect)
+                pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
+                text: pygame.Surface = font_medium.render(label, True, (255, 255, 255))
+                self.screen.blit(
+                    text,
+                    (
+                        self.width // 2 - text.get_width() // 2 + shake_x,
+                        start_y
+                        + i * spacing
+                        + (option_h - text.get_height()) // 2
+                        + shake_y,
+                    ),
+                )
+
+            back_rect = pygame.Rect(
+                self.width // 2 - 60, start_y + len(labels) * spacing + 10, 120, 36
+            )
+            back_hover: bool = back_rect.collidepoint(
+                self.game.mouse_x, self.game.mouse_y
+            )
+            back_color: tuple[int, int, int] = (
+                (80, 80, 80) if back_hover else (60, 60, 60)
+            )
+            pygame.draw.rect(self.screen, back_color, back_rect)
+            pygame.draw.rect(self.screen, (255, 255, 255), back_rect, 2)
+            back_text: pygame.Surface = font_small.render("BACK", True, (255, 255, 255))
+            self.screen.blit(
+                back_text,
+                (
+                    self.width // 2 - back_text.get_width() // 2 + shake_x,
+                    start_y + len(labels) * spacing + 14 + shake_y,
+                ),
+            )
+
+            try:
+                self.game._last_drawn_menu = "hell"
             except Exception:
                 pass
             return
@@ -1255,14 +1683,22 @@ class PygameUIManager:
         )
 
         # Prologo button
-        prologo_rect = pygame.Rect(self.width // 2 - 100, self.height // 2 - 50, 200, 40)
-        prologo_hovered: bool = prologo_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-        prologo_color: tuple[Literal[189], Literal[89], Literal[89]] | tuple[Literal[139], Literal[69], Literal[69]] = (
+        prologo_rect = pygame.Rect(
+            self.width // 2 - 100, self.height // 2 - 50, 200, 40
+        )
+        prologo_hovered: bool = prologo_rect.collidepoint(
+            self.game.mouse_x, self.game.mouse_y
+        )
+        prologo_color: tuple[Literal[189], Literal[89], Literal[89]] | tuple[
+            Literal[139], Literal[69], Literal[69]
+        ] = (
             (189, 89, 89) if prologo_hovered else (139, 69, 69)
         )  # Lighter red when hovered
         pygame.draw.rect(self.screen, prologo_color, prologo_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), prologo_rect, 2)  # White border
-        prologo_text: pygame.Surface = font_medium.render("PROLOGUE", True, (255, 255, 255))
+        prologo_text: pygame.Surface = font_medium.render(
+            "PROLOGUE", True, (255, 255, 255)
+        )
         self.screen.blit(
             prologo_text,
             (
@@ -1273,8 +1709,12 @@ class PygameUIManager:
 
         # Limbo main button (opens second menu)
         limbo_rect = pygame.Rect(self.width // 2 - 100, self.height // 2 + 10, 200, 40)
-        limbo_hovered: bool = limbo_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-        limbo_color: tuple[Literal[137], Literal[78], Literal[36]] | tuple[Literal[107], Literal[58], Literal[26]] = (137, 78, 36) if limbo_hovered else (107, 58, 26)
+        limbo_hovered: bool = limbo_rect.collidepoint(
+            self.game.mouse_x, self.game.mouse_y
+        )
+        limbo_color: tuple[Literal[137], Literal[78], Literal[36]] | tuple[
+            Literal[107], Literal[58], Literal[26]
+        ] = ((137, 78, 36) if limbo_hovered else (107, 58, 26))
         pygame.draw.rect(self.screen, limbo_color, limbo_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), limbo_rect, 2)
         limbo_text: pygame.Surface = font_medium.render("LIMBO", True, (255, 255, 255))
@@ -1287,12 +1727,20 @@ class PygameUIManager:
         )
 
         # Purgatory main button (opens second menu)
-        purgatory_rect = pygame.Rect(self.width // 2 - 100, self.height // 2 + 70, 200, 40)
-        purgatory_hovered: bool = purgatory_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-        purgatory_color: tuple[Literal[137], Literal[78], Literal[136]] | tuple[Literal[107], Literal[58], Literal[106]] = (137, 78, 136) if purgatory_hovered else (107, 58, 106)
+        purgatory_rect = pygame.Rect(
+            self.width // 2 - 100, self.height // 2 + 70, 200, 40
+        )
+        purgatory_hovered: bool = purgatory_rect.collidepoint(
+            self.game.mouse_x, self.game.mouse_y
+        )
+        purgatory_color: tuple[Literal[137], Literal[78], Literal[136]] | tuple[
+            Literal[107], Literal[58], Literal[106]
+        ] = ((137, 78, 136) if purgatory_hovered else (107, 58, 106))
         pygame.draw.rect(self.screen, purgatory_color, purgatory_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), purgatory_rect, 2)
-        purgatory_text: pygame.Surface = font_medium.render("PURGATORY", True, (255, 255, 255))
+        purgatory_text: pygame.Surface = font_medium.render(
+            "PURGATORY", True, (255, 255, 255)
+        )
         self.screen.blit(
             purgatory_text,
             (
@@ -1301,21 +1749,57 @@ class PygameUIManager:
             ),
         )
 
+        # HELL main button (opens second menu) - red dedicated button under PURGATORY
+        hell_rect = pygame.Rect(self.width // 2 - 100, self.height // 2 + 130, 200, 40)
+        hell_hovered: bool = hell_rect.collidepoint(
+            self.game.mouse_x, self.game.mouse_y
+        )
+        hell_color: tuple[Literal[189], Literal[89], Literal[89]] | tuple[
+            Literal[139], Literal[69], Literal[69]
+        ] = (
+            (189, 89, 89) if hell_hovered else (139, 69, 69)
+        )  # Lighter red when hovered
+        pygame.draw.rect(self.screen, hell_color, hell_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), hell_rect, 2)
+        hell_text: pygame.Surface = font_medium.render("HELL", True, (255, 255, 255))
+        self.screen.blit(
+            hell_text,
+            (
+                self.width // 2 - hell_text.get_width() // 2 + shake_x,
+                self.height // 2 + 140 + shake_y,
+            ),
+        )
+
         # Upgrades button moved to bottom of screen to avoid overlap and be more accessible
-        upgrades_rect = pygame.Rect(self.width // 2 - 125, max(20, self.height - 80), 250, 35)
-        upgrades_hovered: bool = upgrades_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-        upgrades_bg_color: tuple[Literal[94], Literal[36], Literal[94]] | tuple[Literal[74], Literal[26], Literal[74]] = (
+        upgrades_rect = pygame.Rect(
+            self.width // 2 - 125, max(20, self.height - 80), 250, 35
+        )
+        upgrades_hovered: bool = upgrades_rect.collidepoint(
+            self.game.mouse_x, self.game.mouse_y
+        )
+        upgrades_bg_color: tuple[Literal[94], Literal[36], Literal[94]] | tuple[
+            Literal[74], Literal[26], Literal[74]
+        ] = (
             (94, 36, 94) if upgrades_hovered else (74, 26, 74)
         )  # Lighter purple when hovered
-        upgrades_border_color: tuple[Literal[255], Literal[224], Literal[20]] | tuple[Literal[255], Literal[204], Literal[0]] = (
+        upgrades_border_color: tuple[Literal[255], Literal[224], Literal[20]] | tuple[
+            Literal[255], Literal[204], Literal[0]
+        ] = (
             (255, 224, 20) if upgrades_hovered else (255, 204, 0)
         )  # Brighter gold when hovered
         pygame.draw.rect(self.screen, upgrades_bg_color, upgrades_rect)
         pygame.draw.rect(self.screen, upgrades_border_color, upgrades_rect, 2)
-        upgrades_text: pygame.Surface = font_small.render("PERMANENT UPGRADES", True, upgrades_border_color)
+        upgrades_text: pygame.Surface = font_small.render(
+            "PERMANENT UPGRADES", True, upgrades_border_color
+        )
         self.screen.blit(
             upgrades_text,
-            (self.width // 2 - upgrades_text.get_width() // 2 + shake_x, upgrades_rect.y + (upgrades_rect.height - upgrades_text.get_height()) // 2 + shake_y),
+            (
+                self.width // 2 - upgrades_text.get_width() // 2 + shake_x,
+                upgrades_rect.y
+                + (upgrades_rect.height - upgrades_text.get_height()) // 2
+                + shake_y,
+            ),
         )
 
         # Draw small options (gear) button in bottom-right corner
@@ -1323,7 +1807,9 @@ class PygameUIManager:
         opt_x = self.width - (opt_size + 14)
         opt_y = max(20, self.height - (opt_size + 14))
         options_rect = pygame.Rect(opt_x, opt_y, opt_size, opt_size)
-        options_hovered: bool = options_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+        options_hovered: bool = options_rect.collidepoint(
+            self.game.mouse_x, self.game.mouse_y
+        )
         bg = (60, 60, 60) if not options_hovered else (90, 90, 90)
         border = (200, 200, 200) if options_hovered else (160, 160, 160)
         pygame.draw.rect(self.screen, bg, options_rect)
@@ -1362,8 +1848,8 @@ class PygameUIManager:
         overlay.fill((0, 0, 0, 160))
         self.screen.blit(overlay, (0, 0))
 
-        # Dialog box
-        dialog_w, dialog_h = 360, 220
+        # Dialog box (wider/taller for readability)
+        dialog_w, dialog_h = 520, 320
         dx = self.width // 2 - dialog_w // 2
         dy = self.height // 2 - dialog_h // 2
         pygame.draw.rect(self.screen, (40, 40, 40), (dx, dy, dialog_w, dialog_h))
@@ -1372,39 +1858,155 @@ class PygameUIManager:
         # Title
         try:
             from src.assets.text_cache import get_font, get_text
+
             font = get_font(28)
             title = get_text("OPTIONS", font, (255, 255, 255))
-            self.screen.blit(title, (self.width // 2 - title.get_width() // 2 + shake_x, dy + 12 + shake_y))
+            self.screen.blit(
+                title,
+                (self.width // 2 - title.get_width() // 2 + shake_x, dy + 12 + shake_y),
+            )
         except Exception:
             font_large = pygame.font.Font(None, 28)
             title = font_large.render("OPTIONS", True, (255, 255, 255))
-            self.screen.blit(title, (self.width // 2 - title.get_width() // 2 + shake_x, dy + 12 + shake_y))
+            self.screen.blit(
+                title,
+                (self.width // 2 - title.get_width() // 2 + shake_x, dy + 12 + shake_y),
+            )
 
         # Placeholder options (toggles like mute/music/volume go here)
         font_med = pygame.font.Font(None, 20)
 
         # Damage numbers toggle (compact, right-aligned)
         dmg_label = font_med.render("Show Damage Numbers:", True, (220, 220, 220))
-        self.screen.blit(dmg_label, (dx + 24 + shake_x, dy + 56 + shake_y))
+        self.screen.blit(dmg_label, (dx + 24 + shake_x, dy + 64 + shake_y))
 
         # Compact toggle box on the right side of the dialog so the label remains readable
         toggle_w, toggle_h = 48, 24
         toggle_x = dx + dialog_w - 24 - toggle_w
-        toggle_y = dy + 56
+        toggle_y = dy + 64
         toggle_rect = pygame.Rect(toggle_x, toggle_y, toggle_w, toggle_h)
         hovered_toggle = toggle_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-        toggle_bg = (80, 160, 80) if getattr(self.game, 'show_damage_numbers', True) else (160, 80, 80)
+        toggle_bg = (
+            (80, 160, 80)
+            if getattr(self.game, "show_damage_numbers", True)
+            else (160, 80, 80)
+        )
         if hovered_toggle:
             toggle_bg = tuple(min(255, c + 20) for c in toggle_bg)
         pygame.draw.rect(self.screen, toggle_bg, toggle_rect)
         pygame.draw.rect(self.screen, (160, 160, 160), toggle_rect, 1)
-        status_text = "On" if getattr(self.game, 'show_damage_numbers', True) else "Off"
+        status_text = "On" if getattr(self.game, "show_damage_numbers", True) else "Off"
         status_surf = font_med.render(status_text, True, (255, 255, 255))
-        self.screen.blit(status_surf, (toggle_x + (toggle_w - status_surf.get_width()) // 2 + shake_x, toggle_y + (toggle_h - status_surf.get_height()) // 2 + shake_y))
+        self.screen.blit(
+            status_surf,
+            (
+                toggle_x + (toggle_w - status_surf.get_width()) // 2 + shake_x,
+                toggle_y + (toggle_h - status_surf.get_height()) // 2 + shake_y,
+            ),
+        )
 
-        # Additional placeholders (e.g., music/sound) below
-        opt2 = font_med.render("Music: On", True, (220, 220, 220))
-        self.screen.blit(opt2, (dx + 24 + shake_x, dy + 90 + shake_y))
+        # Smooth-scaling toggle (applies higher-quality scaling when window > virtual)
+        smooth_on = bool(
+            self.game.global_progress.get("display", {}).get("smooth_scale", True)
+        )
+        smooth_label = font_med.render("Smooth scaling:", True, (220, 220, 220))
+        self.screen.blit(smooth_label, (dx + 24 + shake_x, dy + 104 + shake_y))
+        smooth_toggle_x = dx + dialog_w - 24 - toggle_w
+        smooth_toggle_y = dy + 104
+        smooth_rect = pygame.Rect(smooth_toggle_x, smooth_toggle_y, toggle_w, toggle_h)
+        hovered_s = smooth_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+        smooth_bg = (80, 160, 80) if smooth_on else (160, 80, 80)
+        if hovered_s:
+            smooth_bg = tuple(min(255, c + 20) for c in smooth_bg)
+        pygame.draw.rect(self.screen, smooth_bg, smooth_rect)
+        pygame.draw.rect(self.screen, (160, 160, 160), smooth_rect, 1)
+        smooth_text = "On" if smooth_on else "Off"
+        self.screen.blit(
+            font_med.render(smooth_text, True, (255, 255, 255)),
+            (
+                smooth_toggle_x + (toggle_w - status_surf.get_width()) // 2 + shake_x,
+                smooth_toggle_y + (toggle_h - status_surf.get_height()) // 2 + shake_y,
+            ),
+        )
+
+        # Resolution presets
+        preset_label = font_med.render("Resolution:", True, (220, 220, 220))
+        self.screen.blit(preset_label, (dx + 24 + shake_x, dy + 216 + shake_y))
+
+        # Buttons for presets (taken from game constants)
+        try:
+            from src.game_constants import DEFAULT_DISPLAY_PRESETS
+        except Exception:
+            DEFAULT_DISPLAY_PRESETS = [(1280, 720)]
+
+        # Dropdown for resolution presets
+        btn_w, btn_h = 140, 28
+        start_x = dx + 24
+        btn_y = dy + 248
+
+        dropdown_w, dropdown_h = btn_w, btn_h
+        dropdown_x, dropdown_y = start_x, btn_y
+        dropdown_rect = pygame.Rect(dropdown_x, dropdown_y, dropdown_w, dropdown_h)
+
+        # Current selection label
+        current_label = f"{self.game.window_width}x{self.game.window_height}"
+        hovered = dropdown_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+        bg = (
+            (60, 120, 200)
+            if (self.game.window_width, self.game.window_height)
+            in DEFAULT_DISPLAY_PRESETS
+            else ((120, 120, 120) if not hovered else (160, 160, 160))
+        )
+        pygame.draw.rect(self.screen, bg, dropdown_rect)
+        pygame.draw.rect(self.screen, (200, 200, 200), dropdown_rect, 1)
+        txt = font_med.render(current_label, True, (255, 255, 255))
+        self.screen.blit(
+            txt,
+            (
+                dropdown_x + 8 + shake_x,
+                dropdown_y + (dropdown_h - txt.get_height()) // 2 + shake_y,
+            ),
+        )
+        # small caret indicator
+        caret = font_med.render("▾", True, (220, 220, 220))
+        self.screen.blit(
+            caret,
+            (
+                dropdown_x + dropdown_w - 18 + shake_x,
+                dropdown_y + (dropdown_h - caret.get_height()) // 2 + shake_y,
+            ),
+        )
+
+        # If dropdown open, render the list beneath
+        if getattr(self.game, "options_resolution_dropdown_open", False):
+            item_h = 24
+            item_spacing = 2
+            for i, (pw, ph) in enumerate(DEFAULT_DISPLAY_PRESETS):
+                iy = dropdown_y + dropdown_h + i * (item_h + item_spacing)
+                item_rect = pygame.Rect(dropdown_x, iy, dropdown_w, item_h)
+                is_current = (pw, ph) == (
+                    self.game.window_width,
+                    self.game.window_height,
+                )
+                hovered_item = item_rect.collidepoint(
+                    self.game.mouse_x, self.game.mouse_y
+                )
+                item_bg = (
+                    (80, 140, 220)
+                    if is_current
+                    else ((120, 120, 120) if not hovered_item else (160, 160, 160))
+                )
+                pygame.draw.rect(self.screen, item_bg, item_rect)
+                pygame.draw.rect(self.screen, (200, 200, 200), item_rect, 1)
+                label = f"{pw}x{ph}"
+                txt = font_med.render(label, True, (255, 255, 255))
+                self.screen.blit(
+                    txt,
+                    (
+                        dropdown_x + 8 + shake_x,
+                        iy + (item_h - txt.get_height()) // 2 + shake_y,
+                    ),
+                )
 
         # Close button
         btn_w, btn_h = 120, 36
@@ -1417,7 +2019,13 @@ class PygameUIManager:
         pygame.draw.rect(self.screen, bg, close_rect)
         pygame.draw.rect(self.screen, border, close_rect, 2)
         btn_text = font_med.render("CLOSE", True, (255, 255, 255))
-        self.screen.blit(btn_text, (btn_x + (btn_w - btn_text.get_width()) // 2 + shake_x, btn_y + (btn_h - btn_text.get_height()) // 2 + shake_y))
+        self.screen.blit(
+            btn_text,
+            (
+                btn_x + (btn_w - btn_text.get_width()) // 2 + shake_x,
+                btn_y + (btn_h - btn_text.get_height()) // 2 + shake_y,
+            ),
+        )
 
         # Close button
         btn_w, btn_h = 120, 36
@@ -1430,7 +2038,14 @@ class PygameUIManager:
         pygame.draw.rect(self.screen, bg, close_rect)
         pygame.draw.rect(self.screen, border, close_rect, 2)
         btn_text = font_med.render("CLOSE", True, (255, 255, 255))
-        self.screen.blit(btn_text, (btn_x + (btn_w - btn_text.get_width()) // 2 + shake_x, btn_y + (btn_h - btn_text.get_height()) // 2 + shake_y))
+        self.screen.blit(
+            btn_text,
+            (
+                btn_x + (btn_w - btn_text.get_width()) // 2 + shake_x,
+                btn_y + (btn_h - btn_text.get_height()) // 2 + shake_y,
+            ),
+        )
+
     def draw_permanent_upgrades(self, shake_x=0, shake_y=0) -> None:
         """
         Draw the permanent upgrades menu (migrated from Game).
@@ -1446,18 +2061,34 @@ class PygameUIManager:
 
         # Title and layout
         left_x: int = self.width // 2 - 420
-        title: pygame.Surface = font_large.render("PERMANENT UPGRADES", True, (255, 255, 0))
-        self.screen.blit(title, (self.width // 2 - title.get_width() // 2 + shake_x, 40 + shake_y))
+        title: pygame.Surface = font_large.render(
+            "PERMANENT UPGRADES", True, (255, 255, 0)
+        )
+        self.screen.blit(
+            title, (self.width // 2 - title.get_width() // 2 + shake_x, 40 + shake_y)
+        )
 
         stat_configs = [
             {"name": "POWER", "key": "power", "color": (255, 68, 68), "y": 140},
             {"name": "VIGOR", "key": "vigor", "color": (255, 204, 0), "y": 185},
-            {"name": "ADRENALINE", "key": "adrenaline", "color": (170, 68, 255), "y": 230},
-            {"name": "STRUCTURE", "key": "structure", "color": (139, 105, 20), "y": 275},
+            {
+                "name": "ADRENALINE",
+                "key": "adrenaline",
+                "color": (170, 68, 255),
+                "y": 230,
+            },
+            {
+                "name": "STRUCTURE",
+                "key": "structure",
+                "color": (139, 105, 20),
+                "y": 275,
+            },
         ]
 
         # Precompute max name width to align bars symmetrically
-        rendered_names = [font_medium.render(s["name"], True, s["color"]) for s in stat_configs]
+        rendered_names = [
+            font_medium.render(s["name"], True, s["color"]) for s in stat_configs
+        ]
         max_name_w = max(s.get_width() for s in rendered_names)
         bar_x_base = left_x + max(120, max_name_w + 24)
         bar_width = 180  # slightly shorter for symmetry and visual balance
@@ -1469,13 +2100,19 @@ class PygameUIManager:
         for i, stat in enumerate(stat_configs):
             # Hover and max state handling for stat names
             name_rect = pygame.Rect(left_x, stat["y"], 120, 30)
-            is_hovered: bool = name_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+            is_hovered: bool = name_rect.collidepoint(
+                self.game.mouse_x, self.game.mouse_y
+            )
 
             name_color: tuple[int, int, int] = stat["color"]
             stat_value = self.game.permanent_stats.get(stat["key"], 0)
             if is_hovered and stat_value < 10:
                 col = stat["color"]
-                name_color = (min(255, col[0] + 50), min(255, col[1] + 50), min(255, col[2] + 50))
+                name_color = (
+                    min(255, col[0] + 50),
+                    min(255, col[1] + 50),
+                    min(255, col[2] + 50),
+                )
             elif stat_value >= 10:
                 name_color = (100, 100, 100)
 
@@ -1483,10 +2120,16 @@ class PygameUIManager:
             if is_hovered:
                 name_text = font_name_hover.render(stat["name"], True, name_color)
             else:
-                name_text = rendered_names[i] if i < len(rendered_names) else font_medium.render(stat["name"], True, name_color)
+                name_text = (
+                    rendered_names[i]
+                    if i < len(rendered_names)
+                    else font_medium.render(stat["name"], True, name_color)
+                )
 
             # Lower slightly the name to better align with the bar and center vertically
-            name_y = int(stat["y"] + 22 - (name_text.get_height() // 2)) + shake_y  # moved down 5px
+            name_y = (
+                int(stat["y"] + 22 - (name_text.get_height() // 2)) + shake_y
+            )  # moved down 5px
             self.screen.blit(name_text, (left_x + shake_x, name_y))
 
             # Stat value
@@ -1499,15 +2142,29 @@ class PygameUIManager:
                 # Support multi-line effect text separated by ';' (used for VIGOR description)
                 lines = [s.strip() for s in effect_text.split(";") if s.strip()]
                 if len(lines) == 1:
-                    eff_surf: pygame.Surface = font_small.render(lines[0], True, (180, 180, 180))
-                    eff_y = stat["y"] + 15 + (bar_height // 2) - (eff_surf.get_height() // 2) + shake_y
+                    eff_surf: pygame.Surface = font_small.render(
+                        lines[0], True, (180, 180, 180)
+                    )
+                    eff_y = (
+                        stat["y"]
+                        + 15
+                        + (bar_height // 2)
+                        - (eff_surf.get_height() // 2)
+                        + shake_y
+                    )
                     self.screen.blit(eff_surf, (left_x + 340 + shake_x, eff_y))
                 else:
                     # Render multiple lines stacked and vertically centered in the same area
-                    rendered = [font_small.render(l, True, (180, 180, 180)) for l in lines]
+                    rendered = [
+                        font_small.render(line, True, (180, 180, 180)) for line in lines
+                    ]
                     spacing = 2
-                    total_h = sum(s.get_height() for s in rendered) + spacing * (len(rendered) - 1)
-                    start_y = stat["y"] + 15 + (bar_height // 2) - (total_h // 2) + shake_y
+                    total_h = sum(s.get_height() for s in rendered) + spacing * (
+                        len(rendered) - 1
+                    )
+                    start_y = (
+                        stat["y"] + 15 + (bar_height // 2) - (total_h // 2) + shake_y
+                    )
                     y = start_y
                     for surf in rendered:
                         self.screen.blit(surf, (left_x + 340 + shake_x, y))
@@ -1516,32 +2173,51 @@ class PygameUIManager:
             # MAX indicator if at max level
             if stat_value >= 10:
                 max_text: pygame.Surface = font_small.render("MAX", True, (255, 215, 0))
-                self.screen.blit(max_text, (left_x + 270 + shake_x, stat["y"] + shake_y))
+                self.screen.blit(
+                    max_text, (left_x + 270 + shake_x, stat["y"] + shake_y)
+                )
 
             # Bar (symmetric placement) — highlight only on name (name hover controls text colour already)
             bar_x = bar_x_base
             bar_y = stat["y"] + 15
             bar_bg_color = (26, 26, 26)
             bar_border_color = (68, 68, 68)  # always default border; no gold here
-            pygame.draw.rect(self.screen, bar_bg_color, (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height))
-            pygame.draw.rect(self.screen, bar_border_color, (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height), 1)
+            pygame.draw.rect(
+                self.screen,
+                bar_bg_color,
+                (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height),
+            )
+            pygame.draw.rect(
+                self.screen,
+                bar_border_color,
+                (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height),
+                1,
+            )
             if stat_value > 0:
                 fill_width = min(bar_width, (stat_value / 10) * bar_width)
-                pygame.draw.rect(self.screen, stat["color"], (bar_x + shake_x, bar_y + shake_y, fill_width, bar_height))
+                pygame.draw.rect(
+                    self.screen,
+                    stat["color"],
+                    (bar_x + shake_x, bar_y + shake_y, fill_width, bar_height),
+                )
 
         # Subtitle (closer to original layout)
-        subtitle: pygame.Surface = font_small.render("Upgrade your demonic powers", True, (136, 136, 136))
+        subtitle: pygame.Surface = font_small.render(
+            "Upgrade your demonic powers", True, (136, 136, 136)
+        )
         self.screen.blit(subtitle, (left_x + shake_x, 85 + shake_y))
 
-        # Separator & Classic Upgrades section (migrated from legacy Game impl)
+        # Separator & Blasphemies section (migrated from legacy Game impl)
         separator_y = 320
-        classic_text: pygame.Surface = font_medium.render("CLASSIC UPGRADES", True, (136, 136, 136))
+        classic_text: pygame.Surface = font_medium.render(
+            "BLASPHEMIES", True, (136, 136, 136)
+        )
         self.screen.blit(
             classic_text,
             (left_x + shake_x, separator_y + 30 + shake_y),
         )
 
-        # Placeholder boxes for classic upgrades (2 rows of 5)
+        # Placeholder boxes for Blasphemies (2 rows of 5)
         box_width = 80
         box_height = 60
         box_spacing = 100
@@ -1550,19 +2226,33 @@ class PygameUIManager:
         box_y1: int = separator_y + 60
         for i in range(5):
             box_x = start_x + (i * box_spacing)
-            rect = (box_x - box_width // 2 + shake_x, box_y1 + shake_y, box_width, box_height)
+            rect = (
+                box_x - box_width // 2 + shake_x,
+                box_y1 + shake_y,
+                box_width,
+                box_height,
+            )
             pygame.draw.rect(self.screen, (26, 26, 26), rect)
             pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
 
         box_y2: int = box_y1 + box_height + 20
         for i in range(5):
             box_x = start_x + (i * box_spacing)
-            rect = (box_x - box_width // 2 + shake_x, box_y2 + shake_y, box_width, box_height)
+            rect = (
+                box_x - box_width // 2 + shake_x,
+                box_y2 + shake_y,
+                box_width,
+                box_height,
+            )
             pygame.draw.rect(self.screen, (26, 26, 26), rect)
             pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
 
         # Skill trees (FIRE, STORM, ICE) on the right side
-        tree_types = [("FIRE", "fire", (255, 68, 68)), ("STORM", "storm", (170, 68, 255)), ("ICE", "ice", (100, 200, 255))]
+        tree_types = [
+            ("FIRE", "fire", (255, 68, 68)),
+            ("STORM", "storm", (170, 68, 255)),
+            ("ICE", "ice", (100, 200, 255)),
+        ]
         tree_box_w = 50
         tree_box_h = 36
         tree_v_spacing = 46
@@ -1573,7 +2263,13 @@ class PygameUIManager:
         for col, (label, key_prefix, color) in enumerate(tree_types):
             col_x = tree_base_x + col * tree_col_spacing
             lbl_surf: pygame.Surface = font_small.render(label, True, color)
-            self.screen.blit(lbl_surf, (col_x - lbl_surf.get_width() // 2 + shake_x, tree_top_y - 28 + shake_y))
+            self.screen.blit(
+                lbl_surf,
+                (
+                    col_x - lbl_surf.get_width() // 2 + shake_x,
+                    tree_top_y - 28 + shake_y,
+                ),
+            )
 
             # Draw 3x2 boxes layout similar to legacy view and add hover/tooltips
             inner_col_offset = tree_box_w // 2 + 1
@@ -1581,16 +2277,38 @@ class PygameUIManager:
             right_col_x = col_x + inner_col_offset
             for row in range(3):
                 y = tree_top_y + row * tree_v_spacing
-                left_rect = (left_col_x - tree_box_w // 2 + shake_x, y + shake_y, tree_box_w, tree_box_h)
-                right_rect = (right_col_x - tree_box_w // 2 + shake_x, y + shake_y, tree_box_w, tree_box_h)
+                left_rect = (
+                    left_col_x - tree_box_w // 2 + shake_x,
+                    y + shake_y,
+                    tree_box_w,
+                    tree_box_h,
+                )
+                right_rect = (
+                    right_col_x - tree_box_w // 2 + shake_x,
+                    y + shake_y,
+                    tree_box_w,
+                    tree_box_h,
+                )
 
-                left_active = bool(self.game.permanent_stats.get(f"{key_prefix}_{row+1}", 0))
-                right_active = bool(self.game.permanent_stats.get(f"{key_prefix}_{4+row}", 0))
+                left_active = bool(
+                    self.game.permanent_stats.get(f"{key_prefix}_{row+1}", 0)
+                )
+                right_active = bool(
+                    self.game.permanent_stats.get(f"{key_prefix}_{4+row}", 0)
+                )
 
                 left_bg = color if left_active else (26, 26, 26)
                 right_bg = color if right_active else (26, 26, 26)
-                left_border = tuple(min(255, c + 20) for c in color) if left_active else (51, 51, 51)
-                right_border = tuple(min(255, c + 20) for c in color) if right_active else (51, 51, 51)
+                left_border = (
+                    tuple(min(255, c + 20) for c in color)
+                    if left_active
+                    else (51, 51, 51)
+                )
+                right_border = (
+                    tuple(min(255, c + 20) for c in color)
+                    if right_active
+                    else (51, 51, 51)
+                )
 
                 # Hover detection for visual highlight
                 try:
@@ -1619,22 +2337,47 @@ class PygameUIManager:
                     tooltip_lines = self.game._skill_tooltip_lines(key_prefix, row + 1)
                     if tooltip_lines:
                         tooltip_x = col_x
-                        tooltip_y = tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
-                        self.game._draw_tooltip(tooltip_lines, tooltip_x, tooltip_y, pygame.font.Font(None, 18), anchor_center=True)
+                        tooltip_y = (
+                            tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
+                        )
+                        self.game._draw_tooltip(
+                            tooltip_lines,
+                            tooltip_x,
+                            tooltip_y,
+                            pygame.font.Font(None, 18),
+                            anchor_center=True,
+                        )
 
                 if right_hovered:
                     tooltip_lines = self.game._skill_tooltip_lines(key_prefix, 4 + row)
                     if tooltip_lines:
                         tooltip_x = col_x
-                        tooltip_y = tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
-                        self.game._draw_tooltip(tooltip_lines, tooltip_x, tooltip_y, pygame.font.Font(None, 18), anchor_center=True)
+                        tooltip_y = (
+                            tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
+                        )
+                        self.game._draw_tooltip(
+                            tooltip_lines,
+                            tooltip_x,
+                            tooltip_y,
+                            pygame.font.Font(None, 18),
+                            anchor_center=True,
+                        )
             # Center bottom tier (7)
             center_y = tree_top_y + 3 * tree_v_spacing
             center_key = f"{key_prefix}_7"
             center_active = bool(self.game.permanent_stats.get(center_key, 0))
             center_bg = color if center_active else (26, 26, 26)
-            center_border = tuple(min(255, c + 20) for c in color) if center_active else (51, 51, 51)
-            center_rect = (col_x - tree_box_w // 2 + shake_x, center_y + shake_y, tree_box_w, tree_box_h)
+            center_border = (
+                tuple(min(255, c + 20) for c in color)
+                if center_active
+                else (51, 51, 51)
+            )
+            center_rect = (
+                col_x - tree_box_w // 2 + shake_x,
+                center_y + shake_y,
+                tree_box_w,
+                tree_box_h,
+            )
 
             # Center hover detection and highlight
             try:
@@ -1654,11 +2397,23 @@ class PygameUIManager:
                 tooltip_lines = self.game._skill_tooltip_lines(key_prefix, 7)
                 if tooltip_lines:
                     tooltip_x = col_x
-                    tooltip_y = tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
-                    self.game._draw_tooltip(tooltip_lines, tooltip_x, tooltip_y, pygame.font.Font(None, 18), anchor_center=True)
+                    tooltip_y = (
+                        tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
+                    )
+                    self.game._draw_tooltip(
+                        tooltip_lines,
+                        tooltip_x,
+                        tooltip_y,
+                        pygame.font.Font(None, 18),
+                        anchor_center=True,
+                    )
 
         # Instructions
-        instructions = font_medium.render("Left click to upgrade | Right click to downgrade | ESC to return", True, (200, 200, 200))
+        instructions = font_medium.render(
+            "Left click to upgrade | Right click to downgrade | ESC to return",
+            True,
+            (200, 200, 200),
+        )
         self.screen.blit(instructions, (left_x + shake_x, self.height - 50 + shake_y))
 
         try:
@@ -1672,30 +2427,46 @@ class PygameUIManager:
         if not self.screen or not pygame:
             return
         from src.assets.text_cache import get_font, get_text
+
         font_large = get_font(36)
         font_medium = get_font(28)
 
-        overlay = pygame.Surface((self.width, self.height))
+        overlay = self._cached_overlay()
         overlay.set_alpha(128)
         overlay.fill((0, 0, 0))
         self.screen.blit(overlay, (0, 0))
 
         title: pygame.Surface = get_text("PAUSED", font_large, (255, 255, 255))
-        self.screen.blit(title, (self.width // 2 - title.get_width() // 2 + shake_x, self.height // 2 - 100 + shake_y))
+        self.screen.blit(
+            title,
+            (
+                self.width // 2 - title.get_width() // 2 + shake_x,
+                self.height // 2 - 100 + shake_y,
+            ),
+        )
 
         options = ["Resume", "Quit to Menu"]
         option_height = 40
         for i, option in enumerate(options):
             y_pos = self.height // 2 - 20 + i * option_height
             text_width = len(option) * 14
-            option_rect = pygame.Rect(self.width // 2 - text_width // 2, y_pos, text_width, option_height)
+            option_rect = pygame.Rect(
+                self.width // 2 - text_width // 2, y_pos, text_width, option_height
+            )
             is_hovered = option_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
             if is_hovered:
                 self.game.pause_menu_option = i
             is_selected = i == self.game.pause_menu_option
-            color = (255, 255, 0) if is_selected else ((200, 200, 0) if is_hovered else (255, 255, 255))
+            color = (
+                (255, 255, 0)
+                if is_selected
+                else ((200, 200, 0) if is_hovered else (255, 255, 255))
+            )
             text = font_medium.render(option, True, color)
-            self.screen.blit(text, (self.width // 2 - text.get_width() // 2 + shake_x, y_pos + shake_y))
+            self.screen.blit(
+                text,
+                (self.width // 2 - text.get_width() // 2 + shake_x, y_pos + shake_y),
+            )
 
         try:
             self.game._last_drawn_menu = "pause"
@@ -1704,7 +2475,7 @@ class PygameUIManager:
 
         # If a pause confirmation is active, draw Yes/No dialog
         try:
-            if getattr(self.game, 'pause_confirmation', None):
+            if getattr(self.game, "pause_confirmation", None):
                 pc = self.game.pause_confirmation
                 dialog_w, dialog_h = 260, 70
                 dx = self.width // 2 - dialog_w // 2
@@ -1714,14 +2485,19 @@ class PygameUIManager:
                 dlg_surf = pygame.Surface((dialog_w, dialog_h))
                 dlg_surf.set_alpha(220)
                 dlg_surf.fill((30, 30, 30))
-                pygame.draw.rect(dlg_surf, (120, 120, 120), (0, 0, dialog_w, dialog_h), 2)
+                pygame.draw.rect(
+                    dlg_surf, (120, 120, 120), (0, 0, dialog_w, dialog_h), 2
+                )
                 self.screen.blit(dlg_surf, (dx, dy))
 
-                from src.assets.text_cache import get_text, get_font
+                from src.assets.text_cache import get_font, get_text
+
                 font = get_font(18)
                 msg = "Quit to menu?"
                 msg_surf = get_text(msg, font, (255, 255, 255))
-                self.screen.blit(msg_surf, (dx + (dialog_w - msg_surf.get_width()) // 2, dy + 6))
+                self.screen.blit(
+                    msg_surf, (dx + (dialog_w - msg_surf.get_width()) // 2, dy + 6)
+                )
 
                 # Buttons (clearly boxed and highlight on hover)
                 btn_w = 80
@@ -1732,21 +2508,29 @@ class PygameUIManager:
                 # Detect hover and set selection accordingly
                 try:
                     if yes_rect.collidepoint(self.game.mouse_x, self.game.mouse_y):
-                        pc['selection'] = 0
+                        pc["selection"] = 0
                     elif no_rect.collidepoint(self.game.mouse_x, self.game.mouse_y):
-                        pc['selection'] = 1
+                        pc["selection"] = 1
                 except Exception:
                     pass
 
-                sel = pc.get('selection', 0)
+                sel = pc.get("selection", 0)
 
                 # Draw yes button
                 yes_bg = (255, 215, 0) if sel == 0 else (60, 60, 60)
                 yes_border = (200, 160, 20) if sel == 0 else (120, 120, 120)
                 pygame.draw.rect(self.screen, yes_bg, yes_rect)
                 pygame.draw.rect(self.screen, yes_border, yes_rect, 2)
-                yes_s = get_text("Yes", font, (0, 0, 0) if sel == 0 else (200, 200, 200))
-                self.screen.blit(yes_s, (yes_rect.x + (btn_w - yes_s.get_width()) // 2 + shake_x, yes_rect.y + shake_y + (btn_h - yes_s.get_height()) // 2))
+                yes_s = get_text(
+                    "Yes", font, (0, 0, 0) if sel == 0 else (200, 200, 200)
+                )
+                self.screen.blit(
+                    yes_s,
+                    (
+                        yes_rect.x + (btn_w - yes_s.get_width()) // 2 + shake_x,
+                        yes_rect.y + shake_y + (btn_h - yes_s.get_height()) // 2,
+                    ),
+                )
 
                 # Draw no button
                 no_bg = (255, 215, 0) if sel == 1 else (60, 60, 60)
@@ -1754,7 +2538,13 @@ class PygameUIManager:
                 pygame.draw.rect(self.screen, no_bg, no_rect)
                 pygame.draw.rect(self.screen, no_border, no_rect, 2)
                 no_s = get_text("No", font, (0, 0, 0) if sel == 1 else (200, 200, 200))
-                self.screen.blit(no_s, (no_rect.x + (btn_w - no_s.get_width()) // 2 + shake_x, no_rect.y + shake_y + (btn_h - no_s.get_height()) // 2))
+                self.screen.blit(
+                    no_s,
+                    (
+                        no_rect.x + (btn_w - no_s.get_width()) // 2 + shake_x,
+                        no_rect.y + shake_y + (btn_h - no_s.get_height()) // 2,
+                    ),
+                )
         except Exception:
             pass
 
@@ -1764,6 +2554,7 @@ class PygameUIManager:
         if not self.screen or not pygame:
             return
         from src.assets.text_cache import get_font, get_text
+
         font_huge = get_font(48)
         font_medium = get_font(32)
         font_small = get_font(20)
@@ -1781,7 +2572,9 @@ class PygameUIManager:
         self.screen.blit(overlay, (0, 0))
 
         title = get_text("PLAYER STATS", font_huge, (255, 215, 0))
-        self.screen.blit(title, (self.width // 2 - title.get_width() // 2 + shake_x, 40 + shake_y))
+        self.screen.blit(
+            title, (self.width // 2 - title.get_width() // 2 + shake_x, 40 + shake_y)
+        )
 
         left_col_x = self.width // 2 - 420 + shake_x
         mid_col_x = self.width // 2 - 80 + shake_x
@@ -1794,10 +2587,17 @@ class PygameUIManager:
             ("Level", str(self.game.player_level)),
             ("XP", f"{int(self.game.player_xp)}/{int(self.game.xp_to_next_level)}"),
             ("Score", str(int(self.game.score))),
+            ("Enemies Killed", str(getattr(self.game, "enemies_killed_this_run", 0))),
             ("Damage %", f"{(self.game.damage_multiplier - 1.0) * 100:.0f}%"),
             ("Fire rate %", f"{(1.0 - self.game.fire_rate_multiplier) * -100:.0f}%"),
-            ("Projectile size %", f"{(self.game.projectile_size_multiplier - 1.0) * 100:.0f}%"),
-            ("Damage reduction %", f"{(1.0 - self.game.damage_reduction_multiplier) * 100:.0f}%"),
+            (
+                "Projectile size %",
+                f"{(self.game.projectile_size_multiplier - 1.0) * 100:.0f}%",
+            ),
+            (
+                "Damage reduction %",
+                f"{(1.0 - self.game.damage_reduction_multiplier) * 100:.0f}%",
+            ),
         ]
 
         for i, (label, val) in enumerate(core_lines):
@@ -1810,13 +2610,19 @@ class PygameUIManager:
         # Health
         y = start_y + len(core_lines) * line_h + 10
         health_label = get_text("Health:", font_medium, (200, 200, 200))
-        health_val = get_text(f"{int(self.game.player.health)}/{int(self.game.player.max_health)}", font_medium, (255, 255, 255))
+        health_val = get_text(
+            f"{int(self.game.player.health)}/{int(self.game.player.max_health)}",
+            font_medium,
+            (255, 255, 255),
+        )
         self.screen.blit(health_label, (left_col_x, y))
         self.screen.blit(health_val, (left_col_x + 160, y))
 
         # Weapons and levels
         w_y = start_y
-        self.screen.blit(get_text("Weapons", font_large, (255, 215, 0)), (mid_col_x, w_y - 30))
+        self.screen.blit(
+            get_text("Weapons", font_large, (255, 215, 0)), (mid_col_x, w_y - 30)
+        )
         for i, wid in enumerate(self.game.player_weapons):
             lvl = self.game.weapon_levels.get(wid, 0)
             name = WEAPON_DEFS.get(wid, {}).get("name", wid.replace("_", " ").title())
@@ -1825,14 +2631,19 @@ class PygameUIManager:
 
         # Upgrade levels
         u_y = start_y
-        self.screen.blit(get_text("Upgrades", font_large, (255, 215, 0)), (right_col_x, u_y - 30))
+        self.screen.blit(
+            get_text("Upgrades", font_large, (255, 215, 0)), (right_col_x, u_y - 30)
+        )
         for i, (k, v) in enumerate(self.game.upgrade_levels.items()):
             txt = get_text(f"{k}: {v}", font_medium, (220, 220, 220))
             self.screen.blit(txt, (right_col_x, u_y + i * line_h))
 
         # Permanent stats (excluding tower/statue and elemental keys)
         ps_y = u_y + len(self.game.upgrade_levels) * line_h + 20
-        self.screen.blit(get_text("Permanent Stats", font_large, (255, 215, 0)), (right_col_x, ps_y - 30))
+        self.screen.blit(
+            get_text("Permanent Stats", font_large, (255, 215, 0)),
+            (right_col_x, ps_y - 30),
+        )
         display_stats = self.game._player_stats_display_items()
         for i, (k, v) in enumerate(display_stats):
             txt = get_text(f"{k}: {v}", font_small, (200, 200, 200))
@@ -1840,28 +2651,35 @@ class PygameUIManager:
 
         # Close instructions (Tab instead of I)
         inst = get_text("Press Tab or ESC to close", font_small, (180, 180, 180))
-        self.screen.blit(inst, (self.width // 2 - inst.get_width() // 2 + shake_x, self.height - 50 + shake_y))
+        self.screen.blit(
+            inst,
+            (
+                self.width // 2 - inst.get_width() // 2 + shake_x,
+                self.height - 50 + shake_y,
+            ),
+        )
 
         try:
             self.game._last_drawn_menu = "player_stats"
         except Exception:
             pass
+
     def draw_dead_trees(self, shake_x=0, shake_y=0) -> None:
         # Debugging hook: log when drawing dead trees to help visibility issues
         try:
             if not self.game.is_limbo_stage() or not hasattr(self.game, "dead_trees"):
                 if getattr(self.game, "debug", False):
-                    print("[DEBUG] draw_dead_trees: not in limbo or no dead_trees attr")
+                    logger.debug("draw_dead_trees: not in limbo or no dead_trees attr")
                 return
 
             if not self.game.dead_trees:
                 if getattr(self.game, "debug", False):
-                    print("[DEBUG] draw_dead_trees: dead_trees is empty")
+                    logger.debug("draw_dead_trees: dead_trees is empty")
                 return
 
             if getattr(self.game, "debug", False):
-                print(
-                    f"[DEBUG] draw_dead_trees: drawing {len(self.game.dead_trees)} trees"
+                logger.debug(
+                    "draw_dead_trees: drawing %d trees", len(self.game.dead_trees)
                 )
         except Exception:
             pass
@@ -1928,7 +2746,9 @@ class PygameUIManager:
 
         # Column details (horizontal lines)
         for detail_y in [y + 15, y + 35]:
-            pygame.draw.line(self.screen, (42, 16, 8), (x - 15, detail_y), (x + 15, detail_y), 2)
+            pygame.draw.line(
+                self.screen, (42, 16, 8), (x - 15, detail_y), (x + 15, detail_y), 2
+            )
 
         # Pedestal top (platform for statue)
         pygame.draw.rect(self.screen, (58, 32, 16), (x - 20, y - 10, 40, 10))
@@ -1938,7 +2758,9 @@ class PygameUIManager:
 
         return
 
-    def _draw_statue_model(self, x: int, statue_base_y: int, tower_type: str | None) -> None:
+    def _draw_statue_model(
+        self, x: int, statue_base_y: int, tower_type: str | None
+    ) -> None:
         """Draw a statue model centered at X using a provided statue base Y.
 
         This helper is reused by both pedestals (Limbo) and dynamic towers (Purgatory).
@@ -2082,11 +2904,11 @@ class PygameUIManager:
         """Draw tall pedestals with demonic statues for Limbo stage"""
         if not self.game.is_limbo_stage():
             if getattr(self.game, "debug", False):
-                print("[DEBUG] draw_pedestals: not in limbo")
+                logger.debug("draw_pedestals: not in limbo")
             return
         pygame = self.pygame
         if getattr(self.game, "debug", False):
-            print("[DEBUG] draw_pedestals: drawing pedestals")
+            logger.debug("draw_pedestals: drawing pedestals")
         # Two pedestals at the sides of the play area
         pedestals: list[dict[str, int]] = [
             {"x": 320, "y": 620},  # Left pedestal
@@ -2109,11 +2931,17 @@ class PygameUIManager:
                 pygame.draw.rect(self.screen, (58, 32, 16), (x - 15, y, 30, 50), 2)
                 for detail_y in [y + 15, y + 35]:
                     pygame.draw.line(
-                        self.screen, (42, 16, 8), (x - 15, detail_y), (x + 15, detail_y), 2
+                        self.screen,
+                        (42, 16, 8),
+                        (x - 15, detail_y),
+                        (x + 15, detail_y),
+                        2,
                     )
                 pygame.draw.rect(self.screen, (58, 32, 16), (x - 20, y - 10, 40, 10))
                 pygame.draw.rect(self.screen, (42, 16, 8), (x - 20, y - 10, 40, 10), 2)
-                pygame.draw.rect(self.screen, (200, 170, 100), (x - 20, y - 10, 40, 10), 1)
+                pygame.draw.rect(
+                    self.screen, (200, 170, 100), (x - 20, y - 10, 40, 10), 1
+                )
 
             # Choose statue colors based on stage/tower type
             if getattr(self.game, "selected_stage", None) == "limbo_2":
@@ -2141,7 +2969,9 @@ class PygameUIManager:
             try:
                 # The pedestal version of the statue provides statue_base_y (y - 10), so we
                 # call the shared painter with the same coordinates for consistency.
-                self._draw_statue_model(x, statue_base_y, getattr(self.game, "selected_stage", None))
+                self._draw_statue_model(
+                    x, statue_base_y, getattr(self.game, "selected_stage", None)
+                )
             except Exception:
                 # Fallback to old inlined rendering if helper is not present for some reason
                 # (preserves backwards compatibility in tests)
@@ -2159,7 +2989,9 @@ class PygameUIManager:
                 head_y: int = statue_base_y - 70
                 head_radius = 15
                 pygame.draw.circle(self.screen, body_color, (x, head_y), head_radius)
-                pygame.draw.circle(self.screen, outline_color, (x, head_y), head_radius, 2)
+                pygame.draw.circle(
+                    self.screen, outline_color, (x, head_y), head_radius, 2
+                )
 
                 # Larger horns (from head)
                 pygame.draw.line(
@@ -2273,12 +3105,14 @@ class PygameUIManager:
         sig_left = tuple((int(x), int(y)) for (x, y) in self.game.left_wall_points)
         sig_right = tuple((int(x), int(y)) for (x, y) in self.game.right_wall_points)
         sig = (sig_left, sig_right, self.width, self.height)
-        if getattr(self, "_fog_cache_signature", None) == sig and getattr(self, "_fog_cache", None):
+        if getattr(self, "_fog_cache_signature", None) == sig and getattr(
+            self, "_fog_cache", None
+        ):
             return  # Cache still valid
 
         # Build cache
         pygame = self.pygame
-        wall_thickness = 40
+        wall_thickness = WALL_THICKNESS
         num_layers = 5
         base_r, base_g, base_b = 60, 60, 60
 
@@ -2352,7 +3186,7 @@ class PygameUIManager:
             self._fog_cache_signature = None
 
         pygame = self.pygame
-        wall_thickness = 40
+        wall_thickness = WALL_THICKNESS
         num_layers = 5
 
         if getattr(self, "_fog_cache", None):
@@ -2372,7 +3206,7 @@ class PygameUIManager:
 
         # Fallback to dynamic drawing if cache absent
         pygame = self.pygame
-        wall_thickness = 40
+        wall_thickness = WALL_THICKNESS
         base_r, base_g, base_b = 60, 60, 60
         for i in range(num_layers):
             opacity: float = (num_layers - i) / num_layers
@@ -2441,14 +3275,16 @@ class PygameUIManager:
                             parts = enemy.setdefault("burn_particles", [])
                             # spawn 2-4 particles (increased visibility)
                             for _ in range(random.randint(2, 4)):
-                                parts.append({
-                                    "x": ex + random.uniform(-er/2, er/2),
-                                    "y": flame_y + random.uniform(-4, 4),
-                                    "vx": random.uniform(-30, 30),
-                                    "vy": random.uniform(15, 40),
-                                    "life": random.randint(18, 44),
-                                    "size": random.randint(3, 5),
-                                })
+                                parts.append(
+                                    {
+                                        "x": ex + random.uniform(-er / 2, er / 2),
+                                        "y": flame_y + random.uniform(-4, 4),
+                                        "vx": random.uniform(-30, 30),
+                                        "vy": random.uniform(15, 40),
+                                        "life": random.randint(18, 44),
+                                        "size": random.randint(3, 5),
+                                    }
+                                )
                             # update and draw
                             for p in list(parts):
                                 p["x"] += p["vx"] / 60
@@ -2457,10 +3293,24 @@ class PygameUIManager:
                                 p["life"] -= 1
                                 # draw particle with alpha based on life
                                 try:
-                                    surf = pygame.Surface((p["size"] * 2 + 2, p["size"] * 2 + 2), pygame.SRCALPHA)
+                                    surf = pygame.Surface(
+                                        (p["size"] * 2 + 2, p["size"] * 2 + 2),
+                                        pygame.SRCALPHA,
+                                    )
                                     alpha = max(60, int(255 * (p["life"] / 44)))
-                                    pygame.draw.circle(surf, (255, 140, 0, alpha), (p["size"] + 1, p["size"] + 1), p["size"])
-                                    self.screen.blit(surf, (int(p["x"] - p["size"]), int(p["y"] - p["size"])) )
+                                    pygame.draw.circle(
+                                        surf,
+                                        (255, 140, 0, alpha),
+                                        (p["size"] + 1, p["size"] + 1),
+                                        p["size"],
+                                    )
+                                    self.screen.blit(
+                                        surf,
+                                        (
+                                            int(p["x"] - p["size"]),
+                                            int(p["y"] - p["size"]),
+                                        ),
+                                    )
                                 except Exception:
                                     pass
                                 if p["life"] <= 0:
@@ -2481,10 +3331,24 @@ class PygameUIManager:
                                 p["life"] -= 1
                                 # draw particle with alpha based on life
                                 try:
-                                    surf = pygame.Surface((p["size"] * 2 + 2, p["size"] * 2 + 2), pygame.SRCALPHA)
+                                    surf = pygame.Surface(
+                                        (p["size"] * 2 + 2, p["size"] * 2 + 2),
+                                        pygame.SRCALPHA,
+                                    )
                                     alpha = max(50, int(255 * (p["life"] / 25)))
-                                    pygame.draw.circle(surf, (200, 240, 255, alpha), (p["size"] + 1, p["size"] + 1), p["size"])
-                                    self.screen.blit(surf, (int(p["x"] - p["size"]), int(p["y"] - p["size"])) )
+                                    pygame.draw.circle(
+                                        surf,
+                                        (200, 240, 255, alpha),
+                                        (p["size"] + 1, p["size"] + 1),
+                                        p["size"],
+                                    )
+                                    self.screen.blit(
+                                        surf,
+                                        (
+                                            int(p["x"] - p["size"]),
+                                            int(p["y"] - p["size"]),
+                                        ),
+                                    )
                                 except Exception:
                                     pass
                                 if p["life"] <= 0:
@@ -2529,10 +3393,17 @@ class PygameUIManager:
                 for p in list(self.game.player.burn_particles):
                     try:
                         # p is a BurnParticle object
-                        surf = pygame.Surface((p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA)
+                        surf = pygame.Surface(
+                            (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
+                        )
                         alpha = max(60, int(255 * (p.life / 44)))
-                        pygame.draw.circle(surf, (255, 140, 0, alpha), (p.size + 1, p.size + 1), p.size)
-                        self.screen.blit(surf, (int(p.x + shake_x - p.size), int(p.y + shake_y - p.size)))
+                        pygame.draw.circle(
+                            surf, (255, 140, 0, alpha), (p.size + 1, p.size + 1), p.size
+                        )
+                        self.screen.blit(
+                            surf,
+                            (int(p.x + shake_x - p.size), int(p.y + shake_y - p.size)),
+                        )
                     except Exception:
                         pass
         except Exception:
@@ -2560,21 +3431,28 @@ class PygameUIManager:
 
         # Draw dynamic towers/statues for Purgatory when they exist and are marked visible
         try:
-            if (
-                getattr(self.game, "selected_stage", None)
-                and str(self.game.selected_stage).startswith("purgatory")
-            ):
+            if getattr(self.game, "selected_stage", None) and str(
+                self.game.selected_stage
+            ).startswith(("purgatory", "hell")):
                 lt = getattr(self.game, "left_tower", None)
                 rt = getattr(self.game, "right_tower", None)
                 if lt and getattr(lt, "visible", False):
                     # Draw pedestal first, then statue model above it
                     statue_base_y = int(lt.y - 20 + shake_y)
                     self._draw_pedestal(int(lt.x + shake_x), statue_base_y)
-                    self._draw_statue_model(int(lt.x + shake_x), statue_base_y, getattr(lt, "tower_type", None))
+                    self._draw_statue_model(
+                        int(lt.x + shake_x),
+                        statue_base_y,
+                        getattr(lt, "tower_type", None),
+                    )
                 if rt and getattr(rt, "visible", False):
                     statue_base_y = int(rt.y - 20 + shake_y)
                     self._draw_pedestal(int(rt.x + shake_x), statue_base_y)
-                    self._draw_statue_model(int(rt.x + shake_x), statue_base_y, getattr(rt, "tower_type", None))
+                    self._draw_statue_model(
+                        int(rt.x + shake_x),
+                        statue_base_y,
+                        getattr(rt, "tower_type", None),
+                    )
         except Exception:
             # Don't break rendering if statue drawing throws
             pass
@@ -2615,9 +3493,24 @@ class PygameUIManager:
             core_w = int(max(6, max_core * progress))
             # Draw beam using alpha surface for glow
             beam_surf = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-            outer_color: tuple[Literal[255], Literal[240], Literal[200], int] = (255, 240, 200, int(150 * (0.5 + progress * 0.5)))
-            core_color: tuple[Literal[255], Literal[255], Literal[200], int] = (255, 255, 200, int(220 * (0.3 + progress * 0.7)))
-            center_color: tuple[Literal[255], Literal[255], Literal[180], int] = (255, 255, 180, int(255 * progress))
+            outer_color: tuple[Literal[255], Literal[240], Literal[200], int] = (
+                255,
+                240,
+                200,
+                int(150 * (0.5 + progress * 0.5)),
+            )
+            core_color: tuple[Literal[255], Literal[255], Literal[200], int] = (
+                255,
+                255,
+                200,
+                int(220 * (0.3 + progress * 0.7)),
+            )
+            center_color: tuple[Literal[255], Literal[255], Literal[180], int] = (
+                255,
+                255,
+                180,
+                int(255 * progress),
+            )
             # Outer glow rectangle
             pygame.draw.rect(
                 beam_surf,
@@ -2743,74 +3636,203 @@ class PygameUIManager:
                 timer = effect.get("timer", 0)
                 if len(points) < 2 or timer <= 0:
                     continue
-                
+
                 # Calculate alpha based on remaining timer (fade out)
-                alpha = min(180, int(180 * (timer / 8.0)))  # Max 180 alpha, fade to 0
-                
-                # Draw jagged lines between consecutive points
-                for i in range(len(points) - 1):
-                    start_x, start_y = points[i]
-                    end_x, end_y = points[i + 1]
-                    
-                    # Create jagged lightning path
-                    lightning_points = self._generate_lightning_path(
-                        start_x + shake_x, start_y + shake_y,
-                        end_x + shake_x, end_y + shake_y,
-                        segments=6, max_offset=8
-                    )
-                    
-                    # Draw the jagged line segments
-                    color = (150, 200, 255, alpha)
-                    for j in range(len(lightning_points) - 1):
-                        pygame.draw.line(
-                            self.screen,
-                            color,
-                            lightning_points[j],
-                            lightning_points[j + 1],
-                            2
+                # Use 16 as the default max for explosion-type effects (older chain effects use 8)
+                max_timer = 16 if effect.get("explosion") else 8
+                alpha = min(255, int(255 * (timer / float(max_timer))))
+
+                is_explosion = bool(effect.get("explosion", False))
+
+                # If this is an explosion effect, draw a pulsing core and sparks at the center
+                if is_explosion and len(points) > 0:
+                    try:
+                        cx, cy = points[0]
+                        progress = timer / float(max_timer)
+                        radius = int(effect.get("radius", 80) * (1.0 - progress + 0.25))
+                        color_base = effect.get("color", (120, 220, 255))
+
+                        # Outer glow (soft)
+                        glow_surf = pygame.Surface(
+                            (radius * 2 + 8, radius * 2 + 8), pygame.SRCALPHA
                         )
+                        glow_alpha = max(30, int(alpha * 0.6))
+                        try:
+                            pygame.draw.circle(
+                                glow_surf,
+                                (
+                                    color_base[0],
+                                    color_base[1],
+                                    color_base[2],
+                                    glow_alpha,
+                                ),
+                                (radius + 4, radius + 4),
+                                radius,
+                            )
+                            self.screen.blit(
+                                glow_surf,
+                                (
+                                    int(cx - radius) + shake_x - 4,
+                                    int(cy - radius) + shake_y - 4,
+                                ),
+                            )
+                        except Exception:
+                            pass
+
+                        # Inner bright core
+                        try:
+                            inner_alpha = min(255, alpha + 40)
+                            pygame.draw.circle(
+                                self.screen,
+                                (255, 255, 230, inner_alpha),
+                                (int(cx + shake_x), int(cy + shake_y)),
+                                max(3, int(radius * 0.15)),
+                            )
+                        except Exception:
+                            pass
+
+                        # Irregular radial lightning bolts for emphasis
+                        try:
+                            for ang in range(0, 360, 45):
+                                rad = math.radians(ang)
+                                ex = cx + math.cos(rad) * (radius * 0.9)
+                                ey = cy + math.sin(rad) * (radius * 0.9)
+                                radial_points = self._generate_lightning_path(
+                                    cx + shake_x,
+                                    cy + shake_y,
+                                    ex + shake_x,
+                                    ey + shake_y,
+                                    segments=4,
+                                    max_offset=4,
+                                )
+                                for j in range(len(radial_points) - 1):
+                                    pygame.draw.line(
+                                        self.screen,
+                                        (
+                                            color_base[0],
+                                            color_base[1],
+                                            color_base[2],
+                                            inner_alpha,
+                                        ),
+                                        radial_points[j],
+                                        radial_points[j + 1],
+                                        2,
+                                    )
+                        except Exception:
+                            pass
+
+                        # Sparks at destination points (short-lived bright dots)
+                        try:
+                            for px, py in points[1:]:
+                                pygame.draw.circle(
+                                    self.screen,
+                                    (200, 255, 255, alpha),
+                                    (int(px + shake_x), int(py + shake_y)),
+                                    4,
+                                )
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+
+                # Draw jagged lines between consecutive points
+                # Draw the jagged line segments. Allow effect-provided color (RGB) and apply alpha fade.
+                color_base = effect.get("color", (150, 200, 255))
+                try:
+                    if len(color_base) >= 3:
+                        color = (color_base[0], color_base[1], color_base[2], alpha)
+                    else:
+                        color = (150, 200, 255, alpha)
+                except Exception:
+                    color = (150, 200, 255, alpha)
+
+                if is_explosion:
+                    # For explosion, draw independent lightning bolts from center to each target
+                    center_x, center_y = points[0]
+                    for target_x, target_y in points[1:]:
+                        lightning_points = self._generate_lightning_path(
+                            center_x + shake_x,
+                            center_y + shake_y,
+                            target_x + shake_x,
+                            target_y + shake_y,
+                            segments=6,
+                            max_offset=8,
+                        )
+                        thickness = 3
+                        for j in range(len(lightning_points) - 1):
+                            pygame.draw.line(
+                                self.screen,
+                                color,
+                                lightning_points[j],
+                                lightning_points[j + 1],
+                                thickness,
+                            )
+                else:
+                    # Normal chain lightning: draw between consecutive points
+                    for i in range(len(points) - 1):
+                        start_x, start_y = points[i]
+                        end_x, end_y = points[i + 1]
+                        lightning_points = self._generate_lightning_path(
+                            start_x + shake_x,
+                            start_y + shake_y,
+                            end_x + shake_x,
+                            end_y + shake_y,
+                            segments=6,
+                            max_offset=8,
+                        )
+                        thickness = 2
+                        for j in range(len(lightning_points) - 1):
+                            pygame.draw.line(
+                                self.screen,
+                                color,
+                                lightning_points[j],
+                                lightning_points[j + 1],
+                                thickness,
+                            )
         except Exception:
             logger.exception("draw_chain_lightning_effects failed")
 
-    def _generate_lightning_path(self, start_x, start_y, end_x, end_y, segments=6, max_offset=8):
+    def _generate_lightning_path(
+        self, start_x, start_y, end_x, end_y, segments=6, max_offset=8
+    ):
         """Generate a jagged lightning path between two points"""
         import math
         import random
-        
+
         points = [(start_x, start_y)]
-        
+
         # Calculate direction vector
         dx = end_x - start_x
         dy = end_y - start_y
         distance = math.hypot(dx, dy)
-        
+
         if distance == 0:
             return points
-        
+
         # Normalize direction
         dir_x = dx / distance
         dir_y = dy / distance
-        
+
         # Create perpendicular vector for offset
         perp_x = -dir_y
         perp_y = dir_x
-        
+
         # Generate intermediate points
         for i in range(1, segments):
             # Position along the line (0 to 1)
             t = i / segments
-            
+
             # Base position
             base_x = start_x + dx * t
             base_y = start_y + dy * t
-            
+
             # Add random offset perpendicular to direction
             offset = (random.random() - 0.5) * 2 * max_offset
             point_x = base_x + perp_x * offset
             point_y = base_y + perp_y * offset
-            
+
             points.append((point_x, point_y))
-        
+
         points.append((end_x, end_y))
         return points
 
@@ -2836,7 +3858,9 @@ class PygameUIManager:
                             lx = px + (ex - px) * t
                             ly = py + (ey - py) * t
                             r: float = 18 + 6 * random.random()
-                            color: tuple[Literal[255], Literal[255], Literal[204]] | tuple[Literal[255], Literal[254], Literal[224]] = (
+                            color: tuple[
+                                Literal[255], Literal[255], Literal[204]
+                            ] | tuple[Literal[255], Literal[254], Literal[224]] = (
                                 (255, 255, 204)
                                 if self.game.frame_count % 2 == 0
                                 else (255, 254, 224)
@@ -2911,10 +3935,14 @@ class PygameUIManager:
         )
         # Health
         health_ratio: float = self.game.player.health / self.game.player.max_health
-        health_color: tuple[Literal[20], Literal[80], Literal[20]] | tuple[Literal[255], Literal[255], Literal[0]] | tuple[Literal[255], Literal[0], Literal[0]] = (
+        health_color: tuple[Literal[20], Literal[80], Literal[20]] | tuple[
+            Literal[255], Literal[255], Literal[0]
+        ] | tuple[Literal[255], Literal[0], Literal[0]] = (
             (20, 80, 20)
             if health_ratio > 0.5
-            else (255, 255, 0) if health_ratio > 0.25 else (255, 0, 0)
+            else (255, 255, 0)
+            if health_ratio > 0.25
+            else (255, 0, 0)
         )
         pygame.draw.rect(
             self.screen,
@@ -2930,7 +3958,11 @@ class PygameUIManager:
         )
 
         # Health text
-        health_text = get_text(f"{int(self.game.player.health)}/{int(self.game.player.max_health)}", small_font, (255, 255, 255))
+        health_text = get_text(
+            f"{int(self.game.player.health)}/{int(self.game.player.max_health)}",
+            small_font,
+            (255, 255, 255),
+        )
         self.screen.blit(
             health_text,
             (
@@ -2961,7 +3993,11 @@ class PygameUIManager:
         )
 
         # XP text
-        xp_text = get_text(f"{int(self.game.player_xp)}/{int(self.game.xp_to_next_level)}", small_font, (255, 255, 255))
+        xp_text = get_text(
+            f"{int(self.game.player_xp)}/{int(self.game.xp_to_next_level)}",
+            small_font,
+            (255, 255, 255),
+        )
         self.screen.blit(
             xp_text,
             (
@@ -3015,7 +4051,9 @@ class PygameUIManager:
                     1,
                 )
 
-                weapon_text: pygame.Surface = small_font.render(display_text, True, (200, 200, 200))
+                weapon_text: pygame.Surface = small_font.render(
+                    display_text, True, (200, 200, 200)
+                )
                 self.screen.blit(
                     weapon_text,
                     (
@@ -3026,7 +4064,9 @@ class PygameUIManager:
 
                 # If at max level, add MAX indicator
                 if lvl >= getattr(self.game, "max_weapon_level", 6):
-                    max_text: pygame.Surface = small_font.render("MAX", True, (255, 215, 0))
+                    max_text: pygame.Surface = small_font.render(
+                        "MAX", True, (255, 215, 0)
+                    )
                     self.screen.blit(
                         max_text,
                         (
@@ -3047,6 +4087,7 @@ class PygameUIManager:
         if not self.screen or not pygame:
             return
         from src.assets.text_cache import get_font, get_text
+
         for msg in list(self.game.center_messages):
             try:
                 font = get_font(msg.get("font_size", 36))

@@ -93,18 +93,25 @@ def test_limbo_statues_spawn_once_each():
                 "type": "normal",
             },
         ]
-        # Force statues to be ready to fire
-        game.statue_cooldown_left = 1
-        game.statue_cooldown_right = 1
+        # Force statue to be ready to fire (alternating: left then right)
+        game.statue_cooldown = 1
+        game.statue_next_left = True
         game.statue_projectiles = []
         game.paused = False
         game.awaiting_upgrade = False
 
         game.update_game()
 
-        # Expect two statue projectiles (one left, one right) to have been spawned
+        # Expect a single statue projectile (left fires first)
+        assert (
+            len(game.statue_projectiles) == 1
+        ), f"Expected 1 statue projectile, got {len(game.statue_projectiles)}"
+
+        # Next cycle should spawn the other statue
+        game.statue_cooldown = 1
+        game.update_game()
         assert (
             len(game.statue_projectiles) == 2
-        ), f"Expected 2 statue projectiles, got {len(game.statue_projectiles)}"
+        ), f"Expected 2 statue projectiles after second fire, got {len(game.statue_projectiles)}"
     finally:
         teardown_game(game, root)

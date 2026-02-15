@@ -1,4 +1,7 @@
 import importlib
+import logging
+import math
+import random
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -9,17 +12,18 @@ else:
     Surface = Any
     SpriteType = Any
 
+from types import ModuleType
+
+try:
+    pygame: ModuleType = importlib.import_module("pygame")
+except Exception:
+    pygame: ModuleType = importlib.import_module("pygame_ce")  # type: ignore
+
 # Ensure a runtime base class reference without assigning to the type name
 try:
     PygameSprite = pygame.sprite.Sprite  # type: ignore
 except Exception:
     PygameSprite = object
-
-from types import ModuleType
-try:
-    pygame: ModuleType = importlib.import_module("pygame")
-except Exception:
-    pygame: ModuleType = importlib.import_module("pygame_ce")  # type: ignore
 
 # Use an explicit runtime base variable so mypy does not confuse a TYPE_CHECKING
 # alias with a runtime assignment.
@@ -29,21 +33,18 @@ try:
 except Exception:
     BaseSprite = object
 
-import logging
-import math
-import os
-import random
-
 # Import Projectile explicitly from src.projectile for stability
-from src.projectile import Projectile
+from src.projectile import Projectile  # noqa: E402
 
-logger: logging.Logger = logging.getLogger(__name__) 
+logger: logging.Logger = logging.getLogger(__name__)   
 
 
 class BurnParticle:
     """Simple particle for burn visual effect"""
 
-    def __init__(self, x: float, y: float, vx: float, vy: float, life: int = 30, size: int = 3):
+    def __init__(
+        self, x: float, y: float, vx: float, vy: float, life: int = 30, size: int = 3
+    ):
         self.x = x
         self.y = y
         self.vx = vx
@@ -62,11 +63,12 @@ class BurnParticle:
         return self.life > 0
 
 
-
 class IceParticle:
     """Simple particle for ice explosion visual effect"""
 
-    def __init__(self, x: float, y: float, vx: float, vy: float, life: int = 20, size: int = 2):
+    def __init__(
+        self, x: float, y: float, vx: float, vy: float, life: int = 20, size: int = 2
+    ):
         self.x = x
         self.y = y
         self.vx = vx
@@ -179,8 +181,8 @@ class Enemy(BaseSprite):
             self.big_shot_cooldown = None
 
         # Particle effects
-        self.burn_particles: List["BurnParticle"] = []
-        self.ice_particles: List["IceParticle"] = []
+        self.burn_particles: list["BurnParticle"] = []
+        self.ice_particles: list["IceParticle"] = []
 
         # Create image
         self.image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
@@ -199,7 +201,54 @@ class Enemy(BaseSprite):
         self.shake_timer = 0
 
         # Visual particles for burn effect
-        self.burn_particles: List["BurnParticle"] = []
+        self.burn_particles: list["BurnParticle"] = []
+
+        # Ensure we only record a kill once if kill() called multiple times
+        self._kill_recorded: bool = False
+
+    def kill(self) -> None:
+        """Override kill to notify the running Game once (idempotent)."""
+        try:
+            # Import CURRENT_GAME from whichever module path is available in the
+            # current test/runtime environment ('game' or 'src.game'). Tests
+            # sometimes import Game as `game` (top-level) while runtime uses
+            # `src.game` — handle both to ensure the kill counter is recorded.
+            try:
+                from game import CURRENT_GAME
+            except Exception:
+                from src.game import CURRENT_GAME
+            if not getattr(self, "_kill_recorded", False):
+                try:
+                    if CURRENT_GAME is not None:
+                        CURRENT_GAME.record_enemy_kill()
+                except Exception:
+                    pass
+                try:
+                    self._kill_recorded = True
+                except Exception:
+                    pass
+        except Exception:
+            # If import failed, still attempt to set the flag to avoid double-records
+            try:
+                self._kill_recorded = True
+            except Exception:
+                pass
+        except Exception:
+            pass
+        # Call base kill
+        try:
+            super().kill()
+        except Exception:
+            try:
+                # defensive: attempt to remove from any groups
+                if hasattr(self, "groups"):
+                    for g in list(self.groups()):
+                        try:
+                            g.remove(self)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
 
     def draw_enemy(self) -> None:
         """Draw enemy based on type, try to load image first"""
@@ -220,9 +269,7 @@ class Enemy(BaseSprite):
         except Exception as e:
             # Asset loading already logs warnings; avoid repeating the same warning
             # for each enemy instance to reduce console spam. Log at debug level here.
-            logger.debug(
-                "Could not load %s, using fallback drawing: %s", asset_name, e
-            )
+            logger.debug("Could not load %s, using fallback drawing: %s", asset_name, e)
             # Fallback to drawing
             self.draw_demon()
 
@@ -387,7 +434,10 @@ class Enemy(BaseSprite):
                         overlay = pygame.Surface(
                             (self.width * 3 // 2, self.height * 3 // 2), pygame.SRCALPHA
                         )
-                        center: tuple[int | Any, int | Any] = (overlay.get_width() // 2, overlay.get_height() // 2)
+                        center: tuple[int | Any, int | Any] = (
+                            overlay.get_width() // 2,
+                            overlay.get_height() // 2,
+                        )
                         glow_radius: int = max(self.width, self.height)
                         pygame.draw.circle(
                             overlay, (255, 220, 120, pulse), center, glow_radius
@@ -407,7 +457,7 @@ class Enemy(BaseSprite):
                     if not hasattr(self, "entrance_complete"):
                         # Find target position below cathedral
                         target_y = 140  # Position below cathedral (cathedral ends around y=120)
-                        
+
                         # Move down towards target
                         if self.y < target_y:
                             self.y += self.speed * 0.5 / 60  # Walk down at half speed
@@ -417,13 +467,13 @@ class Enemy(BaseSprite):
                             # Reached target position
                             self.entrance_complete = True
                             self.y = target_y
-                            
+
                             # Initialize floating movement for normal behavior
                             self.float_center_x = self.x
                             self.float_amplitude = 150
                             self.float_speed = 0.015
                             self.float_time = 0
-                    
+
                     if hasattr(self, "entrance_complete") and self.entrance_complete:
                         # Normal floating behavior after entrance
                         # Stay at target height, float horizontally
@@ -455,7 +505,9 @@ class Enemy(BaseSprite):
                         spx = game.clamp_to_walls(spx)
                         self.stop_point = (spx, spy)
                         self.stop_timer = 0
-                        self.stop_threshold = max(10, min(game.width, game.height) * 0.05)
+                        self.stop_threshold = max(
+                            10, min(game.width, game.height) * 0.05
+                        )
 
                     # If currently stopped, count down and do not move
                     if getattr(self, "stop_timer", 0) > 0:
@@ -484,7 +536,11 @@ class Enemy(BaseSprite):
                             spx = game.clamp_to_walls(spx)
                             self.stop_point = (spx, spy)
 
-                elif self.enemy_type == "boss_big" and game is not None and getattr(game, "selected_stage", None) == "limbo":
+                elif (
+                    self.enemy_type == "boss_big"
+                    and game is not None
+                    and getattr(game, "selected_stage", None) == "limbo"
+                ):
                     # Boss Big (Limbo): roam randomly within the top half of the playfield
                     # Do not chase the player directly; behave like a roaming boss within the upper area
                     top_margin = 30
@@ -493,8 +549,12 @@ class Enemy(BaseSprite):
                     right_limit = game.width - 50
 
                     if not hasattr(self, "roam_target"):
-                        rx = random.uniform(game.clamp_to_walls(0), game.clamp_to_walls(game.width))
-                        ry = random.uniform(top_margin, max(top_margin + 10, bottom_limit))
+                        rx = random.uniform(
+                            game.clamp_to_walls(0), game.clamp_to_walls(game.width)
+                        )
+                        ry = random.uniform(
+                            top_margin, max(top_margin + 10, bottom_limit)
+                        )
                         rx = game.clamp_to_walls(rx)
                         self.roam_target = (rx, ry)
                         self.roam_timer = random.randint(80, 240)
@@ -513,8 +573,12 @@ class Enemy(BaseSprite):
                     else:
                         # Reached target -> pick a new one within top half and inside walls
                         self.roam_timer = random.randint(80, 300)
-                        rx = random.uniform(game.clamp_to_walls(0), game.clamp_to_walls(game.width))
-                        ry = random.uniform(top_margin, max(top_margin + 10, bottom_limit))
+                        rx = random.uniform(
+                            game.clamp_to_walls(0), game.clamp_to_walls(game.width)
+                        )
+                        ry = random.uniform(
+                            top_margin, max(top_margin + 10, bottom_limit)
+                        )
                         rx = game.clamp_to_walls(rx)
                         self.roam_target = (rx, ry)
 
@@ -540,8 +604,12 @@ class Enemy(BaseSprite):
 
                     if not hasattr(self, "roam_target"):
                         # Use game's clamp_to_walls so roam stays within arena walls
-                        rx = random.uniform(game.clamp_to_walls(0), game.clamp_to_walls(game.width))
-                        ry = random.uniform(top_margin, max(top_margin + 10, bottom_limit))
+                        rx = random.uniform(
+                            game.clamp_to_walls(0), game.clamp_to_walls(game.width)
+                        )
+                        ry = random.uniform(
+                            top_margin, max(top_margin + 10, bottom_limit)
+                        )
                         # Ensure x respects wall clamps explicitly
                         rx = game.clamp_to_walls(rx)
                         self.roam_target = (rx, ry)
@@ -560,8 +628,12 @@ class Enemy(BaseSprite):
                     else:
                         # Reached target -> pick a new one within top half and inside walls
                         self.roam_timer = random.randint(60, 240)
-                        rx = random.uniform(game.clamp_to_walls(0), game.clamp_to_walls(game.width))
-                        ry = random.uniform(top_margin, max(top_margin + 10, bottom_limit))
+                        rx = random.uniform(
+                            game.clamp_to_walls(0), game.clamp_to_walls(game.width)
+                        )
+                        ry = random.uniform(
+                            top_margin, max(top_margin + 10, bottom_limit)
+                        )
                         rx = game.clamp_to_walls(rx)
                         self.roam_target = (rx, ry)
 
@@ -596,17 +668,15 @@ class Enemy(BaseSprite):
                     # Restore original speed
                     if hasattr(self, "original_speed"):
                         self.speed = getattr(self, "original_speed", self.speed)
-                        try:
-                            del self.original_speed
-                        except Exception:
-                            pass
-
-            # Handle burn (damage over time)
+                        delattr(self, "original_speed")
             if hasattr(self, "burn_timer") and getattr(self, "burn_timer", 0) > 0:
                 # Per-frame decrement
                 self.burn_timer -= 1
                 # Initialize tick timer if missing
-                if not hasattr(self, "burn_tick_timer") or getattr(self, "burn_tick_timer", 0) <= 0:
+                if (
+                    not hasattr(self, "burn_tick_timer")
+                    or getattr(self, "burn_tick_timer", 0) <= 0
+                ):
                     self.burn_tick_timer = getattr(game, "fps", 60)
                 self.burn_tick_timer -= 1
                 if self.burn_tick_timer <= 0:
@@ -631,7 +701,14 @@ class Enemy(BaseSprite):
                         py = self.y - 8 + random.uniform(-4, 4)
                         vx = random.uniform(-15, 15)
                         vy = random.uniform(12, 36)
-                        p = BurnParticle(px, py, vx, vy, life=random.randint(20, 44), size=random.randint(3, 5))
+                        p = BurnParticle(
+                            px,
+                            py,
+                            vx,
+                            vy,
+                            life=random.randint(20, 44),
+                            size=random.randint(3, 5),
+                        )
                         self.burn_particles.append(p)
                 except Exception:
                     pass
@@ -755,7 +832,10 @@ class Enemy(BaseSprite):
         """Handle shooting logic for different enemy types"""
         try:
             # Mini‑Inquisitor (normal enemy with inquisitor appearance) fires only the single aimed slow projectile
-            if self.enemy_type == "normal" and getattr(self, "appearance", None) == "inquisitor":
+            if (
+                self.enemy_type == "normal"
+                and getattr(self, "appearance", None) == "inquisitor"
+            ):
                 dx = player.x - self.x
                 dy = player.y - self.y
                 distance: float = math.sqrt(dx * dx + dy * dy)
@@ -800,7 +880,9 @@ class Enemy(BaseSprite):
                     vel_x = 0
                     vel_y = 220
 
-                projectile: Projectile[Any | Any | float, Any | Any | int, Any | int, Any | int] = Projectile(
+                projectile: Projectile[
+                    Any | Any | float, Any | Any | int, Any | int, Any | int
+                ] = Projectile(
                     self.x,
                     self.y,
                     vel_x,
@@ -850,7 +932,9 @@ class Enemy(BaseSprite):
                     vel_x = 0
                     vel_y = 300
 
-                projectile: Projectile[Any | Any | float, Any | Any | int, Any | int, Any | int] = Projectile(
+                projectile: Projectile[
+                    Any | Any | float, Any | Any | int, Any | int, Any | int
+                ] = Projectile(
                     self.x,
                     self.y,
                     vel_x,
@@ -910,7 +994,9 @@ class Enemy(BaseSprite):
                         game.enemy_projectiles.add(proj)
 
                 # Toggle for next shot
-                self.inquisitor_fire_single_next = not getattr(self, "inquisitor_fire_single_next", False)
+                self.inquisitor_fire_single_next = not getattr(
+                    self, "inquisitor_fire_single_next", False
+                )
                 # Slightly longer cooldown after a single shot to balance rhythm
                 if getattr(self, "inquisitor_fire_single_next", False):
                     # next will be single -> use normal cooldown
@@ -932,7 +1018,9 @@ class Enemy(BaseSprite):
                     vel_x = 0
                     vel_y = 180
 
-                projectile: Projectile[Any | Any | float, Any | Any | int, Any | int, Any | int] = Projectile(
+                projectile: Projectile[
+                    Any | Any | float, Any | Any | int, Any | int, Any | int
+                ] = Projectile(
                     self.x,
                     self.y,
                     vel_x,
@@ -967,12 +1055,19 @@ class Enemy(BaseSprite):
         try:
             # Lazy import CURRENT_GAME to avoid circular imports at module load
             from src.game import CURRENT_GAME
+
             if CURRENT_GAME is not None:
                 try:
-                    x = getattr(self, 'x', None) or (self.rect.centerx if getattr(self, 'rect', None) is not None else 0)
-                    y = getattr(self, 'y', None) or (self.rect.top if getattr(self, 'rect', None) is not None else 0)
+                    x = getattr(self, "x", None) or (
+                        self.rect.centerx
+                        if getattr(self, "rect", None) is not None
+                        else 0
+                    )
+
                     # Position above enemy
-                    pos_y = (getattr(self, 'rect', None) and self.rect.top - 8) or (getattr(self, 'y', 0) - getattr(self, 'height', 0) // 2 - 8)
+                    pos_y = (getattr(self, "rect", None) and self.rect.top - 8) or (
+                        getattr(self, "y", 0) - getattr(self, "height", 0) // 2 - 8
+                    )
                     CURRENT_GAME.spawn_floating_text(str(dmg), x, pos_y)
                 except Exception:
                     pass
@@ -1015,9 +1110,16 @@ class Enemy(BaseSprite):
                 if self.burn_particles:
                     for p in list(self.burn_particles):
                         try:
-                            surf = pygame.Surface((p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA)
+                            surf = pygame.Surface(
+                                (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
+                            )
                             alpha = max(60, int(255 * (p.life / 44)))
-                            pygame.draw.circle(surf, (255, 120, 0, alpha), (p.size + 1, p.size + 1), p.size)
+                            pygame.draw.circle(
+                                surf,
+                                (255, 120, 0, alpha),
+                                (p.size + 1, p.size + 1),
+                                p.size,
+                            )
                             screen.blit(surf, (int(p.x - p.size), int(p.y - p.size)))
                         except Exception:
                             pass
@@ -1026,9 +1128,16 @@ class Enemy(BaseSprite):
                 if self.ice_particles:
                     for p in list(self.ice_particles):
                         try:
-                            surf = pygame.Surface((p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA)
+                            surf = pygame.Surface(
+                                (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
+                            )
                             alpha = max(50, int(255 * (p.life / 25)))
-                            pygame.draw.circle(surf, (200, 240, 255, alpha), (p.size + 1, p.size + 1), p.size)
+                            pygame.draw.circle(
+                                surf,
+                                (200, 240, 255, alpha),
+                                (p.size + 1, p.size + 1),
+                                p.size,
+                            )
                             screen.blit(surf, (int(p.x - p.size), int(p.y - p.size)))
                         except Exception:
                             pass
@@ -1036,6 +1145,8 @@ class Enemy(BaseSprite):
                 # Burn status: particles are drawn above; legacy flame/text removed (particles retained)
 
             except Exception as e:
-                logger.exception("Error drawing burn effect for enemy %s: %s", self.enemy_type, e)
+                logger.exception(
+                    "Error drawing burn effect for enemy %s: %s", self.enemy_type, e
+                )
         except Exception as e:
             logger.exception("Error drawing enemy %s: %s", self.enemy_type, e)

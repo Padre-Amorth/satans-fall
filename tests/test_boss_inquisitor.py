@@ -9,10 +9,22 @@ def test_spawn_inquisitor_on_limbo_wave():
     g.select_stage("limbo")
     em = g.enemy_manager
 
-    # Simulate wave-time reaching boss spawn
-    em.update_wave_boss(28)
-
+    # Non-3 wave -> inquisitor
+    g.wave = 1
+    em.wave_boss_spawned = False
+    em.update_wave_boss(38)
     bosses = [b for b in g.bosses if getattr(b, "enemy_type", "") == "boss_inquisitor"]
+    assert len(bosses) >= 1
+
+    # Wave divisible by 3 -> boss_big instead of inquisitor
+    try:
+        g.bosses.empty()
+    except Exception:
+        g.bosses = []
+    em.wave_boss_spawned = False
+    g.wave = 3
+    em.update_wave_boss(38)
+    bosses = [b for b in g.bosses if getattr(b, "enemy_type", "") == "boss_big"]
     assert len(bosses) >= 1
 
 
@@ -36,7 +48,10 @@ def test_inquisitor_projectile_slows_player_on_hit():
     # Grab any inquisitor projectile and simulate immediate hit
     proj = None
     for p in g.enemy_projectiles:
-        if getattr(p, "appearance", None) == "inquisitor" or getattr(p, "effect", None) == "slow":
+        if (
+            getattr(p, "appearance", None) == "inquisitor"
+            or getattr(p, "effect", None) == "slow"
+        ):
             proj = p
             break
     assert proj is not None
@@ -75,7 +90,10 @@ def test_inquisitor_alternates_fire_pattern():
     boss.shoot_at_player(g.player, g)
     count_first = 0
     for p in g.enemy_projectiles:
-        if getattr(p, "appearance", None) == "inquisitor" or getattr(p, "effect", None) == "slow":
+        if (
+            getattr(p, "appearance", None) == "inquisitor"
+            or getattr(p, "effect", None) == "slow"
+        ):
             count_first += 1
     assert count_first == 3
 
@@ -87,7 +105,10 @@ def test_inquisitor_alternates_fire_pattern():
     boss.shoot_at_player(g.player, g)
     count_second = 0
     for p in g.enemy_projectiles:
-        if getattr(p, "appearance", None) == "inquisitor" or getattr(p, "effect", None) == "slow":
+        if (
+            getattr(p, "appearance", None) == "inquisitor"
+            or getattr(p, "effect", None) == "slow"
+        ):
             count_second += 1
     assert count_second == 1
 
@@ -99,6 +120,9 @@ def test_inquisitor_alternates_fire_pattern():
     boss.shoot_at_player(g.player, g)
     count_third = 0
     for p in g.enemy_projectiles:
-        if getattr(p, "appearance", None) == "inquisitor" or getattr(p, "effect", None) == "slow":
+        if (
+            getattr(p, "appearance", None) == "inquisitor"
+            or getattr(p, "effect", None) == "slow"
+        ):
             count_third += 1
     assert count_third == 3

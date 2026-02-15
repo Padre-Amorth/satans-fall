@@ -2,4 +2,4 @@
 
 from src.entities.enemy import Enemy
 
-__all__ = ["Enemy"]
+__all__: list[str] = ["Enemy"]

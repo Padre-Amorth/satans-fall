@@ -29,6 +29,11 @@ class Tower:
         radius: int = 6,
         tower_type: str = "fire",
     ) -> None:
+        # Ice statues/towers have higher base damage than other types unless
+        # an explicit damage value is provided by the caller.
+        if tower_type == "ice" and damage == 10:
+            damage = 15
+
         self.x = x
         self.y = y
         self.fire_rate = fire_rate
@@ -72,14 +77,31 @@ class Tower:
         # Make Fire tower projectiles visually distinctive
         # Reduce fire projectile size but keep distinctive visuals
         new_radius = max(self.radius, 6)
-        proj = Projectile(self.x, self.y, vel_x, vel_y, damage=self.damage, radius=new_radius, is_enemy_projectile=False, appearance="fire_statue")
+        proj = Projectile(
+            self.x,
+            self.y,
+            vel_x,
+            vel_y,
+            damage=self.damage,
+            radius=new_radius,
+            is_enemy_projectile=False,
+            appearance="fire_statue",
+        )
         # Tag as statue projectile
         proj.source = "statue"
 
         # Fire towers apply burn (damage over time)
         proj.effect = "burn"
         proj.burn_duration = getattr(self, "burn_duration", 180)  # frames
-        proj.burn_damage_per_second = getattr(self, "burn_damage_per_second", 4.0)
+        # Scale burn DPS proportionally to tower damage relative to its base damage so
+        # permanent +% damage applied to towers also affects DOT from Burn.
+        base_burn = getattr(self, "burn_damage_per_second", 4.0)
+        base_damage = getattr(self, "_base_damage", self.damage)
+        try:
+            scale = (self.damage / base_damage) if base_damage else 1.0
+        except Exception:
+            scale = 1.0
+        proj.burn_damage_per_second = base_burn * scale
         return proj
 
     def _fire_storm(self, enemies_list: List[Any]) -> Optional[Projectile]:
@@ -98,7 +120,16 @@ class Tower:
         angle = math.atan2(dy, dx) + random.uniform(-self.inaccuracy, self.inaccuracy)
         vel_x = math.cos(angle) * self.projectile_speed
         vel_y = math.sin(angle) * self.projectile_speed
-        p = Projectile(self.x, self.y, vel_x, vel_y, damage=max(1, int(self.damage * 0.9)), radius=self.radius, is_enemy_projectile=False, appearance="storm_statue")
+        p = Projectile(
+            self.x,
+            self.y,
+            vel_x,
+            vel_y,
+            damage=max(1, int(self.damage * 0.9)),
+            radius=self.radius,
+            is_enemy_projectile=False,
+            appearance="storm_statue",
+        )
         p.source = "statue"
         # Storm statue projectiles chain-hit up to 3 different enemies
         p.chain_targets = getattr(self, "chain_targets", 3)
@@ -120,14 +151,26 @@ class Tower:
         angle = math.atan2(dy, dx) + random.uniform(-self.inaccuracy, self.inaccuracy)
         vel_x = math.cos(angle) * self.projectile_speed
         vel_y = math.sin(angle) * self.projectile_speed
-        p = Projectile(self.x, self.y, vel_x, vel_y, damage=self.damage, radius=self.radius, is_enemy_projectile=False)
+        p = Projectile(
+            self.x,
+            self.y,
+            vel_x,
+            vel_y,
+            damage=self.damage,
+            radius=self.radius,
+            is_enemy_projectile=False,
+        )
         p.source = "statue"
         p.appearance = "ice_statue"
         # Add slow effect metadata used by collision handling
         p.effect = "slow"
         p.slow_duration = 120
         p.slow_factor = 0.5
+        # Add area damage effect if tower has explosion_radius (from ICE1 upgrade)
+        if hasattr(self, "explosion_radius"):
+            p.explosion_radius = self.explosion_radius
         return p
+
 
 # Backwards-compatible aliases
 class FireTower(Tower):
@@ -144,9 +187,12 @@ class IceTower(Tower):
     def __init__(self, x, y, **kwargs):
         super().__init__(x, y, tower_type="ice", **kwargs)
 
+
 class TowerManager:
     @staticmethod
-    def apply_homing(projectiles: List[Any], enemies: Iterable[Any], projectile_speed: float = 320.0) -> None:
+    def apply_homing(
+        projectiles: List[Any], enemies: Iterable[Any], projectile_speed: float = 320.0
+    ) -> None:
         """Apply homing to projectiles.
 
         Accepts either dict-like projectiles or Projectile instances. Mutates velocities in-place.
@@ -160,14 +206,26 @@ class TowerManager:
             if isinstance(proj, dict):
                 px = proj.get("x", 0)
                 py = proj.get("y", 0)
-                get_vx = lambda p: p.get("vel_x", 0)
-                get_vy = lambda p: p.get("vel_y", 0)
-                set_v = lambda p, vx, vy: (p.__setitem__("vel_x", vx), p.__setitem__("vel_y", vy))
+
+                def get_vx(p):
+                    return p.get("vel_x", 0)
+
+                def get_vy(p):
+                    return p.get("vel_y", 0)
+
+                def set_v(p, vx, vy):
+                    p["vel_x"] = vx
+                    p["vel_y"] = vy
             else:
                 px = getattr(proj, "x", 0)
                 py = getattr(proj, "y", 0)
-                get_vx = lambda p: getattr(p, "vel_x", 0)
-                get_vy = lambda p: getattr(p, "vel_y", 0)
+
+                def get_vx(p):
+                    return getattr(p, "vel_x", 0)
+
+                def get_vy(p):
+                    return getattr(p, "vel_y", 0)
+
                 def set_v(p, vx, vy):
                     p.vel_x = vx
                     p.vel_y = vy
@@ -194,12 +252,38 @@ class TowerManager:
                     angle_diff_degrees = math.degrees(angle_diff)
 
                     if angle_diff_degrees <= 90:
+                        # Reduce homing for ICE3 projectiles that have already hit their first enemy
                         homing_strength = 0.1
-                        new_vx = get_vx(proj) * (1 - homing_strength) + target_vel_x * homing_strength
-                        new_vy = get_vy(proj) * (1 - homing_strength) + target_vel_y * homing_strength
+                        if (
+                            hasattr(proj, "appearance")
+                            and getattr(proj, "appearance", "") == "ice_statue"
+                            and getattr(proj, "has_hit_first_enemy", False)
+                        ):
+                            homing_strength = 0.02  # Much weaker homing after first hit
+                        new_vx = (
+                            get_vx(proj) * (1 - homing_strength)
+                            + target_vel_x * homing_strength
+                        )
+                        new_vy = (
+                            get_vy(proj) * (1 - homing_strength)
+                            + target_vel_y * homing_strength
+                        )
                         set_v(proj, new_vx, new_vy)
                 else:
                     homing_strength = 0.8
-                    new_vx = get_vx(proj) * (1 - homing_strength) + target_vel_x * homing_strength
-                    new_vy = get_vy(proj) * (1 - homing_strength) + target_vel_y * homing_strength
+                    # Reduce homing for ICE3 projectiles that have already hit their first enemy
+                    if (
+                        hasattr(proj, "appearance")
+                        and getattr(proj, "appearance", "") == "ice_statue"
+                        and getattr(proj, "has_hit_first_enemy", False)
+                    ):
+                        homing_strength = 0.1  # Much weaker homing after first hit
+                    new_vx = (
+                        get_vx(proj) * (1 - homing_strength)
+                        + target_vel_x * homing_strength
+                    )
+                    new_vy = (
+                        get_vy(proj) * (1 - homing_strength)
+                        + target_vel_y * homing_strength
+                    )
                     set_v(proj, new_vx, new_vy)

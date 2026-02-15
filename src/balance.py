@@ -5,7 +5,7 @@ XP_BASE: int = 100
 XP_GROWTH: float = 1.2
 
 # Player defaults
-PLAYER_BASE_DAMAGE: int = 15
+PLAYER_BASE_DAMAGE: int = 30  # doubled from 15 to increase base weapon damage
 PLAYER_BASE_HEALTH: int = 100
 
 # Burst / Beast weapon defaults
@@ -21,7 +21,24 @@ BASE_SPAWN_RATE: int = 72
 SPAWN_MIN_RATE: int = 30
 SPAWN_RAMP_START_WAVE: int = 3
 SPAWN_RAMP_SLOPE_PRE: int = 3
-SPAWN_RAMP_SLOPE_POST: float = 4.2  # more gradual ramp so spawn_min_rate is reached ~wave 10
+SPAWN_RAMP_SLOPE_POST: float = (
+    4.2  # more gradual ramp so spawn_min_rate is reached ~wave 10
+)
+
+# Enemy base movement speeds (px/sec) - single source of truth for spawn code
+ENEMY_BASE_SPEEDS: dict[str, float] = {
+    "weak": 35.0,
+    "normal": 75.0,
+    "strong": 60.0,
+    "angel": 60.0,
+    "giant": 45.0,
+    # Bosses
+    "boss_medium": 45.0,
+    "boss_inquisitor": 50.0,
+    "boss_big": 40.0,
+    "boss_final": 40.0,
+}
+
 
 # Reinforcements
 REINFORCEMENT_DELAY_MS: int = 2000

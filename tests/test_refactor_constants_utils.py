@@ -1,15 +1,13 @@
 import os
 from pathlib import Path
 
-import pytest
-
 from src.game import Game
 from src.game_constants import (
-    DEFAULT_WIDTH,
-    DEFAULT_HEIGHT,
     DEFAULT_FPS,
+    DEFAULT_HEIGHT,
     DEFAULT_PLAYER_ANIM_SPEED,
     DEFAULT_WAVE_DURATION,
+    DEFAULT_WIDTH,
     STAGE_SETTINGS,
     WALL_THICKNESS,
 )

@@ -1,13 +1,9 @@
 import math
 
+from test_utils import DummyPlayer
+
 from src.entities.enemy import Enemy
 from src.game import Game
-
-
-class DummyPlayer:
-    def __init__(self, x=400, y=500):
-        self.x = x
-        self.y = y
 
 
 def test_boss_moves_to_center_and_shines_when_immortal():
@@ -25,7 +21,7 @@ def test_boss_moves_to_center_and_shines_when_immortal():
     game.prologo_final_boss_immortal = True
 
     # Call update a few times to move towards center and trigger shine
-    player = DummyPlayer()
+    player = DummyPlayer(400, 500)
     for _ in range(10):  # More updates for size increase
         boss.update(player, game)
 

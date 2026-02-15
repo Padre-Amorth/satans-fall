@@ -11,7 +11,6 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import pytest
 from game import Game
 
 
@@ -105,16 +104,16 @@ def test_storm_left_column_increases_chain_targets():
 
     # Apply storm towers and check baseline
     g.apply_tower("storm")
-    base_chain = getattr(g.left_tower, 'chain_targets', 3)
+    base_chain = getattr(g.left_tower, "chain_targets", 3)
     assert base_chain == 3
 
-    # Activate tier 1 -> +1 chain target
-    g.permanent_stats['storm_1'] = 1
+    # Activate tier 1 -> +2 chain targets
+    g.permanent_stats["storm_1"] = 1
     g.apply_permanent_stats()
-    assert g.left_tower.chain_targets == base_chain + 1
+    assert g.left_tower.chain_targets == base_chain + 2
 
-    # Activate all three left slots -> +3 total
-    g.permanent_stats['storm_2'] = 1
-    g.permanent_stats['storm_3'] = 1
+    # Activate all three left slots -> +4 total (2 + 0 + 2); storm_2 is an on-kill explosion now
+    g.permanent_stats["storm_2"] = 1
+    g.permanent_stats["storm_3"] = 1
     g.apply_permanent_stats()
-    assert g.left_tower.chain_targets == base_chain + 3
+    assert g.left_tower.chain_targets == base_chain + 4

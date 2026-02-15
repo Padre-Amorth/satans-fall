@@ -1,8 +1,6 @@
 import os
 from pathlib import Path
 
-import pygame
-
 from src.game import Game
 from src.game_constants import STAGE_SETTINGS
 
@@ -29,11 +27,12 @@ def test_purgatory_colors_fill_inside_and_outside(tmp_path: Path) -> None:
     # Draw world and inspect pixels
     surface = g.screen
     # Ensure canvas is cleared as draw_game_world uses screen provided by Game
+    surface.fill(settings["bg_color"])  # make outside match STAGE_SETTINGS
     g.ui.draw_game_world()
 
-    # Pick a point inside the walls (midpoint x=300, y=100) and a point outside left (50,100)
+    # Pick a point inside the walls (midpoint x=300, y=100) and a point outside left (10,100)
     inside_pixel = surface.get_at((300, 100))[:3]
-    outside_pixel = surface.get_at((50, 100))[:3]
+    outside_pixel = surface.get_at((10, 100))[:3]
 
     assert tuple(inside_pixel) == settings["floor_color"]
     assert tuple(outside_pixel) == settings["bg_color"]

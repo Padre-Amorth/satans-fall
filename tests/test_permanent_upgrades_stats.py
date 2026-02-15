@@ -45,7 +45,9 @@ def test_permanent_upgrades_show_effect_text_and_alignment(tmp_path: Path) -> No
     # Check bar alignment: compute name width and expected bar_x per UI logic
     font_medium = pygame.font.Font(None, 24)
     names = ["POWER", "VIGOR", "ADRENALINE", "STRUCTURE"]
-    max_name_w = max(font_medium.render(n, True, (255, 255, 255)).get_width() for n in names)
+    max_name_w = max(
+        font_medium.render(n, True, (255, 255, 255)).get_width() for n in names
+    )
     expected_bar_x = left_x + max(120, max_name_w + 24)
 
     # Compute expected fill width for the current level and sample a pixel just after the filled area
@@ -55,6 +57,7 @@ def test_permanent_upgrades_show_effect_text_and_alignment(tmp_path: Path) -> No
     sample_y = 140 + 15
     sample_pixel = tuple(surf.get_at((sample_x, sample_y))[:3])
     # Accept either the bar background or the border color as valid evidence of alignment
-    assert sample_pixel in ((26, 26, 26), (68, 68, 68)), (
-        f"Bar not aligned at expected x {expected_bar_x}, found pixel {sample_pixel}"
-    )
+    assert sample_pixel in (
+        (26, 26, 26),
+        (68, 68, 68),
+    ), f"Bar not aligned at expected x {expected_bar_x}, found pixel {sample_pixel}"

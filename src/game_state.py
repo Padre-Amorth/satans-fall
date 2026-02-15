@@ -1,16 +1,25 @@
-import random
 import logging
+import random
 from typing import Any
 
+from src.balance import (
+    BASE_SPAWN_RATE,
+    SPAWN_MIN_RATE,
+    SPAWN_RAMP_SLOPE_POST,
+    SPAWN_RAMP_SLOPE_PRE,
+    SPAWN_RAMP_START_WAVE,
+    XP_BASE,
+    XP_GROWTH,
+)
 from src.weapons import (
     WEAPON_DEFS,
+    get_orbital_count,
     get_weapon_definitions,
     get_weapon_upgrade_description,
-    get_orbital_count,
 )
-from src.balance import XP_BASE, XP_GROWTH, BASE_SPAWN_RATE, SPAWN_MIN_RATE, SPAWN_RAMP_START_WAVE, SPAWN_RAMP_SLOPE_PRE, SPAWN_RAMP_SLOPE_POST
 
 logger: logging.Logger = logging.getLogger(__name__)
+
 
 class GameStateManager:
     def __init__(self, game) -> None:
@@ -74,7 +83,9 @@ class GameStateManager:
         self.prologo_lightning_timer: int = 0
         self.prologo_lightning_strike: bool = False
         self.lightning_points: list[tuple[int, int]] = []
-        self.chain_lightning_effects: list[dict] = []  # List of chain effects with timer and points
+        self.chain_lightning_effects: list[
+            dict
+        ] = []  # List of chain effects with timer and points
         self.showing_prologo_end: bool = False
 
         # Game state
@@ -208,7 +219,9 @@ class GameStateManager:
 
                     # Special handling for orbital acquisition
                     if actual_weapon == "orbital":
-                        self.game.orbital_count = get_orbital_count(self.weapon_levels.get("orbital", 1))
+                        self.game.orbital_count = get_orbital_count(
+                            self.weapon_levels.get("orbital", 1)
+                        )
                         self.game.create_orbitals()
             else:
                 # Upgrade existing weapon
@@ -265,11 +278,14 @@ class GameStateManager:
 
         # Offer weapon acquisitions if player has fewer than 3 weapons
         all_weapon_ids = list(WEAPON_DEFS.keys())
-        unowned_weapons: list[str] = [w for w in all_weapon_ids if w not in self.player_weapons]
+        unowned_weapons: list[str] = [
+            w for w in all_weapon_ids if w not in self.player_weapons
+        ]
 
         # At player level 6 we must propose 3 new weapons only (no upgrades)
         if getattr(self, "player_level", None) == 6:
             import random
+
             if unowned_weapons:
                 if len(unowned_weapons) >= 3:
                     selected = random.sample(unowned_weapons, 3)
@@ -290,8 +306,10 @@ class GameStateManager:
                     choices.append(
                         {
                             "id": f"acquire_{weapon}",
-                            "name": WEAPON_DEFS.get(weapon, {}).get('name', weapon),
-                            "description": WEAPON_DEFS.get(weapon, {}).get('description', ''),
+                            "name": WEAPON_DEFS.get(weapon, {}).get("name", weapon),
+                            "description": WEAPON_DEFS.get(weapon, {}).get(
+                                "description", ""
+                            ),
                         }
                     )
             return choices[:3]
@@ -309,7 +327,9 @@ class GameStateManager:
         # Offer weapon upgrades for owned weapons
         for weapon in self.player_weapons:
             if self.weapon_levels.get(weapon, 0) < self.max_weapon_level:
-                display_name = WEAPON_DEFS.get(weapon, {}).get("name", weapon.replace("_", " ").title())
+                display_name = WEAPON_DEFS.get(weapon, {}).get(
+                    "name", weapon.replace("_", " ").title()
+                )
                 next_level = self.weapon_levels.get(weapon, 0) + 1
                 description = get_weapon_upgrade_description(weapon, next_level)
                 choices.append(
@@ -344,6 +364,7 @@ class GameStateManager:
         Prologo/Limbo initial choices).
         """
         import random
+
         # Start from full definitions, then filter by availability for this stage
         defs = get_weapon_definitions()
         filtered: list[dict] = []
@@ -354,12 +375,17 @@ class GameStateManager:
             if available_from:
                 af = str(available_from).lower()
                 if af == "purgatory":
-                    # only allow in purgatory stages
-                    if not (self.selected_stage and str(self.selected_stage).startswith("purgatory")):
+                    # only allow in purgatory / HELL stages
+                    if not (
+                        self.selected_stage
+                        and str(self.selected_stage).startswith(("purgatory", "hell"))
+                    ):
                         continue
                 elif af == "limbo":
                     # allow in limbo and purgatory but not in prologo
-                    if not (self.selected_stage and str(self.selected_stage) != "prologo"):
+                    if not (
+                        self.selected_stage and str(self.selected_stage) != "prologo"
+                    ):
                         continue
             filtered.append(w)
 
@@ -367,7 +393,10 @@ class GameStateManager:
             filtered = defs
 
         choices = random.sample(filtered, min(3, len(filtered)))
-        return [{"id": c["id"], "name": c["name"], "description": c["description"]} for c in choices]
+        return [
+            {"id": c["id"], "name": c["name"], "description": c["description"]}
+            for c in choices
+        ]
 
     def show_initial_weapon_choice(self) -> None:
         """Enable initial weapon selection screen and populate choices."""
@@ -382,9 +411,21 @@ class GameStateManager:
         secondary effect so players see the actual numbers in the selection UI.
         """
         return [
-            {"id": "fire", "name": "Fire Tower", "description": "Damage: 10 — Burn nearby enemies (4 DPS, 3s)"},
-            {"id": "storm", "name": "Storm Tower", "description": "Damage: 10 (projectile ~9) — Chains to multiple enemies"},
-            {"id": "ice", "name": "Ice Tower", "description": "Damage: 15 — Slows enemies 50% for 2s"},
+            {
+                "id": "fire",
+                "name": "Fire Tower",
+                "description": "Damage: 10 — Burn nearby enemies (4 DPS, 3s)",
+            },
+            {
+                "id": "storm",
+                "name": "Storm Tower",
+                "description": "Damage: 10 (projectile ~9) — Chains to multiple enemies",
+            },
+            {
+                "id": "ice",
+                "name": "Ice Tower",
+                "description": "Damage: 15 — Slows enemies 50% for 2s",
+            },
         ]
 
     def show_initial_tower_choice(self) -> None:
@@ -434,7 +475,9 @@ class GameStateManager:
         }
         for weapon in self.player_weapons:
             if self.weapon_levels.get(weapon, 0) < self.max_weapon_level:
-                display_name = weapon_names.get(weapon, weapon.replace('_', ' ').title())
+                display_name = weapon_names.get(
+                    weapon, weapon.replace("_", " ").title()
+                )
                 current_level = self.weapon_levels.get(weapon, 0)
                 next_level = current_level + 1
                 description = self.get_weapon_upgrade_description(weapon, next_level)
@@ -522,7 +565,10 @@ class GameStateManager:
             amt = int(points * mult)
             self.score += amt
             try:
-                if hasattr(self, "game") and getattr(self.game, "score", None) is not None:
+                if (
+                    hasattr(self, "game")
+                    and getattr(self.game, "score", None) is not None
+                ):
                     self.game.score += amt
             except Exception:
                 pass

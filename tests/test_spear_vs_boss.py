@@ -18,7 +18,9 @@ def test_spear_hits_boss_only_once():
         pass
 
     # create a spear projectile aimed to the right
-    spear = Projectile(g.player.x, g.player.y, 800, 0, damage=30, radius=6, weapon_type='spear')
+    spear = Projectile(
+        g.player.x, g.player.y, 800, 0, damage=30, radius=6, weapon_type="spear"
+    )
     spear.pierce_all = True
 
     # Put projectile into game projectiles (support both Group and list)

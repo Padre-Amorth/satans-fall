@@ -1,8 +1,8 @@
+import logging
 import os
 from pathlib import Path
 
 import pygame
-import logging
 
 from src.game import Game
 

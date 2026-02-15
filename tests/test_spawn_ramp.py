@@ -1,7 +1,6 @@
 import pygame
 
-from src.balance import BASE_SPAWN_RATE, SPAWN_MIN_RATE, SPAWN_RAMP_SLOPE_POST
-from src.game_state import GameStateManager
+from src.balance import SPAWN_MIN_RATE, SPAWN_RAMP_SLOPE_POST
 from src.game import Game
 
 
@@ -24,4 +23,6 @@ def test_spawn_rate_reaches_min_around_wave_10():
 
     # With SPAWN_RAMP_SLOPE_POST ~= 4.2 and BASE_SPAWN_RATE 72, we expect min reached around wave 10
     assert reached_at is not None, "spawn rate never reached SPAWN_MIN_RATE"
-    assert 9 <= reached_at <= 11, f"expected spawn_min_rate around wave 10, reached at wave {reached_at} (slope_post={SPAWN_RAMP_SLOPE_POST})"
+    assert (
+        9 <= reached_at <= 11
+    ), f"expected spawn_min_rate around wave 10, reached at wave {reached_at} (slope_post={SPAWN_RAMP_SLOPE_POST})"

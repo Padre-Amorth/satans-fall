@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
+
 from game import Game
 
 
@@ -29,6 +30,15 @@ def test_adrenaline_gives_five_percent_fire_rate_per_level():
 def test_permanent_stat_effect_texts():
     g = Game()
     assert g.permanent_stat_effect_text("power", 5) == "+3% dmg/level (15% total)"
-    assert g.permanent_stat_effect_text("vigor", 3) == "+10 HP/level (30 HP total); +1% max HP regen every 3s/level"
-    assert g.permanent_stat_effect_text("adrenaline", 2) == "+5% fire rate/level (10% total)"
-    assert g.permanent_stat_effect_text("structure", 4) == "-5% dmg taken/level (20% total)"
+    assert (
+        g.permanent_stat_effect_text("vigor", 3)
+        == "+10 HP/level (30 HP total); +0.5 HP every 5s/level (1.5 HP every 5s)"
+    )
+    assert (
+        g.permanent_stat_effect_text("adrenaline", 2)
+        == "+5% fire rate/level (10% total)"
+    )
+    assert (
+        g.permanent_stat_effect_text("structure", 4)
+        == "-3% dmg taken/level (12% total); +3% XP/level (+12% XP total)"
+    )

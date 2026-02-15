@@ -13,7 +13,7 @@ def test_purgatory_wave_boss_alternates():
     g.wave = 1
     em.wave_boss_spawned = False
     # Simulate wave-time reaching boss spawn
-    em.update_wave_boss(28)
+    em.update_wave_boss(38)
     bosses = [b for b in g.bosses if getattr(b, "enemy_type", "").startswith("boss_")]
     assert any(getattr(b, "enemy_type", "") == "boss_medium" for b in bosses)
 
@@ -24,6 +24,6 @@ def test_purgatory_wave_boss_alternates():
         g.bosses = []
     em.wave_boss_spawned = False
     g.wave = 2
-    em.update_wave_boss(28)
+    em.update_wave_boss(38)
     bosses = [b for b in g.bosses if getattr(b, "enemy_type", "").startswith("boss_")]
     assert any(getattr(b, "enemy_type", "") == "boss_inquisitor" for b in bosses)

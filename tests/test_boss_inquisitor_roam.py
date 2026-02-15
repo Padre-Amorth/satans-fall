@@ -9,7 +9,11 @@ def test_inquisitor_roams_in_top_half_and_speed():
     boss = g.enemy_manager.spawn_boss("inquisitor")
 
     # speed is the spawned value (no global reduction applied)
-    assert getattr(boss, "speed", 0) >= 34  # spawn speed is 34
+    from src.balance import ENEMY_BASE_SPEEDS
+
+    assert (
+        getattr(boss, "speed", 0) == ENEMY_BASE_SPEEDS["boss_inquisitor"]
+    )  # spawn speed from balance
     # Initial shoot cooldown should be in the reduced-rate range
     assert getattr(boss, "shoot_cooldown", 0) >= 100
 

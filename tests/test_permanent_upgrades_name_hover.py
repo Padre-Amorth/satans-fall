@@ -12,10 +12,9 @@ def setup_dummy_sdl():
 
 def rightmost_non_bg_x(surf, start_x, y, bg):
     w = surf.get_width()
-    rx = start_x
     for x in range(start_x, w):
         if tuple(surf.get_at((x, y))[:3]) != bg:
-            rx = x
+            last = x
     # scan to the right looking for the last non-bg pixel in a small region
     last = start_x
     for x in range(start_x, min(w, start_x + 200)):

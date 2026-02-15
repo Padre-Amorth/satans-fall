@@ -1,7 +1,4 @@
-import pytest
-
 from src.game import Game
-from src.weapons import WEAPON_DEFS
 
 
 def test_level_6_purgatory_may_offer_demonstrike():
@@ -27,4 +24,6 @@ def test_level_6_purgatory_may_offer_demonstrike():
         g.weapon_choices = []
         g.player_level = 5
 
-    assert found, "DemonStrike should be possible in level-6 weapon choices on Purgatory"
+    assert (
+        found
+    ), "DemonStrike should be possible in level-6 weapon choices on Purgatory"

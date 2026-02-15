@@ -27,7 +27,9 @@ def test_bars_are_symmetric_and_shorter(tmp_path: Path) -> None:
 
     font_medium = pygame.font.Font(None, 24)
     names = ["POWER", "VIGOR", "ADRENALINE", "STRUCTURE"]
-    max_name_w = max(font_medium.render(n, True, (255, 255, 255)).get_width() for n in names)
+    max_name_w = max(
+        font_medium.render(n, True, (255, 255, 255)).get_width() for n in names
+    )
     expected_bar_x = left_x + max(120, max_name_w + 24)
     expected_bar_width = 180
 
@@ -45,9 +47,9 @@ def test_bars_are_symmetric_and_shorter(tmp_path: Path) -> None:
             (170, 68, 255),  # adrenaline fill
             (139, 105, 20),  # structure fill
         }
-        assert sample_pixel in allowed, (
-            f"Bar at stat y={y} not found at expected x {expected_bar_x}, pixel {sample_pixel}"
-        )
+        assert (
+            sample_pixel in allowed
+        ), f"Bar at stat y={y} not found at expected x {expected_bar_x}, pixel {sample_pixel}"
 
     # Confirm width is shorter than legacy 200
     assert expected_bar_width < 200

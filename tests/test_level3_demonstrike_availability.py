@@ -1,5 +1,3 @@
-import pytest
-
 from src.game import Game
 
 
@@ -32,4 +30,6 @@ def test_level_3_demonstrike_may_be_offered_in_purgatory():
         if "DemonStrike" in ids:
             found = True
             break
-    assert found, "DemonStrike should be possible in level-3 weapon choices on Purgatory"
+    assert (
+        found
+    ), "DemonStrike should be possible in level-3 weapon choices on Purgatory"

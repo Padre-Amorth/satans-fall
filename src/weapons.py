@@ -99,75 +99,96 @@ WEAPON_DEFS: Dict[str, Dict] = {
 }
 
 # Additional weapon-specific parameters (cooldowns, counts, damage factors)
-WEAPON_DEFS["shotgun"].update({
-    "base_pellets": 4,
-    "pellet_level_step": 2,
-    "pellet_increase": 1,
-    "spread_deg": 12,
-    "damage_mult": 0.55,
-    "base_cd": 1.5,
-    "cd_reduction_per_pair": 0.15,
-    "min_cd": 0.4,
-    "base_radius": 5,
-})
+WEAPON_DEFS["shotgun"].update(
+    {
+        "base_pellets": 4,
+        "pellet_level_step": 2,
+        "pellet_increase": 1,
+        "spread_deg": 12,
+        "damage_mult": 0.55,
+        "base_cd": 1.5,
+        "cd_reduction_per_pair": 0.15,
+        "min_cd": 0.4,
+        "base_radius": 5,
+    }
+)
 
-WEAPON_DEFS["orbital"].update({
-    "base_count": 3,
-    "extra_per_pair": 1,
-    "cooldown_base_min": 40,
-    "cooldown_base_max": 100,
-    "cooldown_reduction_per_pair": 6,
-})
+WEAPON_DEFS["orbital"].update(
+    {
+        "base_count": 3,
+        "extra_per_pair": 1,
+        "cooldown_base_min": 40,
+        "cooldown_base_max": 100,
+        "cooldown_reduction_per_pair": 6,
+    }
+)
 
-WEAPON_DEFS["spear"].update({
-    "base_cd": 0.6,
-    "cd_reduction_per_level": 0.06,
-    "min_cd": 0.15,
-    "damage_base_mult": 0.5,
-    "damage_per_level": 2,
-    "speed_factor": 800 / 500.0,
-    "base_radius": 5,
-})
+WEAPON_DEFS["spear"].update(
+    {
+        "base_cd": 0.6,
+        "cd_reduction_per_level": 0.06,
+        "min_cd": 0.15,
+        "damage_base_mult": 0.5,
+        "damage_per_level": 2,
+        "speed_factor": 800 / 500.0,
+        "base_radius": 5,
+    }
+)
 
 # DemonStrike tuning (custom scaling & visuals)
-WEAPON_DEFS["DemonStrike"].update({
-    # Cooldown tuned similar to skull_bomb but slightly *shorter* (more frequent)
-    "base_cd": 1.8,                # Skull Bomb = 2.0 -> DemonStrike slightly more often
-    "cd_reduction_per_level": 0.12,
-    "min_cd": 0.5,
-    "damage_base_mult": 0.5,      # retains player-damage component multiplier
-    "damage_per_level": 10,       # <-- now +10 damage per weapon level
-    # Much slower than spear: emulate a rolling bowling ball
-    "speed_factor": 120 / 500.0,
-    "base_radius": 8,  # kept for backward compatibility (rounded)
-    "base_diameter": 15,  # requested base diameter in pixels
-    "radius_increase_per_level": 4,  # +4 pixels per upgrade level
-})
+WEAPON_DEFS["DemonStrike"].update(
+    {
+        # Cooldown tuned similar to skull_bomb but slightly *shorter* (more frequent)
+        "base_cd": 1.8,  # Skull Bomb = 2.0 -> DemonStrike slightly more often
+        "cd_reduction_per_level": 0.12,
+        "min_cd": 0.5,
+        "damage_base_mult": 0.5,  # retains player-damage component multiplier
+        "damage_per_level": 10,  # <-- now +10 damage per weapon level
+        # Much slower than spear: emulate a rolling bowling ball
+        "speed_factor": 120 / 500.0,
+        "base_radius": 8,  # kept for backward compatibility (rounded)
+        "base_diameter": 15,  # requested base diameter in pixels
+        "radius_increase_per_level": 4,  # +4 pixels per upgrade level
+    }
+)
 
-WEAPON_DEFS["Soul Drain"].update({
-    "base_cd": 1.5,
-    "cd_reduction_at_level_4": 0.3,
-    "min_cd": 0.5,
-    "base_damage": 10,  # doubled from 5
-    "base_heal": 2,
-    "damage_heal_increments": {3: 0.1, 5: 0.1},    # Base projectiles increased to 2 (Lv1 fires 2 projectiles).
-    # Additional projectiles at level thresholds add 1 projectile each.
-    "base_projectiles": 2,    "projectiles_at_level": {2: 1, 4: 1},  # level -> extra projectiles (increments at thresholds)
-})
+WEAPON_DEFS["Soul Drain"].update(
+    {
+        "base_cd": 1.5,
+        "cd_reduction_at_level_4": 0.3,
+        "min_cd": 0.5,
+        "base_damage": 10,  # doubled from 5
+        "base_heal": 2,
+        "damage_heal_increments": {
+            3: 0.1,
+            5: 0.1,
+        },  # Base projectiles increased to 2 (Lv1 fires 2 projectiles).
+        # Additional projectiles at level thresholds add 1 projectile each.
+        "base_projectiles": 2,
+        "projectiles_at_level": {
+            2: 1,
+            4: 1,
+        },  # level -> extra projectiles (increments at thresholds)
+    }
+)
 
-WEAPON_DEFS["beast"].update({
-    "burst_rate_multiplier_per_level": 0.05,
-})
+WEAPON_DEFS["beast"].update(
+    {
+        "burst_rate_multiplier_per_level": 0.05,
+    }
+)
 
-WEAPON_DEFS["skull_bomb"].update({
-    "base_cd": 2.0,
-    "cd_reduction_per_level": 0.15,
-    "min_cd": 0.5,
-    "base_damage": 20,
-    "damage_increase_per_level": 2,
-    "base_explosion_radius": 80,
-    "radius_increase_per_level": 8,
-})
+WEAPON_DEFS["skull_bomb"].update(
+    {
+        "base_cd": 2.0,
+        "cd_reduction_per_level": 0.15,
+        "min_cd": 0.5,
+        "base_damage": 20,
+        "damage_increase_per_level": 2,
+        "base_explosion_radius": 80,
+        "radius_increase_per_level": 8,
+    }
+)
 
 
 def get_orbital_count(level: int) -> int:
@@ -182,7 +203,10 @@ def orbital_cooldown_range(level: int) -> tuple[int, int]:
     base_min = d.get("cooldown_base_min", 40)
     base_max = d.get("cooldown_base_max", 100)
     min_cd = max(10, base_min - reductions * d.get("cooldown_reduction_per_pair", 6))
-    max_cd = max(min_cd + 5, base_max - reductions * (d.get("cooldown_reduction_per_pair", 6) * 2))
+    max_cd = max(
+        min_cd + 5,
+        base_max - reductions * (d.get("cooldown_reduction_per_pair", 6) * 2),
+    )
     return int(min_cd), int(max_cd)
 
 
@@ -197,7 +221,7 @@ def shotgun_pellets(level: int) -> int:
 def shotgun_cooldown(level: int) -> float:
     d = WEAPON_DEFS.get("shotgun", {})
     base_cd = d.get("base_cd", 1.5)
-    reductions = (level // 2)
+    reductions = level // 2
     cd = base_cd - reductions * d.get("cd_reduction_per_pair", 0.15)
     return max(d.get("min_cd", 0.4), cd)
 
@@ -337,7 +361,9 @@ def get_weapon_upgrade_description(weapon: str, level: int) -> str:
 
         if weapon.lower() in ("demonstrike",):
             # DemonStrike: +10 base damage per level
-            return f"Lv{level}: +{10 * level} base DemonStrike damage total (rough guide)"
+            return (
+                f"Lv{level}: +{10 * level} base DemonStrike damage total (rough guide)"
+            )
 
         if weapon.lower() in ("skull_bomb", "skull bomb", "skullbomb"):
             cd = skull_bomb_cooldown(level)

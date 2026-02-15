@@ -26,12 +26,18 @@ def test_stat_hover_does_not_highlight_bar_border(tmp_path: Path) -> None:
     # Bar border should NOT be gold when hovering the name (only name highlights)
     font_medium = pygame.font.Font(None, 24)
     names = ["POWER", "VIGOR", "ADRENALINE", "STRUCTURE"]
-    max_name_w = max(font_medium.render(n, True, (255, 255, 255)).get_width() for n in names)
+    max_name_w = max(
+        font_medium.render(n, True, (255, 255, 255)).get_width() for n in names
+    )
     expected_bar_x = left_x + max(120, max_name_w + 24)
     sample_x = expected_bar_x + 1
     sample_y = 140 + 15
     sample_pixel = tuple(surf.get_at((sample_x, sample_y))[:3])
-    assert sample_pixel == (68, 68, 68), f"Expected default border (no gold) on hover, found {sample_pixel}"
+    assert sample_pixel == (
+        68,
+        68,
+        68,
+    ), f"Expected default border (no gold) on hover, found {sample_pixel}"
 
 
 def test_skill_tree_box_hover_highlight_and_tooltip(tmp_path: Path) -> None:
@@ -44,7 +50,6 @@ def test_skill_tree_box_hover_highlight_and_tooltip(tmp_path: Path) -> None:
     separator_y = 320
     tree_top_y = separator_y - 150
     tree_box_w = 50
-    tree_col_spacing = 120
     tree_base_x = left_x + 680
     col_x = tree_base_x
     inner_col_offset = tree_box_w // 2 + 1
@@ -59,7 +64,11 @@ def test_skill_tree_box_hover_highlight_and_tooltip(tmp_path: Path) -> None:
 
     # Top-left corner of left rect should show gold border after hover
     sample_pixel = tuple(surf.get_at((left_col_x, y))[:3])
-    assert sample_pixel == (255, 224, 20), f"Expected gold border on skill box hover, found {sample_pixel}"
+    assert sample_pixel == (
+        255,
+        224,
+        20,
+    ), f"Expected gold border on skill box hover, found {sample_pixel}"
 
     # And tooltip area should not be background (i.e., tooltip rendered)
     tip_x = col_x
@@ -88,7 +97,6 @@ def test_skill_tree_center_box_highlight_and_tooltip(tmp_path: Path) -> None:
     separator_y = 320
     tree_top_y = separator_y - 150
     tree_box_w = 50
-    tree_col_spacing = 120
     tree_base_x = left_x + 680
     col_x = tree_base_x
     center_y = tree_top_y + 3 * 46
@@ -104,7 +112,11 @@ def test_skill_tree_center_box_highlight_and_tooltip(tmp_path: Path) -> None:
     center_rect_x = col_x - tree_box_w // 2
     center_rect_y = center_y
     sample_pixel = tuple(surf.get_at((center_rect_x, center_rect_y))[:3])
-    assert sample_pixel == (255, 224, 20), f"Expected gold border on center skill box hover, found {sample_pixel}"
+    assert sample_pixel == (
+        255,
+        224,
+        20,
+    ), f"Expected gold border on center skill box hover, found {sample_pixel}"
 
     # And tooltip area should not be background (i.e., tooltip rendered)
     tip_x = col_x

@@ -2,12 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
-## 2026-02-13 — STORM left-column: chain lightning range increased (+1 target per slot) ⚡
+## 2026-02-13 — STORM left-column: chain lightning range rebalanced (slot 1 & 3 +2, slot 2 +1) ⚡
 
-- **Balance change — STORM (left column):** each left-column STORM permanent now grants **+1 chained target** for storm statue/projectile chain lightning (up to +3 total if `storm_1`, `storm_2`, `storm_3` are all active). Default storm chain targets remain 3; activating all three left slots sets it to 6.
-- **UI / Tooltip:** Skill-tree tooltips updated to describe the left-column STORM bonuses.
-- **Tests updated/added:** `tests/test_skill_tree_effects.py` and `tests/test_skill_tooltips.py` updated to verify chain-target stacking and tooltip text.
-- **Notes:** Applies to statue/projectile `chain_targets` only; visual chain effects automatically reflect the increased hops.
+- **Balance change — STORM (left column):** `storm_1` and `storm_3` grant **+2 chained targets** each; `storm_2` no longer increases chain targets — instead it makes enemies **killed by chain lightning explode** in a lightning burst that damages nearby enemies. Chain-target stacking from left slots is now up to **+4** total (base 3 → 7 when both slots 1 & 3 active).
+- **UI / Tooltip:** Skill-tree tooltips updated to describe the new `storm_2` on-kill explosion and the left-column stacking.
+- **Tests updated/added:** `tests/test_skill_tree_effects.py`, `tests/test_skill_tooltips.py`, and `tests/test_storm_extra.py` updated/extended to verify chain-kill explosions and tooltip text.
+- **Notes:** Applies to statue/projectile `chain_targets` only for slot 1 & 3; the `storm_2` effect is an additional AoE-on-chain-kill mechanic and is visually represented by lightning effects.
 
 ## 2026-02-12 — Add Inquisitor Limbo boss (new feature + tuning) ✨
 

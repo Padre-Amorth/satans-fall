@@ -17,51 +17,52 @@ def test_tooltip_lines_tier_requirements():
         g.permanent_stats[f"fire_{i}"] = 0
 
     lines = g._skill_tooltip_lines("fire", 1)
-    # 'Requirement' text should no longer be present; we expect a status and an Effect placeholder
-    assert any(l.startswith("Status:") for l in lines)
-    assert any(l.startswith("Effect:") for l in lines)
     # FIRE tier 1 has a specific effect description (burn propagation on death)
-    assert any("on death" in l or "chains up to 3" in l for l in lines)
+    assert any("on death" in line or "chains up to 3" in line for line in lines)
 
     lines2 = g._skill_tooltip_lines("fire", 2)
-    assert any(l.startswith("Status:") for l in lines2)
-    assert any(l.startswith("Effect:") for l in lines2)
+    assert any("Burn duration ×2; burn DPS ×2" in line for line in lines2)
 
     # FIRE tier 3 should describe the +25% damage vs burning enemies
     lines3left = g._skill_tooltip_lines("fire", 3)
-    assert any(l.startswith("Effect: +25% damage to burning enemies") for l in lines3left)
+    assert any("+25% damage to burning enemies" in line for line in lines3left)
 
-    # STORM left-column tiers (1..3) should describe chain-target bonus
-    for tier in (1, 2, 3):
-        lines_sl = g._skill_tooltip_lines("storm", tier)
-        assert any("Chain lightning +1 target" in l for l in lines_sl)
+    # STORM left-column tiers (1..3) should describe their tier-specific effects
+    lines_s1 = g._skill_tooltip_lines("storm", 1)
+    assert any("Chain lightning +2 targets" in line for line in lines_s1)
 
-    # Center when no full column
-    lines3 = g._skill_tooltip_lines("fire", 7)
-    assert any(l.startswith("Status:") for l in lines3)
-    assert any(l.startswith("Effect:") for l in lines3)
+    lines_s2 = g._skill_tooltip_lines("storm", 2)
+    assert any("Chain-kills trigger lightning explosion" in line or "lightning explosion" in line
+        for line in lines_s2
+    )
 
-    # Fill left column and ensure center still only shows Effect placeholder (no unlock hint)
-    for t in (1, 2, 3):
-        g.permanent_stats[f"fire_{t}"] = 1
-    lines4 = g._skill_tooltip_lines("fire", 7)
-    assert any(l.startswith("Status:") for l in lines4)
-    assert any(l.startswith("Effect:") for l in lines4)
+    lines_s3 = g._skill_tooltip_lines("storm", 3)
+    assert any("Chain lightning +2 targets" in line for line in lines_s3)
+
+    # ICE left-column tier 1 should describe area damage and slow
+    lines_i1 = g._skill_tooltip_lines("ice", 1)
+    assert any(
+        "Projectiles deal area damage and create slowing puddles" in line for line in lines_i1
+    )
+
+    # ICE left-column tier 2 should describe increased area
+    lines_i2 = g._skill_tooltip_lines("ice", 2)
+    assert any("+50% puddle area and area damage radius" in line for line in lines_i2)
 
     # Right-column tiers should show the new per-slot effect text
     for tier in (4, 5, 6):
         lines_r = g._skill_tooltip_lines("fire", tier)
-        assert any(l.startswith("Effect: +10% dmg, +10% fire rate") for l in lines_r)
+        assert any(line.startswith("+10% dmg, +10% fire rate") for line in lines_r)
 
     # STORM right-column now shows +20% fire rate per slot (damage still +10%)
     for tier in (4, 5, 6):
         lines_s = g._skill_tooltip_lines("storm", tier)
-        assert any(l.startswith("Effect: +10% dmg, +20% fire rate") for l in lines_s)
+        assert any(line.startswith("+10% dmg, +20% fire rate") for line in lines_s)
 
     # ICE right-column now shows +20% damage per slot (fire rate remains +10%)
     for tier in (4, 5, 6):
         lines_i = g._skill_tooltip_lines("ice", tier)
-        assert any(l.startswith("Effect: +20% dmg, +10% fire rate") for l in lines_i)
+        assert any(line.startswith("+20% dmg, +10% fire rate") for line in lines_i)
 
 
 def test_draw_tooltip_does_not_crash_when_hovering_over_tree():
@@ -87,7 +88,13 @@ def test_draw_fixed_tooltip_position():
     mid_col_x = tree_base_x
     tooltip_y = (g.height // 2) + 200
     # Should not raise
-    g._draw_tooltip(lines, mid_col_x, tooltip_y, __import__("pygame").font.Font(None, 18), anchor_center=True)
+    g._draw_tooltip(
+        lines,
+        mid_col_x,
+        tooltip_y,
+        __import__("pygame").font.Font(None, 18),
+        anchor_center=True,
+    )
 
 
 def test_tooltip_no_header():
@@ -97,7 +104,7 @@ def test_tooltip_no_header():
         g.permanent_stats[f"fire_{i}"] = 0
     lines = g._skill_tooltip_lines("fire", 1)
     # There should be no header line containing 'Tier' or the label
-    assert not any("Tier" in l or "FIRE" in l for l in lines)
+    assert not any("Tier" in line or "FIRE" in line for line in lines)
 
 
 def test_center_tooltip_shows_under_tree():
@@ -115,6 +122,4 @@ def test_center_tooltip_shows_under_tree():
     g.mouse_x, g.mouse_y = (center_x, center_y)
     # Call draw; should not raise and should be able to build tooltip lines
     g.draw_permanent_upgrades()
-    lines = g._skill_tooltip_lines("fire", 7)
-    assert any(l.startswith("Status:") for l in lines)
-    assert any(l.startswith("Effect:") for l in lines)
+    # Center tier has no effect, just empty

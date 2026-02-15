@@ -49,6 +49,7 @@ def test_level_6_limbo_weapon_choice():
 
     # At level 6 we must show only unowned weapon acquisition choices (up to 3)
     from src.weapons import WEAPON_DEFS
+
     unowned = [w for w in WEAPON_DEFS.keys() if w not in game.player_weapons]
     expected = min(3, len(unowned))
     assert game.awaiting_weapon_choice is True
@@ -56,6 +57,7 @@ def test_level_6_limbo_weapon_choice():
     ids = [c["id"].replace("acquire_", "") for c in game.weapon_choices]
     assert len(set(ids)) == len(ids)  # unique
     from src.weapons import WEAPON_DEFS as WD
+
     # DemonStrike is Purgatory‑only and must not be proposed in Limbo level‑6 choices
     assert "DemonStrike" not in ids
 

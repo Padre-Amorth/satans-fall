@@ -1,11 +1,17 @@
 import logging
-import os
+from typing import TYPE_CHECKING, Any
 
-from numpy import ndarray
 import pygame
-from typing import Any, TYPE_CHECKING
+from numpy import ndarray
 
-from src.balance import XP_BASE, XP_GROWTH, PLAYER_BASE_HEALTH, DEFAULT_PROJECTILE_SIZE_MULTIPLIER, DEFAULT_DAMAGE_REDUCTION_MULTIPLIER, DEFAULT_FIRE_RATE_MULTIPLIER
+from src.balance import (
+    DEFAULT_DAMAGE_REDUCTION_MULTIPLIER,
+    DEFAULT_FIRE_RATE_MULTIPLIER,
+    DEFAULT_PROJECTILE_SIZE_MULTIPLIER,
+    PLAYER_BASE_HEALTH,
+    XP_BASE,
+    XP_GROWTH,
+)
 
 if TYPE_CHECKING:
     from pygame.sprite import Sprite as SpriteType  # type: ignore
@@ -140,7 +146,9 @@ class Player(BaseSprite):
             self.walk_frames.append(new_frame)
 
             # Create flipped version
-            flipped_frame: pygame.Surface = pygame.transform.flip(new_frame, True, False)
+            flipped_frame: pygame.Surface = pygame.transform.flip(
+                new_frame, True, False
+            )
             self.walk_frames.append(flipped_frame)
 
     def draw_satan(self) -> None:
@@ -232,7 +240,9 @@ class Player(BaseSprite):
         self.level += 1
         self.xp -= self.xp_to_next_level
         # Recalculate XP requirement using centralized curve
-        self.xp_to_next_level = int(XP_BASE * (XP_GROWTH ** (self.level - 1)))  # Increase XP requirement
+        self.xp_to_next_level = int(
+            XP_BASE * (XP_GROWTH ** (self.level - 1))
+        )  # Increase XP requirement
         # Note: Upgrade selection will be handled in the game class
 
     def draw(self, screen, shake_x=0, shake_y=0, anim_frame=0, is_moving=False) -> None:

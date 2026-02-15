@@ -29,5 +29,9 @@ def test_purgatory_wider_than_limbo(tmp_path: Path) -> None:
     g.select_stage("purgatory")
     purg_top, purg_bot = get_top_bottom_widths(g)
 
-    assert purg_top > limbo_top, f"Purgatory top width should be wider than Limbo (purg={purg_top} limbo={limbo_top})"
-    assert purg_bot > limbo_bot, f"Purgatory bottom width should be wider than Limbo (purg={purg_bot} limbo={limbo_bot})"
+    assert (
+        purg_top > limbo_top
+    ), f"Purgatory top width should be wider than Limbo (purg={purg_top} limbo={limbo_top})"
+    assert (
+        purg_bot > limbo_bot
+    ), f"Purgatory bottom width should be wider than Limbo (purg={purg_bot} limbo={limbo_bot})"

@@ -1,8 +1,6 @@
 import os
 from pathlib import Path
 
-import pygame
-
 from src.game import Game
 
 
@@ -21,7 +19,7 @@ def any_non_bg(surface, center, bg):
     return False
 
 
-def test_permanent_upgrades_shows_classic_and_skill_trees(tmp_path: Path) -> None:
+def test_permanent_upgrades_shows_blasphemies_and_skill_trees(tmp_path: Path) -> None:
     setup_dummy_sdl()
     g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
 
@@ -34,9 +32,9 @@ def test_permanent_upgrades_shows_classic_and_skill_trees(tmp_path: Path) -> Non
 
     left_x = g.width // 2 - 420
 
-    # Classic Upgrades title area (approx)
-    classic_point = (left_x + 4, 350)
-    assert any_non_bg(surface, classic_point, bg), "Classic Upgrades title not rendered"
+    # Blasphemies title area (approx)
+    blasphemies_point = (left_x + 4, 350)
+    assert any_non_bg(surface, blasphemies_point, bg), "Blasphemies title not rendered"
 
     # Skill trees label area (FIRE expected on right side)
     fire_point = (left_x + 680, 142)

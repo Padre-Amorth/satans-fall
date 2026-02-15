@@ -1,8 +1,6 @@
 import os
 from pathlib import Path
 
-import pygame
-
 from src.game import Game
 
 
@@ -23,7 +21,6 @@ def test_skill_tree_tooltip_shows_on_hover(tmp_path: Path) -> None:
     tree_top_y = separator_y - 150
     tree_box_w = 50
     tree_box_h = 36
-    tree_col_spacing = 120
     tree_base_x = left_x + 680
     # First tree (FIRE), first row -> left column
     col_x = tree_base_x

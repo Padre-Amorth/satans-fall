@@ -1,7 +1,6 @@
 import pygame
 
 from src.game import Game
-from src.entities.enemy import Enemy
 
 
 def test_spawn_and_recycle():
@@ -54,12 +53,16 @@ def test_non_boss_spawn_speed_matches_spawn_value():
     g = Game(debug=True)
 
     # 1) Force the 'normal' branch
-    with patch('random.random', return_value=0.1):
+    with patch("random.random", return_value=0.1):
         g.spawn_enemy()
-    spawned = next((en for en in g.enemies if getattr(en, 'enemy_type', None) == 'normal'), None)
+    spawned = next(
+        (en for en in g.enemies if getattr(en, "enemy_type", None) == "normal"), None
+    )
     assert spawned is not None
-    # spawn speed for normal is currently 60 in spawn logic
-    assert abs(spawned.speed - 60.0) < 0.001
+    # spawn speed for normal is now read from balance
+    from src.balance import ENEMY_BASE_SPEEDS
+
+    assert abs(spawned.speed - ENEMY_BASE_SPEEDS["normal"]) < 0.001
 
     # 2) Spawn reinforcements covering weak/strong/angel
     # Clear game's enemy container in a safe, container‑agnostic way
@@ -77,10 +80,24 @@ def test_non_boss_spawn_speed_matches_spawn_value():
 
     g.spawn_reinforcements(x=200, y=80, count=6)
     # Ensure at least one non-boss enemy spawned and all non-boss enemies use spawn speed
-    non_bosses = [en for en in g.enemies if getattr(en, 'enemy_type', '').startswith(('weak','normal','strong','angel','giant'))]
+    non_bosses = [
+        en
+        for en in g.enemies
+        if getattr(en, "enemy_type", "").startswith(
+            ("weak", "normal", "strong", "angel", "giant")
+        )
+    ]
     assert len(non_bosses) >= 1
+    # Verify per-type spawn speeds using ENEMY_BASE_SPEEDS
+    expected = {
+        k: ENEMY_BASE_SPEEDS[k] for k in ("weak", "normal", "strong", "angel", "giant")
+    }
     for en in non_bosses:
-        assert abs(en.speed - 60.0) < 0.001
+        et = getattr(en, "enemy_type", "")
+        if et in expected:
+            assert (
+                abs(en.speed - expected[et]) < 0.001
+            ), f"{et} expected {expected[et]} but got {en.speed}"
 
     # 3) Spawn a giant via manager/fallback
     # Clear container safely
@@ -97,7 +114,9 @@ def test_non_boss_spawn_speed_matches_spawn_value():
             pass
 
     g.spawn_giant_enemy()
-    giant = next((en for en in g.enemies if getattr(en, 'enemy_type', None) == 'giant'), None)
+    giant = next(
+        (en for en in g.enemies if getattr(en, "enemy_type", None) == "giant"), None
+    )
     assert giant is not None
-    # giant spawn speed aligned to non-boss spawn speed (60)
-    assert abs(giant.speed - 60.0) < 0.001
+    # giant spawn speed aligned to non-boss spawn speed (from balance)
+    assert abs(giant.speed - ENEMY_BASE_SPEEDS["giant"]) < 0.001

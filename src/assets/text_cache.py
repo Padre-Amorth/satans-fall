@@ -6,6 +6,7 @@ which cache Font objects and rendered Surfaces respectively.
 from __future__ import annotations
 
 from typing import Dict, Tuple
+
 import pygame
 
 _font_cache: Dict[Tuple[str | None, int, bool, bool], pygame.font.Font] = {}
@@ -17,7 +18,9 @@ def clear_cache() -> None:
     _text_cache.clear()
 
 
-def get_font(size: int = 24, name: str | None = None, bold: bool = False, italic: bool = False) -> pygame.font.Font:
+def get_font(
+    size: int = 24, name: str | None = None, bold: bool = False, italic: bool = False
+) -> pygame.font.Font:
     # Ensure pygame font module is initialized; if it was shut down during tests,
     # reinitialize and clear caches to avoid returning stale Font objects.
     try:
@@ -54,7 +57,9 @@ def get_font(size: int = 24, name: str | None = None, bold: bool = False, italic
     return f
 
 
-def get_text(text: str, font: pygame.font.Font, color: Tuple[int, int, int]) -> pygame.Surface:
+def get_text(
+    text: str, font: pygame.font.Font, color: Tuple[int, int, int]
+) -> pygame.Surface:
     key = (text, id(font), color)
     if key in _text_cache:
         return _text_cache[key]

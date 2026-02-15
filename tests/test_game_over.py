@@ -23,12 +23,14 @@ def test_game_over_persists_until_keypress():
     game.handle_events()
     assert game.showing_game_over is True
 
-    # Pressing RETURN should restart the stage and clear the game over overlay
+    # Pressing RETURN should do nothing (restart disabled); ESC returns to the main menu
     game.handle_keydown(pygame.K_RETURN)
-    assert game.showing_game_over is False
-    assert game.selected_stage == "prologo"
-    assert game.player.health == game.player.max_health
-    assert game.showing_stage_menu is False
+    assert game.showing_game_over is True
+
+    # Pressing ESC should return to menu
+    game.handle_keydown(pygame.K_ESCAPE)
+    assert game.showing_stage_menu is True
+    assert game.selected_stage is None
 
 
 def test_game_over_fade_in():

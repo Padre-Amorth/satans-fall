@@ -22,7 +22,7 @@ repos:
     hooks:
       - id: mypy
         args: ["--ignore-missing-imports"]
-        additional_dependencies: ["mypy==1.9.5"]
+        additional_dependencies: ["mypy==1.19.1"]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

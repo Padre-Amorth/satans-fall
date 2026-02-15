@@ -3,6 +3,7 @@
 Provides `FontCache.get_font(size, name=None)` and `TextCache.get_text(text, font, color)`
 which cache Font objects and rendered Surfaces respectively.
 """
+
 from __future__ import annotations
 
 from typing import Dict, Tuple

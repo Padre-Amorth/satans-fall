@@ -32,7 +32,9 @@ def test_tooltip_lines_tier_requirements():
     assert any("Chain lightning +2 targets" in line for line in lines_s1)
 
     lines_s2 = g._skill_tooltip_lines("storm", 2)
-    assert any("Chain-kills trigger lightning explosion" in line or "lightning explosion" in line
+    assert any(
+        "Chain-kills trigger lightning explosion" in line
+        or "lightning explosion" in line
         for line in lines_s2
     )
 
@@ -42,7 +44,8 @@ def test_tooltip_lines_tier_requirements():
     # ICE left-column tier 1 should describe area damage and slow
     lines_i1 = g._skill_tooltip_lines("ice", 1)
     assert any(
-        "Projectiles deal area damage and create slowing puddles" in line for line in lines_i1
+        "Projectiles deal area damage and create slowing puddles" in line
+        for line in lines_i1
     )
 
     # ICE left-column tier 2 should describe increased area

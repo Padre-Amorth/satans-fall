@@ -5,7 +5,7 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
 ## Come Usare le Immagini
 
 1. Crea o ottieni le tue immagini (formato PNG, JPG o GIF)
-2. Metti le immagini nella cartella `assets/` 
+2. Metti le immagini nella cartella `assets/`
 3. Usa i nomi dei file indicati sotto
 4. Il gioco caricherà automaticamente le immagini disponibili
 

@@ -83,9 +83,9 @@ class GameStateManager:
         self.prologo_lightning_timer: int = 0
         self.prologo_lightning_strike: bool = False
         self.lightning_points: list[tuple[int, int]] = []
-        self.chain_lightning_effects: list[
-            dict
-        ] = []  # List of chain effects with timer and points
+        self.chain_lightning_effects: list[dict] = (
+            []
+        )  # List of chain effects with timer and points
         self.showing_prologo_end: bool = False
 
         # Game state

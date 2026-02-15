@@ -7,6 +7,7 @@ Responsibilities:
 - Expose spawn-related attributes (enemy_spawn_rate, enemy_spawn_timer)
 - Provide small helper for reinforcements
 """
+
 from __future__ import annotations
 
 import logging

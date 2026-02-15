@@ -1,4 +1,5 @@
 """Centralized weapon definitions and helper utilities."""
+
 from typing import Dict, List
 
 # Centralized weapon definitions to avoid duplication across modules

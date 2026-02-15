@@ -36,7 +36,7 @@ except Exception:
 # Import Projectile explicitly from src.projectile for stability
 from src.projectile import Projectile  # noqa: E402
 
-logger: logging.Logger = logging.getLogger(__name__)   
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class BurnParticle:

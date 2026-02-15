@@ -1,0 +1,39 @@
+{
+  "permanent_stats": {
+    "power": 2,
+    "vigor": 4,
+    "adrenaline": 2,
+    "structure": 4,
+    "fire_1": 1,
+    "fire_2": 1,
+    "fire_3": 1,
+    "fire_4": 1,
+    "fire_5": 1,
+    "fire_6": 1,
+    "fire_7": 0,
+    "storm_1": 1,
+    "storm_2": 1,
+    "storm_3": 1,
+    "storm_4": 1,
+    "storm_5": 1,
+    "storm_6": 1,
+    "storm_7": 0,
+    "ice_1": 1,
+    "ice_2": 1,
+    "ice_3": 1,
+    "ice_4": 1,
+    "ice_5": 1,
+    "ice_6": 1,
+    "ice_7": 0
+  },
+  "global_progress": {
+    "display": {
+      "fullscreen": false,
+      "window_size": [
+        1280,
+        720
+      ],
+      "smooth_scale": true
+    }
+  }
+}

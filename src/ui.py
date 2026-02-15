@@ -778,9 +778,7 @@ class PygameUIManager:
         render_wall_thickness = (
             WALL_THICKNESS * 2
             if is_hell_stage
-            else WALL_THICKNESS
-            if is_prologo
-            else WALL_THICKNESS
+            else WALL_THICKNESS if is_prologo else WALL_THICKNESS
         )
         cap_extension = max(6, render_wall_thickness // 4) if is_hell_stage else 0
 
@@ -1689,9 +1687,10 @@ class PygameUIManager:
         prologo_hovered: bool = prologo_rect.collidepoint(
             self.game.mouse_x, self.game.mouse_y
         )
-        prologo_color: tuple[Literal[189], Literal[89], Literal[89]] | tuple[
-            Literal[139], Literal[69], Literal[69]
-        ] = (
+        prologo_color: (
+            tuple[Literal[189], Literal[89], Literal[89]]
+            | tuple[Literal[139], Literal[69], Literal[69]]
+        ) = (
             (189, 89, 89) if prologo_hovered else (139, 69, 69)
         )  # Lighter red when hovered
         pygame.draw.rect(self.screen, prologo_color, prologo_rect)
@@ -1712,9 +1711,10 @@ class PygameUIManager:
         limbo_hovered: bool = limbo_rect.collidepoint(
             self.game.mouse_x, self.game.mouse_y
         )
-        limbo_color: tuple[Literal[137], Literal[78], Literal[36]] | tuple[
-            Literal[107], Literal[58], Literal[26]
-        ] = ((137, 78, 36) if limbo_hovered else (107, 58, 26))
+        limbo_color: (
+            tuple[Literal[137], Literal[78], Literal[36]]
+            | tuple[Literal[107], Literal[58], Literal[26]]
+        ) = ((137, 78, 36) if limbo_hovered else (107, 58, 26))
         pygame.draw.rect(self.screen, limbo_color, limbo_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), limbo_rect, 2)
         limbo_text: pygame.Surface = font_medium.render("LIMBO", True, (255, 255, 255))
@@ -1733,9 +1733,10 @@ class PygameUIManager:
         purgatory_hovered: bool = purgatory_rect.collidepoint(
             self.game.mouse_x, self.game.mouse_y
         )
-        purgatory_color: tuple[Literal[137], Literal[78], Literal[136]] | tuple[
-            Literal[107], Literal[58], Literal[106]
-        ] = ((137, 78, 136) if purgatory_hovered else (107, 58, 106))
+        purgatory_color: (
+            tuple[Literal[137], Literal[78], Literal[136]]
+            | tuple[Literal[107], Literal[58], Literal[106]]
+        ) = ((137, 78, 136) if purgatory_hovered else (107, 58, 106))
         pygame.draw.rect(self.screen, purgatory_color, purgatory_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), purgatory_rect, 2)
         purgatory_text: pygame.Surface = font_medium.render(
@@ -1754,9 +1755,10 @@ class PygameUIManager:
         hell_hovered: bool = hell_rect.collidepoint(
             self.game.mouse_x, self.game.mouse_y
         )
-        hell_color: tuple[Literal[189], Literal[89], Literal[89]] | tuple[
-            Literal[139], Literal[69], Literal[69]
-        ] = (
+        hell_color: (
+            tuple[Literal[189], Literal[89], Literal[89]]
+            | tuple[Literal[139], Literal[69], Literal[69]]
+        ) = (
             (189, 89, 89) if hell_hovered else (139, 69, 69)
         )  # Lighter red when hovered
         pygame.draw.rect(self.screen, hell_color, hell_rect)
@@ -1777,14 +1779,16 @@ class PygameUIManager:
         upgrades_hovered: bool = upgrades_rect.collidepoint(
             self.game.mouse_x, self.game.mouse_y
         )
-        upgrades_bg_color: tuple[Literal[94], Literal[36], Literal[94]] | tuple[
-            Literal[74], Literal[26], Literal[74]
-        ] = (
+        upgrades_bg_color: (
+            tuple[Literal[94], Literal[36], Literal[94]]
+            | tuple[Literal[74], Literal[26], Literal[74]]
+        ) = (
             (94, 36, 94) if upgrades_hovered else (74, 26, 74)
         )  # Lighter purple when hovered
-        upgrades_border_color: tuple[Literal[255], Literal[224], Literal[20]] | tuple[
-            Literal[255], Literal[204], Literal[0]
-        ] = (
+        upgrades_border_color: (
+            tuple[Literal[255], Literal[224], Literal[20]]
+            | tuple[Literal[255], Literal[204], Literal[0]]
+        ) = (
             (255, 224, 20) if upgrades_hovered else (255, 204, 0)
         )  # Brighter gold when hovered
         pygame.draw.rect(self.screen, upgrades_bg_color, upgrades_rect)
@@ -3858,9 +3862,10 @@ class PygameUIManager:
                             lx = px + (ex - px) * t
                             ly = py + (ey - py) * t
                             r: float = 18 + 6 * random.random()
-                            color: tuple[
-                                Literal[255], Literal[255], Literal[204]
-                            ] | tuple[Literal[255], Literal[254], Literal[224]] = (
+                            color: (
+                                tuple[Literal[255], Literal[255], Literal[204]]
+                                | tuple[Literal[255], Literal[254], Literal[224]]
+                            ) = (
                                 (255, 255, 204)
                                 if self.game.frame_count % 2 == 0
                                 else (255, 254, 224)
@@ -3935,14 +3940,14 @@ class PygameUIManager:
         )
         # Health
         health_ratio: float = self.game.player.health / self.game.player.max_health
-        health_color: tuple[Literal[20], Literal[80], Literal[20]] | tuple[
-            Literal[255], Literal[255], Literal[0]
-        ] | tuple[Literal[255], Literal[0], Literal[0]] = (
+        health_color: (
+            tuple[Literal[20], Literal[80], Literal[20]]
+            | tuple[Literal[255], Literal[255], Literal[0]]
+            | tuple[Literal[255], Literal[0], Literal[0]]
+        ) = (
             (20, 80, 20)
             if health_ratio > 0.5
-            else (255, 255, 0)
-            if health_ratio > 0.25
-            else (255, 0, 0)
+            else (255, 255, 0) if health_ratio > 0.25 else (255, 0, 0)
         )
         pygame.draw.rect(
             self.screen,

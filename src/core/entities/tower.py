@@ -2,6 +2,7 @@
 Module handling tower/statue behavior for Limbo stage.
 Provides Tower and TowerManager classes to encapsulate firing and homing logic.
 """
+
 from __future__ import annotations
 
 import math
@@ -216,6 +217,7 @@ class TowerManager:
                 def set_v(p, vx, vy):
                     p["vel_x"] = vx
                     p["vel_y"] = vy
+
             else:
                 px = getattr(proj, "x", 0)
                 py = getattr(proj, "y", 0)

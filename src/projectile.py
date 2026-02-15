@@ -1,6 +1,6 @@
 import importlib
-from typing import TYPE_CHECKING, Any
 import math
+from typing import TYPE_CHECKING, Any
 
 from pygame.surface import Surface
 

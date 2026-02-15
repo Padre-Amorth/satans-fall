@@ -2483,7 +2483,6 @@ class Game:
         This includes Title, Status (Unlocked/Locked), and the requirement string.
         """
 
-
         # Show an effect description where available. For right-column
         # skill tiers (4..6) we display the per-slot effect that applies to towers/statues.
         lines: list[str] = []
@@ -4883,7 +4882,6 @@ class Game:
         )
         # Read tuned speed from weapon defs so it's centrally configurable
 
-
         # Constrain horizontal velocity to zero so the ball travels perfectly vertical.
         # Use constant speed for consistency, regardless of aim_y magnitude
         vy = 250 if aim_y >= 0 else -250
@@ -5080,7 +5078,6 @@ class Game:
                 if dist > 0:
                     speed = 420
                     # Apply orbital damage upgrades at levels 3 and 5 (+10% each)
-
 
                     vel_x = (dx / dist) * speed
                     vel_y = (dy / dist) * speed
@@ -6417,9 +6414,11 @@ class Game:
                             dmg_to_apply = self._player_damage_vs_burning(
                                 projectile,
                                 enemy,
-                                projectile.damage
-                                if isinstance(projectile, dict)
-                                else getattr(projectile, "damage", 0),
+                                (
+                                    projectile.damage
+                                    if isinstance(projectile, dict)
+                                    else getattr(projectile, "damage", 0)
+                                ),
                             )
                             enemy["health"] = max(
                                 0, enemy.get("health", 0) - dmg_to_apply
@@ -7172,9 +7171,11 @@ class Game:
                     proj_pr = getattr(
                         projectile,
                         "radius",
-                        projectile.get("radius", 0)
-                        if isinstance(projectile, dict)
-                        else 0,
+                        (
+                            projectile.get("radius", 0)
+                            if isinstance(projectile, dict)
+                            else 0
+                        ),
                     )
                 except Exception:
                     proj_px = proj_py = proj_pr = 0
@@ -9126,9 +9127,11 @@ class Game:
                     self.generate_lightning()
                     logger.debug(
                         "[PROLOGO] Lightning points generated: %s",
-                        len(self.lightning_points)
-                        if hasattr(self, "lightning_points")
-                        else None,
+                        (
+                            len(self.lightning_points)
+                            if hasattr(self, "lightning_points")
+                            else None
+                        ),
                     )
                     self.player.health = 0
 

@@ -2272,9 +2272,9 @@ class PygameUIManager:
                     roman_map = {1: "I", 2: "II", 3: "III"}
                     roman = roman_map.get(lvl, "")
                     if roman:
-                        # dark red for Roman numeral inside the box
+                        # darker red for Roman numeral inside the box (improved contrast)
                         lvl_surf: Surface = font_large.render(
-                            roman, True, (180, 30, 30)
+                            roman, True, (120, 20, 20)
                         )
                         self.screen.blit(
                             lvl_surf,

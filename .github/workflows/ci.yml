@@ -38,7 +38,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install ruff black isort mypy
+          pip install -r requirements-dev.txt
+
+      - name: Run pre-commit hooks
+        run: |
+          pip install pre-commit
+          pre-commit run --all-files
 
       - name: Lint (ruff)
         run: ruff check .

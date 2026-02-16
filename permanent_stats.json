@@ -1,0 +1,49 @@
+{
+  "permanent_stats": {
+    "power": 0,
+    "vigor": 0,
+    "adrenaline": 1,
+    "structure": 0,
+    "fire_1": 1,
+    "fire_2": 0,
+    "fire_3": 0,
+    "fire_4": 0,
+    "fire_5": 0,
+    "fire_6": 0,
+    "fire_7": 0,
+    "storm_1": 0,
+    "storm_2": 0,
+    "storm_3": 0,
+    "storm_4": 0,
+    "storm_5": 0,
+    "storm_6": 0,
+    "storm_7": 0,
+    "ice_1": 0,
+    "ice_2": 0,
+    "ice_3": 0,
+    "ice_4": 0,
+    "ice_5": 0,
+    "ice_6": 0,
+    "ice_7": 0,
+    "blasphemy_1": 2,
+    "blasphemy_2": 2,
+    "blasphemy_3": 0,
+    "blasphemy_4": 2,
+    "blasphemy_5": 0,
+    "blasphemy_6": 0,
+    "blasphemy_7": 0,
+    "blasphemy_8": 0,
+    "blasphemy_9": 0,
+    "blasphemy_10": 1
+  },
+  "global_progress": {
+    "display": {
+      "fullscreen": false,
+      "window_size": [
+        1374,
+        798
+      ],
+      "smooth_scale": true
+    }
+  }
+}

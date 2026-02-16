@@ -1,0 +1,509 @@
+"""EnemyManager with simple object pooling and spawn helpers.
+
+Responsibilities:
+- Spawn enemies (reuse from pool when possible)
+- Register externally created enemies
+- Recycle dead enemies back into the pool
+- Expose spawn-related attributes (enemy_spawn_rate, enemy_spawn_timer)
+- Provide small helper for reinforcements
+"""
+
+from __future__ import annotations
+
+import logging
+import random
+from typing import List
+
+from src.balance import ENEMY_BASE_SPEEDS
+from src.entities.enemy import Enemy
+
+logger = logging.getLogger(__name__)
+
+
+class EnemyManager:
+    def __init__(self, game, initial_pool: int = 40) -> None:
+        self.game = game
+        self.pool: List[Enemy] = []
+        self.active: List[Enemy] = []
+        # Spawn timing fields to be used by Game or external managers
+        self.enemy_spawn_rate: int = getattr(game, "enemy_spawn_rate", 72)
+        self.enemy_spawn_timer: int = getattr(game, "enemy_spawn_timer", 0)
+
+        # Big enemy (giant) timers moved to manager
+        self.big_enemy_timer: int = getattr(
+            game, "big_enemy_timer", 12 * getattr(game, "fps", 60)
+        )
+        self.big_enemy_fast_interval: int = getattr(
+            game, "big_enemy_fast_interval", 9 * getattr(game, "fps", 60)
+        )
+        self.big_spawned_this_wave: bool = getattr(game, "big_spawned_this_wave", False)
+
+        # Wave boss flag
+        self.wave_boss_spawned: bool = getattr(game, "wave_boss_spawned", False)
+
+        # Prologo / final boss related state
+        self.prologo_final_boss_spawned: bool = getattr(
+            game, "prologo_final_boss_spawned", False
+        )
+        self.prologo_final_boss_defeated: bool = getattr(
+            game, "prologo_final_boss_defeated", False
+        )
+        self.prologo_final_boss_immortal: bool = getattr(
+            game, "prologo_final_boss_immortal", False
+        )
+
+        # Lightning strike handling
+        self.prologo_lightning_strike: bool = getattr(
+            game, "prologo_lightning_strike", False
+        )
+        self.prologo_lightning_timer: int = getattr(game, "prologo_lightning_timer", 0)
+        self.prologo_lightning_duration_frames: int = getattr(
+            game,
+            "prologo_lightning_duration_frames",
+            180 + 2 * getattr(game, "fps", 60),
+        )
+
+        # Purgatory inquisitor (non-boss) spawn limiter: at most 3 spawns per 15s window
+        self.inquisitor_spawn_window_frames: int = 15 * getattr(game, "fps", 60)
+        self.inquisitor_spawn_window_timer: int = 0
+        self.inquisitor_spawn_count: int = 0
+        # Per-second chance to attempt a spawn when under cap (checked once per second)
+        self.inquisitor_spawn_chance_per_second: float = getattr(
+            game, "inquisitor_spawn_chance_per_second", 0.12
+        )
+
+        # Pre-create a few enemies if possible (best-effort for headless envs)
+        for _ in range(initial_pool):
+            try:
+                self.pool.append(Enemy(0, 0))
+            except Exception:
+                break
+
+    def spawn(
+        self,
+        x: int,
+        y: int,
+        enemy_type: str = "normal",
+        health: float = 20.0,
+        speed: float = 100.0,
+    ) -> Enemy:
+        """Spawn or reuse an enemy and add to game's enemy container."""
+        if self.pool:
+            e = self.pool.pop()
+            try:
+                # Reinitialize instance (safe fallback to re-run constructor)
+                e.__init__(x, y, enemy_type, health, speed)  # type: ignore[misc]
+            except Exception:
+                # If re-init fails, create a new instance
+                e = Enemy(x, y, enemy_type, health, speed)
+        else:
+            e = Enemy(x, y, enemy_type, health, speed)
+
+        # Track active
+        if e not in self.active:
+            self.active.append(e)
+
+        # Add to game container (Group or list)
+        try:
+            self.game.enemies.add(e)
+        except Exception:
+            try:
+                self.game.enemies.append(e)
+            except Exception:
+                pass
+
+        return e
+
+    def register(self, e: Enemy) -> None:
+        """Register an externally created enemy instance."""
+        if e not in self.active:
+            self.active.append(e)
+        try:
+            e.manager = self
+        except Exception:
+            pass
+
+    def recycle(self, e: Enemy) -> None:
+        """Recycle enemy instance back into pool and remove from game containers."""
+        try:
+            if e in self.active:
+                self.active.remove(e)
+        except Exception:
+            pass
+
+        try:
+            if hasattr(self.game.enemies, "remove"):
+                self.game.enemies.remove(e)
+        except Exception:
+            try:
+                self.game.enemies.remove(e)
+            except Exception:
+                pass
+
+        # Reset or hide enemy
+        try:
+            e.x = -9999
+            e.y = -9999
+            e.health = 0
+            # Clear particles/temporary state where applicable
+            e.burn_particles = []
+            e.ice_particles = []
+        except Exception:
+            pass
+
+        # Add back to pool
+        try:
+            self.pool.append(e)
+        except Exception:
+            pass
+
+    def spawn_giant_enemy(self, side: str | None = None) -> Enemy:
+        """Spawn a giant enemy at the top by default (inside walls), or at a specified side.
+
+        side: "left", "right", or "top". If omitted, defaults to "top" so giants
+        appear from above and within wall constraints like other enemies.
+        """
+        # Default to spawning from the top (inside walls) unless caller specifies a side
+        if side is None:
+            side = "top"  # default behavior: spawn from above, inside walls
+
+        if side == "left":
+            x = -30
+            # keep within vertical bounds
+            y = random.randint(0, max(0, self.game.height))
+        elif side == "right":
+            x = self.game.width + 30
+            y = random.randint(0, max(0, self.game.height))
+        else:  # top
+            x = self.game.random_x_between_walls()
+            y = -30
+
+        health = 200 * getattr(
+            self.game, "difficulty_multiplier", 1.0
+        )  # Doubled from 100
+        # Base non-boss giant speed (from balance)
+        speed = ENEMY_BASE_SPEEDS.get("giant", 45)
+        e = self.spawn(x, y, "giant", health, speed)
+        return e
+
+    def update_big_enemy_timer(self) -> None:
+        """Decrement big enemy timer and spawn a giant when it hits zero (once per wave)."""
+        self.big_enemy_timer -= 1
+        if self.big_enemy_timer <= 0 and not self.big_spawned_this_wave:
+            try:
+                self.spawn_giant_enemy()
+                self.big_spawned_this_wave = True
+                if getattr(self.game, "wave", 0) >= 6:
+                    self.big_enemy_timer = self.big_enemy_fast_interval
+                else:
+                    self.big_enemy_timer = 12 * getattr(self.game, "fps", 60)
+            except Exception:
+                # Don't propagate spawn errors to game loop
+                pass
+
+    def update_inquisitor_spawns(self) -> None:
+        """Randomly spawn inquisitor as a *normal* enemy in Purgatory.
+
+        Behaviour:
+        - Only active when current stage startswith 'purgatory'.
+        - Spawns as a non-boss `normal` enemy but uses the `inquisitor` appearance.
+        - Enforced cap: at most 2 spawns per `inquisitor_spawn_window_frames` (15s by default).
+        - Spawn attempts are evaluated once per second with a configurable probability.
+        """
+        # Only valid for Purgatory/HELL stages
+        if not getattr(self.game, "selected_stage", "").startswith(
+            ("purgatory", "hell")
+        ):
+            return
+
+        # Manage window timer (frames)
+        if self.inquisitor_spawn_window_timer > 0:
+            self.inquisitor_spawn_window_timer -= 1
+            if self.inquisitor_spawn_window_timer <= 0:
+                self.inquisitor_spawn_window_timer = 0
+                self.inquisitor_spawn_count = 0
+
+        # If we've already hit cap, nothing to do
+        if self.inquisitor_spawn_count >= 3:
+            return
+
+        # Only attempt spawn once per second (stable chance)
+        if getattr(self.game, "frame_count", 0) % getattr(self.game, "fps", 60) != 0:
+            return
+
+        import random
+
+        if random.random() < self.inquisitor_spawn_chance_per_second:
+            # Spawn a normal enemy that looks like an inquisitor
+            x = self.game.random_x_between_walls()
+            y = -20
+            # Use same stats as 'normal' enemies
+            health = 50 * getattr(self.game, "difficulty_multiplier", 1.0)
+            speed = ENEMY_BASE_SPEEDS.get("normal", 75)
+
+            try:
+                e = self.spawn(x, y, "normal", health, speed)
+            except Exception:
+                try:
+                    e = Enemy(x, y, "normal", health, speed)
+                    if hasattr(self.game.enemies, "add"):
+                        self.game.enemies.add(e)
+                    else:
+                        self.game.enemies.append(e)
+                except Exception:
+                    return
+
+            # Make inquisitor-normal slightly larger (+10px) and give +10 HP
+            try:
+                e.width = getattr(e, "width", 30) + 10
+                e.height = getattr(e, "height", 30) + 10
+                # Rescale image if present
+                try:
+                    import pygame
+
+                    if getattr(e, "image", None) is not None:
+                        e.image = pygame.transform.smoothscale(
+                            e.image, (e.width, e.height)
+                        )
+                        try:
+                            e.base_image = e.image.copy()
+                        except Exception:
+                            pass
+                        e.rect = e.image.get_rect(center=(e.x, e.y))
+                except Exception:
+                    pass
+
+                # Increase HP by 10 (respect max_health semantics)
+                try:
+                    e.max_health = getattr(e, "max_health", 0) + 10
+                    e.health = min(getattr(e, "health", 0) + 10, e.max_health)
+                except Exception:
+                    pass
+
+                # Mark as inquisitor-normal (controls shooting behavior)
+                setattr(e, "is_inquisitor_normal", True)
+                setattr(e, "inquisitor_fire_single_next", False)
+                # Align shoot cooldown to inquisitor rhythm
+                try:
+                    import random
+
+                    e.shoot_cooldown = random.randint(100, 140)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+            # Give it inquisitor appearance but keep normal behaviour
+            try:
+                setattr(e, "appearance", "inquisitor")
+                # If an 'enemy_inquisitor.png' asset exists, use it for this instance
+                try:
+                    from src.assets.manager import get_image
+
+                    img = get_image(
+                        "enemy_inquisitor.png",
+                        (getattr(e, "width", 32), getattr(e, "height", 32)),
+                    )
+                    if img is not None:
+                        e.image = img.copy()
+                        try:
+                            e.base_image = e.image.copy()
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+            # Start window timer if not already running
+            if self.inquisitor_spawn_window_timer == 0:
+                self.inquisitor_spawn_window_timer = self.inquisitor_spawn_window_frames
+
+            self.inquisitor_spawn_count += 1
+
+    def update_wave_boss(self, wave_time: float) -> None:
+        """Handle the timed wave boss spawn (at ~38s).
+
+        Important: in the Prologo stage, once the final boss has spawned we must
+        not spawn any additional wave bosses — only non-boss enemies should
+        continue to appear.
+        """
+        # Explicitly prevent any wave-boss spawns in Prologo after final boss spawned
+        if (
+            getattr(self.game, "selected_stage", None) == "prologo"
+            and self.prologo_final_boss_spawned
+        ):
+            return
+
+        if not self.wave_boss_spawned and wave_time >= 38:
+            # If we're in a Limbo stage: normally spawn Inquisitor, but
+            # replace with boss_big on waves divisible by 3 (wave 3,6,9...).
+            if getattr(self.game, "is_limbo_stage", lambda: False)():
+                current_wave = getattr(self.game, "wave", 0)
+                if current_wave % 3 == 0 and current_wave > 0:
+                    self.spawn_boss("big")
+                else:
+                    self.spawn_boss("inquisitor")
+            # Purgatory: alternate end-of-wave boss between medium and inquisitor
+            elif getattr(self.game, "selected_stage", "").startswith(
+                ("purgatory", "hell")
+            ):
+                # Use wave parity to alternate: odd waves -> medium, even waves -> inquisitor
+                current_wave = getattr(self.game, "wave", 0)
+                if current_wave % 2 == 1:
+                    self.spawn_boss("mid")
+                else:
+                    self.spawn_boss("inquisitor")
+            elif (
+                getattr(self.game, "wave", 0) % 3 == 0
+                and getattr(self.game, "wave", 0) > 0
+            ):
+                self.spawn_boss("big")
+            else:
+                self.spawn_boss("mid")
+            self.wave_boss_spawned = True
+
+    def update_prologo_events(self) -> None:
+        """Handle Prologo-specific boss events (final boss spawn, lightning, regen)."""
+        try:
+            # Final boss spawn at 3:55 (235 seconds)
+            if (
+                getattr(self.game, "selected_stage", None) == "prologo"
+                and not self.prologo_final_boss_spawned
+                and getattr(self.game, "time_elapsed", 0) >= 235
+            ):
+                self.spawn_boss("final")
+                self.prologo_final_boss_spawned = True
+
+            # Lightning strike countdown
+            if (
+                getattr(self.game, "selected_stage", None) == "prologo"
+                and self.prologo_lightning_strike
+            ):
+                self.prologo_lightning_timer += 1
+                if (
+                    self.prologo_lightning_timer
+                    >= self.prologo_lightning_duration_frames
+                ):
+                    # Call into game to show Prologo defeat
+                    try:
+                        self.game.prologo_defeat()
+                    except Exception:
+                        pass
+
+            # Boss regeneration when immortal
+            for boss in list(getattr(self.game, "bosses", [])):
+                if (
+                    getattr(boss, "enemy_type", "") == "boss_final"
+                    and self.prologo_final_boss_immortal
+                    and getattr(boss, "health", 0) < getattr(boss, "max_health", 0)
+                ):
+                    boss.health = min(getattr(boss, "max_health", 0), boss.health + 3.0)
+                    if (
+                        boss.health >= boss.max_health
+                        and not self.prologo_lightning_strike
+                    ):
+                        # Trigger lightning and knock out player
+                        self.prologo_lightning_strike = True
+                        try:
+                            # Use game's generator if available
+                            if hasattr(self.game, "generate_lightning"):
+                                self.game.generate_lightning()
+                            else:
+                                # Fallback: create a minimal lightning_points list
+                                self.game.lightning_points = [
+                                    (
+                                        int(
+                                            getattr(
+                                                self.game.player,
+                                                "x",
+                                                self.game.width // 2,
+                                            )
+                                        ),
+                                        0,
+                                    ),
+                                    (
+                                        int(
+                                            getattr(
+                                                self.game.player,
+                                                "x",
+                                                self.game.width // 2,
+                                            )
+                                        ),
+                                        self.game.height,
+                                    ),
+                                ]
+                            # Knock out player
+                            try:
+                                self.game.player.health = 0
+                            except Exception:
+                                pass
+                        except Exception:
+                            pass
+        except Exception:
+            # Fail-safe: don't let manager errors break the game loop
+            pass
+
+    def spawn_boss(self, boss_type: str = "mid") -> Enemy:
+        """Spawn a boss of the specified type ('final', 'big', 'mid').
+        Adds the boss to `game.bosses` to preserve existing boss grouping.
+        """
+        x = self.game.width // 2
+        # Special spawn position for prologue bosses - start higher up
+        if getattr(self.game, "selected_stage", None) == "prologo" and boss_type in [
+            "final",
+            "big",
+        ]:
+            y = -150  # Start higher for walking entrance
+        else:
+            y = -50
+
+        if boss_type == "final":
+            enemy_type = "boss_final"
+            health = 2000 * getattr(
+                self.game, "difficulty_multiplier", 1.0
+            )  # Doubled from 1000
+            speed = ENEMY_BASE_SPEEDS.get("boss_final", 40)
+        elif boss_type == "big":
+            enemy_type = "boss_big"
+            health = 1200 * getattr(
+                self.game, "difficulty_multiplier", 1.0
+            )  # Doubled from 600
+            speed = ENEMY_BASE_SPEEDS.get("boss_big", 40)
+        elif boss_type == "inquisitor":
+            # Special Limbo boss (HP increased by 50%, now reduced by 10%)
+            enemy_type = "boss_inquisitor"
+            # Base HP: 525 -> apply -10% for tuning
+            health = int(
+                1050 * 0.9 * getattr(self.game, "difficulty_multiplier", 1.0)
+            )  # Doubled from 525 -> 944
+            speed = ENEMY_BASE_SPEEDS.get(
+                "boss_inquisitor", 50
+            )  # inquisitor speed from balance
+        else:
+            enemy_type = "boss_medium"
+            health = 600 * getattr(
+                self.game, "difficulty_multiplier", 1.0
+            )  # Doubled from 300
+            speed = ENEMY_BASE_SPEEDS.get("boss_medium", 45)
+
+        boss = Enemy(x, y, enemy_type, health, speed)
+        # Track active
+        if boss not in self.active:
+            self.active.append(boss)
+        # Add to boss group on game
+        try:
+            self.game.bosses.add(boss)
+        except Exception:
+            try:
+                self.game.bosses.append(boss)
+            except Exception:
+                pass
+        return boss
+
+    def cleanup(self) -> None:
+        """Optional maintenance (shrink pool if too big), not used for now."""
+        pass
+
+
+__all__ = ["EnemyManager"]

@@ -20,7 +20,7 @@ pip install -r requirements.txt
 - Stay at the bottom of the screen and dodge incoming demons
 - Automatically shoot holy fire at enemies above you
 - Survive as many waves as possible to increase your score
-- Each wave gets harder with more enemies and increased enemy health/speed
+- Each wave gets harder with more enemies and increased enemy health (movement speeds are controlled by `ENEMY_BASE_SPEEDS` in `src/balance.py`)
 
 ## Running the Game
 
@@ -37,7 +37,7 @@ Debug CLI flags (developer shortcuts):
 
 The project uses a modular Pygame architecture with separate components:
 
-- `src/player.py` - Player character logic
+- `src/entities/player.py` - Player character logic (moved from `src/player.py`)
 - `src/game.py` - Core game mechanics
 - `src/enemy.py` - Enemy spawning and AI
 - `src/projectile.py` - Weapon and projectile systems
@@ -85,6 +85,12 @@ The included `.pre-commit-config.yaml` will run `ruff --fix` on changed files so
   - **Orbitals**: Summon orbiting sentinels that auto-target enemies
   - **Shotgun**: Fire spread of pellets with cooldown
   - **Spear**: Piercing spear that hits all enemies in path
+
+- **Statues / Towers (Limbo / Purgatory)**: Base projectile damage **10** —
+  - **Fire**: deals 10 damage and applies Burn (4 DPS for 3s)
+  - **Storm**: deals ~9 projectile damage and chains between enemies. Left-column STORM permanents: slots 1 & 3 grant **+2 chained targets** each; slot 2 causes **chain-kills to explode in a lightning burst** that damages nearby enemies (chain-target total stacks up to **+4** when both slots 1 & 3 are active).
+  - **Ice**: deals 10 damage and applies a 50% slow for 2s
+
 - **Upgrade System**: Choose from 6 different upgrades every level with visual icons:
   - Damage +20% (damage icon)
   - Fire Rate +15% (fire rate icon)
@@ -92,7 +98,9 @@ The included `.pre-commit-config.yaml` will run `ruff --fix` on changed files so
   - Damage Reduction +10% (piercing icon)
   - Max Health +20 (bounce icon)
   - Speed +20% (speed icon)
-- **Multiple Enemy Types**: 
+
+  - **Permanent Upgrades — POWER:** increases player damage **+5% per level** (was +3%); reflected in UI and tests.
+- **Multiple Enemy Types**:
   - Weak demons (blue angels)
   - Normal demons (white angels)
   - Strong demons (golden archangels)
@@ -120,6 +128,8 @@ The included `.pre-commit-config.yaml` will run `ruff --fix` on changed files so
 - Move left: LEFT ARROW or A
 - Move right: RIGHT ARROW or D
 - Pause: ESC
+  - Note: The **Restart** option has been removed from the Pause menu (only Resume and Quit remain).
+- Game Over behavior: Pressing ENTER/SPACE no longer restarts a level; press **ESC** to return to the stage menu.
 - During upgrade selection:
   - LEFT/RIGHT arrows: Select upgrade (shown with icons)
   - ENTER: Confirm selection

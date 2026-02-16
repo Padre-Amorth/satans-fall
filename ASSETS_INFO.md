@@ -5,7 +5,7 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
 ## Come Usare le Immagini
 
 1. Crea o ottieni le tue immagini (formato PNG, JPG o GIF)
-2. Metti le immagini nella cartella `assets/` 
+2. Metti le immagini nella cartella `assets/`
 3. Usa i nomi dei file indicati sotto
 4. Il gioco caricherà automaticamente le immagini disponibili
 
@@ -21,15 +21,19 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
 ### Nemici
 - **File:** `assets/enemy_weak.png`
   - Dimensione: 40x40 pixel
-  - Nemico debole (angelo azzurro)
+  - Nemico debole (zombie)
 
 - **File:** `assets/enemy_normal.png`
   - Dimensione: 40x40 pixel
-  - Nemico normale (angelo bianco)
+  - Nemico normale (esorcist)
+
+- **File:** `assets/enemy_inquisitor.png`
+  - Dimensione: 40x40 pixel
+  - Nemico normale (inquisitor)
 
 - **File:** `assets/enemy_strong.png`
   - Dimensione: 40x40 pixel
-  - Nemico forte (arcangelo dorato)
+  - Nemico forte (soldier)
 
 - **File:** `assets/enemy_angel.png`
   - Dimensione: 40x40 pixel
@@ -54,7 +58,7 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
 
 - **File:** `assets/boss_final.png`
   - Dimensione: 150x150 pixel
-  - Boss finale (figura divina più grande)
+  - Boss finale (gesù)
 
 ### Proiettili
 - **File:** `assets/projectile.png`
@@ -64,6 +68,38 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
 - **File:** `assets/enemy_projectile.png`
   - Dimensione: 20x20 pixel
   - Proiettili dei nemici
+
+### Edifici PROLOGUE (Cattedrali e Chiese)
+- **File:** `assets/cathedral_center.png`
+  - Dimensione consigliata: 100x100 pixel
+  - Cattedrale centrale (più grande, con torri laterali)
+  - Posizionata al centro del livello PROLOGUE
+
+- **File:** `assets/church_left.png`
+  - Dimensione consigliata: 60x60 pixel
+  - Chiesa laterale sinistra
+  - Posizionata a sinistra nel livello PROLOGUE
+
+- **File:** `assets/church_right.png`
+  - Dimensione consigliata: 60x60 pixel
+  - Chiesa laterale destra
+  - Posizionata a destra nel livello PROLOGUE
+
+- **File:** `assets/church_outer_left.png`
+  - Dimensione consigliata: 60x60 pixel
+  - Chiesa esterna sinistra
+  - Posizionata al lato più esterno sinistro del livello PROLOGUE
+
+- **File:** `assets/church_outer_right.png`
+  - Dimensione consigliata: 60x60 pixel
+  - Chiesa esterna destra
+  - Posizionata al lato più esterno destro del livello PROLOGUE
+
+### Campo di battaglia (Limbo)
+- **File:** `assets/limbo_battlefield.png`
+  - Dimensione consigliata: 1280x720 (verrà ridimensionata automaticamente)
+  - Immagine di sfondo per la parte interna delle mura nei livelli `limbo`, `limbo_2`, `limbo_3`.
+  - Se mancante, il gioco userà il riempimento arancione di default.
 
 ## Consigli per le Immagini
 
@@ -81,7 +117,10 @@ satans fall/
 │   ├── enemy_weak.png
 │   ├── enemy_normal.png
 │   ├── boss_final.png
-│   └── projectile.png
+│   ├── projectile.png
+│   ├── cathedral_center.png
+│   ├── church_left.png
+│   └── church_right.png
 ├── main_pygame.py
 └── ...
 ```

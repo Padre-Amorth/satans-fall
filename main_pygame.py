@@ -39,7 +39,14 @@ def main():
         logger.debug("CLI flag detected: auto-selecting Prologo and fast-forwarding")
         game.select_stage("prologo")
 
-    game.run()
+    try:
+        game.run()
+    except Exception as e:
+        import traceback
+
+        print(f"Game crashed with error: {e}")
+        traceback.print_exc()
+        input("Press Enter to exit...")
 
 
 if __name__ == "__main__":

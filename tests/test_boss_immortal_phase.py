@@ -1,12 +1,9 @@
 import math
-from src.enemy import Enemy
+
+from test_utils import DummyPlayer
+
+from src.entities.enemy import Enemy
 from src.game import Game
-
-
-class DummyPlayer:
-    def __init__(self, x=400, y=500):
-        self.x = x
-        self.y = y
 
 
 def test_boss_moves_to_center_and_shines_when_immortal():
@@ -24,16 +21,16 @@ def test_boss_moves_to_center_and_shines_when_immortal():
     game.prologo_final_boss_immortal = True
 
     # Call update a few times to move towards center and trigger shine
-    player = DummyPlayer()
+    player = DummyPlayer(400, 500)
     for _ in range(10):  # More updates for size increase
         boss.update(player, game)
 
     new_dist = math.hypot(boss.x - center_x, boss.y - center_y)
 
     assert new_dist < initial_dist, "Boss did not move closer to center when immortal"
-    assert boss.width > initial_width, (
-        "Boss did not increase in size during regeneration"
-    )
+    assert (
+        boss.width > initial_width
+    ), "Boss did not increase in size during regeneration"
     assert hasattr(boss, "shine_phase") and boss.shine_phase > 0
     assert boss.shining is True
     # If base image exists, the image should have been modified (at least one pixel differs)

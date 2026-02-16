@@ -1,4 +1,4 @@
-from src.enemy import Enemy
+from src.entities.enemy import Enemy
 
 
 def test_boss_final_is_100x100():

@@ -2193,6 +2193,7 @@ class PygameUIManager:
             # Bar (symmetric placement) — highlight only on name (name hover controls text colour already)
             bar_x = bar_x_base
             bar_y = stat["y"] + 15
+            # Bar (original menu background color)
             bar_bg_color = (26, 26, 26)
             bar_border_color = (68, 68, 68)  # always default border; no gold here
             pygame.draw.rect(
@@ -2260,7 +2261,7 @@ class PygameUIManager:
                 # draw border on top
                 pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
             else:
-                pygame.draw.rect(self.screen, (26, 26, 26), rect)
+                pygame.draw.rect(self.screen, (8, 8, 8), rect)
                 pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
 
             # draw Roman numerals for top-row blasphemy boxes (multi-level)
@@ -2273,20 +2274,14 @@ class PygameUIManager:
                     roman = roman_map.get(lvl, "")
                     if roman:
                         # darker red for Roman numeral inside the box (improved contrast)
-                        lvl_surf: Surface = font_large.render(
-                            roman, True, (120, 20, 20)
-                        )
+                        lvl_surf: Surface = font_large.render(roman, True, (120, 20, 20))
                         self.screen.blit(
                             lvl_surf,
                             (
                                 box_x - lvl_surf.get_width() // 2 + shake_x,
-                                box_y1
-                                + box_height // 2
-                                - lvl_surf.get_height() // 2
-                                + shake_y,
+                                box_y1 + box_height // 2 - lvl_surf.get_height() // 2 + shake_y,
                             ),
                         )
-
             # Hover tooltip for top-row blasphemy boxes
             try:
                 mouse_point = (self.game.mouse_x, self.game.mouse_y)
@@ -2328,7 +2323,7 @@ class PygameUIManager:
                 box_width,
                 box_height,
             )
-            pygame.draw.rect(self.screen, (26, 26, 26), rect)
+            pygame.draw.rect(self.screen, (8, 8, 8), rect)
             pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
 
             # Hover tooltip for bottom-row blasphemy boxes
@@ -2409,8 +2404,8 @@ class PygameUIManager:
                     self.game.permanent_stats.get(f"{key_prefix}_{4+row}", 0)
                 )
 
-                left_bg: tuple[int, ...] = color if left_active else (26, 26, 26)
-                right_bg: tuple[int, ...] = color if right_active else (26, 26, 26)
+                left_bg: tuple[int, ...] = color if left_active else (8, 8, 8)
+                right_bg: tuple[int, ...] = color if right_active else (8, 8, 8)
                 left_border: tuple[int, ...] = (
                     tuple(min(255, c + 20) for c in color)
                     if left_active
@@ -2478,7 +2473,7 @@ class PygameUIManager:
             center_y = tree_top_y + 3 * tree_v_spacing
             center_key = f"{key_prefix}_7"
             center_active = bool(self.game.permanent_stats.get(center_key, 0))
-            center_bg: tuple[int, ...] = color if center_active else (26, 26, 26)
+            center_bg: tuple[int, ...] = color if center_active else (8, 8, 8)
             center_border: tuple[int, ...] = (
                 tuple(min(255, c + 20) for c in color)
                 if center_active

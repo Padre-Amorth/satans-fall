@@ -1268,7 +1268,8 @@ class Game:
                 else:
                     self.screen.fill(stage_settings["bg_color"])
             else:
-                self.screen.fill((20, 10, 30))
+                # Main menu background — use very-dark gray instead of bluish tone
+                self.screen.fill((8, 8, 8))
 
             # Draw game world if in game
             if (
@@ -1800,6 +1801,7 @@ class Game:
             bar_width = 200
             bar_height = 12
 
+            # Bar background (original color)
             pygame.draw.rect(
                 self.screen,
                 (26, 26, 26),
@@ -1912,8 +1914,8 @@ class Game:
                 roman_map = {1: "I", 2: "II", 3: "III"}
                 roman = roman_map.get(lvl, "")
                 if roman:
-                    # dark red for Roman numeral inside the box
-                    lvl_surf = font_large.render(roman, True, (180, 30, 30))
+                    # darker red for Roman numeral inside the box (improved contrast)
+                    lvl_surf = font_large.render(roman, True, (120, 20, 20))
                     sx = box_x - lvl_surf.get_width() // 2 + shake_x
                     sy = box_y1 + box_height // 2 - lvl_surf.get_height() // 2 + shake_y
                     self.screen.blit(lvl_surf, (sx, sy))

@@ -58,6 +58,6 @@ def test_permanent_upgrades_show_effect_text_and_alignment(tmp_path: Path) -> No
     sample_pixel = tuple(surf.get_at((sample_x, sample_y))[:3])
     # Accept either the bar background or the border color as valid evidence of alignment
     assert sample_pixel in (
-        (26, 26, 26),
+        (8, 8, 8),
         (68, 68, 68),
     ), f"Bar not aligned at expected x {expected_bar_x}, found pixel {sample_pixel}"

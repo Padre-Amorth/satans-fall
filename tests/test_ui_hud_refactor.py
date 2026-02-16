@@ -34,7 +34,7 @@ def test_game_draw_hud_delegates_to_ui(tmp_path: Path) -> None:
     def fake_draw_hud(shake_x=0, shake_y=0):
         called["v"] = True
 
-    g.ui.draw_hud = fake_draw_hud
+    g.ui.draw_hud = fake_draw_hud  # type: ignore[method-assign]
     g.draw_hud()
     assert called["v"] is True
 
@@ -48,6 +48,6 @@ def test_game_draw_center_messages_delegates(tmp_path: Path) -> None:
     def fake_draw_center(shake_x=0, shake_y=0):
         called["v"] = True
 
-    g.ui.draw_center_messages = fake_draw_center
+    g.ui.draw_center_messages = fake_draw_center  # type: ignore[method-assign]
     g.draw_center_messages()
     assert called["v"] is True

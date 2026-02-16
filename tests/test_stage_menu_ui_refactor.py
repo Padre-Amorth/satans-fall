@@ -40,6 +40,6 @@ def test_game_draw_stage_menu_delegates(tmp_path: Path) -> None:
     def fake_draw(shake_x=0, shake_y=0):
         called["v"] = True
 
-    g.ui.draw_stage_menu = fake_draw
+    g.ui.draw_stage_menu = fake_draw  # type: ignore[method-assign]
     g.draw_stage_menu()
     assert called["v"] is True

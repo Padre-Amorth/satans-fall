@@ -106,13 +106,56 @@ WEAPON_DEFS["shotgun"].update(
         "pellet_level_step": 2,
         "pellet_increase": 1,
         "spread_deg": 12,
-        "damage_mult": 0.55,
+        "damage_mult": 0.55,  # legacy multiplier (kept for compatibility)
         "base_cd": 1.5,
         "cd_reduction_per_pair": 0.15,
         "min_cd": 0.4,
         "base_radius": 5,
+        # New configurable absolute pellet damage targets (used for linear remap)
+        "min_pellet_damage": 20,  # Lv1 target damage per pellet
+        "max_pellet_damage": 30,  # Lv6 target damage per pellet
     }
 )
+
+
+def shotgun_pellet_damage(level: int, base_player_damage: int) -> int:
+    """Return per-pellet damage for Hellgun.
+
+    Behavior:
+    - Linearly interpolates between configured min/max pellet damage across levels 1..max_level.
+    - Scales the resulting value proportionally to the provided base_player_damage relative to
+      the default player base (30) so pellet damage still benefits from player damage upgrades.
+    - If level <= 0, falls back to the legacy formula (approx. base_player_damage * damage_mult).
+    """
+    try:
+        d = WEAPON_DEFS.get("shotgun", {})
+        min_d = float(d.get("min_pellet_damage", 20))
+        max_d = float(d.get("max_pellet_damage", 30))
+        max_level = int(d.get("max_level", 6) or 6)
+    except Exception:
+        # Fallback: legacy behavior proportional to base player damage
+        return int(
+            base_player_damage
+            * float(WEAPON_DEFS.get("shotgun", {}).get("damage_mult", 0.55))
+        )
+
+    if level <= 0:
+        return int(base_player_damage * float(d.get("damage_mult", 0.55)))
+
+    lvl = max(1, min(int(level), max_level))
+    t = (lvl - 1) / max(1, (max_level - 1))
+    remapped = min_d + t * (max_d - min_d)
+
+    # Scale remapped absolute pellet damage proportionally to player's base damage.
+    # Default player base is 30 (PLAYER_BASE_DAMAGE); use 30 as reference.
+    reference = 30.0
+    try:
+        scaled = remapped * (float(base_player_damage) / reference)
+    except Exception:
+        scaled = remapped
+    # Use int() truncation to match existing conventions
+    return int(scaled)
+
 
 WEAPON_DEFS["orbital"].update(
     {
@@ -139,8 +182,8 @@ WEAPON_DEFS["spear"].update(
 # DemonStrike tuning (custom scaling & visuals)
 WEAPON_DEFS["DemonStrike"].update(
     {
-        # Cooldown tuned similar to skull_bomb but slightly *shorter* (more frequent)
-        "base_cd": 1.8,  # Skull Bomb = 2.0 -> DemonStrike slightly more often
+        # Cooldown tuned similar to skull_bomb (kept at 1.8s here)
+        "base_cd": 1.8,  # roughly matched to Skull Bomb base_cd
         "cd_reduction_per_level": 0.12,
         "min_cd": 0.5,
         "damage_base_mult": 0.5,  # retains player-damage component multiplier
@@ -159,7 +202,8 @@ WEAPON_DEFS["Soul Drain"].update(
         "cd_reduction_at_level_4": 0.3,
         "min_cd": 0.5,
         "base_damage": 10,  # doubled from 5
-        "base_heal": 2,
+        # Halved healing per your request
+        "base_heal": 1,
         "damage_heal_increments": {
             3: 0.1,
             5: 0.1,
@@ -176,16 +220,49 @@ WEAPON_DEFS["Soul Drain"].update(
 WEAPON_DEFS["beast"].update(
     {
         "burst_rate_multiplier_per_level": 0.05,
+        # Absolute damage targets for Beast weapon (used to remap multiplier)
+        "min_damage": 22,  # Lv1 target damage per basic projectile
+        "max_damage": 45,  # Lv6 target damage per basic projectile
     }
 )
 
+
+def beast_damage(level: int, base_damage: int) -> int:
+    """Return effective beast-adjusted damage for a basic projectile.
+
+    This remaps Beast levels linearly between the configured absolute
+    damage targets (min_damage -> max_damage) and returns the final
+    integer damage value. If level <= 0, returns the provided base_damage.
+    """
+    try:
+        d = WEAPON_DEFS.get("beast", {})
+        min_d = float(d.get("min_damage", 22))
+        max_d = float(d.get("max_damage", 45))
+        max_level = int(d.get("max_level", 6) or 6)
+    except Exception:
+        return int(base_damage)
+
+    if level <= 0:
+        return int(base_damage)
+
+    lvl = max(1, min(int(level), max_level))
+    # Linear interpolation across levels 1..max_level
+    t = (lvl - 1) / max(1, (max_level - 1))
+    desired = min_d + t * (max_d - min_d)
+    # Use floor-like truncation to match existing int() semantics elsewhere
+    return int(desired)
+
+
 WEAPON_DEFS["skull_bomb"].update(
     {
-        "base_cd": 2.0,
-        "cd_reduction_per_level": 0.15,
+        "base_cd": 1.8,
+        # Linear reduction per level so Lv1=1.8s -> Lv6=1.0s (5 steps of 0.16s)
+        "cd_reduction_per_level": 0.16,
         "min_cd": 0.5,
-        "base_damage": 20,
-        "damage_increase_per_level": 2,
+        # Pre-multiplied base + fractional per-level increment so final values
+        # (after existing *1.2 multiplier in skull_bomb_damage) are: Lv1=30, Lv6=50
+        "base_damage": 25,
+        "damage_increase_per_level": 3.3333333333333335,
         "base_explosion_radius": 80,
         "radius_increase_per_level": 8,
     }
@@ -193,9 +270,11 @@ WEAPON_DEFS["skull_bomb"].update(
 
 
 def get_orbital_count(level: int) -> int:
-    base = WEAPON_DEFS.get("orbital", {}).get("base_count", 3)
-    extra = (level // 2) * WEAPON_DEFS.get("orbital", {}).get("extra_per_pair", 1)
-    return base + extra
+    base = int(WEAPON_DEFS.get("orbital", {}).get("base_count", 3) or 3)
+    extra = (level // 2) * int(
+        WEAPON_DEFS.get("orbital", {}).get("extra_per_pair", 1) or 1
+    )
+    return int(base + extra)
 
 
 def orbital_cooldown_range(level: int) -> tuple[int, int]:
@@ -213,53 +292,57 @@ def orbital_cooldown_range(level: int) -> tuple[int, int]:
 
 def shotgun_pellets(level: int) -> int:
     d = WEAPON_DEFS.get("shotgun", {})
-    base = d.get("base_pellets", 4)
-    step = d.get("pellet_level_step", 2)
-    inc = d.get("pellet_increase", 1)
-    return base + (level // step) * inc
+    base = int(d.get("base_pellets", 4) or 4)
+    step = int(d.get("pellet_level_step", 2) or 2)
+    inc = int(d.get("pellet_increase", 1) or 1)
+    return int(base + (level // step) * inc)
 
 
 def shotgun_cooldown(level: int) -> float:
     d = WEAPON_DEFS.get("shotgun", {})
-    base_cd = d.get("base_cd", 1.5)
+    base_cd = float(d.get("base_cd", 1.5) or 1.5)
     reductions = level // 2
-    cd = base_cd - reductions * d.get("cd_reduction_per_pair", 0.15)
-    return max(d.get("min_cd", 0.4), cd)
+    cd = base_cd - reductions * float(d.get("cd_reduction_per_pair", 0.15) or 0.15)
+    return float(max(float(d.get("min_cd", 0.4) or 0.4), cd))
 
 
 def spear_cooldown(level: int) -> float:
     d = WEAPON_DEFS.get("spear", {})
-    base_cd = d.get("base_cd", 0.6)
-    cd = base_cd - level * d.get("cd_reduction_per_level", 0.06)
-    return max(d.get("min_cd", 0.15), cd)
+    base_cd = float(d.get("base_cd", 0.6) or 0.6)
+    cd = base_cd - level * float(d.get("cd_reduction_per_level", 0.06) or 0.06)
+    return float(max(float(d.get("min_cd", 0.15) or 0.15), cd))
 
 
 def DemonStrike_cooldown(level: int) -> float:
     """Cooldown for DemonStrike — uses DemonStrike-specific tuning from WEAPON_DEFS."""
     d = WEAPON_DEFS.get("DemonStrike", {})
-    base_cd = d.get("base_cd", 1.8)
-    cd = base_cd - level * d.get("cd_reduction_per_level", 0.12)
-    return max(d.get("min_cd", 0.5), cd)
+    base_cd = float(d.get("base_cd", 1.8) or 1.8)
+    cd = base_cd - level * float(d.get("cd_reduction_per_level", 0.12) or 0.12)
+    return float(max(float(d.get("min_cd", 0.5) or 0.5), cd))
 
 
 def soul_drain_cd(level: int) -> float:
     d = WEAPON_DEFS.get("Soul Drain", {})
-    base_cd = d.get("base_cd", 1.5)
+    base_cd = float(d.get("base_cd", 1.5) or 1.5)
     if level >= 4:
-        base_cd -= d.get("cd_reduction_at_level_4", 0.3)
-    return max(d.get("min_cd", 0.5), base_cd)
+        base_cd -= float(d.get("cd_reduction_at_level_4", 0.3) or 0.3)
+    return float(max(float(d.get("min_cd", 0.5) or 0.5), base_cd))
 
 
 def soul_drain_projectile_count(level: int) -> int:
     d = WEAPON_DEFS.get("Soul Drain", {})
     # Base projectiles now come from definition (default 2)
-    base = d.get("base_projectiles", 2)
+    base = int(d.get("base_projectiles", 2) or 2)
     extra = 0
     proj_map = d.get("projectiles_at_level", {})
     for thresh, extra_n in proj_map.items():
-        if level >= thresh:
-            extra += extra_n
-    return base + extra
+        try:
+            t = int(thresh)
+        except Exception:
+            t = thresh  # keep original if not coercible
+        if level >= t:
+            extra += int(extra_n or 0)
+    return int(base + extra)
 
 
 def soul_drain_damage_heal_mult(level: int) -> tuple[float, float]:
@@ -274,9 +357,9 @@ def soul_drain_damage_heal_mult(level: int) -> tuple[float, float]:
 
 def skull_bomb_cooldown(level: int) -> float:
     d = WEAPON_DEFS.get("skull_bomb", {})
-    base_cd = d.get("base_cd", 2.0)
-    cd = base_cd - (level - 1) * d.get("cd_reduction_per_level", 0.15)
-    return max(d.get("min_cd", 0.5), cd)
+    base_cd = float(d.get("base_cd", 2.0) or 2.0)
+    cd = base_cd - (level - 1) * float(d.get("cd_reduction_per_level", 0.15) or 0.15)
+    return float(max(float(d.get("min_cd", 0.5) or 0.5), cd))
 
 
 def skull_bomb_damage(level: int) -> int:
@@ -288,8 +371,10 @@ def skull_bomb_damage(level: int) -> int:
 
 def skull_bomb_explosion_radius(level: int) -> int:
     d = WEAPON_DEFS.get("skull_bomb", {})
-    base_radius = d.get("base_explosion_radius", 50)
-    return base_radius + (level - 1) * d.get("radius_increase_per_level", 5)
+    base_radius = int(d.get("base_explosion_radius", 50) or 50)
+    return int(
+        base_radius + (level - 1) * int(d.get("radius_increase_per_level", 5) or 5)
+    )
 
 
 def get_weapon_definitions() -> List[Dict[str, str]]:
@@ -333,7 +418,7 @@ def get_weapon_upgrade_description(weapon: str, level: int) -> str:
 
     upd = w.get("upgrade_descriptions", {})
     if level in upd:
-        return upd[level]
+        return str(upd[level])
 
     # Inference fallback: try to construct a useful description based on known params
     try:

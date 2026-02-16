@@ -99,7 +99,7 @@ The included `.pre-commit-config.yaml` will run `ruff --fix` on changed files so
   - Max Health +20 (bounce icon)
   - Speed +20% (speed icon)
 
-  - **Permanent Upgrades — POWER:** increases player damage **+3% per level** (was +2%); reflected in UI and tests.
+  - **Permanent Upgrades — POWER:** increases player damage **+5% per level** (was +3%); reflected in UI and tests.
 - **Multiple Enemy Types**:
   - Weak demons (blue angels)
   - Normal demons (white angels)

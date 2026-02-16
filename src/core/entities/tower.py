@@ -43,6 +43,10 @@ class Tower:
         self.damage = damage
         self.radius = radius
         self.tower_type = tower_type
+        # Preserve base stats for external code that reads these (game.py expects them)
+        self._base_damage: int = damage
+        self._base_fire_rate: int = fire_rate
+        self.visible: bool = True
 
     def fire_at_closest(self, enemies: Iterable[Any]) -> Optional[object]:
         """Return a projectile dict, or a list of projectile dicts, or None if no enemies."""

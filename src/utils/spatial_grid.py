@@ -47,9 +47,9 @@ class SpatialGrid:
             r = float(getattr(obj, "radius", 0))
             return x, y, r
         if isinstance(obj, dict):
-            x = float(obj.get("x", 0))
-            y = float(obj.get("y", 0))
-            r = float(obj.get("radius", obj.get("rad", 0)))
+            x = float(obj.get("x", 0) or 0)
+            y = float(obj.get("y", 0) or 0)
+            r = float(obj.get("radius", obj.get("rad", 0)) or 0)
             return x, y, r
         # Fallback: try attributes 'rect' center
         rect: Any | None = getattr(obj, "rect", None)

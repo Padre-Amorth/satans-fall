@@ -200,9 +200,6 @@ class Enemy(BaseSprite):
 
         self.shake_timer = 0
 
-        # Visual particles for burn effect
-        self.burn_particles: list["BurnParticle"] = []
-
         # Ensure we only record a kill once if kill() called multiple times
         self._kill_recorded: bool = False
 
@@ -539,60 +536,127 @@ class Enemy(BaseSprite):
                 elif (
                     self.enemy_type == "boss_big"
                     and game is not None
-                    and getattr(game, "selected_stage", None) == "limbo"
+                    and getattr(game, "selected_stage", None)
+                    in ("limbo", "limbo_2", "limbo_3")
                 ):
-                    # Boss Big (Limbo): roam randomly within the top half of the playfield
-                    # Do not chase the player directly; behave like a roaming boss within the upper area
+                    # Boss Big (Limbo stages): descend vertically to a mid-screen Y,
+                    # then perform a smooth sinusoidal horizontal oscillation (no chase).
                     top_margin = 30
-                    bottom_limit = int(game.height / 2) - 40  # do not cross halfway
+                    bottom_limit = int(game.height / 2) - 40  # vertical stop line
                     left_limit = 50
                     right_limit = game.width - 50
 
-                    if not hasattr(self, "roam_target"):
-                        rx = random.uniform(
-                            game.clamp_to_walls(0), game.clamp_to_walls(game.width)
+                    # Initialize Limbo-specific state on first update
+                    if not hasattr(self, "limbo_phase"):
+                        # Phase: 'descend' -> move vertically toward bottom_limit
+                        #        'hover'  -> sinusoidal horizontal oscillation around a center X
+                        self.limbo_phase = "descend"
+                        # Record where the entrance starts so we can ease acceleration
+                        # from the spawn Y -> entrance_threshold smoothly.
+                        self.entrance_start_y = float(self.y)
+                        # Stop 150px higher than the prior bottom_limit (raised 50px from before),
+                        # but never above the top margin region.
+                        self.limbo_target_y = float(
+                            max(top_margin + 10, bottom_limit - 150)
                         )
-                        ry = random.uniform(
-                            top_margin, max(top_margin + 10, bottom_limit)
-                        )
-                        rx = game.clamp_to_walls(rx)
-                        self.roam_target = (rx, ry)
-                        self.roam_timer = random.randint(80, 240)
+                        # Centre of horizontal oscillation (set when hover starts)
+                        self.hover_center_x = float(self.x)
+                        # Phase and parameters for the sine wave
+                        self.hover_phase = random.uniform(0.0, math.pi * 2)
+                        # Tune amplitude/frequency slightly by limbo stage for variety
+                        stage = getattr(game, "selected_stage", "limbo")
+                        # Increase base amplitude to make oscillation noticeably wider
+                        base_amp = 120.0
+                        if stage == "limbo_2":
+                            base_amp = 160.0
+                        elif stage == "limbo_3":
+                            base_amp = 200.0
+                        # Ensure amplitude fits inside arena (respect walls)
+                        max_amp = max(10.0, (right_limit - left_limit) / 2.0 - 6.0)
+                        self.hover_amplitude = min(base_amp, max_amp)
+                        # Angular speed (radians/frame) -> period ~ (2*pi / ang_speed)
+                        # Further reduced angular speed => noticeably slower oscillation
+                        # (still within testable limits so we observe at least one cycle).
+                        self.hover_angular_speed = random.uniform(0.010, 0.022)
 
-                    # Move toward roam target (slower, heavier movement for big boss)
-                    tx, ty = self.roam_target
-                    dx = tx - self.x
-                    dy = ty - self.y
-                    dist = math.hypot(dx, dy)
-                    if dist > 6:
-                        # big boss moves slightly slower and with less jitter
-                        vx = (dx / dist) * (self.speed * random.uniform(0.7, 0.95)) / 60
-                        vy = (dy / dist) * (self.speed * random.uniform(0.7, 0.95)) / 60
-                        self.x += vx
-                        self.y += vy
-                    else:
-                        # Reached target -> pick a new one within top half and inside walls
-                        self.roam_timer = random.randint(80, 300)
-                        rx = random.uniform(
-                            game.clamp_to_walls(0), game.clamp_to_walls(game.width)
-                        )
-                        ry = random.uniform(
-                            top_margin, max(top_margin + 10, bottom_limit)
-                        )
-                        rx = game.clamp_to_walls(rx)
-                        self.roam_target = (rx, ry)
+                    if self.limbo_phase == "descend":
+                        # Move vertically toward the mid-screen stop line; keep X steady
+                        dy = self.limbo_target_y - self.y
+                        if abs(dy) > 2:
+                            vy = math.copysign(max(1.0, abs(dy) * 0.12), dy)
 
-                    # Slight random jitter so movement looks organic but less than inquisitor
-                    if random.random() < 0.01:
-                        self.x += random.uniform(-1.0, 1.0)
-                        self.y += random.uniform(-0.6, 0.6)
+                            # Entrance easing: progressively accelerate from a slow
+                            # entrance speed up to normal descent as the boss moves
+                            # into the visible area. Progress is based on Y position
+                            # from entrance_start_y -> entrance_threshold.
+                            entrance_threshold = top_margin + 60
+                            entrance_slow_factor = 0.25  # slow at the very start
+                            base_speed_factor = self.speed * 0.02
 
-                    # Clamp to arena walls and top-half limit (never cross halfway line)
-                    try:
-                        self.x = game.clamp_to_walls(self.x)
-                    except Exception:
-                        self.x = max(left_limit, min(right_limit, self.x))
-                    self.y = max(top_margin, min(bottom_limit, self.y))
+                            start_y = getattr(self, "entrance_start_y", self.y)
+                            if (
+                                self.y < entrance_threshold
+                                and entrance_threshold > start_y
+                            ):
+                                # progress in [0,1] as boss moves from start_y -> threshold
+                                progress = (self.y - start_y) / (
+                                    entrance_threshold - start_y
+                                )
+                                progress = max(0.0, min(1.0, progress))
+                                # ease-in (quadratic) so acceleration ramps up gradually
+                                ease = progress * progress
+                                lerped = (
+                                    entrance_slow_factor
+                                    + (1.0 - entrance_slow_factor) * ease
+                                )
+                                speed_factor = base_speed_factor * lerped
+                            else:
+                                speed_factor = base_speed_factor
+
+                            # apply vertical movement with progressive acceleration
+                            self.y += vy * speed_factor
+                        else:
+                            # Arrived: switch to hover phase; capture current center X
+                            self.limbo_phase = "hover"
+                            self.hover_center_x = float(self.x)
+
+                        # Small x-clamp while descending to avoid wall overlap
+                        try:
+                            self.x = game.clamp_to_walls(self.x)
+                        except Exception:
+                            self.x = max(left_limit, min(right_limit, self.x))
+                        # Clamp vertically so it never crosses halfway line.
+                        # Allow boss_big in the 'descend' entrance phase to remain
+                        # above the visible top (y < top_margin) so it can enter
+                        # gradually from off-screen instead of snapping to top.
+                        if not (
+                            self.enemy_type == "boss_big"
+                            and getattr(self, "limbo_phase", None) == "descend"
+                        ):
+                            self.y = max(top_margin, min(self.y, bottom_limit))
+                        else:
+                            # Only cap the lower bound — allow values above top_margin
+                            self.y = min(self.y, bottom_limit)
+
+                    elif self.limbo_phase == "hover":
+                        # Maintain Y near the mid-screen line with light vertical jitter
+                        self.y += random.uniform(-0.25, 0.25)
+                        self.y = max(top_margin, min(self.y, bottom_limit))
+
+                        # Sinusoidal horizontal oscillation around hover_center_x
+                        self.hover_phase += self.hover_angular_speed
+                        self.x = self.hover_center_x + (
+                            self.hover_amplitude * math.sin(self.hover_phase)
+                        )
+
+                        # Keep inside arena walls (clamp final X)
+                        try:
+                            self.x = game.clamp_to_walls(self.x)
+                        except Exception:
+                            self.x = max(left_limit, min(right_limit, self.x))
+
+                    # Ensure boss never chases the player in Limbo
+                    # (no code path that sets velocity towards player here)
 
                 elif self.enemy_type == "boss_inquisitor" and game is not None:
                     # Inquisitor roams randomly within the top half of the playfield
@@ -1108,37 +1172,41 @@ class Enemy(BaseSprite):
             try:
                 # Draw particles behind the flame
                 if self.burn_particles:
-                    for p in list(self.burn_particles):
+                    for bp in list(self.burn_particles):
                         try:
                             surf = pygame.Surface(
-                                (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
+                                (bp.size * 2 + 2, bp.size * 2 + 2), pygame.SRCALPHA
                             )
-                            alpha = max(60, int(255 * (p.life / 44)))
+                            alpha = max(60, int(255 * (bp.life / 44)))
                             pygame.draw.circle(
                                 surf,
                                 (255, 120, 0, alpha),
-                                (p.size + 1, p.size + 1),
-                                p.size,
+                                (bp.size + 1, bp.size + 1),
+                                bp.size,
                             )
-                            screen.blit(surf, (int(p.x - p.size), int(p.y - p.size)))
+                            screen.blit(
+                                surf, (int(bp.x - bp.size), int(bp.y - bp.size))
+                            )
                         except Exception:
                             pass
 
                 # Draw ice particles
                 if self.ice_particles:
-                    for p in list(self.ice_particles):
+                    for ip in list(self.ice_particles):
                         try:
                             surf = pygame.Surface(
-                                (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
+                                (ip.size * 2 + 2, ip.size * 2 + 2), pygame.SRCALPHA
                             )
-                            alpha = max(50, int(255 * (p.life / 25)))
+                            alpha = max(50, int(255 * (ip.life / 25)))
                             pygame.draw.circle(
                                 surf,
                                 (200, 240, 255, alpha),
-                                (p.size + 1, p.size + 1),
-                                p.size,
+                                (ip.size + 1, ip.size + 1),
+                                ip.size,
                             )
-                            screen.blit(surf, (int(p.x - p.size), int(p.y - p.size)))
+                            screen.blit(
+                                surf, (int(ip.x - ip.size), int(ip.y - ip.size))
+                            )
                         except Exception:
                             pass
 

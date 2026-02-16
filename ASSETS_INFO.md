@@ -95,6 +95,12 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
   - Chiesa esterna destra
   - Posizionata al lato più esterno destro del livello PROLOGUE
 
+### Campo di battaglia (Limbo)
+- **File:** `assets/limbo_battlefield.png`
+  - Dimensione consigliata: 1280x720 (verrà ridimensionata automaticamente)
+  - Immagine di sfondo per la parte interna delle mura nei livelli `limbo`, `limbo_2`, `limbo_3`.
+  - Se mancante, il gioco userà il riempimento arancione di default.
+
 ## Consigli per le Immagini
 
 - **Formato:** PNG con sfondo trasparente è l'ideale

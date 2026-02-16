@@ -2,16 +2,24 @@ import logging
 import math
 import os
 import random
-from typing import Any, Dict, List, Literal
+from typing import TYPE_CHECKING, Any, Dict, Literal
 
 from src.assets.manager import get_image
 from src.game_constants import WALL_THICKNESS
 from src.weapons import (
     WEAPON_DEFS,
+    beast_damage,
+    shotgun_pellet_damage,
     shotgun_pellets,
+    skull_bomb_cooldown,
     skull_bomb_damage,
     soul_drain_projectile_count,
 )
+
+if TYPE_CHECKING:
+    from pygame import Surface  # type: ignore
+else:
+    Surface = Any
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -22,6 +30,11 @@ class UIManager:
         self.canvas = game.canvas
         self.width = game.width
         self.height = game.height
+
+        # Limbo fog particles (visual-only, spawned outside the battlefield walls)
+        # Each particle: dict with x, y, vx, vy, size, life, max_life, alpha
+        self._limbo_fog_particles: list[dict] = []
+        self._limbo_fog_spawn_acc: float = 0.0
 
     def draw_ui(self) -> None:
         """Draw all UI elements (HUD, messages, special effects)"""
@@ -121,7 +134,7 @@ class UIManager:
         )
 
         # XP fill
-        xp_ratio: float = min(
+        xp_ratio = min(
             1.0, self.game.game_state.player_xp / self.game.game_state.xp_to_next_level
         )
         self.canvas.create_rectangle(
@@ -158,7 +171,7 @@ class UIManager:
                 lvl = self.game.game_state.weapon_levels.get(wid, 0)
                 display_name: str | None = name_map.get(wid, wid.capitalize())
                 display_text: str = f"{display_name} Lv{lvl}"
-                y: int = hud_y + i * 18
+                y = hud_y + i * 18
                 # Background box
                 self.canvas.create_rectangle(
                     hud_x - box_w,
@@ -188,12 +201,7 @@ class UIManager:
                     if wid == "shotgun":
                         slevel = self.game.weapon_levels.get("shotgun", 0)
                         pellets = shotgun_pellets(slevel)
-                        dmg_mult = 1.0 + (slevel >= 3) * 0.1 + (slevel >= 5) * 0.1
-                        pellet_dmg = int(
-                            basic_damage
-                            * WEAPON_DEFS.get("shotgun", {}).get("damage_mult", 0.55)
-                            * dmg_mult
-                        )
+                        pellet_dmg = shotgun_pellet_damage(slevel, basic_damage)
                         dmg_text = f"{pellet_dmg} dmg ×{pellets} pellets"
                     elif wid == "orbital":
                         olevel = self.game.weapon_levels.get("orbital", 0)
@@ -226,14 +234,18 @@ class UIManager:
                         dmg_text = f"{sd_dmg} dmg ×{proj_count} proj"
                     elif wid == "beast":
                         blevel = self.game.weapon_levels.get("beast", 0)
-                        mult = 1 + blevel * 0.05
-                        dmg_text = (
-                            f"Basic dmg: {int(basic_damage * mult)} ({int(mult*100)}%)"
+                        b_dmg = beast_damage(blevel, basic_damage)
+                        pct = (
+                            int(round(b_dmg / basic_damage * 100))
+                            if basic_damage > 0
+                            else 100
                         )
+                        dmg_text = f"Basic dmg: {b_dmg} ({pct}%)"
                     elif wid == "skull_bomb":
                         slevel = self.game.weapon_levels.get("skull_bomb", 0)
                         kb_dmg = skull_bomb_damage(slevel)
-                        dmg_text = f"{kb_dmg} explosion dmg"
+                        kb_cd = skull_bomb_cooldown(slevel)
+                        dmg_text = f"{kb_dmg} explosion dmg (cd {kb_cd:.2f}s)"
                     else:
                         # Fallback: show player's basic damage
                         dmg_text = f"Base dmg: {basic_damage}"
@@ -300,7 +312,7 @@ class UIManager:
     def draw_lightning_effect(self) -> None:
         """Draw the divine lightning strike effect"""
         # Full screen white flash with pulsing
-        flash_alpha: float = abs(math.sin(self.game.frame_count * 0.3))
+        flash_alpha = abs(math.sin(self.game.frame_count * 0.3))
         if flash_alpha > 0.3:
             self.canvas.create_rectangle(
                 0, 0, self.width, self.height, fill="#ffffff", stipple="gray25"
@@ -686,6 +698,10 @@ class PygameUIManager:
         self.width: Any | int = getattr(game, "width", 0)
         self.height: Any | int = getattr(game, "height", 0)
 
+        # Limbo fog particles (visual-only, spawned outside the battlefield walls)
+        self._limbo_fog_particles: list[dict] = []
+        self._limbo_fog_spawn_acc: float = 0.0
+
     def _cached_overlay(self, use_alpha: bool = False) -> Any:
         """Return a cached overlay surface sized to the UI virtual resolution.
         Uses a small per-instance cache to avoid allocating large surfaces every frame.
@@ -734,11 +750,12 @@ class PygameUIManager:
                 [(p[0] + shake_x, p[1] + shake_y) for p in inside_points],
             )
 
-        # Fill inside battlefield with dark orange for limbo
+        # Fill inside battlefield with dark orange for limbo (skip if battlefield bg image present)
         elif (
             self.game.is_limbo_stage()
             and self.game.left_wall_points
             and self.game.right_wall_points
+            and not self.game.background_image_drawn
         ):
             inside_points = (
                 self.game.left_wall_points + self.game.right_wall_points[::-1]
@@ -772,14 +789,24 @@ class PygameUIManager:
         wall_color = settings["wall_color"]
 
         # Use double thickness and caps only for HELL variants; otherwise keep default thickness
-        # For prologue, use half thickness (doubled from quarter)
+        # For Limbo increase thickness slightly (user request). Prologo keeps default behavior.
         is_hell_stage = getattr(self.game, "selected_stage", "").startswith("hell")
         is_prologo = getattr(self.game, "selected_stage", "") == "prologo"
-        render_wall_thickness = (
-            WALL_THICKNESS * 2
-            if is_hell_stage
-            else WALL_THICKNESS if is_prologo else WALL_THICKNESS
+        is_limbo_stage = (
+            getattr(self.game, "selected_stage", "").startswith("limbo")
+            or getattr(self.game, "is_limbo_stage", lambda: False)()
         )
+
+        if is_hell_stage:
+            render_wall_thickness = WALL_THICKNESS * 2
+        elif is_limbo_stage:
+            # Make Limbo walls slightly thicker (+4 px)
+            render_wall_thickness = WALL_THICKNESS + 4
+        elif is_prologo:
+            render_wall_thickness = WALL_THICKNESS
+        else:
+            render_wall_thickness = WALL_THICKNESS
+
         cap_extension = max(6, render_wall_thickness // 4) if is_hell_stage else 0
 
         # For prologue, create irregular thickness by varying per section
@@ -1497,18 +1524,18 @@ class PygameUIManager:
 
             option_w = 320
             option_h = 48
-            start_x: int = self.width // 2 - option_w // 2
-            start_y: int = self.height // 2 - 40
+            start_x = self.width // 2 - option_w // 2
+            start_y = self.height // 2 - 40
             spacing = 60
 
-            labels: List[str] = ["LIMBO 1", "LIMBO 2", "LIMBO 3"]
+            labels = ["LIMBO 1", "LIMBO 2", "LIMBO 3"]
             for i, label in enumerate(labels):
                 rect = pygame.Rect(start_x, start_y + i * spacing, option_w, option_h)
-                hovered: bool = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-                bg: tuple[int, int, int] = (137, 78, 36) if hovered else (107, 58, 26)
+                hovered = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+                bg = (137, 78, 36) if hovered else (107, 58, 26)
                 pygame.draw.rect(self.screen, bg, rect)
                 pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
-                text: pygame.Surface = font_medium.render(label, True, (255, 255, 255))
+                text = font_medium.render(label, True, (255, 255, 255))
                 self.screen.blit(
                     text,
                     (
@@ -1523,15 +1550,11 @@ class PygameUIManager:
             back_rect = pygame.Rect(
                 self.width // 2 - 60, start_y + len(labels) * spacing + 10, 120, 36
             )
-            back_hover: bool = back_rect.collidepoint(
-                self.game.mouse_x, self.game.mouse_y
-            )
-            back_color: tuple[int, int, int] = (
-                (80, 80, 80) if back_hover else (60, 60, 60)
-            )
+            back_hover = back_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+            back_color = (80, 80, 80) if back_hover else (60, 60, 60)
             pygame.draw.rect(self.screen, back_color, back_rect)
             pygame.draw.rect(self.screen, (255, 255, 255), back_rect, 2)
-            back_text: pygame.Surface = font_small.render("BACK", True, (255, 255, 255))
+            back_text = font_small.render("BACK", True, (255, 255, 255))
             self.screen.blit(
                 back_text,
                 (
@@ -1559,18 +1582,18 @@ class PygameUIManager:
 
             option_w = 320
             option_h = 48
-            start_x: int = self.width // 2 - option_w // 2
-            start_y: int = self.height // 2 - 40
+            start_x = self.width // 2 - option_w // 2
+            start_y = self.height // 2 - 40
             spacing = 60
 
-            labels: List[str] = ["PURGATORY 1", "PURGATORY 2", "PURGATORY 3"]
+            labels = ["PURGATORY 1", "PURGATORY 2", "PURGATORY 3"]
             for i, label in enumerate(labels):
                 rect = pygame.Rect(start_x, start_y + i * spacing, option_w, option_h)
-                hovered: bool = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-                bg: tuple[int, int, int] = (137, 78, 136) if hovered else (107, 58, 106)
+                hovered = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+                bg = (137, 78, 136) if hovered else (107, 58, 106)
                 pygame.draw.rect(self.screen, bg, rect)
                 pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
-                text: pygame.Surface = font_medium.render(label, True, (255, 255, 255))
+                text = font_medium.render(label, True, (255, 255, 255))
                 self.screen.blit(
                     text,
                     (
@@ -1585,15 +1608,11 @@ class PygameUIManager:
             back_rect = pygame.Rect(
                 self.width // 2 - 60, start_y + len(labels) * spacing + 10, 120, 36
             )
-            back_hover: bool = back_rect.collidepoint(
-                self.game.mouse_x, self.game.mouse_y
-            )
-            back_color: tuple[int, int, int] = (
-                (80, 80, 80) if back_hover else (60, 60, 60)
-            )
+            back_hover = back_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+            back_color = (80, 80, 80) if back_hover else (60, 60, 60)
             pygame.draw.rect(self.screen, back_color, back_rect)
             pygame.draw.rect(self.screen, (255, 255, 255), back_rect, 2)
-            back_text: pygame.Surface = font_small.render("BACK", True, (255, 255, 255))
+            back_text = font_small.render("BACK", True, (255, 255, 255))
             self.screen.blit(
                 back_text,
                 (
@@ -1621,18 +1640,18 @@ class PygameUIManager:
 
             option_w = 320
             option_h = 48
-            start_x: int = self.width // 2 - option_w // 2
-            start_y: int = self.height // 2 - 40
+            start_x = self.width // 2 - option_w // 2
+            start_y = self.height // 2 - 40
             spacing = 60
 
-            labels: List[str] = ["GEHENNA", "LAKE OF FIRE", "HADES"]
+            labels = ["GEHENNA", "LAKE OF FIRE", "HADES"]
             for i, label in enumerate(labels):
                 rect = pygame.Rect(start_x, start_y + i * spacing, option_w, option_h)
-                hovered: bool = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-                bg: tuple[int, int, int] = (189, 89, 89) if hovered else (139, 69, 69)
+                hovered = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+                bg = (189, 89, 89) if hovered else (139, 69, 69)
                 pygame.draw.rect(self.screen, bg, rect)
                 pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
-                text: pygame.Surface = font_medium.render(label, True, (255, 255, 255))
+                text = font_medium.render(label, True, (255, 255, 255))
                 self.screen.blit(
                     text,
                     (
@@ -1647,15 +1666,11 @@ class PygameUIManager:
             back_rect = pygame.Rect(
                 self.width // 2 - 60, start_y + len(labels) * spacing + 10, 120, 36
             )
-            back_hover: bool = back_rect.collidepoint(
-                self.game.mouse_x, self.game.mouse_y
-            )
-            back_color: tuple[int, int, int] = (
-                (80, 80, 80) if back_hover else (60, 60, 60)
-            )
+            back_hover = back_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+            back_color = (80, 80, 80) if back_hover else (60, 60, 60)
             pygame.draw.rect(self.screen, back_color, back_rect)
             pygame.draw.rect(self.screen, (255, 255, 255), back_rect, 2)
-            back_text: pygame.Surface = font_small.render("BACK", True, (255, 255, 255))
+            back_text = font_small.render("BACK", True, (255, 255, 255))
             self.screen.blit(
                 back_text,
                 (
@@ -1695,9 +1710,7 @@ class PygameUIManager:
         )  # Lighter red when hovered
         pygame.draw.rect(self.screen, prologo_color, prologo_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), prologo_rect, 2)  # White border
-        prologo_text: pygame.Surface = font_medium.render(
-            "PROLOGUE", True, (255, 255, 255)
-        )
+        prologo_text: Surface = font_medium.render("PROLOGUE", True, (255, 255, 255))
         self.screen.blit(
             prologo_text,
             (
@@ -1717,7 +1730,7 @@ class PygameUIManager:
         ) = ((137, 78, 36) if limbo_hovered else (107, 58, 26))
         pygame.draw.rect(self.screen, limbo_color, limbo_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), limbo_rect, 2)
-        limbo_text: pygame.Surface = font_medium.render("LIMBO", True, (255, 255, 255))
+        limbo_text: Surface = font_medium.render("LIMBO", True, (255, 255, 255))
         self.screen.blit(
             limbo_text,
             (
@@ -1739,9 +1752,7 @@ class PygameUIManager:
         ) = ((137, 78, 136) if purgatory_hovered else (107, 58, 106))
         pygame.draw.rect(self.screen, purgatory_color, purgatory_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), purgatory_rect, 2)
-        purgatory_text: pygame.Surface = font_medium.render(
-            "PURGATORY", True, (255, 255, 255)
-        )
+        purgatory_text: Surface = font_medium.render("PURGATORY", True, (255, 255, 255))
         self.screen.blit(
             purgatory_text,
             (
@@ -1763,7 +1774,7 @@ class PygameUIManager:
         )  # Lighter red when hovered
         pygame.draw.rect(self.screen, hell_color, hell_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), hell_rect, 2)
-        hell_text: pygame.Surface = font_medium.render("HELL", True, (255, 255, 255))
+        hell_text: Surface = font_medium.render("HELL", True, (255, 255, 255))
         self.screen.blit(
             hell_text,
             (
@@ -1793,7 +1804,7 @@ class PygameUIManager:
         )  # Brighter gold when hovered
         pygame.draw.rect(self.screen, upgrades_bg_color, upgrades_rect)
         pygame.draw.rect(self.screen, upgrades_border_color, upgrades_rect, 2)
-        upgrades_text: pygame.Surface = font_small.render(
+        upgrades_text: Surface = font_small.render(
             "PERMANENT UPGRADES", True, upgrades_border_color
         )
         self.screen.blit(
@@ -1890,7 +1901,7 @@ class PygameUIManager:
         toggle_y = dy + 64
         toggle_rect = pygame.Rect(toggle_x, toggle_y, toggle_w, toggle_h)
         hovered_toggle = toggle_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-        toggle_bg = (
+        toggle_bg: tuple[int, ...] = (
             (80, 160, 80)
             if getattr(self.game, "show_damage_numbers", True)
             else (160, 80, 80)
@@ -1919,7 +1930,7 @@ class PygameUIManager:
         smooth_toggle_y = dy + 104
         smooth_rect = pygame.Rect(smooth_toggle_x, smooth_toggle_y, toggle_w, toggle_h)
         hovered_s = smooth_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-        smooth_bg = (80, 160, 80) if smooth_on else (160, 80, 80)
+        smooth_bg: tuple[int, ...] = (80, 160, 80) if smooth_on else (160, 80, 80)
         if hovered_s:
             smooth_bg = tuple(min(255, c + 20) for c in smooth_bg)
         pygame.draw.rect(self.screen, smooth_bg, smooth_rect)
@@ -2064,15 +2075,13 @@ class PygameUIManager:
         font_small = pygame.font.Font(None, 18)
 
         # Title and layout
-        left_x: int = self.width // 2 - 420
-        title: pygame.Surface = font_large.render(
-            "PERMANENT UPGRADES", True, (255, 255, 0)
-        )
+        left_x = self.width // 2 - 420
+        title: Surface = font_large.render("PERMANENT UPGRADES", True, (255, 255, 0))
         self.screen.blit(
             title, (self.width // 2 - title.get_width() // 2 + shake_x, 40 + shake_y)
         )
 
-        stat_configs = [
+        stat_configs: list[dict[str, Any]] = [
             {"name": "POWER", "key": "power", "color": (255, 68, 68), "y": 140},
             {"name": "VIGOR", "key": "vigor", "color": (255, 204, 0), "y": 185},
             {
@@ -2108,7 +2117,7 @@ class PygameUIManager:
                 self.game.mouse_x, self.game.mouse_y
             )
 
-            name_color: tuple[int, int, int] = stat["color"]
+            name_color = stat["color"]
             stat_value = self.game.permanent_stats.get(stat["key"], 0)
             if is_hovered and stat_value < 10:
                 col = stat["color"]
@@ -2140,13 +2149,13 @@ class PygameUIManager:
             val_text = font_small.render(f"Level: {stat_value}", True, (255, 255, 255))
             self.screen.blit(val_text, (left_x + 200 + shake_x, stat["y"] + shake_y))
 
-            # Effect description (e.g., "+3% dmg/level (15% total)")
+            # Effect description (e.g., "+5% dmg/level (25% total)")
             effect_text = self.game.permanent_stat_effect_text(stat["key"], stat_value)
             if effect_text:
                 # Support multi-line effect text separated by ';' (used for VIGOR description)
                 lines = [s.strip() for s in effect_text.split(";") if s.strip()]
                 if len(lines) == 1:
-                    eff_surf: pygame.Surface = font_small.render(
+                    eff_surf: Surface = font_small.render(
                         lines[0], True, (180, 180, 180)
                     )
                     eff_y = (
@@ -2176,7 +2185,7 @@ class PygameUIManager:
 
             # MAX indicator if at max level
             if stat_value >= 10:
-                max_text: pygame.Surface = font_small.render("MAX", True, (255, 215, 0))
+                max_text: Surface = font_small.render("MAX", True, (255, 215, 0))
                 self.screen.blit(
                     max_text, (left_x + 270 + shake_x, stat["y"] + shake_y)
                 )
@@ -2206,16 +2215,14 @@ class PygameUIManager:
                 )
 
         # Subtitle (closer to original layout)
-        subtitle: pygame.Surface = font_small.render(
+        subtitle: Surface = font_small.render(
             "Upgrade your demonic powers", True, (136, 136, 136)
         )
         self.screen.blit(subtitle, (left_x + shake_x, 85 + shake_y))
 
         # Separator & Blasphemies section (migrated from legacy Game impl)
         separator_y = 320
-        classic_text: pygame.Surface = font_medium.render(
-            "BLASPHEMIES", True, (136, 136, 136)
-        )
+        classic_text: Surface = font_medium.render("BLASPHEMIES", True, (136, 136, 136))
         self.screen.blit(
             classic_text,
             (left_x + shake_x, separator_y + 30 + shake_y),
@@ -2223,11 +2230,20 @@ class PygameUIManager:
 
         # Placeholder boxes for Blasphemies (2 rows of 5)
         box_width = 80
-        box_height = 60
+        # make boxes perfectly square
+        box_height = box_width
         box_spacing = 100
-        start_x: int = left_x + box_spacing // 2 - 40
+        start_x = left_x + box_spacing // 2 - 40
 
-        box_y1: int = separator_y + 60
+        box_y1 = separator_y + 60
+        # attempt to load a single override asset (all boxes will use the same image)
+        asset_name = (
+            self.game.global_progress.get("blasphemy_box_asset")
+            if getattr(self.game, "global_progress", None)
+            else None
+        ) or "blasphemy_box.png"
+        box_asset = get_image(asset_name, (box_width, box_height))
+
         for i in range(5):
             box_x = start_x + (i * box_spacing)
             rect = (
@@ -2236,10 +2252,74 @@ class PygameUIManager:
                 box_width,
                 box_height,
             )
-            pygame.draw.rect(self.screen, (26, 26, 26), rect)
-            pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
+            if box_asset:
+                # use the imported asset as a scaled background for the box
+                self.screen.blit(
+                    box_asset, (box_x - box_width // 2 + shake_x, box_y1 + shake_y)
+                )
+                # draw border on top
+                pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
+            else:
+                pygame.draw.rect(self.screen, (26, 26, 26), rect)
+                pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
 
-        box_y2: int = box_y1 + box_height + 20
+            # draw Roman numerals for top-row blasphemy boxes (multi-level)
+            if i in (0, 1, 2, 3, 4):
+                key = f"blasphemy_{i+1}"
+                lvl = self.game.permanent_stats.get(key, 0)
+                if lvl:
+                    # Render only Roman numerals (I, II, III) in a larger font
+                    roman_map = {1: "I", 2: "II", 3: "III"}
+                    roman = roman_map.get(lvl, "")
+                    if roman:
+                        # dark red for Roman numeral inside the box
+                        lvl_surf: Surface = font_large.render(
+                            roman, True, (180, 30, 30)
+                        )
+                        self.screen.blit(
+                            lvl_surf,
+                            (
+                                box_x - lvl_surf.get_width() // 2 + shake_x,
+                                box_y1
+                                + box_height // 2
+                                - lvl_surf.get_height() // 2
+                                + shake_y,
+                            ),
+                        )
+
+            # Hover tooltip for top-row blasphemy boxes
+            try:
+                mouse_point = (self.game.mouse_x, self.game.mouse_y)
+            except Exception:
+                mouse_point = (0, 0)
+
+            if pygame.Rect(
+                box_x - box_width // 2, box_y1, box_width, box_height
+            ).collidepoint(mouse_point):
+                key = f"blasphemy_{i+1}"
+                lvl = self.game.permanent_stats.get(key, 0)
+                effect = self.game.permanent_stat_effect_text(key, lvl)
+                title = f"Blasphemy {i+1}"
+                if key == "blasphemy_1":
+                    state_line = f"Level: {lvl}/3"
+                else:
+                    state_line = "Unlocked" if lvl else "Locked"
+                tooltip_lines = [title]
+                if effect:
+                    tooltip_lines.append(effect)
+                tooltip_lines.append(state_line)
+                tooltip_x = box_x
+                # position tooltip below the second blasphemy row (keeps layout consistent)
+                tooltip_y = box_y1 + box_height + 20 + box_height + 12
+                self.game._draw_tooltip(
+                    tooltip_lines,
+                    tooltip_x,
+                    tooltip_y,
+                    pygame.font.Font(None, 18),
+                    anchor_center=True,
+                )
+
+        box_y2 = box_y1 + box_height + 20
         for i in range(5):
             box_x = start_x + (i * box_spacing)
             rect = (
@@ -2251,6 +2331,34 @@ class PygameUIManager:
             pygame.draw.rect(self.screen, (26, 26, 26), rect)
             pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
 
+            # Hover tooltip for bottom-row blasphemy boxes
+            try:
+                mouse_point = (self.game.mouse_x, self.game.mouse_y)
+            except Exception:
+                mouse_point = (0, 0)
+
+            if pygame.Rect(
+                box_x - box_width // 2, box_y2, box_width, box_height
+            ).collidepoint(mouse_point):
+                key = f"blasphemy_{6 + i}"
+                lvl = self.game.permanent_stats.get(key, 0)
+                effect = self.game.permanent_stat_effect_text(key, lvl)
+                title = f"Blasphemy {6 + i}"
+                state_line = "Unlocked" if lvl else "Locked"
+                tooltip_lines = [title]
+                if effect:
+                    tooltip_lines.append(effect)
+                tooltip_lines.append(state_line)
+                tooltip_x = box_x
+                tooltip_y = box_y2 + box_height + 12
+                self.game._draw_tooltip(
+                    tooltip_lines,
+                    tooltip_x,
+                    tooltip_y,
+                    pygame.font.Font(None, 18),
+                    anchor_center=True,
+                )
+
         # Skill trees (FIRE, STORM, ICE) on the right side
         tree_types = [
             ("FIRE", "fire", (255, 68, 68)),
@@ -2261,12 +2369,12 @@ class PygameUIManager:
         tree_box_h = 36
         tree_v_spacing = 46
         tree_col_spacing = 120
-        tree_base_x: int = left_x + 680
-        tree_top_y: int = separator_y - 150
+        tree_base_x = left_x + 680
+        tree_top_y = separator_y - 150
 
         for col, (label, key_prefix, color) in enumerate(tree_types):
             col_x = tree_base_x + col * tree_col_spacing
-            lbl_surf: pygame.Surface = font_small.render(label, True, color)
+            lbl_surf: Surface = font_small.render(label, True, color)
             self.screen.blit(
                 lbl_surf,
                 (
@@ -2301,14 +2409,14 @@ class PygameUIManager:
                     self.game.permanent_stats.get(f"{key_prefix}_{4+row}", 0)
                 )
 
-                left_bg = color if left_active else (26, 26, 26)
-                right_bg = color if right_active else (26, 26, 26)
-                left_border = (
+                left_bg: tuple[int, ...] = color if left_active else (26, 26, 26)
+                right_bg: tuple[int, ...] = color if right_active else (26, 26, 26)
+                left_border: tuple[int, ...] = (
                     tuple(min(255, c + 20) for c in color)
                     if left_active
                     else (51, 51, 51)
                 )
-                right_border = (
+                right_border: tuple[int, ...] = (
                     tuple(min(255, c + 20) for c in color)
                     if right_active
                     else (51, 51, 51)
@@ -2370,8 +2478,8 @@ class PygameUIManager:
             center_y = tree_top_y + 3 * tree_v_spacing
             center_key = f"{key_prefix}_7"
             center_active = bool(self.game.permanent_stats.get(center_key, 0))
-            center_bg = color if center_active else (26, 26, 26)
-            center_border = (
+            center_bg: tuple[int, ...] = color if center_active else (26, 26, 26)
+            center_border: tuple[int, ...] = (
                 tuple(min(255, c + 20) for c in color)
                 if center_active
                 else (51, 51, 51)
@@ -2440,7 +2548,7 @@ class PygameUIManager:
         overlay.fill((0, 0, 0))
         self.screen.blit(overlay, (0, 0))
 
-        title: pygame.Surface = get_text("PAUSED", font_large, (255, 255, 255))
+        title: Surface = get_text("PAUSED", font_large, (255, 255, 255))
         self.screen.blit(
             title,
             (
@@ -2797,7 +2905,7 @@ class PygameUIManager:
             glow_color = (200, 150, 60)
 
         # Statue body (slimmer triangular/demonic shape)
-        body_points: list[tuple[int, int]] = [
+        body_points = [
             (x, statue_base_y - 60),  # Neck point (head connects here)
             (x - 12, statue_base_y - 40),  # Left shoulder
             (x - 15, statue_base_y),  # Left base
@@ -2808,7 +2916,7 @@ class PygameUIManager:
         pygame.draw.polygon(self.screen, outline_color, body_points, 2)
 
         # Head (larger and round)
-        head_y: int = statue_base_y - 70
+        head_y = statue_base_y - 70
         head_radius = 15
         pygame.draw.circle(self.screen, body_color, (x, head_y), head_radius)
         pygame.draw.circle(self.screen, outline_color, (x, head_y), head_radius, 2)
@@ -2837,9 +2945,9 @@ class PygameUIManager:
         pygame.draw.circle(self.screen, glow_color, (x, head_y), head_radius + 4, 2)
 
         # Pitchfork in hand
-        fork_x: int = x + 20  # Held to the right side
-        fork_top_y: int = statue_base_y - 100
-        fork_bottom_y: int = statue_base_y - 20
+        fork_x = x + 20  # Held to the right side
+        fork_top_y = statue_base_y - 100
+        fork_bottom_y = statue_base_y - 20
         pygame.draw.line(
             self.screen,
             (42, 42, 42),
@@ -2920,11 +3028,11 @@ class PygameUIManager:
         ]
 
         for pedestal in pedestals:
-            x: int = pedestal["x"] + shake_x
-            y: int = pedestal["y"] + shake_y
+            x = pedestal["x"] + shake_x
+            y = pedestal["y"] + shake_y
 
             # Draw pedestal for statue using shared helper.
-            statue_base_y: int = y - 10
+            statue_base_y = y - 10
             try:
                 self._draw_pedestal(x, statue_base_y)
             except Exception:
@@ -2979,7 +3087,7 @@ class PygameUIManager:
             except Exception:
                 # Fallback to old inlined rendering if helper is not present for some reason
                 # (preserves backwards compatibility in tests)
-                body_points: list[tuple[int, int]] = [
+                body_points = [
                     (x, statue_base_y - 60),  # Neck point (head connects here)
                     (x - 12, statue_base_y - 40),  # Left shoulder
                     (x - 15, statue_base_y),  # Left base
@@ -2990,7 +3098,7 @@ class PygameUIManager:
                 pygame.draw.polygon(self.screen, outline_color, body_points, 2)
 
                 # Head (larger and round)
-                head_y: int = statue_base_y - 70
+                head_y = statue_base_y - 70
                 head_radius = 15
                 pygame.draw.circle(self.screen, body_color, (x, head_y), head_radius)
                 pygame.draw.circle(
@@ -3026,9 +3134,9 @@ class PygameUIManager:
 
                 # Pitchfork in hand
                 # Handle (long pole)
-                fork_x: int = x + 20  # Held to the right side
-                fork_top_y: int = statue_base_y - 100
-                fork_bottom_y: int = statue_base_y - 20
+                fork_x = x + 20  # Held to the right side
+                fork_top_y = statue_base_y - 100
+                fork_bottom_y = statue_base_y - 20
                 pygame.draw.line(
                     self.screen,
                     (42, 42, 42),
@@ -3091,6 +3199,230 @@ class PygameUIManager:
                 pygame.draw.polygon(self.screen, (74, 16, 16), right_wing_points)
                 pygame.draw.polygon(self.screen, (42, 0, 0), right_wing_points, 1)
 
+    def _spawn_limbo_fog_particles(self) -> None:
+        """Spawn small, soft smoke particles along the entire external wall section.
+
+        Particles are sampled along wall segments (left and right) and spawned just
+        outside the wall edge; velocity follows the local wall tangent so the
+        smoke appears to drift obliquely along the walls and can slightly cover
+        the wall/statue silhouettes.
+        """
+        if not self.game.is_limbo_stage():
+            return
+        if not (self.game.left_wall_points and self.game.right_wall_points):
+            return
+
+        # Helper: sample a random point along a polyline (list of (x,y))
+        def sample_along(points):
+            if len(points) < 2:
+                return points[0]
+            # choose a random segment weighted by segment length
+            seg_lengths = []
+            for a, b in zip(points, points[1:]):
+                dx = b[0] - a[0]
+                dy = b[1] - a[1]
+                seg_lengths.append((math.hypot(dx, dy), a, b))
+            total = sum(l for l, *_ in seg_lengths)
+            if total <= 0:
+                return points[0]
+            r = random.uniform(0, total)
+            acc = 0.0
+            for length, a, b in seg_lengths:
+                acc += length
+                if r <= acc:
+                    t = random.random()
+                    return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a, b)
+            # fallback
+            a, b = seg_lengths[-1][1], seg_lengths[-1][2]
+            t = random.random()
+            return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a, b)
+
+        # Spawn probability per frame per side (increased density)
+        spawn_chance = 0.95
+        # Range (px) outside wall where particles can appear (reduced slightly)
+        outside_min = -40
+        outside_max = 170
+
+        # Left wall: spawn along left_wall_points, offset slightly to the left
+        if random.random() < spawn_chance:
+            sample = sample_along(self.game.left_wall_points)
+            if sample:
+                sx, sy, a, b = sample
+                # compute local tangent and normalize
+                dx = b[0] - a[0]
+                dy = b[1] - a[1]
+                seg_len = math.hypot(dx, dy) or 1.0
+                tx, ty = dx / seg_len, dy / seg_len
+                # outward normal (approx): point to the left of the segment
+                nx, ny = -ty, tx
+
+                # spawn multiple nearby particles to increase local density
+                spawn_count = random.randint(2, 5)
+                for _ in range(spawn_count):
+                    offset = random.uniform(outside_min, outside_max)
+                    spawn_x = int(sx + nx * offset + random.uniform(-6, 6))
+                    spawn_y = int(sy + random.uniform(-12, 12))
+                    # clamp to screen bounds to avoid off-screen coordinates
+                    spawn_x = max(0, min(self.width - 1, spawn_x))
+                    spawn_y = max(0, min(self.height - 1, spawn_y))
+                    # velocity: include tangent component (oblique along wall) + small outward push + slight upward
+                    vx = tx * random.uniform(-0.22, 0.22) + nx * random.uniform(
+                        -0.06, -0.006
+                    )
+                    vy = ty * random.uniform(-0.14, 0.14) + random.uniform(-0.45, -0.02)
+                    # smaller and **more** transparent particles (alpha lowered)
+                    size = random.randint(2, 8)
+                    life = random.randint(220, 520)
+                    # More transparent for Limbo 2 & Limbo 3
+                    if getattr(self.game, "selected_stage", None) in (
+                        "limbo_2",
+                        "limbo_3",
+                    ):
+                        alpha = random.randint(5, 30)
+                    else:
+                        alpha = random.randint(30, 90)
+                    # Color variants per stage: limbo_2 -> yellow/white, limbo_3 -> yellow/red
+                    stage = getattr(self.game, "selected_stage", None)
+                    if stage == "limbo_2":
+                        color_type = random.choice(["yellow", "white"])
+                    elif stage == "limbo_3":
+                        color_type = random.choice(["yellow", "red"])
+                    else:
+                        color_type = "white"
+                    p = {
+                        "x": float(spawn_x),
+                        "y": float(spawn_y),
+                        "vx": vx,
+                        "vy": vy,
+                        "size": size,
+                        "life": life,
+                        "max_life": life,
+                        "alpha": alpha,
+                        "color_type": color_type,
+                    }
+                    self._limbo_fog_particles.append(p)
+
+        # Right wall: spawn along right_wall_points, offset slightly to the right
+        if random.random() < spawn_chance:
+            sample = sample_along(self.game.right_wall_points)
+            if sample:
+                sx, sy, a, b = sample
+                dx = b[0] - a[0]
+                dy = b[1] - a[1]
+                seg_len = math.hypot(dx, dy) or 1.0
+                tx, ty = dx / seg_len, dy / seg_len
+                # outward normal to the right of the segment
+                nx, ny = ty, -tx
+
+                spawn_count = random.randint(2, 5)
+                for _ in range(spawn_count):
+                    offset = random.uniform(outside_min, outside_max)
+                    spawn_x = int(sx + nx * offset + random.uniform(-6, 6))
+                    spawn_y = int(sy + random.uniform(-12, 12))
+                    # clamp to screen bounds
+                    spawn_x = max(0, min(self.width - 1, spawn_x))
+                    spawn_y = max(0, min(self.height - 1, spawn_y))
+                    vx = tx * random.uniform(-0.22, 0.22) + nx * random.uniform(
+                        0.006, 0.06
+                    )
+                    vy = ty * random.uniform(-0.14, 0.14) + random.uniform(-0.45, -0.02)
+                    # smaller and more transparent particles (alpha lowered)
+                    size = random.randint(2, 8)
+                    life = random.randint(220, 520)
+                    # More transparent for Limbo 2 & Limbo 3
+                    if getattr(self.game, "selected_stage", None) in (
+                        "limbo_2",
+                        "limbo_3",
+                    ):
+                        alpha = random.randint(5, 30)
+                    else:
+                        alpha = random.randint(30, 90)
+                    # Color variants per stage: limbo_2 -> yellow/white, limbo_3 -> yellow/red
+                    stage = getattr(self.game, "selected_stage", None)
+                    if stage == "limbo_2":
+                        color_type = random.choice(["yellow", "white"])
+                    elif stage == "limbo_3":
+                        color_type = random.choice(["yellow", "red"])
+                    else:
+                        color_type = "white"
+                    p = {
+                        "x": float(spawn_x),
+                        "y": float(spawn_y),
+                        "vx": vx,
+                        "vy": vy,
+                        "size": size,
+                        "life": life,
+                        "max_life": life,
+                        "alpha": alpha,
+                        "color_type": color_type,
+                    }
+                    self._limbo_fog_particles.append(p)
+
+    def _update_and_draw_limbo_fog_particles(
+        self, shake_x: int = 0, shake_y: int = 0
+    ) -> None:
+        """Update particle state and draw them with a soft/blur-like appearance.
+
+        Softness is simulated by drawing a few concentric circles with decreasing alpha.
+        """
+        if not getattr(self, "_limbo_fog_particles", None):
+            return
+        pygame = self.pygame
+
+        # Layer surface to draw particles with per-pixel alpha
+        layer = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+
+        new_parts: list[dict] = []
+        for p in self._limbo_fog_particles:
+            # update physics
+            p["x"] += p["vx"]
+            p["y"] += p["vy"]
+            p["life"] -= 1
+
+            # life-based parameters (slower fade -> more persistent)
+            life_ratio = max(0.0, p["life"] / float(p["max_life"]))
+            # baseline visibility so particles remain perceptible near end-of-life (reduced for higher transparency)
+            min_vis = 0.12
+            eff_ratio = min_vis + (1.0 - min_vis) * life_ratio
+            cur_alpha = int(p["alpha"] * eff_ratio)
+            # gentler size growth while alive
+            cur_size = max(1, int(p["size"] * (1.0 + (1.0 - life_ratio) * 0.15)))
+
+            if p["life"] > 0:
+                cx = int(p["x"] + shake_x)
+                cy = int(p["y"] + shake_y)
+
+                # Draw hard-edged particle (NO blur): single filled circle
+                radius = max(1, int(cur_size))
+                # Color overrides for Limbo 2 / Limbo 3: per-particle color variants
+                stage = getattr(self.game, "selected_stage", None)
+                if stage in ("limbo_2", "limbo_3"):
+                    ctype = p.get("color_type", "white")
+                    if ctype == "yellow":
+                        # slightly darker yellow for Limbo 2 particles
+                        col = (200, 160, 60, cur_alpha)
+                    elif ctype == "white":
+                        col = (220, 220, 220, cur_alpha)
+                    elif ctype == "red":
+                        col = (220, 80, 80, cur_alpha)
+                    else:
+                        col = (220, 220, 220, cur_alpha)
+                else:
+                    col = (70, 70, 70, cur_alpha)
+                pygame.draw.circle(layer, col, (cx, cy), radius)
+                new_parts.append(p)
+
+        self._limbo_fog_particles = new_parts
+
+        # blit particle layer above fog polygons (subtle)
+        try:
+            self.screen.blit(layer, (0, 0))
+        except Exception:
+            pass
+        except Exception:
+            # defensive: ignore drawing failures in headless tests
+            pass
+
     def _build_fog_cache(self) -> None:
         """Pre-render fog layers into cached surfaces.
 
@@ -3108,7 +3440,13 @@ class PygameUIManager:
         # Create a signature from wall points to detect changes
         sig_left = tuple((int(x), int(y)) for (x, y) in self.game.left_wall_points)
         sig_right = tuple((int(x), int(y)) for (x, y) in self.game.right_wall_points)
-        sig = (sig_left, sig_right, self.width, self.height)
+        sig = (
+            sig_left,
+            sig_right,
+            self.width,
+            self.height,
+            getattr(self.game, "selected_stage", None),
+        )
         if getattr(self, "_fog_cache_signature", None) == sig and getattr(
             self, "_fog_cache", None
         ):
@@ -3118,9 +3456,18 @@ class PygameUIManager:
         pygame = self.pygame
         wall_thickness = WALL_THICKNESS
         num_layers = 5
-        base_r, base_g, base_b = 60, 60, 60
+        # Lateral fog base color — warmer tints per limbo stage
+        stage = getattr(self.game, "selected_stage", None)
+        if stage == "limbo_3":
+            # redder for limbo_3
+            base_r, base_g, base_b = 90, 50, 50
+        elif stage == "limbo_2":
+            # darker yellow for limbo_2 (reduced brightness/saturation)
+            base_r, base_g, base_b = 85, 75, 40
+        else:
+            base_r, base_g, base_b = 60, 60, 60
 
-        cache: list[pygame.Surface] = []
+        cache: list[Surface | None] = []
 
         for i in range(num_layers):
             opacity: float = (num_layers - i) / num_layers
@@ -3193,25 +3540,38 @@ class PygameUIManager:
         wall_thickness = WALL_THICKNESS
         num_layers = 5
 
-        if getattr(self, "_fog_cache", None):
+        cache = getattr(self, "_fog_cache", None)
+        if cache:
             # Blit pre-rendered fog layers with per-frame shake offsets
             idx = 0
             for i in range(num_layers):
-                left_surf = self._fog_cache[idx]
+                left_surf = cache[idx]
                 idx += 1
-                right_surf = self._fog_cache[idx]
+                right_surf = cache[idx]
                 idx += 1
                 if left_surf:
                     # blit with shake offset
                     self.screen.blit(left_surf, (shake_x, shake_y))
                 if right_surf:
                     self.screen.blit(right_surf, (shake_x, shake_y))
+
+            # Spawn/update/draw particle-based smoky fog (outside walls)
+            self._spawn_limbo_fog_particles()
+            self._update_and_draw_limbo_fog_particles(shake_x, shake_y)
             return
 
         # Fallback to dynamic drawing if cache absent
         pygame = self.pygame
         wall_thickness = WALL_THICKNESS
-        base_r, base_g, base_b = 60, 60, 60
+        # Base lateral fog color — warmer tints per limbo stage
+        stage = getattr(self.game, "selected_stage", None)
+        if stage == "limbo_3":
+            base_r, base_g, base_b = 90, 50, 50
+        elif stage == "limbo_2":
+            # darker yellow for limbo_2
+            base_r, base_g, base_b = 85, 75, 40
+        else:
+            base_r, base_g, base_b = 60, 60, 60
         for i in range(num_layers):
             opacity: float = (num_layers - i) / num_layers
             layer_offset: int = 250 * (i + 1) // num_layers
@@ -3256,6 +3616,10 @@ class PygameUIManager:
                     fog_surface, color + (int(128 * opacity),), right_fog_points
                 )
                 self.screen.blit(fog_surface, (0, 0))
+
+        # Spawn/update/draw particle-based smoky fog (outside walls)
+        self._spawn_limbo_fog_particles()
+        self._update_and_draw_limbo_fog_particles(shake_x, shake_y)
 
     def draw_game_objects(self, shake_x=0, shake_y=0) -> None:
         if not self.screen:
@@ -3556,8 +3920,8 @@ class PygameUIManager:
                 total = int(
                     getattr(self.game, "prologo_lightning_duration_frames", 180)
                 )
-                start_frame: int = max(1, int(total * 0.1))
-                peak_frame: int = max(1, int(total * 0.75))
+                start_frame = max(1, int(total * 0.1))
+                peak_frame = max(1, int(total * 0.75))
                 os.makedirs("screenshots", exist_ok=True)
                 if (
                     not getattr(self.game, "_screenshot_taken_start", False)
@@ -3587,7 +3951,7 @@ class PygameUIManager:
                 getattr(self.game, "prologo_lightning_duration_frames", 180)
             )
             radius = int(min(max_radius, (t / duration) * max_radius + 8))
-            pulse: float = (math.sin(self.game.frame_count * 0.25) + 1) * 0.5
+            pulse = (math.sin(self.game.frame_count * 0.25) + 1) * 0.5
             # Outer glow circle
             pygame.draw.circle(
                 self.screen,
@@ -3604,7 +3968,7 @@ class PygameUIManager:
             )
             # Flash star lines
             for ang in range(0, 360, 45):
-                rad: float = math.radians(ang)
+                rad = math.radians(ang)
                 lx: Any | float = end_x + math.cos(rad) * (radius * 0.9)
                 ly: Any | float = end_y + math.sin(rad) * (radius * 0.9)
                 pygame.draw.line(
@@ -3634,6 +3998,8 @@ class PygameUIManager:
     def draw_chain_lightning_effects(self, shake_x=0, shake_y=0) -> None:
         """Draw chain lightning effects between enemies"""
         pygame = self.pygame
+        if not self.screen or not pygame:
+            return
         try:
             for effect in getattr(self.game.game_state, "chain_lightning_effects", []):
                 points = effect.get("points", [])
@@ -3929,7 +4295,7 @@ class PygameUIManager:
         # Health bar
         bar_width = 200
         bar_height = 20
-        bar_x: int = self.width - bar_width - 10
+        bar_x = self.width - bar_width - 10
         bar_y = 10
 
         # Background
@@ -3939,12 +4305,8 @@ class PygameUIManager:
             (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height),
         )
         # Health
-        health_ratio: float = self.game.player.health / self.game.player.max_health
-        health_color: (
-            tuple[Literal[20], Literal[80], Literal[20]]
-            | tuple[Literal[255], Literal[255], Literal[0]]
-            | tuple[Literal[255], Literal[0], Literal[0]]
-        ) = (
+        health_ratio = self.game.player.health / self.game.player.max_health
+        health_color = (
             (20, 80, 20)
             if health_ratio > 0.5
             else (255, 255, 0) if health_ratio > 0.25 else (255, 0, 0)
@@ -3983,7 +4345,7 @@ class PygameUIManager:
             (100, 100, 100),
             (bar_x + shake_x, xp_bar_y + shake_y, bar_width, bar_height),
         )
-        xp_ratio: float = self.game.player_xp / max(1, self.game.xp_to_next_level)
+        xp_ratio = self.game.player_xp / max(1, self.game.xp_to_next_level)
         # XP bar in darker purple
         pygame.draw.rect(
             self.screen,
@@ -4022,8 +4384,8 @@ class PygameUIManager:
         )
 
         # Weapon HUD - show extra weapons with levels
-        hud_x: int = self.width - 10
-        hud_y: int = xp_bar_y + bar_height + 35
+        hud_x = self.width - 10
+        hud_y = xp_bar_y + bar_height + 35
         box_w = 170
         box_h = 20
 
@@ -4037,11 +4399,11 @@ class PygameUIManager:
                 "Soul Drain": "Soul Drain",
             }
             for i, wid in enumerate(self.game.player_weapons):
-                lvl: int = self.game.weapon_levels.get(wid, 0)
+                lvl = self.game.weapon_levels.get(wid, 0)
                 display_name: str = name_map.get(wid, wid.capitalize())
                 display_text: str = f"{display_name} Lv{lvl}"
 
-                y: int = hud_y + i * 22
+                y = hud_y + i * 22
 
                 # Background box
                 pygame.draw.rect(
@@ -4056,7 +4418,7 @@ class PygameUIManager:
                     1,
                 )
 
-                weapon_text: pygame.Surface = small_font.render(
+                weapon_text: Surface = small_font.render(
                     display_text, True, (200, 200, 200)
                 )
                 self.screen.blit(
@@ -4069,9 +4431,7 @@ class PygameUIManager:
 
                 # If at max level, add MAX indicator
                 if lvl >= getattr(self.game, "max_weapon_level", 6):
-                    max_text: pygame.Surface = small_font.render(
-                        "MAX", True, (255, 215, 0)
-                    )
+                    max_text: Surface = small_font.render("MAX", True, (255, 215, 0))
                     self.screen.blit(
                         max_text,
                         (

@@ -37,9 +37,9 @@ class Player(BaseSprite):
         self.width = 61  # Increased by another 10%
         self.height = 73  # Increased by another 10%
         self.max_health = PLAYER_BASE_HEALTH
-        self.health: int = self.max_health
-        self.speed = 300
-        self.velocity_x = 0
+        self.health: float = float(self.max_health)
+        self.speed: float = 300.0
+        self.velocity_x: float = 0.0
 
         # Slow status (can be applied by enemy projectiles)
         self.slow_timer: int = 0

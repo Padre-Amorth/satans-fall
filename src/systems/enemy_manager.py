@@ -92,7 +92,7 @@ class EnemyManager:
             e = self.pool.pop()
             try:
                 # Reinitialize instance (safe fallback to re-run constructor)
-                e.__init__(x, y, enemy_type, health, speed)
+                e.__init__(x, y, enemy_type, health, speed)  # type: ignore[misc]
             except Exception:
                 # If re-init fails, create a new instance
                 e = Enemy(x, y, enemy_type, health, speed)
@@ -175,9 +175,7 @@ class EnemyManager:
             x = self.game.width + 30
             y = random.randint(0, max(0, self.game.height))
         else:  # top
-            x = random.randint(0, self.game.width)
-            # Clamp X so giant appears within the stage walls like other enemies
-            x = self.game.clamp_to_walls(x)
+            x = self.game.random_x_between_walls()
             y = -30
 
         health = 200 * getattr(
@@ -237,8 +235,7 @@ class EnemyManager:
 
         if random.random() < self.inquisitor_spawn_chance_per_second:
             # Spawn a normal enemy that looks like an inquisitor
-            x = random.randint(0, getattr(self.game, "width", 1280))
-            x = getattr(self.game, "clamp_to_walls", lambda v: v)(x)
+            x = self.game.random_x_between_walls()
             y = -20
             # Use same stats as 'normal' enemies
             health = 50 * getattr(self.game, "difficulty_multiplier", 1.0)

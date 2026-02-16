@@ -31,8 +31,8 @@ def test_purgatory_colors_fill_inside_and_outside(tmp_path: Path) -> None:
     g.ui.draw_game_world()
 
     # Pick a point inside the walls (midpoint x=300, y=100) and a point outside left (10,100)
-    inside_pixel = surface.get_at((300, 100))[:3]
-    outside_pixel = surface.get_at((10, 100))[:3]
+    inside_pixel = surface.get_at((300, 100))[:3]  # type: ignore[index]
+    outside_pixel = surface.get_at((10, 100))[:3]  # type: ignore[index]
 
     assert tuple(inside_pixel) == settings["floor_color"]
     assert tuple(outside_pixel) == settings["bg_color"]

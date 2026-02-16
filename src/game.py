@@ -3,7 +3,7 @@ import logging
 import math
 import random
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, TypedDict
 
 import pygame
 from pygame.key import ScancodeWrapper
@@ -49,11 +49,13 @@ from src.ui import PygameUIManager
 from src.weapons import (
     WEAPON_DEFS,
     DemonStrike_cooldown,
+    beast_damage,
     get_orbital_count,
     get_weapon_definitions,
     get_weapon_upgrade_description,
     orbital_cooldown_range,
     shotgun_cooldown,
+    shotgun_pellet_damage,
     shotgun_pellets,
     skull_bomb_cooldown,
     skull_bomb_damage,
@@ -70,6 +72,9 @@ class StatConfig(TypedDict):
     color: tuple[int, int, int]
     y: int
 
+
+if TYPE_CHECKING:
+    from src.systems.projectile_manager import ProjectileManager
 
 logger: logging.Logger = logging.getLogger(__name__)
 LOG = logging.getLogger(__name__)
@@ -241,7 +246,7 @@ class Game:
 
         # Persistent stats container must exist early so other init code can reference it
         self.permanent_stats: Dict[str, int] = {}
-        self.projectile_manager = None
+        self.projectile_manager: "ProjectileManager | None" = None
 
         # Centralized floating text pool for damage numbers and feedback (world coords)
         self.floating_texts: List[FloatingText] = []
@@ -291,11 +296,7 @@ class Game:
         self.ice_puddles: List[Dict[str, Any]] = []
         # Orbital defaults
         self.orbital_count = 3
-        self.orbitals = []
-
-    def _init_entities(self) -> None:
-        # Frame counter for animations
-        self.frame_count = 0
+        self.orbitals: List[Dict[str, Any]] = []
 
     def _init_player(self) -> None:
         # Game state
@@ -330,7 +331,7 @@ class Game:
         self.weapon_choices: List[Dict[str, Any]] = []
         self.selected_weapon_index = 0
         self.is_initial_weapon_choice = False
-        self.player_weapons: List[str] = []
+        self.player_weapons = []
         self._max_extra_weapons = MAX_EXTRA_WEAPONS
         # Base weapon progression
 
@@ -344,7 +345,7 @@ class Game:
         }
 
         # Weapon levels
-        self.weapon_levels: Dict[str, int] = {}
+        self.weapon_levels = {}
 
         # Permanent stats (meta-progression)
         # Ensure we don't overwrite loaded/persisted stats; set defaults only if missing
@@ -416,7 +417,7 @@ class Game:
 
         # Game variables
         self.wave = 0
-        self.wave_time: float = 0.0
+        self.wave_time = 0.0
         self.wave_duration = DEFAULT_WAVE_DURATION  # seconds
         self.enemy_spawn_timer = 0
         self.base_spawn_rate = 72  # base frames between spawns
@@ -429,10 +430,11 @@ class Game:
         self.spawn_min_rate = SPAWN_MIN_RATE
 
         # Spawn acceleration
-        self.spawn_accel_timer: int = 20 * self.fps
-        self.time_elapsed: float = 0.0
+        self.spawn_accel_timer = 20 * self.fps
+        self.time_elapsed = 0.0
 
         # Enemy manager (handles pooling/spawning helpers)
+        self.enemy_manager: EnemyManager | None = None
         try:
             self.enemy_manager = EnemyManager(self)
             # Keep initial rates in sync (populate manager fields)
@@ -465,18 +467,18 @@ class Game:
         self._prologo_lightning_timer = 0
         # Duration (frames) between lightning strike start and showing ending screen.
         # Default was 180 (3s); add 2 more seconds as requested (2 * fps)
-        self.prologo_lightning_duration_frames: int = 180 + 2 * self.fps
+        self.prologo_lightning_duration_frames = 180 + 2 * self.fps
         self._prologo_lightning_strike = False
-        self.lightning_points: List[tuple] = []
+        self.lightning_points = []
 
         # Stage system
         self.selected_stage: Optional[str] = None
         # Default stage settings centralized in src.game_constants
-        self.stage_settings = STAGE_SETTINGS.copy()
+        self.stage_settings: dict[str, Any] = STAGE_SETTINGS.copy()
 
         # Game variables
         self.wave = 0
-        self.wave_time: float = 0.0
+        self.wave_time = 0.0
         self.wave_duration = DEFAULT_WAVE_DURATION  # seconds
         self.enemy_spawn_timer = 0
         self.base_spawn_rate = 72  # base frames between spawns
@@ -489,20 +491,8 @@ class Game:
         self.spawn_min_rate = SPAWN_MIN_RATE
 
         # Spawn acceleration
-        self.spawn_accel_timer: int = 20 * self.fps
-        self.time_elapsed: float = 0.0
-
-        # Enemy manager (handles pooling/spawning helpers)
-        try:
-            self.enemy_manager = EnemyManager(self)
-            # Keep initial rates in sync (populate manager fields)
-            if hasattr(self, "enemy_spawn_rate"):
-                self.enemy_manager.enemy_spawn_rate = self.enemy_spawn_rate
-            if hasattr(self, "enemy_spawn_timer"):
-                self.enemy_manager.enemy_spawn_timer = self.enemy_spawn_timer
-        except Exception as e:
-            logger.exception("Failed to create EnemyManager: %s", e)
-            self.enemy_manager = None
+        self.spawn_accel_timer = 20 * self.fps
+        self.time_elapsed = 0.0
 
         # Giant enemy spawning (supports manager-backed timers via properties)
         # Note: these are proxied to EnemyManager when present
@@ -511,7 +501,9 @@ class Game:
         self.big_spawned_this_wave = False
 
         # Initialize orbitals
-        self.orbitals: List[Dict[str, Any]] = []
+        self.orbitals = []
+        # Spatial grid (built on-demand in collision handler)
+        self.spatial_grid: Any | None = None
         # Screen shake defaults
         self.shake_timer = 0
         self.shake_intensity = 0
@@ -645,39 +637,39 @@ class Game:
     # Backwards-compatible properties to proxy timer state to EnemyManager when present
     @property
     def big_enemy_timer(self) -> int:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             return self.enemy_manager.big_enemy_timer
         return getattr(self, "_big_enemy_timer", 0)
 
     @big_enemy_timer.setter
     def big_enemy_timer(self, val: int) -> None:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             self.enemy_manager.big_enemy_timer = val
         else:
             self._big_enemy_timer = val
 
     @property
     def big_spawned_this_wave(self) -> bool:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             return self.enemy_manager.big_spawned_this_wave
         return getattr(self, "_big_spawned_this_wave", False)
 
     @big_spawned_this_wave.setter
     def big_spawned_this_wave(self, val: bool) -> None:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             self.enemy_manager.big_spawned_this_wave = val
         else:
             self._big_spawned_this_wave = val
 
     @property
     def big_enemy_fast_interval(self) -> int:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             return self.enemy_manager.big_enemy_fast_interval
         return getattr(self, "_big_enemy_fast_interval", 9 * self.fps)
 
     @big_enemy_fast_interval.setter
     def big_enemy_fast_interval(self, val: int) -> None:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             self.enemy_manager.big_enemy_fast_interval = val
         else:
             self._big_enemy_fast_interval = val
@@ -685,13 +677,13 @@ class Game:
     # Wave boss flag proxy
     @property
     def wave_boss_spawned(self) -> bool:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             return getattr(self.enemy_manager, "wave_boss_spawned", False)
         return getattr(self, "_wave_boss_spawned", False)
 
     @wave_boss_spawned.setter
     def wave_boss_spawned(self, val: bool) -> None:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             self.enemy_manager.wave_boss_spawned = val
         else:
             self._wave_boss_spawned = val
@@ -699,65 +691,65 @@ class Game:
     # Prologo boss / lightning proxies
     @property
     def prologo_final_boss_spawned(self) -> bool:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             return getattr(self.enemy_manager, "prologo_final_boss_spawned", False)
         return getattr(self, "_prologo_final_boss_spawned", False)
 
     @prologo_final_boss_spawned.setter
     def prologo_final_boss_spawned(self, val: bool) -> None:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             self.enemy_manager.prologo_final_boss_spawned = val
         else:
             self._prologo_final_boss_spawned = val
 
     @property
     def prologo_final_boss_immortal(self) -> bool:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             return getattr(self.enemy_manager, "prologo_final_boss_immortal", False)
         return getattr(self, "_prologo_final_boss_immortal", False)
 
     @prologo_final_boss_immortal.setter
     def prologo_final_boss_immortal(self, val: bool) -> None:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             self.enemy_manager.prologo_final_boss_immortal = val
         else:
             self._prologo_final_boss_immortal = val
 
     @property
     def prologo_lightning_strike(self) -> bool:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             return getattr(self.enemy_manager, "prologo_lightning_strike", False)
         return getattr(self, "_prologo_lightning_strike", False)
 
     @prologo_lightning_strike.setter
     def prologo_lightning_strike(self, val: bool) -> None:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             self.enemy_manager.prologo_lightning_strike = val
         else:
             self._prologo_lightning_strike = val
 
     @property
     def prologo_lightning_timer(self) -> int:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             return getattr(self.enemy_manager, "prologo_lightning_timer", 0)
         return getattr(self, "_prologo_lightning_timer", 0)
 
     @prologo_lightning_timer.setter
     def prologo_lightning_timer(self, val: int) -> None:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             self.enemy_manager.prologo_lightning_timer = val
         else:
             self._prologo_lightning_timer = val
 
     @property
     def prologo_final_boss_defeated(self) -> bool:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             return getattr(self.enemy_manager, "prologo_final_boss_defeated", False)
         return getattr(self, "_prologo_final_boss_defeated", False)
 
     @prologo_final_boss_defeated.setter
     def prologo_final_boss_defeated(self, val: bool) -> None:
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             self.enemy_manager.prologo_final_boss_defeated = val
         else:
             self._prologo_final_boss_defeated = val
@@ -796,6 +788,7 @@ class Game:
             "projectile.png",
             "enemy_projectile.png",
             "battlefield_cross.png",  # Bloody cross for battlefield decoration
+            "limbo_battlefield.png",
         ]
 
         # Preload originals for quick subsequent scaling
@@ -821,31 +814,31 @@ class Game:
             progress: float = y / self.height
             # Default width per-stage (may be overridden for stage-specific behavior)
             if self.is_limbo_stage():
-                width_at_y: float = 680 - (progress * 280)
+                width_at_y = 680 - (progress * 280)
             elif self.selected_stage and str(self.selected_stage).startswith("hell"):
                 # HELL: make walls totally vertical — narrowed by 50px per side (100px total)
-                width_at_y: float = 620.0  # 720 - 100 (50px per side)
+                width_at_y = 620.0  # 720 - 100 (50px per side)
             elif self.selected_stage and str(self.selected_stage).startswith(
                 "purgatory"
             ):
                 # Purgatory retains previous layout
-                width_at_y: float = 720 - (progress * 240)
+                width_at_y = 720 - (progress * 240)
             elif self.selected_stage == "prologo":
                 # Prologo: widened by 60px total (30px per side)
-                width_at_y: float = 620 - (progress * 240)
+                width_at_y = 620 - (progress * 240)
             else:
-                width_at_y: float = 560 - (progress * 240)
+                width_at_y = 560 - (progress * 240)
 
             # Irregularity creates small horizontal wobble; disable for HELL to keep walls vertical
             if self.selected_stage and str(self.selected_stage).startswith("hell"):
-                irregularity: float = 0.0
+                irregularity = 0.0
             else:
-                irregularity: float = math.sin(y / 80) * 5 + math.cos(y / 60) * 3
+                irregularity = math.sin(y / 80) * 5 + math.cos(y / 60) * 3
                 if self.selected_stage == "prologo":
                     irregularity += math.sin(y / 35) * 2 + math.cos(y / 47) * 1
 
-            left_x: float = (self.width - width_at_y) // 2 + irregularity
-            right_x: float = (self.width + width_at_y) // 2 + irregularity
+            left_x = (self.width - width_at_y) // 2 + irregularity
+            right_x = (self.width + width_at_y) // 2 + irregularity
 
             self.left_wall_points.append((left_x, y))
             self.right_wall_points.append((right_x, y))
@@ -1105,6 +1098,38 @@ class Game:
 
         return max(left_boundary, min(x_pos, right_boundary))
 
+    def random_x_between_walls(self, margin: int = 0) -> int:
+        """Return a uniformly random X coordinate inside the playable walls.
+
+        If walls are not present this falls back to a full-width random value.
+        `margin` insets the returned range from the left/right walls (useful for
+        reinforcements or UI elements that need a safe distance from edges).
+        """
+        # Fallback when walls not generated
+        if not self.left_wall_points or not self.right_wall_points:
+            low = max(0, margin)
+            high = max(0, self.width - margin)
+            return random.randint(low, high)
+
+        wall_thickness = (
+            WALL_THICKNESS if self.selected_stage == "prologo" else WALL_THICKNESS
+        )
+        left_boundary = int(
+            max(point[0] for point in self.left_wall_points) + wall_thickness + margin
+        )
+        right_boundary = int(
+            min(point[0] for point in self.right_wall_points) - wall_thickness - margin
+        )
+
+        # Clamp to valid screen bounds and guard against degenerate ranges
+        left_boundary = max(0, left_boundary)
+        right_boundary = min(self.width, right_boundary)
+        if left_boundary >= right_boundary:
+            # Degenerate case: fallback to clamped midpoint
+            return max(left_boundary, min(left_boundary, right_boundary))
+
+        return random.randint(left_boundary, right_boundary)
+
     def run(self) -> None:
         """Main game loop"""
         logger.info("Game starting...")
@@ -1129,7 +1154,9 @@ class Game:
             # Clear screen with background color or image
             self.background_image_drawn = False
             if self.selected_stage and self.selected_stage in self.stage_settings:
-                stage_settings = self.stage_settings[self.selected_stage]
+                stage_settings: dict[str, Any] = self.stage_settings[
+                    self.selected_stage
+                ]
 
                 # First, draw external background image if available
                 bg_external_image_name = stage_settings.get("bg_image_external")
@@ -1151,8 +1178,8 @@ class Game:
                 if bg_image_name:
                     # Calculate game area boundaries
                     if self.left_wall_points and self.right_wall_points:
-                        # For prologue, use polygon masking to fit the slanted walls
-                        if self.selected_stage == "prologo":
+                        # For prologue and Limbo, use polygon masking to fit the slanted/irregular walls
+                        if self.selected_stage == "prologo" or self.is_limbo_stage():
                             inside_points = (
                                 self.left_wall_points + self.right_wall_points[::-1]
                             )
@@ -1302,35 +1329,51 @@ class Game:
 
     def draw_game_world(self, shake_x=0, shake_y=0) -> None:
         """Delegate game world drawing to the Pygame UI manager."""
-        return self.ui.draw_game_world(shake_x, shake_y)
+        if hasattr(self, "ui") and hasattr(self.ui, "draw_game_world"):
+            self.ui.draw_game_world(shake_x, shake_y)
+        return None
 
     def draw_dead_trees(self, shake_x=0, shake_y=0) -> None:
         """Delegate dead tree drawing to Pygame UI manager."""
-        return self.ui.draw_dead_trees(shake_x, shake_y)
+        if hasattr(self, "ui") and hasattr(self.ui, "draw_dead_trees"):
+            self.ui.draw_dead_trees(shake_x, shake_y)
+        return None
 
     def draw_pedestals(self, shake_x=0, shake_y=0) -> None:
         """Delegate pedestal drawing to Pygame UI manager."""
-        return self.ui.draw_pedestals(shake_x, shake_y)
+        if hasattr(self, "ui") and hasattr(self.ui, "draw_pedestals"):
+            self.ui.draw_pedestals(shake_x, shake_y)
+        return None
 
     def draw_fog(self, shake_x=0, shake_y=0) -> None:
         """Delegate fog drawing to Pygame UI manager."""
-        return self.ui.draw_fog(shake_x, shake_y)
+        if hasattr(self, "ui") and hasattr(self.ui, "draw_fog"):
+            self.ui.draw_fog(shake_x, shake_y)
+        return None
 
     def draw_game_objects(self, shake_x=0, shake_y=0) -> None:
         """Delegate drawing of objects to the Pygame UI manager."""
-        return self.ui.draw_game_objects(shake_x, shake_y)
+        if hasattr(self, "ui") and hasattr(self.ui, "draw_game_objects"):
+            self.ui.draw_game_objects(shake_x, shake_y)
+        return None
 
     def draw_special_effects(self, shake_x=0, shake_y=0) -> None:
         """Delegate special effects to Pygame UI manager."""
-        return self.ui.draw_special_effects(shake_x, shake_y)
+        if hasattr(self, "ui") and hasattr(self.ui, "draw_special_effects"):
+            self.ui.draw_special_effects(shake_x, shake_y)
+        return None
 
     def draw_lightning_effect(self, shake_x=0, shake_y=0):
         """Delegate lightning effect drawing to Pygame UI manager."""
-        return self.ui.draw_lightning_effect(shake_x, shake_y)
+        if hasattr(self, "ui") and hasattr(self.ui, "draw_lightning_effect"):
+            self.ui.draw_lightning_effect(shake_x, shake_y)
+        return None
 
     def draw_spine_effect(self, shake_x=0, shake_y=0):
         """Delegate spine effect drawing to Pygame UI manager."""
-        return self.ui.draw_spine_effect(shake_x, shake_y)
+        if hasattr(self, "ui") and hasattr(self.ui, "draw_spine_effect"):
+            self.ui.draw_spine_effect(shake_x, shake_y)
+        return None
 
     def draw_skull_bomb_particles(self, shake_x=0, shake_y=0) -> None:
         """Draw skull bomb explosion particles and area effects"""
@@ -1635,25 +1678,25 @@ class Game:
     def draw_hud(self, shake_x=0, shake_y=0) -> None:
         """Backward-compatible wrapper that delegates HUD drawing to UI manager."""
         if hasattr(self, "ui") and hasattr(self.ui, "draw_hud"):
-            return self.ui.draw_hud(shake_x, shake_y)
+            self.ui.draw_hud(shake_x, shake_y)
         return None
 
     def draw_center_messages(self, shake_x=0, shake_y=0) -> None:
         """Backward-compatible wrapper: delegate to UI manager's implementation."""
         if hasattr(self, "ui") and hasattr(self.ui, "draw_center_messages"):
-            return self.ui.draw_center_messages(shake_x, shake_y)
+            self.ui.draw_center_messages(shake_x, shake_y)
         return None
 
     def draw_stage_menu(self, shake_x=0, shake_y=0) -> None:
         """Backward-compatible wrapper: delegate stage/menu drawing to UI manager."""
         if hasattr(self, "ui") and hasattr(self.ui, "draw_stage_menu"):
-            return self.ui.draw_stage_menu(shake_x, shake_y)
+            self.ui.draw_stage_menu(shake_x, shake_y)
         return None
 
     def draw_permanent_upgrades(self, shake_x=0, shake_y=0) -> None:
         """Backward-compatible wrapper that delegates to UI manager."""
         if hasattr(self, "ui") and hasattr(self.ui, "draw_permanent_upgrades"):
-            return self.ui.draw_permanent_upgrades(shake_x, shake_y)
+            self.ui.draw_permanent_upgrades(shake_x, shake_y)
         return None
 
     def _draw_permanent_upgrades_impl(self, shake_x=0, shake_y=0) -> None:
@@ -1804,7 +1847,8 @@ class Game:
 
         # Placeholder boxes for future upgrades (2 rows of 5)
         box_width = 80  # slightly smaller
-        box_height = 60
+        # make boxes perfectly square
+        box_height = box_width
         box_spacing = 100
         start_x: int = (
             left_x + box_spacing // 2 - 40
@@ -1812,29 +1856,67 @@ class Game:
 
         # First row
         box_y1: int = separator_y + 60
+        # try global_progress override first, otherwise default filename
+        asset_name = (
+            self.global_progress.get("blasphemy_box_asset")
+            if getattr(self, "global_progress", None)
+            else None
+        ) or "blasphemy_box.png"
+        box_asset = get_image(asset_name, (box_width, box_height))
+
         for i in range(5):
             box_x = start_x + (i * box_spacing)
-            pygame.draw.rect(
-                self.screen,
-                (26, 26, 26),
-                (
-                    box_x - box_width // 2 + shake_x,
-                    box_y1 + shake_y,
-                    box_width,
-                    box_height,
-                ),
-            )
-            pygame.draw.rect(
-                self.screen,
-                (51, 51, 51),
-                (
-                    box_x - box_width // 2 + shake_x,
-                    box_y1 + shake_y,
-                    box_width,
-                    box_height,
-                ),
-                1,
-            )
+            if box_asset:
+                self.screen.blit(
+                    box_asset, (box_x - box_width // 2 + shake_x, box_y1 + shake_y)
+                )
+                pygame.draw.rect(
+                    self.screen,
+                    (51, 51, 51),
+                    (
+                        box_x - box_width // 2 + shake_x,
+                        box_y1 + shake_y,
+                        box_width,
+                        box_height,
+                    ),
+                    1,
+                )
+            else:
+                pygame.draw.rect(
+                    self.screen,
+                    (26, 26, 26),
+                    (
+                        box_x - box_width // 2 + shake_x,
+                        box_y1 + shake_y,
+                        box_width,
+                        box_height,
+                    ),
+                )
+                pygame.draw.rect(
+                    self.screen,
+                    (51, 51, 51),
+                    (
+                        box_x - box_width // 2 + shake_x,
+                        box_y1 + shake_y,
+                        box_width,
+                        box_height,
+                    ),
+                    1,
+                )
+
+            # Show Roman numerals for top-row blasphemy boxes (multi-level)
+            key = f"blasphemy_{i+1}"
+            lvl = self.permanent_stats.get(key, 0)
+            if lvl:
+                # Show Roman numerals only (I, II, III) in a larger font
+                roman_map = {1: "I", 2: "II", 3: "III"}
+                roman = roman_map.get(lvl, "")
+                if roman:
+                    # dark red for Roman numeral inside the box
+                    lvl_surf = font_large.render(roman, True, (180, 30, 30))
+                    sx = box_x - lvl_surf.get_width() // 2 + shake_x
+                    sy = box_y1 + box_height // 2 - lvl_surf.get_height() // 2 + shake_y
+                    self.screen.blit(lvl_surf, (sx, sy))
 
         # Second row
         box_y2: int = box_y1 + box_height + 20
@@ -1876,8 +1958,8 @@ class Game:
         tree_base_x: int = left_x + 680  # moved right
         tree_top_y: int = separator_y - 150  # moved much higher
 
-        for col, (label, key_prefix, color) in enumerate(tree_types):
-            col_x = tree_base_x + col * tree_col_spacing
+        for col_idx, (label, key_prefix, color) in enumerate(tree_types):
+            col_x = tree_base_x + col_idx * tree_col_spacing
             # Title
             lbl_surf: pygame.Surface = font_small.render(label, True, color)
             self.screen.blit(
@@ -2076,7 +2158,9 @@ class Game:
     def draw_pause_menu(self, shake_x=0, shake_y=0) -> None:
         """Backward-compatible wrapper that delegates to UI manager."""
         if hasattr(self, "ui") and hasattr(self.ui, "draw_pause_menu"):
-            return self.ui.draw_pause_menu(shake_x, shake_y)
+            if hasattr(self, "ui") and hasattr(self.ui, "draw_pause_menu"):
+                self.ui.draw_pause_menu(shake_x, shake_y)
+            return None
         return None
 
     def _draw_pause_menu_impl(self, shake_x=0, shake_y=0) -> None:
@@ -2308,7 +2392,7 @@ class Game:
     def permanent_stat_effect_text(self, key: str, level: int) -> str:
         """Return a human-friendly description of the per-level and total effect for a permanent stat."""
         if key == "power":
-            per = 3.0
+            per = 5.0
             total = per * level
             return f"+{per:.0f}% dmg/level ({total:.0f}% total)"
         if key == "vigor":
@@ -2331,6 +2415,30 @@ class Game:
             total = per * level
             xp_total_pct = int(round(per * level))
             return f"-{per:.0f}% dmg taken/level ({total:.0f}% total); +3% XP/level (+{xp_total_pct}% XP total)"
+        # Blasphemy-specific descriptions
+        if key.startswith("blasphemy"):
+            # Blasphemy 1: +5% damage/level
+            if key == "blasphemy_1":
+                per = 10.0
+                total = per * level
+                return f"+{per:.0f}% dmg/level ({total:.0f}% total)"
+            # Blasphemy 2: +20 HP/level
+            if key == "blasphemy_2":
+                per = 20
+                total = per * level
+                return f"+{per:d} HP/level ({total:d} HP total)"
+            # Blasphemy 3: +10% fire rate/level
+            if key == "blasphemy_3":
+                per = 10.0
+                total = per * level
+                return f"+{per:.0f}% fire rate/level ({total:.0f}% total)"
+            # Blasphemy 4: +10% XP/level
+            if key == "blasphemy_4":
+                per = 10.0
+                total = per * level
+                return f"+{per:.0f}% XP/level ({total:.0f}% total)"
+            # Other blasphemies: no per-level descriptive effect
+            return ""
         return ""
 
     def _enforce_center_requirement(self, key_prefix: str) -> None:
@@ -2357,11 +2465,17 @@ class Game:
         This should be called when permanent stats change so the in-game values reflect
         the upgrades immediately (not only after reset_game()).
         """
-        # Damage multiplier: 'power' gives +3% per level
-        self.damage_multiplier = 1.0 + (self.permanent_stats.get("power", 0) * 0.03)
-        # Fire rate multiplier: 'adrenaline' gives +5% per level
-        self.fire_rate_multiplier = 1.0 + (
-            self.permanent_stats.get("adrenaline", 0) * 0.05
+        # Damage multiplier: 'power' gives +5% per level; blasphemy_1 gives +10% per level
+        self.damage_multiplier = (
+            1.0
+            + (self.permanent_stats.get("power", 0) * 0.05)
+            + (self.permanent_stats.get("blasphemy_1", 0) * 0.10)
+        )
+        # Fire rate multiplier: 'adrenaline' gives +5% per level; blasphemy_3 gives +10% per level
+        self.fire_rate_multiplier = (
+            1.0
+            + (self.permanent_stats.get("adrenaline", 0) * 0.05)
+            + (self.permanent_stats.get("blasphemy_3", 0) * 0.10)
         )
         # Apply other effects for consistency
         self.projectile_size_multiplier = 1.0 + (
@@ -2372,7 +2486,12 @@ class Game:
             self.permanent_stats.get("structure", 0) * 0.03
         )
         # XP multiplier used whenever the game awards XP to the player (default 1.0)
-        self.xp_multiplier = 1.0 + (self.permanent_stats.get("structure", 0) * 0.03)
+        # Include blasphemy_4 which grants +10% XP per level
+        self.xp_multiplier = (
+            1.0
+            + (self.permanent_stats.get("structure", 0) * 0.03)
+            + (self.permanent_stats.get("blasphemy_4", 0) * 0.10)
+        )
 
         # Ensure the player object also reflects the new multipliers
         try:
@@ -2380,6 +2499,17 @@ class Game:
             self.player.fire_rate_multiplier = self.fire_rate_multiplier
             self.player.projectile_size_multiplier = self.projectile_size_multiplier
             self.player.damage_reduction_multiplier = self.damage_reduction_multiplier
+            # Ensure player's max health reflects VIGOR + Blasphemy 2 (+20 HP per level)
+            try:
+                self.player.max_health = (
+                    PLAYER_BASE_HEALTH
+                    + (self.permanent_stats.get("vigor", 0) * 10)
+                    + (self.permanent_stats.get("blasphemy_2", 0) * 20)
+                )
+                if getattr(self.player, "health", 0) > self.player.max_health:
+                    self.player.health = self.player.max_health
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -2577,7 +2707,9 @@ class Game:
     def draw_player_stats(self, shake_x=0, shake_y=0) -> None:
         """Backward-compatible wrapper that delegates to UI manager."""
         if hasattr(self, "ui") and hasattr(self.ui, "draw_player_stats"):
-            return self.ui.draw_player_stats(shake_x, shake_y)
+            if hasattr(self, "ui") and hasattr(self.ui, "draw_player_stats"):
+                self.ui.draw_player_stats(shake_x, shake_y)
+            return None
         return None
 
     def _draw_player_stats_impl(self, shake_x=0, shake_y=0) -> None:
@@ -3363,6 +3495,109 @@ class Game:
                             )
                         return
 
+                # --- Blasphemies grid (two rows of 5) click handling ---
+                # Coordinates mirror the drawing code so clicks line up with boxes
+                box_width = 80
+                box_height = 60
+                box_spacing = 100
+                start_x = left_x + box_spacing // 2 - 40
+                separator_y = 320
+                box_y1 = separator_y + 60
+
+                # Top row (1..5)
+                for i in range(5):
+                    box_x = start_x + (i * box_spacing)
+                    rect = pygame.Rect(
+                        box_x - box_width // 2, box_y1, box_width, box_height
+                    )
+                    key = f"blasphemy_{i+1}"
+                    if rect.collidepoint(pos):
+                        # Treat blasphemy slots 1..4 as multi-level (0..3); others toggle
+                        if key in (
+                            "blasphemy_1",
+                            "blasphemy_2",
+                            "blasphemy_3",
+                            "blasphemy_4",
+                        ):
+                            if button == 1 and self.permanent_stats.get(key, 0) < 3:
+                                self.permanent_stats[key] = (
+                                    self.permanent_stats.get(key, 0) + 1
+                                )
+                                self.save_permanent_stats()
+                                self.apply_permanent_stats()
+                                self.show_centered_message(
+                                    f"Blasphemy {i+1} upgraded to level {self.permanent_stats[key]}!",
+                                    100,
+                                    (200, 80, 80),
+                                    20,
+                                )
+                            elif button == 3 and self.permanent_stats.get(key, 0) > 0:
+                                self.permanent_stats[key] = (
+                                    self.permanent_stats.get(key, 0) - 1
+                                )
+                                self.save_permanent_stats()
+                                self.apply_permanent_stats()
+                                self.show_centered_message(
+                                    f"Blasphemy {i+1} downgraded to level {self.permanent_stats[key]}!",
+                                    100,
+                                    (200, 80, 80),
+                                    20,
+                                )
+                        else:
+                            # Other blasphemy slots toggle on/off (boolean)
+                            if button == 1 and not self.permanent_stats.get(key, 0):
+                                self.permanent_stats[key] = 1
+                                self.save_permanent_stats()
+                                self.apply_permanent_stats()
+                                self.show_centered_message(
+                                    f"Blasphemy {i+1} unlocked!",
+                                    100,
+                                    (200, 80, 80),
+                                    20,
+                                )
+                            elif button == 3 and self.permanent_stats.get(key, 0):
+                                self.permanent_stats[key] = 0
+                                self.save_permanent_stats()
+                                self.apply_permanent_stats()
+                                self.show_centered_message(
+                                    f"Blasphemy {i+1} locked!",
+                                    100,
+                                    (200, 80, 80),
+                                    20,
+                                )
+                        return
+
+                # Second row (6..10)
+                box_y2 = box_y1 + box_height + 20
+                for i in range(5):
+                    box_x = start_x + (i * box_spacing)
+                    rect = pygame.Rect(
+                        box_x - box_width // 2, box_y2, box_width, box_height
+                    )
+                    key = f"blasphemy_{6 + i}"
+                    if rect.collidepoint(pos):
+                        if button == 1 and not self.permanent_stats.get(key, 0):
+                            self.permanent_stats[key] = 1
+                            self.save_permanent_stats()
+                            self.apply_permanent_stats()
+                            self.show_centered_message(
+                                f"Blasphemy {6 + i} unlocked!",
+                                100,
+                                (200, 80, 80),
+                                20,
+                            )
+                        elif button == 3 and self.permanent_stats.get(key, 0):
+                            self.permanent_stats[key] = 0
+                            self.save_permanent_stats()
+                            self.apply_permanent_stats()
+                            self.show_centered_message(
+                                f"Blasphemy {6 + i} locked!",
+                                100,
+                                (200, 80, 80),
+                                20,
+                            )
+                        return
+
                 # Handle clicks on the 3 skill trees on the right side
                 tree_types = [
                     ("FIRE", "fire", (255, 68, 68)),
@@ -3378,8 +3613,8 @@ class Game:
                 tree_base_x: int = left_x + 680  # moved right to match drawing
                 tree_top_y: int = 320 - 150  # moved much higher to match drawing
 
-                for col, (label, key_prefix, color) in enumerate(tree_types):
-                    col_x = tree_base_x + col * tree_col_spacing
+                for col_idx, (label, key_prefix, color) in enumerate(tree_types):
+                    col_x = tree_base_x + col_idx * tree_col_spacing
                     # Bring inner columns very close (boxes nearly touch)
                     inner_col_offset = tree_box_w // 2 + 1
                     left_col_x = col_x - inner_col_offset
@@ -3949,8 +4184,12 @@ class Game:
         self.player.level = 1
         self.player.xp_to_next_level = XP_BASE
         # Permanent upgrade application:
-        # 'power' gives +3% damage per level
-        self.player.damage_multiplier = 1.0 + (self.permanent_stats["power"] * 0.03)
+        # 'power' gives +5% damage per level; blasphemy_1 gives +10% dmg/level
+        self.player.damage_multiplier = (
+            1.0
+            + (self.permanent_stats["power"] * 0.05)
+            + (self.permanent_stats.get("blasphemy_1", 0) * 0.10)
+        )
         # 'adrenaline' gives +5% fire rate per level
         self.player.fire_rate_multiplier = 1.0 + (
             self.permanent_stats["adrenaline"] * 0.05
@@ -3961,8 +4200,10 @@ class Game:
             DEFAULT_DAMAGE_REDUCTION_MULTIPLIER
             - (self.permanent_stats["structure"] * 0.03)
         )
-        self.player.max_health = PLAYER_BASE_HEALTH + (
-            self.permanent_stats["vigor"] * 10
+        self.player.max_health = (
+            PLAYER_BASE_HEALTH
+            + (self.permanent_stats["vigor"] * 10)
+            + (self.permanent_stats.get("blasphemy_2", 0) * 20)
         )
         self.player.health = self.player.max_health
 
@@ -4014,6 +4255,17 @@ class Game:
             "ice_5",
             "ice_6",
             "ice_7",
+            # Blasphemies grid (2 rows of 5) — added for permanent upgrades
+            "blasphemy_1",
+            "blasphemy_2",
+            "blasphemy_3",
+            "blasphemy_4",
+            "blasphemy_5",
+            "blasphemy_6",
+            "blasphemy_7",
+            "blasphemy_8",
+            "blasphemy_9",
+            "blasphemy_10",
         ]
         for k in keys:
             self.permanent_stats.setdefault(k, 0)
@@ -4272,7 +4524,25 @@ class Game:
         # Update special projectiles
         for proj in self.projectiles:
             if isinstance(proj, SoulDrainProjectile):
-                proj.update(self.enemies, self.player)
+                # Pass both regular enemies and any boss sprites so Soul Drain
+                # homing can prioritize boss targets (including end-of-wave bosses).
+                targets = []
+                try:
+                    # Add regular enemies (list or Group)
+                    targets.extend(
+                        list(self.enemies) if hasattr(self.enemies, "__iter__") else []
+                    )
+                except Exception:
+                    pass
+                try:
+                    # Add bosses (Group or list)
+                    if hasattr(getattr(self, "bosses", None), "sprites"):
+                        targets.extend(self.bosses.sprites())
+                    elif getattr(self, "bosses", None) is not None:
+                        targets.extend(list(self.bosses))
+                except Exception:
+                    pass
+                proj.update(targets, self.player)
 
         # Apply ice puddle slowing effects before enemy movement
         for enemy in self.enemies:
@@ -4380,16 +4650,18 @@ class Game:
             for enemy in list(self.enemies.sprites()):
                 if hasattr(enemy, "health") and enemy.health <= 0:
                     self.add_score(enemy.max_health * 18 * self.difficulty_multiplier)
-                    type_xp = {
+                    type_xp_local = {
                         "weak": 10,
                         "normal": 16,
                         "strong": 25,
                         "giant": 50,
                         "angel": 22,
                     }
-                    base_xp = type_xp.get(getattr(enemy, "enemy_type", None), 12)
+                    base_xp_local = type_xp_local.get(
+                        str(getattr(enemy, "enemy_type", "")), 12
+                    )
                     self.player_xp += int(
-                        round(base_xp * getattr(self, "xp_multiplier", 1.0))
+                        round(base_xp_local * getattr(self, "xp_multiplier", 1.0))
                     )
                     if self.player_xp >= self.xp_to_next_level:
                         self.trigger_level_up()
@@ -4737,8 +5009,8 @@ class Game:
         if "shotgun" in self.player_weapons and self.hellgun_cooldown_timer <= 0:
             self.fire_hellgun(aim_vel_x, aim_vel_y)
             slevel = self.weapon_levels.get("shotgun", 0)
-            cd_sec: float = shotgun_cooldown(slevel)
-            self.hellgun_cooldown_timer = int(cd_sec * self.fps)
+            cd_shot: float = shotgun_cooldown(slevel)
+            self.hellgun_cooldown_timer = int(cd_shot * self.fps)
 
         if "spear" in self.player_weapons and self.spear_cooldown_timer <= 0:
             self.fire_spear(aim_vel_x, aim_vel_y)
@@ -4779,9 +5051,19 @@ class Game:
         # Apply beast weapon damage bonus (+5% per level)
         beast_level: int = self.weapon_levels.get("beast", 0)
         if beast_level > 0:
-            base_damage = int(base_damage * (1 + beast_level * 0.05))
+            try:
+                # Use centralized helper to compute beast-adjusted damage
+                base_damage = beast_damage(beast_level, base_damage)
+            except Exception:
+                # Fallback to old percentage behaviour if helper missing
+                base_damage = int(base_damage * (1 + beast_level * 0.05))
 
         base_radius = int(8 * self.projectile_size_multiplier)
+
+        # If player has the 'beast' weapon, make basic projectiles visibly larger
+        # Fixed increase: +25% radius for beast projectiles (all levels)
+        if self.weapon_levels.get("beast", 0) > 0:
+            base_radius = max(1, int(base_radius * 1.25))
 
         projectile: Projectile = Projectile(
             self.player.x,
@@ -4792,9 +5074,10 @@ class Game:
             radius=base_radius,
         )
         self.projectiles.add(projectile)
-        if getattr(self, "projectile_manager", None) is not None:
+        mgr = self.projectile_manager
+        if mgr is not None:
             try:
-                self.projectile_manager.register(projectile)
+                mgr.register(projectile)
             except Exception:
                 pass
 
@@ -4815,12 +5098,12 @@ class Game:
             vx: float = math.cos(a) * 500
             vy: float = math.sin(a) * 500
 
-            # Apply shotgun damage multiplier and upgrade increments at levels 3 and 5 (+10% each)
-            dmg_mult = 1.0 + (slevel >= 3) * 0.1 + (slevel >= 5) * 0.1
-            base_damage = int(
-                self.player_damage * self.damage_multiplier * 0.55 * dmg_mult
-            )
+            # Per-pellet damage now remapped by helper so Lv1..Lv6 => 20..30 (scaled by player damage)
+            base_player = int(self.player_damage * self.damage_multiplier)
+            base_damage = shotgun_pellet_damage(slevel, base_player)
             base_radius = int(5 * self.projectile_size_multiplier * 1.0)
+            # Increase pellet collision/visual radius by +2 px as requested
+            base_radius = max(1, base_radius + 2)
 
             pellet: Projectile = Projectile(
                 self.player.x,
@@ -4832,9 +5115,10 @@ class Game:
                 weapon_type="shotgun",
             )
             self.projectiles.add(pellet)
-            if getattr(self, "projectile_manager", None) is not None:
+            mgr = self.projectile_manager
+            if mgr is not None:
                 try:
-                    self.projectile_manager.register(pellet)
+                    mgr.register(pellet)
                 except Exception:
                     pass
 
@@ -4861,9 +5145,10 @@ class Game:
         )
         spear.pierce_all = True
         self.projectiles.add(spear)
-        if getattr(self, "projectile_manager", None) is not None:
+        mgr = self.projectile_manager
+        if mgr is not None:
             try:
-                self.projectile_manager.register(spear)
+                mgr.register(spear)
             except Exception:
                 pass
 
@@ -4919,9 +5204,10 @@ class Game:
         ball.slow_factor = 0.5
 
         self.projectiles.add(ball)
-        if getattr(self, "projectile_manager", None) is not None:
+        mgr = self.projectile_manager
+        if mgr is not None:
             try:
-                self.projectile_manager.register(ball)
+                mgr.register(ball)
             except Exception:
                 pass
 
@@ -4936,6 +5222,9 @@ class Game:
         heal_mult = (
             1.0 + (slevel >= 3) * 0.1 + (slevel >= 5) * 0.1
         )  # Lv3 & Lv5: +10% heal
+
+        # Read base_heal from weapon defs so changes propagate consistently
+        base_heal = WEAPON_DEFS.get("Soul Drain", {}).get("base_heal", 2)
 
         for i in range(num_projectiles):
             # Spread slightly
@@ -4953,13 +5242,14 @@ class Game:
                     WEAPON_DEFS.get("Soul Drain", {}).get("base_damage", 10)
                     * damage_mult
                 ),
-                heal_amount=int(2 * heal_mult),
+                heal_amount=int(base_heal * heal_mult),
                 level=slevel,
             )
             self.projectiles.add(soul_proj)
-            if getattr(self, "projectile_manager", None) is not None:
+            mgr = self.projectile_manager
+            if mgr is not None:
                 try:
-                    self.projectile_manager.register(soul_proj)
+                    mgr.register(soul_proj)
                 except Exception:
                     pass
 
@@ -4970,8 +5260,9 @@ class Game:
         explosion_radius = skull_bomb_explosion_radius(slevel)
 
         # Create skull projectile
-        vx = aim_x * 320  # Slower than basic projectiles (20% reduction)
-        vy = aim_y * 320
+        # Slightly slower than basic projectiles (≈26% slower than 500 px/s)
+        vx = aim_x * 370
+        vy = aim_y * 370
 
         skull: Projectile = Projectile(
             self.player.x,
@@ -4986,9 +5277,10 @@ class Game:
         skull.explosion_radius = explosion_radius
 
         self.projectiles.add(skull)
-        if getattr(self, "projectile_manager", None) is not None:
+        mgr = self.projectile_manager
+        if mgr is not None:
             try:
-                self.projectile_manager.register(skull)
+                mgr.register(skull)
             except Exception:
                 pass
 
@@ -5112,9 +5404,10 @@ class Game:
                     source="orbital",
                 )
                 self.projectiles.add(projectile)
-                if getattr(self, "projectile_manager", None) is not None:
+                mgr = self.projectile_manager
+                if mgr is not None:
                     try:
-                        self.projectile_manager.register(projectile)
+                        mgr.register(projectile)
                     except Exception:
                         pass
 
@@ -5186,7 +5479,9 @@ class Game:
                                     self, "projectile_manager", None
                                 ) is not None and not isinstance(p, dict):
                                     try:
-                                        self.projectile_manager.register(p)
+                                        mgr = self.projectile_manager
+                                        if mgr is not None:
+                                            mgr.register(p)
                                     except Exception:
                                         pass
                             except Exception:
@@ -5223,11 +5518,13 @@ class Game:
                     else:
                         try:
                             self.projectiles.add(proj)
-                            if getattr(
-                                self, "projectile_manager", None
-                            ) is not None and not isinstance(proj, dict):
+                            if self.projectile_manager is not None and isinstance(
+                                proj, Projectile
+                            ):
                                 try:
-                                    self.projectile_manager.register(proj)
+                                    mgr = self.projectile_manager
+                                    if mgr is not None:
+                                        mgr.register(proj)
                                 except Exception:
                                     pass
                         except Exception:
@@ -5354,12 +5651,11 @@ class Game:
             # Flag to indicate we've processed this projectile via the spatial-grid branch
             processed_projectile = False
             # Ensure we always have an iterable for hit enemies
-            hit_enemies = []
+            hit_enemies: list[Any] = []
 
             # If we have a spatial grid and projectile exposes position, use it
-            if getattr(self, "spatial_grid", None) is not None and hasattr(
-                projectile, "x"
-            ):
+            sg = self.spatial_grid
+            if sg is not None and hasattr(projectile, "x"):
                 try:
                     px = getattr(projectile, "x", 0)
                     py = getattr(projectile, "y", 0)
@@ -5370,7 +5666,11 @@ class Game:
                         and (projectile.rect.width // 2)
                         or 5,
                     )
-                    candidates = self.spatial_grid.query_circle(px, py, pr)
+                    sg = self.spatial_grid
+                    if sg is not None:
+                        candidates = sg.query_circle(px, py, pr)
+                    else:
+                        candidates = []
                     # Narrow candidates by precise circle overlap
                     hit_enemies = []
                     for enemy in candidates:
@@ -5398,7 +5698,11 @@ class Game:
                         and (projectile.rect.width // 2)
                         or 5,
                     )
-                    candidates = self.spatial_grid.query_circle(px, py, pr)
+                    sg = self.spatial_grid
+                    if sg is not None:
+                        candidates = sg.query_circle(px, py, pr)
+                    else:
+                        candidates = []
                     # Narrow candidates by precise circle overlap
                     hit_enemies = []
                     for enemy in candidates:
@@ -5460,6 +5764,14 @@ class Game:
             except Exception:
                 pass
 
+            # ICE projectile: if it hit any enemy, ensure ICE3 first-hit flag is set
+            if getattr(projectile, "appearance", None) == "ice_statue" and hit_enemies:
+                # If ICE3 is active, mark this projectile as having hit its first enemy
+                if self.permanent_stats.get("ice_3", 0) and not hasattr(
+                    projectile, "has_hit_first_enemy"
+                ):
+                    projectile.has_hit_first_enemy = True
+
             # Special handling for ice projectiles with area damage
             if (
                 getattr(projectile, "appearance", None) == "ice_statue"
@@ -5491,10 +5803,6 @@ class Game:
 
                         # Mark as hit
                         projectile.hit_enemy_ids.add(enemy_id)
-
-                        # Mark that projectile has hit its first enemy (for reduced homing)
-                        if not hasattr(projectile, "has_hit_first_enemy"):
-                            projectile.has_hit_first_enemy = True
 
                         try:
                             # Apply damage
@@ -5560,7 +5868,7 @@ class Game:
                             try:
                                 life = random.randint(15, 30)
                                 size = random.randint(2, 5)
-                                p = IceParticle(
+                                p_ice = IceParticle(
                                     px + offset_x,
                                     py + offset_y,
                                     vx,
@@ -5568,7 +5876,7 @@ class Game:
                                     life=life,
                                     size=size,
                                 )
-                                self.ice_particles.append(p)
+                                self.ice_particles.append(p_ice)
                             except Exception:
                                 pass
 
@@ -5680,10 +5988,10 @@ class Game:
                     try:
                         life = random.randint(15, 30)
                         size = random.randint(2, 5)
-                        p = IceParticle(
+                        p_ice_local = IceParticle(
                             px + offset_x, py + offset_y, vx, vy, life=life, size=size
                         )
-                        self.ice_particles.append(p)
+                        self.ice_particles.append(p_ice_local)
                     except Exception:
                         pass
 
@@ -5997,7 +6305,7 @@ class Game:
                             # More varied life and size
                             life = random.randint(10, 40)  # Wider range
                             size = random.randint(1, 6)  # Smaller to larger
-                            p = BurnParticle(
+                            p_burn = BurnParticle(
                                 px + offset_x,
                                 py + offset_y,
                                 vx,
@@ -6005,7 +6313,7 @@ class Game:
                                 life=life,
                                 size=size,
                             )
-                            self.skull_bomb_particles.append(p)
+                            self.skull_bomb_particles.append(p_burn)
                         except Exception:
                             pass
 
@@ -6241,20 +6549,22 @@ class Game:
                                             except Exception:
                                                 pass
                                             try:
-                                                type_xp = {
+                                                type_xp_local = {
                                                     "weak": 10,
                                                     "normal": 16,
                                                     "strong": 25,
                                                     "giant": 50,
                                                     "angel": 22,
                                                 }
-                                                base_xp = type_xp.get(
-                                                    getattr(targ, "enemy_type", None),
+                                                base_xp_local = type_xp_local.get(
+                                                    str(
+                                                        getattr(targ, "enemy_type", "")
+                                                    ),
                                                     12,
                                                 )
                                                 self.player_xp += int(
                                                     round(
-                                                        base_xp
+                                                        base_xp_local
                                                         * getattr(
                                                             self, "xp_multiplier", 1.0
                                                         )
@@ -6415,7 +6725,7 @@ class Game:
                                 projectile,
                                 enemy,
                                 (
-                                    projectile.damage
+                                    projectile.get("damage", 0)
                                     if isinstance(projectile, dict)
                                     else getattr(projectile, "damage", 0)
                                 ),
@@ -6649,7 +6959,9 @@ class Game:
                         if isinstance(projectile, dict):
                             hit_ids = projectile.setdefault("_hit_ids", set())
                         else:
-                            hit_ids = getattr(projectile, "_hit_ids", set())
+                            if not hasattr(projectile, "_hit_ids"):
+                                projectile._hit_ids = set()
+                            hit_ids = projectile._hit_ids
                     hit_ids.add(id(enemy))
                     # For bosses, also remember the boss-type so multi-part bosses
                     # or duplicate boss sub-sprites won't be damaged multiple times
@@ -6661,6 +6973,8 @@ class Game:
                                     etype
                                 )
                             else:
+                                if not hasattr(projectile, "_hit_boss_types"):
+                                    projectile._hit_boss_types = set()
                                 projectile._hit_boss_types.add(etype)
                     except Exception:
                         pass
@@ -6704,7 +7018,7 @@ class Game:
                         for _ in range(10):  # More ice shards for better visibility
                             vx = random.uniform(-60, 60)
                             vy = random.uniform(-40, 20)  # Some go up, some down
-                            p = IceParticle(
+                            p_ice_enemy = IceParticle(
                                 enemy.x,
                                 enemy.y,
                                 vx,
@@ -6712,7 +7026,7 @@ class Game:
                                 life=25,
                                 size=random.randint(1, 3),
                             )
-                            enemy.ice_particles.append(p)
+                            enemy.ice_particles.append(p_ice_enemy)
 
                 # Apply burn effect (Fire towers)
                 if effect == "burn":
@@ -6820,16 +7134,20 @@ class Game:
                                 * 18
                                 * self.difficulty_multiplier
                             )
-                            type_xp = {
+                            type_xp_local = {
                                 "weak": 10,
                                 "normal": 16,
                                 "strong": 25,
                                 "giant": 50,
                                 "angel": 22,
                             }
-                            base_xp = type_xp.get(enemy.get("type"), 12)
+                            base_xp_local = type_xp_local.get(
+                                str(enemy.get("type", "")), 12
+                            )
                             self.player_xp += int(
-                                round(base_xp * getattr(self, "xp_multiplier", 1.0))
+                                round(
+                                    base_xp_local * getattr(self, "xp_multiplier", 1.0)
+                                )
                             )
                             if self.player_xp >= self.xp_to_next_level:
                                 self.trigger_level_up()
@@ -6858,18 +7176,20 @@ class Game:
                                 enemy.max_health * 18 * self.difficulty_multiplier
                             )
                             # Give XP on kill (per-type table, flat values)
-                            type_xp: Dict[str, int] = {
+                            type_xp_local = {
                                 "weak": 10,
                                 "normal": 16,
                                 "strong": 25,
                                 "giant": 50,
                                 "angel": 22,
                             }
-                            base_xp: int = type_xp.get(
-                                enemy.enemy_type, 12
+                            base_xp_local = type_xp_local.get(
+                                str(enemy.enemy_type), 12
                             )  # fallback XP
                             self.player_xp += int(
-                                round(base_xp * getattr(self, "xp_multiplier", 1.0))
+                                round(
+                                    base_xp_local * getattr(self, "xp_multiplier", 1.0)
+                                )
                             )
                             if self.player_xp >= self.xp_to_next_level:
                                 self.trigger_level_up()
@@ -7009,16 +7329,21 @@ class Game:
                                 self.add_score(
                                     targ.max_health * 18 * self.difficulty_multiplier
                                 )
-                                type_xp = {
+                                type_xp_local = {
                                     "weak": 10,
                                     "normal": 16,
                                     "strong": 25,
                                     "giant": 50,
                                     "angel": 22,
                                 }
-                                base_xp = type_xp.get(targ.enemy_type, 12)
+                                base_xp_local = type_xp_local.get(
+                                    str(targ.enemy_type), 12
+                                )
                                 self.player_xp += int(
-                                    round(base_xp * getattr(self, "xp_multiplier", 1.0))
+                                    round(
+                                        base_xp_local
+                                        * getattr(self, "xp_multiplier", 1.0)
+                                    )
                                 )
                                 if self.player_xp >= self.xp_to_next_level:
                                     self.trigger_level_up()
@@ -7240,7 +7565,9 @@ class Game:
                                 if isinstance(projectile, dict):
                                     hit_ids = projectile.setdefault("_hit_ids", set())
                                 else:
-                                    hit_ids = getattr(projectile, "_hit_ids", set())
+                                    if not hasattr(projectile, "_hit_ids"):
+                                        projectile._hit_ids = set()
+                                    hit_ids = projectile._hit_ids
                             hit_ids.add(id(enemy))
 
                         except Exception:
@@ -7320,16 +7647,20 @@ class Game:
                                 * 18
                                 * self.difficulty_multiplier
                             )
-                            type_xp = {
+                            type_xp_local = {
                                 "weak": 10,
                                 "normal": 16,
                                 "strong": 25,
                                 "giant": 50,
                                 "angel": 22,
                             }
-                            base_xp = type_xp.get(enemy.get("type"), 12)
+                            base_xp_local = type_xp_local.get(
+                                str(enemy.get("type")), 12
+                            )
                             self.player_xp += int(
-                                round(base_xp * getattr(self, "xp_multiplier", 1.0))
+                                round(
+                                    base_xp_local * getattr(self, "xp_multiplier", 1.0)
+                                )
                             )
                             if self.player_xp >= self.xp_to_next_level:
                                 self.trigger_level_up()
@@ -7546,7 +7877,9 @@ class Game:
                                 if isinstance(projectile, dict):
                                     hit_ids = projectile.setdefault("_hit_ids", set())
                                 else:
-                                    hit_ids = getattr(projectile, "_hit_ids", set())
+                                    if not hasattr(projectile, "_hit_ids"):
+                                        projectile._hit_ids = set()
+                                    hit_ids = projectile._hit_ids
                             hit_ids.add(id(enemy))
                         except Exception:
                             pass
@@ -7605,18 +7938,20 @@ class Game:
                             self.add_score(
                                 enemy.max_health * 18 * self.difficulty_multiplier
                             )
-                            type_xp: Dict[str, int] = {
+                            type_xp_local = {
                                 "weak": 10,
                                 "normal": 16,
                                 "strong": 25,
                                 "giant": 50,
                                 "angel": 22,
                             }
-                            base_xp: int = type_xp.get(
-                                enemy.enemy_type, 12
+                            base_xp_local = type_xp_local.get(
+                                str(enemy.enemy_type), 12
                             )  # fallback XP
                             self.player_xp += int(
-                                round(base_xp * getattr(self, "xp_multiplier", 1.0))
+                                round(
+                                    base_xp_local * getattr(self, "xp_multiplier", 1.0)
+                                )
                             )
                             if self.player_xp >= self.xp_to_next_level:
                                 self.trigger_level_up()
@@ -7688,17 +8023,19 @@ class Game:
                                             * 18
                                             * self.difficulty_multiplier
                                         )
-                                        type_xp = {
+                                        type_xp_local = {
                                             "weak": 10,
                                             "normal": 16,
                                             "strong": 25,
                                             "giant": 50,
                                             "angel": 22,
                                         }
-                                        base_xp = type_xp.get(targ.get("type"), 12)
+                                        base_xp_local = type_xp_local.get(
+                                            str(targ.get("type")), 12
+                                        )
                                         self.player_xp += int(
                                             round(
-                                                base_xp
+                                                base_xp_local
                                                 * getattr(self, "xp_multiplier", 1.0)
                                             )
                                         )
@@ -7736,17 +8073,19 @@ class Game:
                                             * 18
                                             * self.difficulty_multiplier
                                         )
-                                        type_xp: Dict[str, int] = {
+                                        type_xp_local = {
                                             "weak": 10,
                                             "normal": 16,
                                             "strong": 25,
                                             "giant": 50,
                                             "angel": 22,
                                         }
-                                        base_xp: int = type_xp.get(targ.enemy_type, 12)
+                                        base_xp_local = type_xp_local.get(
+                                            targ.enemy_type, 12
+                                        )
                                         self.player_xp += int(
                                             round(
-                                                base_xp
+                                                base_xp_local
                                                 * getattr(self, "xp_multiplier", 1.0)
                                             )
                                         )
@@ -7790,10 +8129,12 @@ class Game:
                             "_hit_boss_types", set()
                         )
                     else:
-                        hit_ids_local = getattr(projectile, "_hit_ids", set())
-                        hit_boss_types_local = getattr(
-                            projectile, "_hit_boss_types", set()
-                        )
+                        if not hasattr(projectile, "_hit_ids"):
+                            projectile._hit_ids = set()
+                        hit_ids_local = projectile._hit_ids
+                        if not hasattr(projectile, "_hit_boss_types"):
+                            projectile._hit_boss_types = set()
+                        hit_boss_types_local = projectile._hit_boss_types
                     if id(boss) in hit_ids_local or (
                         getattr(boss, "enemy_type", "") in hit_boss_types_local
                     ):
@@ -7861,7 +8202,11 @@ class Game:
                             getattr(boss, "enemy_type", "")
                         )
                     else:
+                        if not hasattr(projectile, "_hit_ids"):
+                            projectile._hit_ids = set()
                         projectile._hit_ids.add(id(boss))
+                        if not hasattr(projectile, "_hit_boss_types"):
+                            projectile._hit_boss_types = set()
                         projectile._hit_boss_types.add(getattr(boss, "enemy_type", ""))
                 except Exception:
                     pass
@@ -7979,12 +8324,12 @@ class Game:
                             ) and targ.enemy_type.startswith("boss_"):
                                 # Boss death handling
                                 self.add_score(targ.max_health * 25)
-                                boss_xp_map: Dict[str, int] = {
+                                boss_xp_map = {
                                     "medium": 80,
                                     "big": 150,
                                     "final": 400,
                                 }
-                                boss_base_xp: int = boss_xp_map.get(
+                                boss_base_xp = boss_xp_map.get(
                                     targ.enemy_type.replace("boss_", ""), 100
                                 )
                                 self.player_xp += int(
@@ -8001,16 +8346,19 @@ class Game:
                                 self.add_score(
                                     targ.max_health * 18 * self.difficulty_multiplier
                                 )
-                                type_xp = {
+                                type_xp_local = {
                                     "weak": 10,
                                     "normal": 16,
                                     "strong": 25,
                                     "giant": 50,
                                     "angel": 22,
                                 }
-                                base_xp = type_xp.get(targ.enemy_type, 12)
+                                base_xp_local = type_xp_local.get(targ.enemy_type, 12)
                                 self.player_xp += int(
-                                    round(base_xp * getattr(self, "xp_multiplier", 1.0))
+                                    round(
+                                        base_xp_local
+                                        * getattr(self, "xp_multiplier", 1.0)
+                                    )
                                 )
                                 if self.player_xp >= self.xp_to_next_level:
                                     self.trigger_level_up()
@@ -8081,7 +8429,7 @@ class Game:
                         for _ in range(random.randint(3, 6)):
                             vx = random.uniform(-30, 30)
                             vy = random.uniform(15, 40)
-                            p = BurnParticle(
+                            p_burn_enemy = BurnParticle(
                                 enemy.x + random.uniform(-8, 8),
                                 enemy.y - 8 + random.uniform(-4, 4),
                                 vx,
@@ -8090,7 +8438,7 @@ class Game:
                                 size=random.randint(3, 5),
                             )
                             try:
-                                enemy.burn_particles.append(p)
+                                enemy.burn_particles.append(p_burn_enemy)
                             except Exception:
                                 pass
                         # Player particles - same stronger effect
@@ -8099,7 +8447,7 @@ class Game:
                         for _ in range(random.randint(3, 6)):
                             vx = random.uniform(-30, 30)
                             vy = random.uniform(15, 40)
-                            p = BurnParticle(
+                            p_burn_player_local = BurnParticle(
                                 self.player.x + random.uniform(-16, 16),
                                 self.player.y - 8 + random.uniform(-4, 4),
                                 vx,
@@ -8107,7 +8455,7 @@ class Game:
                                 life=random.randint(18, 44),
                                 size=random.randint(3, 5),
                             )
-                            self.player.burn_particles.append(p)
+                            self.player.burn_particles.append(p_burn_player_local)
                     except Exception:
                         pass
 
@@ -8828,7 +9176,7 @@ class Game:
             return 320.0 if side == "left" else 960.0
         # Find nearest y sample
         nearest = min(points, key=lambda p: abs(p[1] - y))
-        return nearest[0]
+        return float(nearest[0])
 
     def apply_tower(self, tower_id: str) -> None:
         """Apply the selected tower type for Purgatory and place towers at the bottom outside walls."""
@@ -8891,7 +9239,7 @@ class Game:
     def update_enemy_spawning(self) -> None:
         """Handle enemy spawning logic (delegates timing to EnemyManager when present)."""
         # Use manager timers if manager exists
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             self.enemy_manager.enemy_spawn_timer -= 1
             if self.enemy_manager.enemy_spawn_timer <= 0:
                 self.spawn_enemy()
@@ -8913,7 +9261,7 @@ class Game:
                     self.enemy_spawn_timer = self.enemy_spawn_rate
 
         # Periodic big enemy spawn (delegate to EnemyManager when present)
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             try:
                 self.enemy_manager.update_big_enemy_timer()
             except Exception:
@@ -8948,7 +9296,7 @@ class Game:
             # Update both game and manager rates to keep them in sync
             new_rate = max(self.spawn_min_rate, int(self.enemy_spawn_rate * 0.99))
             self.enemy_spawn_rate = new_rate
-            if getattr(self, "enemy_manager", None) is not None:
+            if self.enemy_manager is not None:
                 self.enemy_manager.enemy_spawn_rate = new_rate
             self.spawn_accel_timer = 20 * self.fps
 
@@ -8966,7 +9314,7 @@ class Game:
             self.wave += 1
             self.wave_time = 0
             # Reset wave boss flag (proxy to manager when available)
-            if getattr(self, "enemy_manager", None) is not None:
+            if self.enemy_manager is not None:
                 try:
                     self.enemy_manager.wave_boss_spawned = False
                 except Exception:
@@ -8977,7 +9325,7 @@ class Game:
             # Reset prologo final boss flags if any (proxy to manager when available)
             # Skip reset for prologo to prevent multiple spawns
             if self.selected_stage != "prologo":
-                if getattr(self, "enemy_manager", None) is not None:
+                if self.enemy_manager is not None:
                     try:
                         self.enemy_manager.prologo_final_boss_spawned = False
                         self.enemy_manager.prologo_final_boss_defeated = False
@@ -8998,7 +9346,7 @@ class Game:
                     self.prologo_lightning_strike = False
 
             # Keep big spawn flag in manager if available
-            if getattr(self, "enemy_manager", None) is not None:
+            if self.enemy_manager is not None:
                 try:
                     self.enemy_manager.big_spawned_this_wave = False
                 except Exception:
@@ -9012,20 +9360,20 @@ class Game:
                     self.spawn_min_rate,
                     int(self.base_spawn_rate - self.wave * self.spawn_ramp_slope_pre),
                 )
-                if getattr(self, "enemy_manager", None) is not None:
+                if self.enemy_manager is not None:
                     self.enemy_manager.enemy_spawn_rate = self.enemy_spawn_rate
             else:
                 self.enemy_spawn_rate = max(
                     self.spawn_min_rate,
                     int(self.base_spawn_rate - self.wave * self.spawn_ramp_slope_post),
                 )
-                if getattr(self, "enemy_manager", None) is not None:
+                if self.enemy_manager is not None:
                     self.enemy_manager.enemy_spawn_rate = self.enemy_spawn_rate
 
             self.difficulty_multiplier = 1.0 + (self.wave * 0.12)
 
         # Spawn boss at 38 seconds (delegate to manager when available)
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             try:
                 self.enemy_manager.update_wave_boss(self.wave_time)
             except Exception:
@@ -9053,7 +9401,7 @@ class Game:
 
         # Ensure giant spawns at 12 seconds if not already spawned
         if self.wave_time >= 12:
-            if getattr(self, "enemy_manager", None) is not None:
+            if self.enemy_manager is not None:
                 if not self.enemy_manager.big_spawned_this_wave:
                     self.spawn_big_enemy()
                     self.enemy_manager.big_spawned_this_wave = True
@@ -9063,13 +9411,13 @@ class Game:
                     self.big_spawned_this_wave = True
 
         # Ensure wave boss spawning is handled by manager when available
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             # manager.update_wave_boss already called earlier; nothing else required here
             pass
 
     def update_prologo_events(self) -> None:
         """Handle special Prologo events (managed by EnemyManager when present)"""
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             try:
                 self.enemy_manager.update_prologo_events()
                 return
@@ -9078,7 +9426,7 @@ class Game:
                 pass
 
         # Final boss at 3:55 (235 seconds) - delegate to manager when available
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             try:
                 self.enemy_manager.update_prologo_events()
             except Exception:
@@ -9302,19 +9650,9 @@ class Game:
         self.screen.blit(text, (self.width // 2 - text.get_width() // 2, 540))
 
     def spawn_enemy(self) -> None:
-        if self.selected_stage == "prologo":
-            # Prologo: spawn from the top and pick an X uniformly between the walls.
-            # Use clamp_to_walls so this is safe even when wall point arrays are empty
-            # (tests / headless runners may not call generate_walls()).
-            x = random.randint(0, self.width)
-            x = self.clamp_to_walls(x)
-            y = -20
-        else:
-            # Spawn from top of screen
-            x: int = random.randint(0, self.width)
-            # Keep spawn within walls
-            x = self.clamp_to_walls(x)
-            y = -20
+        # Spawn from top of screen (pick X uniformly between the walls)
+        x = self.random_x_between_walls()
+        y = -20
 
         # Choose enemy type based on wave and random chance
         rand: float = random.random()
@@ -9347,17 +9685,17 @@ class Game:
             speed = ENEMY_BASE_SPEEDS.get("weak", 35)
 
         # Use EnemyManager when available
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             try:
                 self.enemy_manager.spawn(x, y, enemy_type, health, speed)
             except Exception:
-                enemy: Enemy = Enemy(x, y, enemy_type, health, speed)
+                enemy = Enemy(x, y, enemy_type, health, speed)
                 if hasattr(self.enemies, "add"):
                     self.enemies.add(enemy)
                 else:
                     self.enemies.append(enemy)
         else:
-            enemy: Enemy = Enemy(x, y, enemy_type, health, speed)
+            enemy = Enemy(x, y, enemy_type, health, speed)
             if hasattr(self.enemies, "add"):
                 self.enemies.add(enemy)
             else:
@@ -9411,7 +9749,7 @@ class Game:
 
     def spawn_giant_enemy(self) -> None:
         """Spawn a giant enemy at random edge (delegates to EnemyManager)."""
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             try:
                 self.enemy_manager.spawn_giant_enemy()
                 return
@@ -9428,9 +9766,7 @@ class Game:
             x = self.width + 30
             y = random.randint(0, self.height)
         else:  # top
-            x = random.randint(0, self.width)
-            # Keep top spawn within walls
-            x = self.clamp_to_walls(x)
+            x = self.random_x_between_walls()
             y = -30
 
         enemy_type = "giant"
@@ -9445,16 +9781,14 @@ class Game:
 
     def spawn_big_enemy(self) -> None:
         """Spawn a big enemy (giant). Delegates to EnemyManager if available."""
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             try:
                 self.enemy_manager.spawn_giant_enemy()
                 return
             except Exception:
                 pass
 
-        x: int = random.randint(0, self.width)
-        # Keep spawn within walls
-        x = self.clamp_to_walls(x)
+        x = self.random_x_between_walls()
         y = -30
 
         enemy_type = "giant"
@@ -9480,9 +9814,7 @@ class Game:
                     x = self.clamp_to_walls(x)
                     y = building["y"]
                 else:  # No buildings (limbo), spawn at random top position
-                    x: int = random.randint(100, self.width - 100)
-                    # Clamp random top spawn inside walls
-                    x = self.clamp_to_walls(x)
+                    x = self.random_x_between_walls(margin=100)
                     y = 50
             if count is None:
                 count: int = self.reinforcement_count
@@ -9549,7 +9881,7 @@ class Game:
 
     def spawn_boss(self, boss_type) -> None:
         """Spawn a boss of the specified type (delegates to EnemyManager)."""
-        if getattr(self, "enemy_manager", None) is not None:
+        if self.enemy_manager is not None:
             try:
                 self.enemy_manager.spawn_boss(boss_type)
                 return

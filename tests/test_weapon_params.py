@@ -32,6 +32,13 @@ def test_shotgun_pellets_and_fire():
             level
         ), f"Expected {shotgun_pellets(level)} pellets at level {level}, got {len(projs)}"
 
+        # Pellets should be 2px larger in radius compared to legacy base (base 5 -> now 7)
+        if projs:
+            expected_radius = int(5 * game.projectile_size_multiplier) + 2
+            assert (
+                projs[0].radius == expected_radius
+            ), f"Pellet radius should be {expected_radius}, got {projs[0].radius}"
+
 
 def test_shotgun_and_spear_cooldowns():
     assert abs(shotgun_cooldown(1) - 1.5) < 1e-6

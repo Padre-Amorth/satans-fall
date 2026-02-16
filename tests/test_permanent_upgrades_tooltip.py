@@ -54,3 +54,57 @@ def test_skill_tree_tooltip_shows_on_hover(tmp_path: Path) -> None:
             break
 
     assert found, "Tooltip not rendered when hovering over skill tree box"
+
+
+def test_blasphemy_tooltip_shows_on_hover(tmp_path: Path) -> None:
+    """Hovering over the first blasphemy box shows a tooltip with description + levels."""
+    setup_dummy_sdl()
+    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+
+    # Ensure the first blasphemy has a visible level
+    g.permanent_stats["blasphemy_1"] = 2
+
+    g.show_permanent_upgrades()
+
+    left_x = g.width // 2 - 420
+    box_spacing = 100
+    start_x = left_x + box_spacing // 2 - 40
+    box_x = start_x + (0 * box_spacing)
+    separator_y = 320
+    box_y1 = separator_y + 80
+    box_height = 80
+    box_y2 = box_y1 + box_height + 20
+
+    # Put mouse over the center of the first (top-left) blasphemy box
+    g.mouse_x = box_x
+    g.mouse_y = box_y1 + box_height // 2
+
+    # Draw upgrades menu (should render the blasphemy tooltip)
+    g.ui.draw_permanent_upgrades()
+    surf = g.screen
+    bg = tuple(surf.get_at((0, 0))[:3])
+
+    # Tooltip is anchored under the blasphemies (below second row)
+    tip_x = box_x
+    tip_y = box_y2 + box_height + 12
+
+    # Sample small region around tip for any non-background pixel
+    found = False
+    for dx in range(-4, 5):
+        for dy in range(-2, 3):
+            px = max(0, min(surf.get_width() - 1, tip_x + dx))
+            py = max(0, min(surf.get_height() - 1, tip_y + dy))
+            if tuple(surf.get_at((px, py))[:3]) != bg:
+                found = True
+                break
+        if found:
+            break
+
+    assert found, "Blasphemy tooltip not rendered on hover"
+
+    # Also ensure the level label inside the first box is visible
+    sample_x = box_x
+    sample_y = box_y1 + box_height // 2
+    assert (
+        tuple(surf.get_at((sample_x, sample_y))[:3]) != bg
+    ), "Level text for blasphemy_1 not rendered"

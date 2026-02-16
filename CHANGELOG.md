@@ -18,7 +18,7 @@ All notable changes to this project are documented in this file.
 - **Gameplay tuning:** reduced Inquisitor fire rate and tuned projectile slow (duration and strength).
 - **Gameplay tuning:** enemy base movement speeds are now centralised in `ENEMY_BASE_SPEEDS` (`src/balance.py`) and applied at spawn. Current values: `weak=35`, `normal=75`, `strong=60`, `angel=60`, `giant=45` (bosses: `boss_medium=45`, `boss_inquisitor=50`, `boss_big=40`, `boss_final=40`). This replaces previous hard-coded spawn values and makes tuning a single-source operation.
 - **Spawn rate tuning:** made spawn-rate increase more gradual so the minimum spawn rate (`SPAWN_MIN_RATE = 30`) is reached around **wave 10** (reduced `SPAWN_RAMP_SLOPE_POST` to ~4.2).
-- **Balance change — Permanent Upgrades:** `POWER` now grants **+3% damage per level** (was +2%); UI strings and tests updated to match the new value.
+- **Balance change — Permanent Upgrades:** `POWER` now grants **+5% damage per level** (was +3%); `BLASPHEMY_1` now grants **+10% damage per level**; UI strings and tests updated to match the new values.
 - **Fixes & safety:** Inquisitor movement respects wall clamps; projectiles and pooling behavior covered by tests.
 - **Tests added/updated:** spawn, slow-on-hit, roaming confined to top-half, confinement to walls, and fire-rate assertions.
 

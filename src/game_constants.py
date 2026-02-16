@@ -25,20 +25,23 @@ STAGE_SETTINGS = {
     },
     "limbo": {
         "bg_color": (0, 0, 0),
+        "bg_image": "limbo_battlefield.png",
         "floor_color": (100, 50, 0),
-        "wall_color": (42, 18, 8),
+        "wall_color": (56, 29, 18),  # desaturated (-20% saturation)
         "building_color": None,  # No buildings in limbo
     },
     "limbo_2": {
         "bg_color": (0, 0, 0),
+        "bg_image": "limbo_battlefield.png",
         "floor_color": (100, 50, 0),
-        "wall_color": (42, 18, 8),
+        "wall_color": (56, 29, 18),  # desaturated (-20% saturation)
         "building_color": None,
     },
     "limbo_3": {
         "bg_color": (0, 0, 0),
+        "bg_image": "limbo_battlefield.png",
         "floor_color": (100, 50, 0),
-        "wall_color": (42, 18, 8),
+        "wall_color": (56, 29, 18),  # desaturated (-20% saturation)
         "building_color": None,
     },
     "purgatory": {

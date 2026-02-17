@@ -43,9 +43,7 @@ def test_boss_big_sinusoidal_hover_in_all_limbo_stages(stage):
     ), f"boss_big did not enter hover phase in {stage}"
 
     # Examine samples from the moment hover started (skip a few transient frames)
-    start_idx = min(len(xs) - 1, hover_start + 8)
-    xs_after = xs[start_idx:]
-    ys_after = ys[start_idx:]
+    # (sampling code removed; not used in assertions)
 
 
 def test_boss_big_enters_scene_slowly_in_limbo():

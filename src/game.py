@@ -419,9 +419,11 @@ class Game:
         self.wave = 0
         self.wave_time = 0.0
         self.wave_duration = DEFAULT_WAVE_DURATION  # seconds
-        self.enemy_spawn_timer = 0
-        self.base_spawn_rate = 72  # base frames between spawns
+        # Initialize spawn timer from the configured rate so the first spawn
+        # doesn't occur immediately during tests or right after reset.
         self.enemy_spawn_rate = 72  # frames between spawns
+        self.base_spawn_rate = 72  # base frames between spawns
+        self.enemy_spawn_timer = self.enemy_spawn_rate
 
         # Wave ramp settings (centralized)
         self.spawn_ramp_start_wave = SPAWN_RAMP_START_WAVE
@@ -480,9 +482,11 @@ class Game:
         self.wave = 0
         self.wave_time = 0.0
         self.wave_duration = DEFAULT_WAVE_DURATION  # seconds
-        self.enemy_spawn_timer = 0
-        self.base_spawn_rate = 72  # base frames between spawns
+        # Initialize spawn timer to the configured rate so gameplay doesn't
+        # spawn enemies the instant the game starts during tests
         self.enemy_spawn_rate = 72  # frames between spawns
+        self.base_spawn_rate = 72  # base frames between spawns
+        self.enemy_spawn_timer = self.enemy_spawn_rate
 
         # Wave ramp settings (centralized)
         self.spawn_ramp_start_wave = SPAWN_RAMP_START_WAVE
@@ -4314,7 +4318,8 @@ class Game:
 
         self.wave = 0
         self.wave_time = 0.0
-        self.enemy_spawn_timer = 0
+        # Reset spawn timer to the configured spawn rate (avoid immediate spawn)
+        self.enemy_spawn_timer = self.base_spawn_rate
         self.enemy_spawn_rate = self.base_spawn_rate
         self.spawn_accel_timer = 20 * self.fps
         self.time_elapsed = 0.0
@@ -4840,16 +4845,17 @@ class Game:
                         pass
         else:
             for enemy in list(self.enemies):
-                # Dict-style enemies (legacy path)
+                # Plain-list enemies (object instances expected)
                 if getattr(enemy, "health", 0) <= 0:
                     self.add_score(
-                        enemy.get("max_health", 10) * 18 * self.difficulty_multiplier
+                        getattr(enemy, "max_health", 10)
+                        * 18
+                        * self.difficulty_multiplier
                     )
-                    # Propagate burn on death if flagged for dict-based enemies
                     try:
                         if (
-                            enemy.get("burn_propagate_on_death", False)
-                            or enemy.get("burn_propagate_hops", 0) > 0
+                            getattr(enemy, "burn_propagate_on_death", False)
+                            or getattr(enemy, "burn_propagate_hops", 0) > 0
                         ):
                             try:
                                 self._propagate_burn(enemy)
@@ -4857,6 +4863,20 @@ class Game:
                                 pass
                     except Exception:
                         pass
+                    base_xp_local = 12
+                    try:
+                        base_xp_local = {
+                            "weak": 10,
+                            "normal": 16,
+                            "strong": 25,
+                            "giant": 50,
+                            "angel": 22,
+                        }.get(str(getattr(enemy, "enemy_type", "")), 12)
+                    except Exception:
+                        base_xp_local = 12
+                    self.player_xp += int(
+                        round(base_xp_local * getattr(self, "xp_multiplier", 1.0))
+                    )
                     if self.player_xp >= self.xp_to_next_level:
                         self.trigger_level_up()
                     try:
@@ -4864,7 +4884,17 @@ class Game:
                     except Exception:
                         pass
                     try:
-                        self.enemies.remove(enemy)
+                        # Call kill() if implemented, then ensure removal from plain list
+                        if hasattr(enemy, "kill"):
+                            try:
+                                enemy.kill()
+                            except Exception:
+                                pass
+                        try:
+                            # Always attempt to remove from the plain list container
+                            self.enemies.remove(enemy)
+                        except Exception:
+                            pass
                     except Exception:
                         pass
 
@@ -4998,7 +5028,11 @@ class Game:
         # Process burn timers for dict-based enemies
         if not hasattr(self.enemies, "update"):
             for enemy in list(self.enemies):
-                if getattr(enemy, "burn_timer", 0) > 0:
+                # Only process dict-backed enemies in this branch; object-based
+                # enemies are updated via their own `.update()` (above).
+                if not isinstance(enemy, dict):
+                    continue
+                if enemy.get("burn_timer", 0) > 0:
                     enemy["burn_timer"] -= 1
 
                     # Burn tick handling
@@ -5975,7 +6009,29 @@ class Game:
                         try:
                             # Apply damage
                             dmg_to_apply = getattr(projectile, "damage", 0)
-                            enemy.take_damage(dmg_to_apply)
+                            if id(enemy) in getattr(projectile, "_hit_ids", set()):
+                                pass
+                            else:
+                                try:
+                                    LOG.debug(
+                                        "handle_collisions ICE3-hit: proj_id=%s effect=%s enemy_id=%s pre_hit_ids=%s",
+                                        id(projectile),
+                                        getattr(projectile, "effect", None),
+                                        id(enemy),
+                                        getattr(projectile, "_hit_ids", None),
+                                    )
+                                except Exception:
+                                    pass
+                                enemy.take_damage(dmg_to_apply)
+                                try:
+                                    LOG.debug(
+                                        "handle_collisions ICE3-hit-done: proj_id=%s enemy_id=%s post_hit_ids=%s",
+                                        id(projectile),
+                                        id(enemy),
+                                        getattr(projectile, "_hit_ids", None),
+                                    )
+                                except Exception:
+                                    pass
                             # Apply slow effect (object-style)
                             slow_duration = getattr(projectile, "slow_duration", 120)
                             slow_factor = getattr(projectile, "slow_factor", 0.5)
@@ -6022,6 +6078,14 @@ class Game:
                                     )
                                 except Exception:
                                     pass
+
+                    # Ensure _hit_ids includes hit_enemy_ids so the subsequent explosion
+                    # doesn't damage the same enemies again
+                    if not hasattr(projectile, "_hit_ids"):
+                        projectile._hit_ids = set()
+                    projectile._hit_ids.update(
+                        getattr(projectile, "hit_enemy_ids", set())
+                    )
 
                     # First hit: create explosion and puddle
                     if not has_exploded:
@@ -6085,7 +6149,12 @@ class Game:
                                 try:
                                     # Apply damage
                                     dmg_to_apply = getattr(projectile, "damage", 0)
-                                    enemy.take_damage(dmg_to_apply)
+                                    if id(enemy) in getattr(
+                                        projectile, "_hit_ids", set()
+                                    ):
+                                        pass
+                                    else:
+                                        enemy.take_damage(dmg_to_apply)
                                     # Apply slow effect (object-style)
                                     slow_duration = getattr(
                                         projectile, "slow_duration", 120
@@ -6201,9 +6270,16 @@ class Game:
                     distance = math.sqrt(dx * dx + dy * dy)
                     if distance <= explosion_radius:
                         try:
-                            # Apply damage
+                            # Apply damage (skip if already hit by this projectile)
                             dmg_to_apply = getattr(projectile, "damage", 0)
-                            enemy.take_damage(dmg_to_apply)
+                            if id(enemy) in getattr(
+                                projectile, "_hit_ids", set()
+                            ) or id(enemy) in getattr(
+                                projectile, "hit_enemy_ids", set()
+                            ):
+                                pass
+                            else:
+                                enemy.take_damage(dmg_to_apply)
                             # Apply slow effect (support dict *and* Enemy instances)
                             slow_duration = getattr(projectile, "slow_duration", 120)
                             slow_factor = getattr(projectile, "slow_factor", 0.5)
@@ -6333,46 +6409,15 @@ class Game:
                                 )
                             except Exception:
                                 pass
-                        # spawn centralized floating text (yellow if FIRE tier-3 bonus applied)
+
+                    # Fallback when .take_damage isn't available: adjust attribute
+                    if not hasattr(enemy, "take_damage"):
                         try:
-                            ex, ey = self._enemy_pos(enemy)
-                            try:
-                                base = (
-                                    projectile.get("damage", 0)
-                                    if isinstance(projectile, dict)
-                                    else getattr(projectile, "damage", 0)
-                                )
-                                is_player_proj = (
-                                    not getattr(
-                                        projectile, "is_enemy_projectile", False
-                                    )
-                                ) and (getattr(projectile, "source", None) != "statue")
-                                color = (
-                                    (255, 200, 0)
-                                    if (
-                                        self.permanent_stats.get("fire_3", 0)
-                                        and is_player_proj
-                                        and dmg_to_apply > base
-                                    )
-                                    else (255, 255, 255)
-                                )
-                            except Exception:
-                                color = (255, 255, 255)
-                            self.spawn_floating_text(
-                                str(int(dmg_to_apply)),
-                                ex,
-                                ey - self._enemy_radius(enemy) - 8,
-                                color=color,
+                            enemy.health = max(
+                                0, getattr(enemy, "health", 0) - int(dmg_to_apply)
                             )
                         except Exception:
                             pass
-                    # Fallback when .take_damage isn't available: adjust attribute
-                    try:
-                        enemy.health = max(
-                            0, getattr(enemy, "health", 0) - int(dmg_to_apply)
-                        )
-                    except Exception:
-                        pass
                     try:
                         ex, ey = self._enemy_pos(enemy)
                         try:
@@ -6425,6 +6470,10 @@ class Game:
                         projectile._hit_ids.add(id(enemy))
                     except Exception:
                         pass
+
+                    # Mark as processed so we don't run the later plain-list / fallback
+                    # collision branch for the same projectile in this frame.
+                    processed_projectile = True
 
                     # We've handled Soul Drain for this contact — skip the normal damage path
                     continue
@@ -6520,7 +6569,10 @@ class Game:
                                 dmg_to_apply = self._player_damage_vs_burning(
                                     projectile, enemy, getattr(projectile, "damage", 0)
                                 )
-                                enemy.take_damage(dmg_to_apply)
+                                if id(enemy) in getattr(projectile, "_hit_ids", set()):
+                                    pass
+                                else:
+                                    enemy.take_damage(dmg_to_apply)
                                 try:
                                     ex, ey = self._enemy_pos(enemy)
                                     # Highlight numeric damage yellow if FIRE tier-3 bonus applied
@@ -7260,6 +7312,15 @@ class Game:
                                 if not hasattr(projectile, "_hit_ids"):
                                     projectile._hit_ids = set()
                                 projectile._hit_ids.add(id(targ))
+                                try:
+                                    LOG.debug(
+                                        "handle_collisions: projectile id=%s chained-damaged targ id=%s; _hit_ids=%s",
+                                        id(projectile),
+                                        id(targ),
+                                        getattr(projectile, "_hit_ids", None),
+                                    )
+                                except Exception:
+                                    pass
                             except Exception:
                                 pass
 
@@ -7519,14 +7580,23 @@ class Game:
                 except Exception:
                     proj_px = proj_py = proj_pr = 0
 
+                # Ensure candidates is fresh for the plain-list collision pass
+                candidates = []
+
                 for enemy in list(self.enemies):
                     ex, ey = self._enemy_pos(enemy)
                     er = self._enemy_radius(enemy)
                     dx = ex - proj_px
                     dy = ey - proj_py
                     # precise circle overlap check
-                    if dx * dx + dy * dy <= (er + proj_pr) * (er + proj_pr):
-                        candidates.append((dx * dx + dy * dy, enemy))
+                    d2 = dx * dx + dy * dy
+                    try:
+                        thresh = (er + proj_pr) * (er + proj_pr)
+
+                        if d2 <= thresh:
+                            candidates.append((d2, enemy))
+                    except Exception:
+                        pass
 
                 # Normalize candidate entries to (dist_sq, enemy) tuples so
                 # downstream code can assume a consistent structure.
@@ -7590,6 +7660,15 @@ class Game:
                                 projectile._hit_ids = set()
                             hit_ids = projectile._hit_ids
                         hit_ids.add(id(enemy))
+                        try:
+                            LOG.debug(
+                                "handle_collisions: projectile id=%s damaged enemy id=%s; _hit_ids=%s",
+                                id(projectile),
+                                id(enemy),
+                                getattr(projectile, "_hit_ids", None),
+                            )
+                        except Exception:
+                            pass
 
                     except Exception:
                         pass
@@ -7793,7 +7872,11 @@ class Game:
                             dmg_to_apply = self._player_damage_vs_burning(
                                 projectile, enemy, p_damage
                             )
-                            enemy.take_damage(dmg_to_apply)
+                            # Skip if this projectile already recorded a hit on this enemy
+                            if id(enemy) in getattr(projectile, "_hit_ids", set()):
+                                pass
+                            else:
+                                enemy.take_damage(dmg_to_apply)
 
                             # Remove storm projectiles on contact (apply chain immediately)
                             if (
@@ -7835,7 +7918,47 @@ class Game:
                                                 eff = self._player_damage_vs_burning(
                                                     projectile, targ, p_damage
                                                 )
-                                                targ.take_damage(eff * 2)
+                                                try:
+                                                    LOG.debug(
+                                                        "handle_collisions chain: proj_id=%s targ_id=%s pre_hit_ids=%s",
+                                                        id(projectile),
+                                                        id(targ),
+                                                        getattr(
+                                                            projectile, "_hit_ids", None
+                                                        ),
+                                                    )
+                                                except Exception:
+                                                    pass
+                                                try:
+                                                    targ.take_damage(eff * 2)
+                                                    damaged = True
+                                                except Exception:
+                                                    try:
+                                                        targ.health -= eff * 2
+                                                        damaged = True
+                                                    except Exception:
+                                                        pass
+                                                try:
+                                                    LOG.debug(
+                                                        "handle_collisions chain-done: proj_id=%s targ_id=%s post_hit_ids=%s",
+                                                        id(projectile),
+                                                        id(targ),
+                                                        getattr(
+                                                            projectile, "_hit_ids", None
+                                                        ),
+                                                    )
+                                                except Exception:
+                                                    pass
+                                            except Exception:
+                                                try:
+                                                    eff = (
+                                                        self._player_damage_vs_burning(
+                                                            projectile, targ, p_damage
+                                                        )
+                                                    )
+                                                    targ.health -= eff * 2
+                                                except Exception:
+                                                    pass
                                             except Exception:
                                                 try:
                                                     eff = (

@@ -1,3 +1,5 @@
+from typing import Any
+
 DEFAULT_WIDTH = 1280
 DEFAULT_HEIGHT = 720
 DEFAULT_FPS = 60
@@ -14,7 +16,7 @@ DEFAULT_DISPLAY_PRESETS = [
     (1920, 1080),
 ]
 
-STAGE_SETTINGS = {
+STAGE_SETTINGS: dict[str, dict[str, Any]] = {
     "prologo": {
         "bg_color": (40, 20, 10),  # marrone scuro fuori dai muri
         "bg_image_external": "prologue_background.png",  # Background image for prologue external area

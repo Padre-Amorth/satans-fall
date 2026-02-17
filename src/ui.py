@@ -2299,20 +2299,20 @@ class PygameUIManager:
                 key = f"blasphemy_{i+1}"
                 lvl = self.game.permanent_stats.get(key, 0)
                 effect = self.game.permanent_stat_effect_text(key, lvl)
-                title = f"Blasphemy {i+1}"
+                tooltip_title = f"Blasphemy {i+1}"
                 if key == "blasphemy_1":
                     state_line = f"Level: {lvl}/3"
                 else:
                     state_line = "Unlocked" if lvl else "Locked"
-                tooltip_lines = [title]
+                blasphemy_tooltip_lines = [tooltip_title]
                 if effect:
-                    tooltip_lines.append(effect)
-                tooltip_lines.append(state_line)
+                    blasphemy_tooltip_lines.append(effect)
+                blasphemy_tooltip_lines.append(state_line)
                 tooltip_x = box_x
                 # position tooltip below the second blasphemy row (keeps layout consistent)
                 tooltip_y = box_y1 + box_height + 20 + box_height + 12
                 self.game._draw_tooltip(
-                    tooltip_lines,
+                    blasphemy_tooltip_lines,
                     tooltip_x,
                     tooltip_y,
                     pygame.font.Font(None, 18),
@@ -2343,16 +2343,16 @@ class PygameUIManager:
                 key = f"blasphemy_{6 + i}"
                 lvl = self.game.permanent_stats.get(key, 0)
                 effect = self.game.permanent_stat_effect_text(key, lvl)
-                title = f"Blasphemy {6 + i}"
+                tooltip_title = f"Blasphemy {6 + i}"
                 state_line = "Unlocked" if lvl else "Locked"
-                tooltip_lines = [title]
+                blasphemy_tooltip_lines = [tooltip_title]
                 if effect:
-                    tooltip_lines.append(effect)
-                tooltip_lines.append(state_line)
+                    blasphemy_tooltip_lines.append(effect)
+                blasphemy_tooltip_lines.append(state_line)
                 tooltip_x = box_x
                 tooltip_y = box_y2 + box_height + 12
                 self.game._draw_tooltip(
-                    tooltip_lines,
+                    blasphemy_tooltip_lines,
                     tooltip_x,
                     tooltip_y,
                     pygame.font.Font(None, 18),

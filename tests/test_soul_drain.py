@@ -59,3 +59,46 @@ def test_soul_drain_prefers_boss_over_closer_enemy():
 
     # Soul Drain should prioritize the boss despite being further away
     assert sd.target is boss
+
+
+def test_soul_drain_single_contact_damage_once():
+    """Regression test: a Soul Drain contact must apply damage exactly once.
+
+    This verifies the earlier bug where damage was applied twice (take_damage +
+    fallback health subtraction). The enemy should lose exactly ``projectile.damage``
+    and the projectile must record the hit in its ``_hit_ids`` set.
+    """
+    from src.game import Game
+
+    g = Game(debug=True)
+
+    # prepare a single enemy and a soul drain projectile positioned to hit
+    enemy = Enemy(320, 520, enemy_type="normal", health=50)
+    g.enemies = [enemy]
+
+    sd = SoulDrainProjectile(320, 520, 0, 0, damage=10, heal_amount=2, level=1)
+
+    # ensure no other projectiles interfere
+    try:
+        g.projectiles.empty()
+    except Exception:
+        g.projectiles = []
+
+    try:
+        g.projectiles.add(sd)
+    except Exception:
+        g.projectiles.append(sd)
+
+    before_hp = enemy.health
+
+    # run collision handling once
+    g.handle_collisions()
+
+    # enemy must have taken exactly one instance of the projectile's damage
+    assert enemy.health == before_hp - getattr(sd, "damage", 0)
+
+    # the projectile must have recorded this hit
+    assert id(enemy) in getattr(sd, "_hit_ids", set())
+
+    # the drain effect should also be applied
+    assert getattr(enemy, "drain_timer", 0) > 0

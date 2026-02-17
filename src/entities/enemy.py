@@ -1,4 +1,5 @@
 import importlib
+import inspect
 import logging
 import math
 import random
@@ -1178,7 +1179,56 @@ class Enemy(BaseSprite):
         show_floating: when False suppresses the floating damage text (used for contact
         damage and other silent effects).
         """
+        try:
+            logger.debug(
+                "Enemy.take_damage: %s taking damage %s (health_before=%s)",
+                self,
+                damage,
+                getattr(self, "health", None),
+            )
+        except Exception:
+            pass
+        # Debug: log take_damage call (caller info included)
+        try:
+            caller = "unknown"
+            try:
+                f = inspect.stack()[1]
+                caller = f"{f.filename}:{f.lineno} in {f.function}"
+            except Exception:
+                pass
+            logger.debug(
+                "Enemy.take_damage called -> self=%s dmg=%s health_before=%s caller=%s",
+                self,
+                damage,
+                getattr(self, "health", None),
+                caller,
+            )
+        except Exception:
+            pass
         self.health -= damage
+        try:
+            logger.debug(
+                "Enemy.take_damage: %s health_after=%s",
+                self,
+                getattr(self, "health", None),
+            )
+        except Exception:
+            pass
+        try:
+            caller = "unknown"
+            try:
+                f = inspect.stack()[1]
+                caller = f"{f.filename}:{f.lineno} in {f.function}"
+            except Exception:
+                pass
+            logger.debug(
+                "Enemy.take_damage finished -> self=%s health_after=%s caller=%s",
+                self,
+                getattr(self, "health", None),
+                caller,
+            )
+        except Exception:
+            pass
         self.shake_timer = 10
         # Try to show floating damage number via centralized game instance (unless suppressed)
         if not show_floating:

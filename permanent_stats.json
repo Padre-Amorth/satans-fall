@@ -21,8 +21,8 @@
     "ice_1": 1,
     "ice_2": 1,
     "ice_3": 1,
-    "ice_4": 1,
-    "ice_5": 1,
+    "ice_4": 0,
+    "ice_5": 0,
     "ice_6": 0,
     "ice_7": 0,
     "blasphemy_1": 2,
@@ -40,8 +40,8 @@
     "display": {
       "fullscreen": false,
       "window_size": [
-        1279,
-        720
+        2048,
+        1081
       ],
       "smooth_scale": true
     }

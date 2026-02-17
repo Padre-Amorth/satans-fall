@@ -156,6 +156,39 @@ def test_get_hit_enemies_for_projectile_with_list_and_group():
     assert e in hits2
 
 
+def test_projectile_does_not_hit_when_outside_collision_radius():
+    """Regression: projectile must NOT damage an enemy when placed beyond (pr + er).
+
+    This verifies we don't reuse stale candidate lists and that the plain-list
+    collision pass only reports overlaps when the center distance is <= sum of radii.
+    """
+    from src.entities.enemy import Enemy
+
+    g = Game(debug=True)
+    enemy = Enemy(200, 200)
+    g.enemies = [enemy]
+
+    pr = 5
+    # place projectile 3 pixels beyond collision boundary
+    p = Projectile(200 + (pr + enemy.radius) + 3, 200, 0, 0, damage=10, radius=pr)
+
+    try:
+        g.projectiles.empty()
+    except Exception:
+        g.projectiles = []
+    try:
+        g.projectiles.append(p)
+    except Exception:
+        g.projectiles = [p]
+
+    before_hp = enemy.health
+    g.handle_collisions()
+
+    # No damage should have occurred and projectile must not have recorded a hit
+    assert enemy.health == before_hp
+    assert id(enemy) not in getattr(p, "_hit_ids", set())
+
+
 def test_enemy_kill_is_idempotent_and_records_game():
     from src.entities.enemy import Enemy
 

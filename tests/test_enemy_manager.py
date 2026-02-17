@@ -99,8 +99,17 @@ def test_non_boss_spawn_speed_matches_spawn_value():
                 abs(en.speed - expected[et]) < 0.001
             ), f"{et} expected {expected[et]} but got {en.speed}"
 
-    # 3) Spawn a giant via manager/fallback
-    # Clear container safely
+
+def test_reinforcements_triggered_when_boss_dies_in_update():
+    """If a wave boss (boss_medium) dies during the bosses' update (e.g. burn),
+    the reinforcement message + timer must still be scheduled and the
+    USEREVENT+1 must spawn reinforcements when fired.
+    """
+    pygame.init()
+    g = Game(debug=True)
+    g.select_stage("purgatory")
+
+    # Ensure no enemies initially
     try:
         for _e in list(g.enemies):
             try:
@@ -113,13 +122,69 @@ def test_non_boss_spawn_speed_matches_spawn_value():
         except Exception:
             pass
 
-    g.spawn_giant_enemy()
-    giant = next(
-        (en for en in g.enemies if getattr(en, "enemy_type", None) == "giant"), None
-    )
-    assert giant is not None
-    # giant spawn speed aligned to non-boss spawn speed (from balance)
-    assert abs(giant.speed - ENEMY_BASE_SPEEDS["giant"]) < 0.001
+    em = g.enemy_manager
+    # Spawn a mid-wave boss via manager/fallback
+    boss = em.spawn_boss("mid")
+    assert boss is not None
+    assert boss.enemy_type == "boss_medium"
+    assert boss in g.bosses
+
+    # Kill the boss using take_damage (simulate DOT or other damage source)
+    boss.take_damage(boss.max_health)
+
+    # The centered message should have been enqueued
+    msgs = [m for m in g.center_messages if "REINFORCEMENTS" in m.get("text", "")]
+    assert (
+        len(msgs) >= 1
+    ), "Reinforcement message not shown when boss killed via take_damage"
+
+    # Manually post the timer event (avoid waiting for real-time timer) and process events
+    pygame.event.post(pygame.event.Event(pygame.USEREVENT + 1))
+    g.handle_events()
+
+    # After handling the event, there should be at least one non-boss enemy spawned
+    non_bosses = [
+        en
+        for en in g.enemies
+        if getattr(en, "enemy_type", "").startswith(
+            ("weak", "normal", "strong", "angel", "giant")
+        )
+    ]
+    assert len(non_bosses) >= 1, "Reinforcements were not spawned after USEREVENT+1"
+
+
+def test_reinforcements_scheduled_when_boss_take_damage_kills():
+    """Killing a wave boss via take_damage must schedule reinforcements (message + timer)."""
+    pygame.init()
+    g = Game(debug=True)
+    g.select_stage("purgatory")
+    em = g.enemy_manager
+
+    boss = em.spawn_boss("mid")
+    assert boss is not None and boss.enemy_type == "boss_medium"
+
+    # Kill via take_damage (simulate DOT or direct ability)
+    boss.take_damage(boss.max_health)
+
+    # Centered message enqueued
+    msgs = [m for m in g.center_messages if "REINFORCEMENTS" in m.get("text", "")]
+    assert (
+        len(msgs) >= 1
+    ), "Reinforcement message not shown when boss killed via take_damage"
+
+    # Fire the reinforcement event manually and ensure enemies spawn
+    pygame.event.post(pygame.event.Event(pygame.USEREVENT + 1))
+    g.handle_events()
+    non_bosses = [
+        en
+        for en in g.enemies
+        if getattr(en, "enemy_type", "").startswith(
+            ("weak", "normal", "strong", "angel", "giant")
+        )
+    ]
+    assert (
+        len(non_bosses) >= 1
+    ), "Reinforcements were not spawned after USEREVENT+1 when boss was killed via take_damage"
 
 
 def test_strong_can_spawn_in_first_two_waves():

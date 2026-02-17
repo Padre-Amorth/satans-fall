@@ -231,8 +231,11 @@ def beast_damage(level: int, base_damage: int) -> int:
     """Return effective beast-adjusted damage for a basic projectile.
 
     This remaps Beast levels linearly between the configured absolute
-    damage targets (min_damage -> max_damage) and returns the final
-    integer damage value. If level <= 0, returns the provided base_damage.
+    damage targets (min_damage -> max_damage) and then scales the result
+    proportionally to the provided `base_damage` relative to the game's
+    default player base (30). That makes permanent player damage modifiers
+    (e.g. `power`, `blasphemy_1`) correctly affect Beast projectiles.
+    If level <= 0, returns the provided base_damage unchanged.
     """
     try:
         d = WEAPON_DEFS.get("beast", {})
@@ -249,8 +252,15 @@ def beast_damage(level: int, base_damage: int) -> int:
     # Linear interpolation across levels 1..max_level
     t = (lvl - 1) / max(1, (max_level - 1))
     desired = min_d + t * (max_d - min_d)
-    # Use floor-like truncation to match existing int() semantics elsewhere
-    return int(desired)
+
+    # Scale remapped absolute beast damage proportionally to player's base damage.
+    # Default player base is 30 (PLAYER_BASE_DAMAGE); use 30 as reference.
+    reference = 30.0
+    try:
+        scaled = desired * (float(base_damage) / reference)
+    except Exception:
+        scaled = desired
+    return int(scaled)
 
 
 WEAPON_DEFS["skull_bomb"].update(

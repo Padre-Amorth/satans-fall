@@ -4975,7 +4975,7 @@ class Game:
         if hasattr(self.bosses, "sprites"):
             for boss in list(self.bosses.sprites()):
                 if hasattr(boss, "health") and boss.health <= 0:
-                    # Boss death handling (similar to enemy death but with different XP multiplier? Wait, bosses have their own handling elsewhere, but for burn we need this)
+                    # Boss death handling (similar to enemy death but with different XP multiplier)
                     # For now, use enemy-like handling; adjust if bosses have special death logic
                     self.add_score(boss.max_health * 25)  # Bosses give more score
                     boss_xp_map = {"medium": 80, "big": 150, "final": 400}
@@ -4999,6 +4999,28 @@ class Game:
                                 pass
                     except Exception:
                         pass
+
+                    # If a medium (wave) boss dies by any cause, schedule reinforcements
+                    try:
+                        if getattr(boss, "enemy_type", "") == "boss_medium":
+                            # Show the centered HUD message and schedule the reinforcement timer
+                            try:
+                                self.show_centered_message(
+                                    "REINFORCEMENTS INCOMING!", 1800, (255, 204, 0)
+                                )
+                            except Exception:
+                                pass
+                            try:
+                                # Clear any existing reinforcement timer then schedule a new one
+                                pygame.time.set_timer(pygame.USEREVENT + 1, 0)
+                                pygame.time.set_timer(
+                                    pygame.USEREVENT + 1, self.reinforcement_delay_ms
+                                )
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
                     boss.kill()  # Remove dead boss
         else:
             for boss in list(self.bosses):
@@ -8277,7 +8299,7 @@ class Game:
                         boss.take_damage(bd)
                         if boss.health <= boss.max_health * 0.1:
                             self.prologo_final_boss_immortal = True
-                            boss.health = boss.max_health * 0.1
+                            boss.health = int(boss.max_health * 0.1)
                 else:
                     bd = self._player_damage_vs_burning(
                         projectile, boss, getattr(projectile, "damage", 0)

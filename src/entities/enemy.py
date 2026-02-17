@@ -1205,6 +1205,21 @@ class Enemy(BaseSprite):
             )
         except Exception:
             pass
+        # Centralized safeguard: if this is the Prologo final boss and it is currently
+        # in the immortal/regeneration phase, ignore incoming damage from any source.
+        try:
+            from src.game import CURRENT_GAME
+
+            if (
+                getattr(self, "enemy_type", "") == "boss_final"
+                and CURRENT_GAME is not None
+                and getattr(CURRENT_GAME, "selected_stage", None) == "prologo"
+                and getattr(CURRENT_GAME, "prologo_final_boss_immortal", False)
+            ):
+                return
+        except Exception:
+            pass
+
         self.health -= damage
         try:
             logger.debug(
@@ -1212,6 +1227,57 @@ class Enemy(BaseSprite):
                 self,
                 getattr(self, "health", None),
             )
+        except Exception:
+            pass
+
+        # If a wave boss (boss_medium) is killed by any damage source, ensure the
+        # game's reinforcement sequence is scheduled (message + timer). This covers
+        # cases where bosses die outside the projectile-collision path (burn, DOT, etc.).
+        try:
+            from src.game import CURRENT_GAME
+
+            if (
+                getattr(self, "enemy_type", "") == "boss_medium"
+                and CURRENT_GAME is not None
+                and getattr(self, "health", 1) <= 0
+            ):
+                try:
+                    CURRENT_GAME.show_centered_message(
+                        "REINFORCEMENTS INCOMING!", 1800, (255, 204, 0)
+                    )
+                except Exception:
+                    pass
+                try:
+                    import pygame
+
+                    pygame.time.set_timer(pygame.USEREVENT + 1, 0)
+                    pygame.time.set_timer(
+                        pygame.USEREVENT + 1, CURRENT_GAME.reinforcement_delay_ms
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        # If this is the Prologo final boss and the damage reduced it to <=10% of
+        # max health, begin the immortal/regeneration phase and clamp HP to 10%.
+        try:
+            from src.game import CURRENT_GAME
+
+            if (
+                getattr(self, "enemy_type", "") == "boss_final"
+                and CURRENT_GAME is not None
+                and getattr(CURRENT_GAME, "selected_stage", None) == "prologo"
+            ):
+                # Only trigger the phase when not already immortal
+                if not getattr(CURRENT_GAME, "prologo_final_boss_immortal", False):
+                    try:
+                        threshold = getattr(self, "max_health", 0) * 0.1
+                        if getattr(self, "health", 0) <= threshold:
+                            CURRENT_GAME.prologo_final_boss_immortal = True
+                            # Clamp to exact 10% so subsequent game logic won't kill the boss
+                            self.health = int(threshold)
+                    except Exception:
+                        pass
         except Exception:
             pass
         try:

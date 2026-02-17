@@ -41,6 +41,38 @@ def test_prologo_final_boss_spawn_and_lightning():
     assert hasattr(g, "lightning_points")
 
 
+def test_prologo_final_boss_becomes_immortal_instead_of_dying():
+    """Final boss should enter immortal/regeneration at 10% HP instead of dying
+
+    Regression: area/explosion damage or other sources were killing the boss
+    because the immortal-transition logic was not centralized. Ensure any call
+    to take_damage triggers the transition and clamps HP to 10%.
+    """
+    pygame.init()
+    g = Game(debug=True)
+    g.selected_stage = "prologo"
+    em = g.enemy_manager
+
+    # Spawn final boss and ensure it's present
+    boss = em.spawn_boss("final")
+    assert boss is not None
+    assert boss.enemy_type == "boss_final"
+    assert boss in g.bosses
+
+    # Put boss just above the threshold and apply a large hit
+    boss.health = boss.max_health * 0.12
+    # Apply a damage that would normally kill it; take_damage should clamp + set immortal
+    boss.take_damage(boss.max_health)
+
+    # Boss must have transitioned to immortal phase and be clamped to 10%
+    assert g.prologo_final_boss_immortal is True
+    assert int(boss.health) == int(boss.max_health * 0.1)
+    # Boss should still be alive in boss group (not killed)
+    assert boss in g.bosses
+    # The defeated flag must not be set
+    assert g.prologo_final_boss_defeated is False
+
+
 def test_prologo_enemy_spawns_vary_after_draw():
     """Ensure Prologo spawns are not fixed by UI drawing (no global RNG reseed).
 

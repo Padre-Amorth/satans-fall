@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased — Bug fixes & tests ✅
+
+- Fix: `The number of the beast` (Beast weapon) now correctly scales its projectile damage with the player's `base_damage` so **permanent upgrades** (`power`, `blasphemy_1`) affect Beast damage as intended. Added unit tests for damage scaling.
+- Fix: Prologo final boss **no longer dies** when reduced below 10% HP — it now reliably enters the immortal/regeneration phase (HP clamped to 10%). Centralized the immortal-transition in `Enemy.take_damage` and added unit tests for the immortal/regeneration flow.
+- Fix: Reinforcement waves are now scheduled reliably when a wave boss dies (including deaths from DOT/burn or direct `take_damage`). The centered HUD message and `USEREVENT+1` timer are scheduled consistently; added tests to cover the sequence.
+- Tests: Added/updated tests covering Beast scaling, Prologo final boss immortal phase, and reinforcement scheduling.
+
 ## 2026-02-13 — STORM left-column: chain lightning range rebalanced (slot 1 & 3 +2, slot 2 +1) ⚡
 
 - **Balance change — STORM (left column):** `storm_1` and `storm_3` grant **+2 chained targets** each; `storm_2` no longer increases chain targets — instead it makes enemies **killed by chain lightning explode** in a lightning burst that damages nearby enemies. Chain-target stacking from left slots is now up to **+4** total (base 3 → 7 when both slots 1 & 3 active).

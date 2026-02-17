@@ -1,3 +1,5 @@
+import math
+
 import pygame
 
 from src.game import Game
@@ -63,3 +65,22 @@ def test_player_move_up_then_down_returns_to_baseline(monkeypatch):
         g.handle_input()
         g.player.update(g.width)
     assert int(g.player.y) == baseline
+
+
+def test_diagonal_speed_normalized(monkeypatch):
+    g = Game()
+    start_x, start_y = g.player.x, g.player.y
+    # Simulate holding RIGHT + W (diagonal up-right) for one frame
+    monkeypatch.setattr(
+        pygame.key, "get_pressed", lambda: FakeKeys({pygame.K_RIGHT, pygame.K_w})
+    )
+    g.handle_input()
+    g.player.update(g.width)
+    dx = g.player.x - start_x
+    dy = g.player.y - start_y
+    moved = math.hypot(dx, dy)
+    # Expected movement magnitude per frame == speed / 60
+    expected = g.player.speed / 60.0
+    assert (
+        abs(moved - expected) < 0.01
+    ), f"diagonal moved {moved:.3f}, expected {expected:.3f}"

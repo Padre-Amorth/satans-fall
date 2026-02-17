@@ -38,7 +38,7 @@ class Player(BaseSprite):
         self.height = 73  # Increased by another 10%
         self.max_health = PLAYER_BASE_HEALTH
         self.health: float = float(self.max_health)
-        self.speed: float = 250.0  # reduced from 300 to 250 px/s per user request
+        self.speed: float = 220.0  # user-requested base speed (px/s)
         self.velocity_x: float = 0.0
         # Vertical velocity for limited vertical movement (new feature)
         self.velocity_y: float = 0.0
@@ -199,13 +199,29 @@ class Player(BaseSprite):
         self.velocity_y = self.speed
 
     def update(self, screen_width) -> None:
-        # Apply horizontal velocity
-        self.x += self.velocity_x / 60  # Divide by FPS
-        # Apply vertical velocity (new behavior)
+        # Apply velocities (normalize on diagonal so diagonal speed == base speed)
+        vx = float(self.velocity_x)
+        vy = float(self.velocity_y)
         try:
-            self.y += self.velocity_y / 60
+            if vx != 0 and vy != 0:
+                # scale components so sqrt(vx^2+vy^2) == self.speed
+                import math
+
+                mag = math.hypot(vx, vy)
+                if mag > 0:
+                    factor = float(self.speed) / mag
+                    vx *= factor
+                    vy *= factor
+            # Divide by FPS
+            self.x += vx / 60
+            self.y += vy / 60
         except Exception:
-            pass
+            # fallback to previous behaviour on any error
+            try:
+                self.x += self.velocity_x / 60
+                self.y += self.velocity_y / 60
+            except Exception:
+                pass
 
         # Clamp vertical movement if a vertical range has been configured by the
         # `Game` instance. We attach `vertical_min_y`/`vertical_max_y` to the
@@ -214,8 +230,9 @@ class Player(BaseSprite):
         vmax = getattr(self, "vertical_max_y", None)
         if vmin is not None and vmax is not None:
             try:
-                # Ensure consistent numeric types
-                self.y = max(int(vmin), min(int(self.y), int(vmax)))
+                # Keep `y` as float to preserve precise per-frame movement; clamp
+                # against the configured bounds without truncating.
+                self.y = max(float(vmin), min(self.y, float(vmax)))
             except Exception:
                 pass
 

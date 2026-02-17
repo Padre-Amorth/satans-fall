@@ -40,6 +40,8 @@ class Player(BaseSprite):
         self.health: float = float(self.max_health)
         self.speed: float = 300.0
         self.velocity_x: float = 0.0
+        # Vertical velocity for limited vertical movement (new feature)
+        self.velocity_y: float = 0.0
 
         # Slow status (can be applied by enemy projectiles)
         self.slow_timer: int = 0
@@ -188,15 +190,41 @@ class Player(BaseSprite):
     def move_right(self) -> None:
         self.velocity_x = self.speed
 
-    def update(self, screen_width) -> None:
-        # Apply velocity
-        self.x += self.velocity_x / 60  # Divide by FPS
+    def move_up(self) -> None:
+        """Request upward movement (caller should call this each frame while key held)."""
+        self.velocity_y = -self.speed
 
-        # Clamp to screen
+    def move_down(self) -> None:
+        """Request downward movement (caller should call this each frame while key held)."""
+        self.velocity_y = self.speed
+
+    def update(self, screen_width) -> None:
+        # Apply horizontal velocity
+        self.x += self.velocity_x / 60  # Divide by FPS
+        # Apply vertical velocity (new behavior)
+        try:
+            self.y += self.velocity_y / 60
+        except Exception:
+            pass
+
+        # Clamp vertical movement if a vertical range has been configured by the
+        # `Game` instance. We attach `vertical_min_y`/`vertical_max_y` to the
+        # player to avoid changing `Player.update` signature.
+        vmin = getattr(self, "vertical_min_y", None)
+        vmax = getattr(self, "vertical_max_y", None)
+        if vmin is not None and vmax is not None:
+            try:
+                # Ensure consistent numeric types
+                self.y = max(int(vmin), min(int(self.y), int(vmax)))
+            except Exception:
+                pass
+
+        # Clamp to screen horizontally
         self.x = max(self.width // 2, min(self.x, screen_width - self.width // 2))
 
-        # Reset velocity
+        # Reset velocities (per-frame input)
         self.velocity_x = 0
+        self.velocity_y = 0
 
         # Handle slow status timer
         if getattr(self, "slow_timer", 0) > 0:

@@ -306,6 +306,18 @@ class Game:
         self.enemy_projectiles: Any = pygame.sprite.Group()
         self.bosses: Any = pygame.sprite.Group()
 
+        # Allow limited vertical movement (centered on player's baseline).
+        # `player_vertical_range` is the total allowed vertical span in pixels.
+        self.player_vertical_range: int = 200  # user-requested default
+        half_range = self.player_vertical_range // 2
+        baseline_y = int(self.player.y)
+        self.player_vertical_min_y = baseline_y - half_range
+        self.player_vertical_max_y = baseline_y + half_range
+        # Expose to player instance so `Player.update` can clamp itself without
+        # changing the player.update signature used in many places.
+        setattr(self.player, "vertical_min_y", self.player_vertical_min_y)
+        setattr(self.player, "vertical_max_y", self.player_vertical_max_y)
+
         # Backwards compatibility: simple list of statue projectile dicts used by
         # older code and tests. New code also stores Projectiles in self.projectiles.
         self.statue_projectiles: list = []
@@ -5216,6 +5228,14 @@ class Game:
                 moving = True
             else:
                 self.player.velocity_x = 0
+
+            # Vertical movement (W / S)
+            if keys[pygame.K_w] or keys[pygame.K_UP]:
+                self.player.move_up()
+                moving = True
+            elif keys[pygame.K_s] or keys[pygame.K_DOWN]:
+                self.player.move_down()
+                moving = True
 
             # Update player animation
             if moving:

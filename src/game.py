@@ -308,11 +308,13 @@ class Game:
 
         # Allow limited vertical movement (centered on player's baseline).
         # `player_vertical_range` is the total allowed vertical span in pixels.
+        # Movement is allowed only *upwards* from the starting baseline.
         self.player_vertical_range: int = 200  # user-requested default
         half_range = self.player_vertical_range // 2
         baseline_y = int(self.player.y)
         self.player_vertical_min_y = baseline_y - half_range
-        self.player_vertical_max_y = baseline_y + half_range
+        # Do not allow movement below the starting baseline (max == baseline)
+        self.player_vertical_max_y = baseline_y
         # Expose to player instance so `Player.update` can clamp itself without
         # changing the player.update signature used in many places.
         setattr(self.player, "vertical_min_y", self.player_vertical_min_y)

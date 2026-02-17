@@ -15,7 +15,8 @@ def test_player_vertical_range_initialized():
     g = Game()
     baseline = int(g.height - 80)
     assert g.player_vertical_min_y == baseline - (g.player_vertical_range // 2)
-    assert g.player_vertical_max_y == baseline + (g.player_vertical_range // 2)
+    # max must equal the starting baseline (no downward movement allowed)
+    assert g.player_vertical_max_y == baseline
     # Player instance should also expose the same bounds
     assert getattr(g.player, "vertical_min_y") == g.player_vertical_min_y
     assert getattr(g.player, "vertical_max_y") == g.player_vertical_max_y
@@ -37,11 +38,28 @@ def test_player_move_up_and_clamp(monkeypatch):
 def test_player_move_down_and_clamp(monkeypatch):
     g = Game()
     baseline = g.player.y
-    # Simulate holding S for many frames
+    # Simulate holding S for many frames (starting at baseline)
     monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys({pygame.K_s}))
     for _ in range(50):
         g.handle_input()
         g.player.update(g.width)
-    # Player should be clamped to the maximum Y
+    # Player should NOT move below the starting baseline
+    assert int(g.player.y) == baseline
     assert int(g.player.y) == g.player_vertical_max_y
-    assert g.player.y >= baseline
+
+
+def test_player_move_up_then_down_returns_to_baseline(monkeypatch):
+    g = Game()
+    baseline = g.player.y
+    # Move up first
+    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys({pygame.K_w}))
+    for _ in range(20):
+        g.handle_input()
+        g.player.update(g.width)
+    assert g.player.y < baseline
+    # Then move down back to baseline (allowed, but not below)
+    monkeypatch.setattr(pygame.key, "get_pressed", lambda: FakeKeys({pygame.K_s}))
+    for _ in range(40):
+        g.handle_input()
+        g.player.update(g.width)
+    assert int(g.player.y) == baseline

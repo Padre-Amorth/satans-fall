@@ -8,17 +8,22 @@ def test_spatial_grid_basic():
     objs = []
     # place objects at (50,50), (150,150), (300,300)
     for x, y in [(50, 50), (150, 150), (300, 300)]:
-        objs.append({"x": x, "y": y, "radius": 5, "id": f"obj_{x}_{y}"})
+        objs.append(SimpleObj(x, y, r=5))
 
     grid.build(objs)
 
     # Query near first object
     res1 = grid.query_circle(48, 52, 10)
-    assert any((isinstance(o, dict) and o.get("id") == "obj_50_50") for o in res1)
+    assert any(
+        (hasattr(o, "x") and o.x == 50 and hasattr(o, "y") and o.y == 50) for o in res1
+    )
 
     # Query near second object
     res2 = grid.query_circle(150, 150, 5)
-    assert any((isinstance(o, dict) and o.get("id") == "obj_150_150") for o in res2)
+    assert any(
+        (hasattr(o, "x") and o.x == 150 and hasattr(o, "y") and o.y == 150)
+        for o in res2
+    )
 
     # Query in empty region
     res3 = grid.query_circle(10, 300, 5)

@@ -8944,7 +8944,7 @@ class Game:
 
         # Define upgrade patterns inline
         def get_upgrade_patterns():
-            return [
+            patterns = [
                 {
                     "id": "damage",
                     "name": "Damage +10%",
@@ -8991,6 +8991,17 @@ class Game:
                     ),
                 },
             ]
+
+            # Projectile-size upgrades are not available during the Prologo stage;
+            # only from Limbo onward. Filter here so the rest of the generator can
+            # remain unchanged.
+            try:
+                if getattr(self, "selected_stage", None) == "prologo":
+                    patterns = [p for p in patterns if p.get("id") != "projectile_size"]
+            except Exception:
+                pass
+
+            return patterns
 
         def get_weapon_upgrade_patterns(game):
             weapon_upgrades = []

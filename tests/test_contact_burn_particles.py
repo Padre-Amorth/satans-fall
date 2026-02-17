@@ -24,23 +24,21 @@ def test_sprite_enemy_contact_emits_particles():
 def test_dict_enemy_contact_emits_particles():
     g = Game()
     g.select_stage("limbo")
-    enemy = {
-        "x": g.player.x,
-        "y": g.player.y,
-        "health": 20,
-        "max_health": 20,
-        "speed": 60,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
-    g.enemies = [enemy]
+    from src.entities.enemy import Enemy
+
+    enemy_obj = Enemy(g.player.x, g.player.y, enemy_type="normal", health=20)
+    enemy_obj.health = 20
+    enemy_obj.max_health = 20
+    enemy_obj.speed = 60
+    enemy_obj.radius = 12
+    enemy_obj.damage = 5
+    g.enemies = [enemy_obj]
 
     g.handle_collisions()
 
     assert (
-        "burn_particles" in enemy and len(enemy["burn_particles"]) > 0
-    ), "Expected dict enemy to include burn_particles on contact"
+        getattr(enemy_obj, "burn_particles", []) and len(enemy_obj.burn_particles) > 0
+    ), "Expected enemy to include burn_particles on contact"
     assert (
         hasattr(g.player, "burn_particles") and len(g.player.burn_particles) > 0
     ), "Expected player to emit burn particles on contact"

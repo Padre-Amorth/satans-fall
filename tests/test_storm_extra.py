@@ -77,11 +77,15 @@ def test_storm_dict_projectile_with_spatial_grid_triggers_chain_and_removal():
     pygame.init()
     g = Game()
 
-    # dict-style enemies and dict-style projectile (backwards compat)
-    g.enemies = [
-        {"x": 400, "y": 100, "health": 20, "max_health": 20, "radius": 12},
-        {"x": 420, "y": 100, "health": 20, "max_health": 20, "radius": 12},
-    ]
+    # object-style enemies (legacy dict paths removed)
+    e1 = Enemy(400, 100, enemy_type="normal", health=20)
+    e2 = Enemy(420, 100, enemy_type="normal", health=20)
+    try:
+        g.enemies.empty()
+        g.enemies.add(e1)
+        g.enemies.add(e2)
+    except Exception:
+        g.enemies = [e1, e2]
 
     # Build spatial grid so the spatial branch is taken
     from src.utils.spatial_grid import SpatialGrid
@@ -89,23 +93,21 @@ def test_storm_dict_projectile_with_spatial_grid_triggers_chain_and_removal():
     g.spatial_grid = SpatialGrid(cell_size=120, width=g.width, height=g.height)
     g.spatial_grid.build(g._enemies_iter())
 
-    proj = {
-        "x": 400,
-        "y": 100,
-        "vel_x": 0.0,
-        "vel_y": 0.0,
-        "damage": 5,
-        "radius": 6,
-        "source": "statue",
-        "appearance": "storm_statue",
-        "chain_targets": 2,
-    }
-    g.projectiles = [proj]
+    proj = Projectile(400, 100, 0.0, 0.0, damage=5, radius=6, appearance="storm_statue")
+    proj.source = "statue"
+    proj.chain_targets = 2
+    try:
+        g.projectiles.add(proj)
+    except Exception:
+        g.projectiles = [proj]
 
     g.handle_collisions()
 
-    # projectile dict should be removed on contact and chain visual added
-    assert proj not in g.projectiles
+    # projectile should be removed on contact and chain visual added
+    try:
+        assert proj not in list(g.projectiles)
+    except Exception:
+        assert proj not in g.projectiles
     assert len(getattr(g.game_state, "chain_lightning_effects", [])) >= 1
 
 

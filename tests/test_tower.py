@@ -3,6 +3,7 @@ import pygame
 pygame.init()
 pygame.font.init()
 from src.core.entities.tower import Tower, TowerManager  # noqa: E402
+from src.projectile import Projectile  # used by updated tests  # noqa: E402
 
 
 class DummyEnemy(pygame.sprite.Sprite):
@@ -27,32 +28,28 @@ def test_tower_fires_at_closest():
     proj = t.fire_at_closest([e1, e2])
     assert proj is not None
     # Should aim roughly rightwards (toward e1)
-    if isinstance(proj, dict):
-        vx = proj["vel_x"]
-        vy = proj["vel_y"]
-    else:
-        vx = getattr(proj, "vel_x", 0)
-        vy = getattr(proj, "vel_y", 0)
+    vx = getattr(proj, "vel_x", 0)
+    vy = getattr(proj, "vel_y", 0)
     assert vx > 0
     assert abs(vy) < 1e-6 or abs(vy) < vx
 
 
 def test_homing_applies_when_angle_small():
     # Projectile initially moving roughly rightwards, enemy ahead => homing should nudge velocity
-    proj = {"x": 300, "y": 300, "vel_x": 100.0, "vel_y": 0.0}
+    proj = Projectile(300, 300, 100.0, 0.0)
     e = DummyEnemy(600, 300)
-    before_vx = proj["vel_x"]
+    before_vx = proj.vel_x
     TowerManager.apply_homing([proj], [e], projectile_speed=320.0)
-    assert proj["vel_x"] != before_vx
+    assert proj.vel_x != before_vx
 
 
 def test_homing_skips_when_angle_large():
     # Projectile moving leftwards while enemy to the right -> angle diff > 90 => skip homing
-    proj = {"x": 300, "y": 300, "vel_x": -100.0, "vel_y": 0.0}
+    proj = Projectile(300, 300, -100.0, 0.0)
     e = DummyEnemy(600, 300)
-    before_vx = proj["vel_x"]
+    before_vx = proj.vel_x
     TowerManager.apply_homing([proj], [e], projectile_speed=320.0)
-    assert proj["vel_x"] == before_vx
+    assert proj.vel_x == before_vx
 
 
 def test_storm_fires_single_projectile():
@@ -61,11 +58,8 @@ def test_storm_fires_single_projectile():
     proj = t.fire_at_closest([e1])
     # Now a single projectile should be returned
     assert proj is not None
-    if isinstance(proj, dict):
-        assert "vel_x" in proj and "vel_y" in proj
-    else:
-        assert hasattr(proj, "vel_x") and hasattr(proj, "vel_y")
-        assert getattr(proj, "appearance", None) == "storm_statue"
+    assert hasattr(proj, "vel_x") and hasattr(proj, "vel_y")
+    assert getattr(proj, "appearance", None) == "storm_statue"
 
 
 def test_ice_projectile_has_slow():
@@ -74,12 +68,8 @@ def test_ice_projectile_has_slow():
     proj = t.fire_at_closest([e1])
     # Should be a Projectile object with slow metadata
     assert proj is not None
-    if isinstance(proj, dict):
-        assert proj.get("effect") == "slow"
-        assert "slow_duration" in proj and "slow_factor" in proj
-    else:
-        assert getattr(proj, "effect", None) == "slow"
-        assert hasattr(proj, "slow_duration") and hasattr(proj, "slow_factor")
+    assert getattr(proj, "effect", None) == "slow"
+    assert hasattr(proj, "slow_duration") and hasattr(proj, "slow_factor")
 
 
 def test_fire_projectile_appearance():
@@ -88,13 +78,8 @@ def test_fire_projectile_appearance():
     proj = t.fire_at_closest([e1])
     assert proj is not None
     # Should be marked for special appearance
-    if isinstance(proj, dict):
-        assert proj.get("effect") == "burn"
-        # dict-based path is not used for Projectile objects; ensure radius key exists
-        assert proj.get("radius", 0) >= 10
-    else:
-        assert getattr(proj, "appearance", None) == "fire_statue"
-        assert getattr(proj, "radius", 0) >= 6
+    assert getattr(proj, "appearance", None) == "fire_statue"
+    assert getattr(proj, "radius", 0) >= 6
 
 
 def test_ice_projectile_appearance():
@@ -103,11 +88,7 @@ def test_ice_projectile_appearance():
     proj = t.fire_at_closest([e1])
     assert proj is not None
     # Should be marked for special appearance
-    if isinstance(proj, dict):
-        # dict-based path not used for Projectile objects
-        pass
-    else:
-        assert getattr(proj, "appearance", None) == "ice_statue"
+    assert getattr(proj, "appearance", None) == "ice_statue"
 
 
 def test_storm_projectile_chains_three_enemies():
@@ -115,50 +96,22 @@ def test_storm_projectile_chains_three_enemies():
 
     game = Game()
     # Place three enemies close together
-    game.enemies = [
-        {
-            "x": 400,
-            "y": 100,
-            "health": 20,
-            "max_health": 20,
-            "speed": 60,
-            "radius": 12,
-            "damage": 5,
-            "type": "normal",
-        },
-        {
-            "x": 420,
-            "y": 100,
-            "health": 20,
-            "max_health": 20,
-            "speed": 60,
-            "radius": 12,
-            "damage": 5,
-            "type": "normal",
-        },
-        {
-            "x": 440,
-            "y": 100,
-            "health": 20,
-            "max_health": 20,
-            "speed": 60,
-            "radius": 12,
-            "damage": 5,
-            "type": "normal",
-        },
-    ]
+    from src.entities.enemy import Enemy
+
+    e1 = Enemy(400, 100, enemy_type="normal", health=20)
+    e2 = Enemy(420, 100, enemy_type="normal", health=20)
+    e3 = Enemy(440, 100, enemy_type="normal", health=20)
+    try:
+        game.enemies.empty()
+        game.enemies.add(e1)
+        game.enemies.add(e2)
+        game.enemies.add(e3)
+    except Exception:
+        game.enemies = [e1, e2, e3]
     # Create a storm-statue projectile already on top of first enemy
-    proj = {
-        "x": 400,
-        "y": 100,
-        "vel_x": 0.0,
-        "vel_y": 0.0,
-        "damage": 5,
-        "radius": 6,
-        "source": "statue",
-        "appearance": "storm_statue",
-        "chain_targets": 3,
-    }
+    proj = Projectile(400, 100, 0.0, 0.0, damage=5, radius=6, appearance="storm_statue")
+    proj.source = "statue"
+    proj.chain_targets = 3
     # Use simple list for projectiles to make collision branch deterministic
     game.projectiles = []
     game.projectiles.append(proj)
@@ -167,9 +120,9 @@ def test_storm_projectile_chains_three_enemies():
     game.handle_collisions()
 
     # Each enemy should have been hit: primary takes 5 damage, secondaries take 10 damage
-    assert game.enemies[0]["health"] == 15
-    assert game.enemies[1]["health"] == 10
-    assert game.enemies[2]["health"] == 10
+    assert e1.health == e1.max_health - 5
+    assert e2.health == e2.max_health - 10
+    assert e3.health == e3.max_health - 10
 
 
 def test_ice_tower_explosion_radius_with_upgrade():
@@ -266,9 +219,173 @@ def test_ice_tower_ice3_piercing():
     puddle = game.ice_puddles[-1]
     assert puddle["x"] == 400
     assert puddle["y"] == 530
+
+
+def test_ice_tower_ice3_pierces_multiple_enemies_non_lethal():
+    """ICE3 projectiles should pierce multiple nearby enemies even when the first hit isn't lethal."""
+    from src.game import Game
+
+    game = Game()
+    game.permanent_stats["ice_3"] = 1
+    game.permanent_stats["ice_1"] = 1
+
+    t = Tower(320, 530, tower_type="ice", projectile_speed=100.0, inaccuracy=0.0)
+    game.left_tower = t
+    game.apply_permanent_stats()
+
+    # Two enemies close together with enough health to survive a single hit
+    e1 = DummyEnemy(400, 530)
+    e2 = DummyEnemy(420, 530)
+    try:
+        game.enemies.empty()
+        game.enemies.add(e1)
+        game.enemies.add(e2)
+    except Exception:
+        game.enemies = [e1, e2]
+
+    proj = t.fire_at_closest([e1, e2])
+    assert proj is not None and getattr(proj, "appearance", None) == "ice_statue"
+    game.projectiles.add(proj)
+
+    # Place projectile on top of the first enemy (non-lethal expected)
+    proj.x, proj.y = 400, 530
+    before_e1, before_e2 = e1.health, e2.health
+
+    game.handle_collisions()
+
+    # Both enemies should have been damaged and the projectile should still exist
+    assert e1.health < before_e1
+    assert e2.health < before_e2
+    assert proj in list(game.projectiles)
+
+
+def test_ice_tower_ice3_pierces_multiple_enemies_non_lethal_dict():
+    """Same as above but converted to object-style enemies."""
+    from src.game import Game
+
+    game = Game()
+    game.permanent_stats["ice_3"] = 1
+    game.permanent_stats["ice_1"] = 1
+    # Ensure ICE2 (larger puddles) is disabled for this test
+    game.permanent_stats["ice_2"] = 0
+
+    # Use object-style enemies (converted)
+    e1 = DummyEnemy(400, 530)
+    e1.health = 100
+    e1.max_health = 100
+    e1.radius = 12
+    e2 = DummyEnemy(408, 530)
+    e2.health = 100
+    e2.max_health = 100
+    e2.radius = 12
+    try:
+        game.enemies.empty()
+        game.enemies.add(e1)
+        game.enemies.add(e2)
+    except Exception:
+        game.enemies = [e1, e2]
+
+    # Construct a projectile (statue-source)
+    proj = Projectile(400, 530, 0.0, 0.0, damage=20, radius=6, appearance="ice_statue")
+    proj.source = "statue"
+    game.projectiles = [proj]
+
+    before_hps = [e.health for e in (e1, e2)]
+    game.handle_collisions()
+    after_hps = [e.health for e in (e1, e2)]
+
+    assert after_hps[0] < before_hps[0]
+    assert after_hps[1] < before_hps[1]
+    # projectile should remain for ICE3 behavior when applicable
+    assert proj in game.projectiles
+    # Check that a puddle was created and has expected properties
+    puddle = game.ice_puddles[-1]
     assert puddle["radius"] == 40
     assert puddle["timer"] == 5 * 60  # 5 seconds
     assert puddle["slow_factor"] == 0.5  # 50% speed reduction
+
+
+def test_ice_tower_ice3_pierces_many_enemies():
+    """ICE3 projectiles must pierce an arbitrary number of enemies (not only on lethal hits)."""
+    from src.game import Game
+
+    game = Game()
+    game.permanent_stats["ice_3"] = 1
+    game.permanent_stats["ice_1"] = 1
+
+    t = Tower(320, 530, tower_type="ice", projectile_speed=100.0, inaccuracy=0.0)
+    game.left_tower = t
+    game.apply_permanent_stats()
+
+    e1 = DummyEnemy(400, 530)
+    e2 = DummyEnemy(408, 530)
+    e3 = DummyEnemy(416, 530)
+    try:
+        game.enemies.empty()
+        game.enemies.add(e1)
+        game.enemies.add(e2)
+        game.enemies.add(e3)
+    except Exception:
+        game.enemies = [e1, e2, e3]
+
+    proj = t.fire_at_closest([e1, e2, e3])
+    assert proj is not None and getattr(proj, "appearance", None) == "ice_statue"
+    game.projectiles.add(proj)
+
+    # Place projectile on top of the first enemy (non-lethal expected)
+    proj.x, proj.y = 400, 530
+    before = [e.health for e in (e1, e2, e3)]
+
+    game.handle_collisions()
+
+    after = [e.health for e in (e1, e2, e3)]
+    assert after[0] < before[0]
+    assert after[1] < before[1]
+    assert after[2] < before[2]
+    # projectile should still exist (piercing / ice3)
+    assert proj in list(game.projectiles)
+
+
+def test_ice_tower_ice3_pierces_many_enemies_dict():
+    """Converted to object-style: ice projectiles should pierce multiple enemies when ICE3 is active."""
+    from src.game import Game
+
+    game = Game()
+    game.permanent_stats["ice_3"] = 1
+    game.permanent_stats["ice_1"] = 0
+
+    e1 = DummyEnemy(400, 530)
+    e1.health = 100
+    e1.max_health = 100
+    e1.radius = 12
+    e2 = DummyEnemy(408, 530)
+    e2.health = 100
+    e2.max_health = 100
+    e2.radius = 12
+    e3 = DummyEnemy(416, 530)
+    e3.health = 100
+    e3.max_health = 100
+    e3.radius = 12
+    try:
+        game.enemies.empty()
+        game.enemies.add(e1)
+        game.enemies.add(e2)
+        game.enemies.add(e3)
+    except Exception:
+        game.enemies = [e1, e2, e3]
+
+    proj = Projectile(400, 530, 0.0, 0.0, damage=20, radius=6, appearance="ice_statue")
+    proj.source = "statue"
+    game.projectiles = [proj]
+
+    before_hps = [e.health for e in (e1, e2, e3)]
+    game.handle_collisions()
+    after_hps = [e.health for e in (e1, e2, e3)]
+
+    assert after_hps[0] < before_hps[0]
+    assert after_hps[1] < before_hps[1]
+    assert after_hps[2] < before_hps[2]
+    assert proj in game.projectiles
 
 
 def test_ice_tower_ice3_single_damage_per_enemy():

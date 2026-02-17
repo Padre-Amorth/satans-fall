@@ -90,7 +90,7 @@ def test_game_handle_collisions_with_sprite_and_dict():
 
     # Dict-style enemy test
     g2 = Game(debug=True)
-    dict_enemy = {"x": 400, "y": 400, "radius": 8, "health": 30}
+    dict_enemy = Enemy(400, 400, enemy_type="normal", health=30)
     g2.enemies = [dict_enemy]
 
     proj = Projectile(400, 400, 0, 0, damage=6, radius=6)
@@ -99,7 +99,8 @@ def test_game_handle_collisions_with_sprite_and_dict():
 
     g2.handle_collisions()
 
-    assert dict_enemy["health"] < 30
+    # Enemy should have taken damage (compare vs its starting max_health)
+    assert dict_enemy.health < dict_enemy.max_health
 
 
 __all__ = [

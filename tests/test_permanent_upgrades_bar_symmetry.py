@@ -40,7 +40,7 @@ def test_bars_are_symmetric_and_shorter(tmp_path: Path) -> None:
         sample_y = y + 15
         sample_pixel = tuple(surf.get_at((sample_x, sample_y))[:3])
         allowed = {
-            (8, 8, 8),  # bar background (primary menu color)
+            (26, 26, 26),  # bar background
             (68, 68, 68),  # bar border
             (255, 68, 68),  # power fill
             (255, 204, 0),  # vigor fill

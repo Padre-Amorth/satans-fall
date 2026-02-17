@@ -2274,12 +2274,17 @@ class PygameUIManager:
                     roman = roman_map.get(lvl, "")
                     if roman:
                         # darker red for Roman numeral inside the box (improved contrast)
-                        lvl_surf: Surface = font_large.render(roman, True, (120, 20, 20))
+                        lvl_surf: Surface = font_large.render(
+                            roman, True, (120, 20, 20)
+                        )
                         self.screen.blit(
                             lvl_surf,
                             (
                                 box_x - lvl_surf.get_width() // 2 + shake_x,
-                                box_y1 + box_height // 2 - lvl_surf.get_height() // 2 + shake_y,
+                                box_y1
+                                + box_height // 2
+                                - lvl_surf.get_height() // 2
+                                + shake_y,
                             ),
                         )
             # Hover tooltip for top-row blasphemy boxes
@@ -3217,7 +3222,7 @@ class PygameUIManager:
                 dx = b[0] - a[0]
                 dy = b[1] - a[1]
                 seg_lengths.append((math.hypot(dx, dy), a, b))
-            total = sum(l for l, *_ in seg_lengths)
+            total = sum(length for length, *_ in seg_lengths)
             if total <= 0:
                 return points[0]
             r = random.uniform(0, total)
@@ -3249,7 +3254,7 @@ class PygameUIManager:
                 seg_len = math.hypot(dx, dy) or 1.0
                 tx, ty = dx / seg_len, dy / seg_len
                 # outward normal (approx): point to the left of the segment
-                nx, ny = -ty, tx
+                nx = -ty
 
                 # spawn multiple nearby particles to increase local density
                 spawn_count = random.randint(2, 5)
@@ -3307,7 +3312,7 @@ class PygameUIManager:
                 seg_len = math.hypot(dx, dy) or 1.0
                 tx, ty = dx / seg_len, dy / seg_len
                 # outward normal to the right of the segment
-                nx, ny = ty, -tx
+                nx = ty
 
                 spawn_count = random.randint(2, 5)
                 for _ in range(spawn_count):
@@ -3411,7 +3416,8 @@ class PygameUIManager:
 
         # blit particle layer above fog polygons (subtle)
         try:
-            self.screen.blit(layer, (0, 0))
+            if self.screen is not None:
+                self.screen.blit(layer, (0, 0))
         except Exception:
             pass
         except Exception:

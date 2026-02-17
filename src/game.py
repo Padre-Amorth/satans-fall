@@ -920,6 +920,220 @@ class Game:
             return e.get("radius", 12)
         return getattr(e, "radius", 12)
 
+    def _projectile_radius(self, proj: Any) -> int:
+        """Return radius for a projectile object or dict (test helper).
+
+        - Handles Projectile instances, objects with a `rect`, and simple dicts.
+        """
+        if isinstance(proj, dict):
+            return int(proj.get("radius", 5))
+        r = getattr(proj, "radius", None)
+        if r is not None:
+            try:
+                return int(r)
+            except Exception:
+                pass
+        rect = getattr(proj, "rect", None)
+        if rect is not None:
+            try:
+                return int(rect.width // 2)
+            except Exception:
+                pass
+        return 5
+
+    def _get_projectile_metadata(self, projectile: Any) -> Dict[str, Any]:
+        """Normalize commonly used projectile metadata into a dict for tests.
+
+        Returns: { effect, slow_duration, slow_factor, burn_duration, burn_dps }
+        """
+        effect = (
+            projectile.get("effect")
+            if isinstance(projectile, dict)
+            else getattr(projectile, "effect", None)
+        )
+        slow_duration = (
+            projectile.get("slow_duration", 120)
+            if isinstance(projectile, dict)
+            else getattr(projectile, "slow_duration", 120)
+        )
+        slow_factor = (
+            projectile.get("slow_factor", 0.5)
+            if isinstance(projectile, dict)
+            else getattr(projectile, "slow_factor", 0.5)
+        )
+        burn_duration = (
+            projectile.get("burn_duration", 180)
+            if isinstance(projectile, dict)
+            else getattr(projectile, "burn_duration", 180)
+        )
+        burn_dps = (
+            projectile.get("burn_damage_per_second", 4.0)
+            if isinstance(projectile, dict)
+            else getattr(projectile, "burn_damage_per_second", 4.0)
+        )
+        # Permanent upgrade interaction (fire_2) - double burn effects
+        if getattr(self, "permanent_stats", None) and self.permanent_stats.get(
+            "fire_2", 0
+        ):
+            try:
+                burn_duration = int(burn_duration * 2)
+            except Exception:
+                pass
+            try:
+                burn_dps = burn_dps * 2
+            except Exception:
+                pass
+        return {
+            "effect": effect,
+            "slow_duration": slow_duration,
+            "slow_factor": slow_factor,
+            "burn_duration": burn_duration,
+            "burn_dps": burn_dps,
+        }
+
+    def _get_hit_enemies_for_projectile(self, projectile: Any) -> list[Any]:
+        """Return enemies hit by projectile (supports dict/list and Group).
+
+        - Uses spatial_grid when available; otherwise falls back to pygame.sprite
+          collision or manual list scanning.
+        """
+        hit_enemies: list[Any] = []
+        try:
+            px = float(
+                projectile.get("x", 0)
+                if isinstance(projectile, dict)
+                else getattr(projectile, "x", 0)
+            )
+            py = float(
+                projectile.get("y", 0)
+                if isinstance(projectile, dict)
+                else getattr(projectile, "y", 0)
+            )
+            pr = self._projectile_radius(projectile)
+            sg = getattr(self, "spatial_grid", None)
+            if sg is not None:
+                candidates = sg.query_circle(px, py, pr)
+            else:
+                candidates = []
+            for enemy in candidates:
+                ex, ey = self._enemy_pos(enemy)
+                er = self._enemy_radius(enemy)
+                dx = ex - px
+                dy = ey - py
+                if dx * dx + dy * dy <= (pr + er) * (pr + er):
+                    hit_enemies.append(enemy)
+            if not hit_enemies:
+                # Try pygame Group collision when possible
+                if (
+                    hasattr(self.enemies, "sprites")
+                    and not isinstance(projectile, dict)
+                    and hasattr(projectile, "rect")
+                ):
+                    hit_enemies = pygame.sprite.spritecollide(
+                        projectile, self.enemies, False
+                    )
+                else:
+                    try:
+                        for enemy in list(self.enemies):
+                            ex, ey = self._enemy_pos(enemy)
+                            er = self._enemy_radius(enemy)
+                            dx = ex - px
+                            dy = ey - py
+                            if dx * dx + dy * dy <= (pr + er) * (pr + er):
+                                hit_enemies.append(enemy)
+                    except Exception:
+                        hit_enemies = []
+        except Exception:
+            hit_enemies = []
+        return hit_enemies
+
+    def _build_spatial_grid(self) -> None:
+        """Create or rebuild the SpatialGrid used by collision queries (test helper)."""
+        try:
+            from src.utils.spatial_grid import SpatialGrid
+
+            enemies_iter = self._enemies_iter()
+            if not hasattr(self, "spatial_grid") or self.spatial_grid is None:
+                cell_size = getattr(self, "spatial_grid_cell_size", 120)
+                self.spatial_grid = SpatialGrid(
+                    cell_size=cell_size, width=self.width, height=self.height
+                )
+            try:
+                self.spatial_grid.build(enemies_iter)
+            except Exception:
+                self.spatial_grid = None
+        except Exception:
+            self.spatial_grid = None
+
+    def _remove_offscreen_projectiles(self) -> None:
+        """Remove projectiles that left the screen (Group or list).
+
+        Kept simple for tests: remove sprites whose y is offscreen and filter lists.
+        """
+        projs = getattr(self, "projectiles", [])
+        # Group-based
+        if hasattr(projs, "sprites"):
+            for p in list(projs):
+                try:
+                    if getattr(p, "y", None) is not None and p.y < 0:
+                        p.kill()
+                except Exception:
+                    pass
+        else:
+            projs = [
+                p
+                for p in list(projs)
+                if not (getattr(p, "y", None) is not None and p.y < 0)
+            ]
+            self.projectiles = projs
+
+    def _apply_ice_puddles(self):
+        """Apply slowing effect from active ice puddles to nearby enemies (test helper)."""
+        try:
+            for puddle in getattr(self, "ice_puddles", []) or []:
+                if puddle.get("timer", 0) <= 0:
+                    continue
+                px = float(puddle.get("x", 0))
+                py = float(puddle.get("y", 0))
+                pr = float(puddle.get("radius", 0))
+                slow_factor = float(puddle.get("slow_factor", 0.5))
+                for enemy in self._enemies_iter():
+                    try:
+                        ex, ey = self._enemy_pos(enemy)
+                        if (ex - px) ** 2 + (ey - py) ** 2 <= pr * pr:
+                            if isinstance(enemy, dict):
+                                if "original_speed" not in enemy:
+                                    enemy["original_speed"] = enemy.get("speed", 0)
+                                enemy["speed"] = enemy["original_speed"] * slow_factor
+                                enemy["slow_factor"] = slow_factor
+                            else:
+                                if not hasattr(enemy, "original_speed"):
+                                    enemy.original_speed = getattr(enemy, "speed", 0)
+                                enemy.speed = enemy.original_speed * slow_factor
+                                enemy.slow_factor = slow_factor
+                    except Exception:
+                        # ignore per-enemy errors when applying puddle slow
+                        pass
+                # Bosses
+                try:
+                    if hasattr(self, "bosses") and self.bosses:
+                        bosses = (
+                            self.bosses.sprites()
+                            if hasattr(self.bosses, "sprites")
+                            else list(self.bosses)
+                        )
+                        for boss in bosses:
+                            bx, by = self._enemy_pos(boss)
+                            if (bx - px) ** 2 + (by - py) ** 2 <= pr * pr:
+                                if not hasattr(boss, "original_speed"):
+                                    boss.original_speed = getattr(boss, "speed", 0)
+                                boss.speed = boss.original_speed * slow_factor
+                                boss.slow_factor = slow_factor
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     def _propagate_burn(self, source_enemy):
         """Propagate a burn from source_enemy to nearby enemies.
 
@@ -4684,6 +4898,7 @@ class Game:
                         pass
         else:
             for enemy in list(self.enemies):
+                # Dict-style enemies (legacy path)
                 if isinstance(enemy, dict) and enemy.get("health", 0) <= 0:
                     self.add_score(
                         enemy.get("max_health", 10) * 18 * self.difficulty_multiplier
@@ -4708,6 +4923,59 @@ class Game:
                         pass
                     try:
                         self.enemies.remove(enemy)
+                    except Exception:
+                        pass
+
+                # Object/sprite enemies stored in a plain list (support for tests)
+                elif hasattr(enemy, "health") and enemy.health <= 0:
+                    try:
+                        self.add_score(
+                            enemy.max_health * 18 * self.difficulty_multiplier
+                        )
+                    except Exception:
+                        pass
+                    type_xp_local = {
+                        "weak": 10,
+                        "normal": 16,
+                        "strong": 25,
+                        "giant": 50,
+                        "angel": 22,
+                    }
+                    base_xp_local = type_xp_local.get(
+                        str(getattr(enemy, "enemy_type", "")), 12
+                    )
+                    try:
+                        self.player_xp += int(
+                            round(base_xp_local * getattr(self, "xp_multiplier", 1.0))
+                        )
+                    except Exception:
+                        pass
+                    if self.player_xp >= self.xp_to_next_level:
+                        self.trigger_level_up()
+                    # Propagate burn if flagged
+                    try:
+                        if (
+                            getattr(enemy, "burn_propagate_on_death", False)
+                            or getattr(enemy, "burn_propagate_hops", 0) > 0
+                        ):
+                            try:
+                                self._propagate_burn(enemy)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    try:
+                        # If enemy implements kill(), call it for symmetry with Group
+                        enemy.kill()
+                    except Exception:
+                        pass
+                    try:
+                        # remove from the plain list
+                        self.enemies.remove(enemy)
+                        try:
+                            self.record_enemy_kill()
+                        except Exception:
+                            pass
                     except Exception:
                         pass
 
@@ -5573,14 +5841,6 @@ class Game:
 
         TowerManager.apply_homing(statue_projs, enemies_list)
 
-        # Ensure backward-compatible statue projectile dicts have required keys
-        try:
-            for p in self.statue_projectiles:
-                if isinstance(p, dict) and "radius" not in p:
-                    p["radius"] = 6
-        except Exception:
-            pass
-
     def handle_collisions(self) -> None:
         """Handle all collision detection"""
 
@@ -5607,37 +5867,22 @@ class Game:
         # Projectiles hit enemies
         for projectile in list(self.projectiles):
             try:
-                # Debug logging removed
-                pass
+                LOG.debug(
+                    "handle_collisions: processing projectile id=%s appearance=%s effect=%s rect=%s",
+                    id(projectile),
+                    getattr(projectile, "appearance", None),
+                    getattr(projectile, "effect", None),
+                    getattr(projectile, "rect", None),
+                )
             except Exception:
                 pass
             primary_target = None
-            # Normalize projectile fields for dict/object compatibility
-            effect = (
-                projectile.get("effect")
-                if isinstance(projectile, dict)
-                else getattr(projectile, "effect", None)
-            )
-            slow_duration = (
-                projectile.get("slow_duration", 120)
-                if isinstance(projectile, dict)
-                else getattr(projectile, "slow_duration", 120)
-            )
-            slow_factor = (
-                projectile.get("slow_factor", 0.5)
-                if isinstance(projectile, dict)
-                else getattr(projectile, "slow_factor", 0.5)
-            )
-            burn_duration = (
-                projectile.get("burn_duration", 180)
-                if isinstance(projectile, dict)
-                else getattr(projectile, "burn_duration", 180)
-            )
-            burn_dps = (
-                projectile.get("burn_damage_per_second", 4.0)
-                if isinstance(projectile, dict)
-                else getattr(projectile, "burn_damage_per_second", 4.0)
-            )
+            # Projectile metadata (object-only canonical representation)
+            effect = getattr(projectile, "effect", None)
+            slow_duration = getattr(projectile, "slow_duration", 120)
+            slow_factor = getattr(projectile, "slow_factor", 0.5)
+            burn_duration = getattr(projectile, "burn_duration", 180)
+            burn_dps = getattr(projectile, "burn_damage_per_second", 4.0)
             # FIRE left-column tier 2: double burn duration and burn DPS
             if getattr(self, "permanent_stats", None) and self.permanent_stats.get(
                 "fire_2", 0
@@ -5751,18 +5996,27 @@ class Game:
             # Prefer the nearest hit candidate to be processed as primary (avoid multiple targets in same frame)
             try:
                 if len(hit_enemies) > 1:
-                    px = getattr(projectile, "x", 0)
-                    py = getattr(projectile, "y", 0)
-                    hit_enemies.sort(
-                        key=lambda e: (self._enemy_pos(e)[0] - px) ** 2
-                        + (self._enemy_pos(e)[1] - py) ** 2
+                    # Allow multi-hit for statues / piercing projectiles (ICE3, spear-like behaviour)
+                    appearance = getattr(projectile, "appearance", None)
+                    is_statue = appearance in ("ice_statue", "storm_statue")
+                    pierce_attr = (
+                        getattr(projectile, "pierce_all", False)
+                        or getattr(projectile, "pierce_count", 0) > 0
                     )
-                    hit_enemies = [hit_enemies[0]]
-                try:
-                    # Debug: hit candidates filtered
-                    pass
-                except Exception:
-                    pass
+                    # If not a special multi-hit projectile, prefer the nearest target only
+                    if not (is_statue or pierce_attr):
+                        px = getattr(projectile, "x", 0)
+                        py = getattr(projectile, "y", 0)
+                        hit_enemies.sort(
+                            key=lambda e: (self._enemy_pos(e)[0] - px) ** 2
+                            + (self._enemy_pos(e)[1] - py) ** 2
+                        )
+                        hit_enemies = [hit_enemies[0]]
+                    try:
+                        # Debug: hit candidates filtered
+                        pass
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
@@ -5775,11 +6029,7 @@ class Game:
                     projectile.has_hit_first_enemy = True
 
             # Special handling for ice projectiles with area damage
-            if (
-                getattr(projectile, "appearance", None) == "ice_statue"
-                and hasattr(projectile, "explosion_radius")
-                and hit_enemies
-            ):
+            if getattr(projectile, "appearance", None) == "ice_statue" and hit_enemies:
                 # Check if ICE3 is active for piercing behavior
                 ice3_active = self.permanent_stats.get("ice_3", 0)
 
@@ -5810,17 +6060,26 @@ class Game:
                             # Apply damage
                             dmg_to_apply = getattr(projectile, "damage", 0)
                             enemy.take_damage(dmg_to_apply)
-                            # Apply slow effect
+                            # Apply slow effect (support dict *and* Enemy instances)
                             slow_duration = getattr(projectile, "slow_duration", 120)
                             slow_factor = getattr(projectile, "slow_factor", 0.5)
-                            if hasattr(enemy, "slow_timer"):
+                            if isinstance(enemy, dict):
+                                enemy["slow_timer"] = max(
+                                    enemy.get("slow_timer", 0), slow_duration
+                                )
+                                enemy["slow_factor"] = min(
+                                    enemy.get("slow_factor", 1.0), slow_factor
+                                )
+                            else:
                                 enemy.slow_timer = max(
                                     getattr(enemy, "slow_timer", 0), slow_duration
                                 )
-                            if hasattr(enemy, "slow_factor"):
                                 enemy.slow_factor = min(
                                     getattr(enemy, "slow_factor", 1.0), slow_factor
                                 )
+                                if not hasattr(enemy, "original_speed"):
+                                    enemy.original_speed = enemy.speed
+                                enemy.speed = enemy.original_speed * enemy.slow_factor
                             try:
                                 ex, ey = self._enemy_pos(enemy)
                                 self.spawn_floating_text(
@@ -5919,22 +6178,33 @@ class Game:
                                     # Apply damage
                                     dmg_to_apply = getattr(projectile, "damage", 0)
                                     enemy.take_damage(dmg_to_apply)
-                                    # Apply slow effect
+                                    # Apply slow effect (support dict *and* Enemy instances)
                                     slow_duration = getattr(
                                         projectile, "slow_duration", 120
                                     )
                                     slow_factor = getattr(
                                         projectile, "slow_factor", 0.5
                                     )
-                                    if hasattr(enemy, "slow_timer"):
+                                    if isinstance(enemy, dict):
+                                        enemy["slow_timer"] = max(
+                                            enemy.get("slow_timer", 0), slow_duration
+                                        )
+                                        enemy["slow_factor"] = min(
+                                            enemy.get("slow_factor", 1.0), slow_factor
+                                        )
+                                    else:
                                         enemy.slow_timer = max(
                                             getattr(enemy, "slow_timer", 0),
                                             slow_duration,
                                         )
-                                    if hasattr(enemy, "slow_factor"):
                                         enemy.slow_factor = min(
                                             getattr(enemy, "slow_factor", 1.0),
                                             slow_factor,
+                                        )
+                                        if not hasattr(enemy, "original_speed"):
+                                            enemy.original_speed = enemy.speed
+                                        enemy.speed = (
+                                            enemy.original_speed * enemy.slow_factor
                                         )
                                     try:
                                         ex, ey = self._enemy_pos(enemy)
@@ -6034,17 +6304,26 @@ class Game:
                             # Apply damage
                             dmg_to_apply = getattr(projectile, "damage", 0)
                             enemy.take_damage(dmg_to_apply)
-                            # Apply slow effect
+                            # Apply slow effect (support dict *and* Enemy instances)
                             slow_duration = getattr(projectile, "slow_duration", 120)
                             slow_factor = getattr(projectile, "slow_factor", 0.5)
-                            if hasattr(enemy, "slow_timer"):
+                            if isinstance(enemy, dict):
+                                enemy["slow_timer"] = max(
+                                    enemy.get("slow_timer", 0), slow_duration
+                                )
+                                enemy["slow_factor"] = min(
+                                    enemy.get("slow_factor", 1.0), slow_factor
+                                )
+                            else:
                                 enemy.slow_timer = max(
                                     getattr(enemy, "slow_timer", 0), slow_duration
                                 )
-                            if hasattr(enemy, "slow_factor"):
                                 enemy.slow_factor = min(
                                     getattr(enemy, "slow_factor", 1.0), slow_factor
                                 )
+                                if not hasattr(enemy, "original_speed"):
+                                    enemy.original_speed = enemy.speed
+                                enemy.speed = enemy.original_speed * enemy.slow_factor
                             try:
                                 ex, ey = self._enemy_pos(enemy)
                                 self.spawn_floating_text(
@@ -6108,16 +6387,12 @@ class Game:
                 # Avoid multiple hits on the same enemy by this projectile
                 hit_ids = None
                 try:
-                    if isinstance(projectile, dict):
-                        hit_ids = projectile.setdefault("_hit_ids", set())
-                        # also keep boss-type hits for dict-style projectiles
-                        projectile.setdefault("_hit_boss_types", set())
-                    else:
-                        if not hasattr(projectile, "_hit_ids"):
-                            projectile._hit_ids = set()
-                        hit_ids = projectile._hit_ids
-                        if not hasattr(projectile, "_hit_boss_types"):
-                            projectile._hit_boss_types = set()
+                    # Canonical hit-tracking on Projectile objects (legacy dict paths removed)
+                    if not hasattr(projectile, "_hit_ids"):
+                        projectile._hit_ids = set()
+                    hit_ids = projectile._hit_ids
+                    if not hasattr(projectile, "_hit_boss_types"):
+                        projectile._hit_boss_types = set()
                     # If this exact enemy was already hit by this projectile, skip
                     if id(enemy) in hit_ids:
                         continue
@@ -6249,12 +6524,9 @@ class Game:
 
                     # Record this hit so the same projectile won't process the same enemy again
                     try:
-                        if isinstance(projectile, dict):
-                            projectile.setdefault("_hit_ids", set()).add(id(enemy))
-                        else:
-                            if not hasattr(projectile, "_hit_ids"):
-                                projectile._hit_ids = set()
-                            projectile._hit_ids.add(id(enemy))
+                        if not hasattr(projectile, "_hit_ids"):
+                            projectile._hit_ids = set()
+                        projectile._hit_ids.add(id(enemy))
                     except Exception:
                         pass
 
@@ -6357,11 +6629,7 @@ class Game:
                                     ex, ey = self._enemy_pos(enemy)
                                     # Highlight numeric damage yellow if FIRE tier-3 bonus applied
                                     try:
-                                        base = (
-                                            projectile.get("damage", 0)
-                                            if isinstance(projectile, dict)
-                                            else getattr(projectile, "damage", 0)
-                                        )
+                                        base = getattr(projectile, "damage", 0)
                                         is_player_proj = (
                                             not getattr(
                                                 projectile, "is_enemy_projectile", False
@@ -6770,200 +7038,15 @@ class Game:
                             except Exception:
                                 pass
 
-                            # Storm-statue dict-style projectiles should be removed on first contact (apply chain immediately)
-                            if (
-                                isinstance(projectile, dict)
-                                and projectile.get("appearance") == "storm_statue"
-                            ):
-                                try:
-                                    chain = projectile.get("chain_targets", 0)
-                                    if (
-                                        chain
-                                        and chain > 1
-                                        and not projectile.get("_chain_applied", False)
-                                    ):
-                                        chain_points = [
-                                            (enemy.get("x", 0), enemy.get("y", 0))
-                                        ]
-                                        others = []
-                                        max_chain_distance = 300
-                                        for other in list(self.enemies):
-                                            if other is enemy:
-                                                continue
-                                            if other.get("health", 0) <= 0:
-                                                continue
-                                            dx_o = other.get("x", 0) - enemy.get("x", 0)
-                                            dy_o = other.get("y", 0) - enemy.get("y", 0)
-                                            dist = math.hypot(dx_o, dy_o)
-                                            if dist <= max_chain_distance:
-                                                others.append((dist, other))
-                                        others.sort(key=lambda t: t[0])
-                                        to_chain = min(len(others), chain - 1)
-                                        for targ_dist, targ in others[:to_chain]:
-                                            targ["health"] -= (
-                                                projectile.get("damage", 0) * 2
-                                            )
-                                            tx, ty = self._enemy_pos(targ)
-                                            chain_points.append((tx, ty))
-
-                                            if targ["health"] <= 0:
-                                                try:
-                                                    self.add_score(
-                                                        targ.get("max_health", 10)
-                                                        * 18
-                                                        * self.difficulty_multiplier
-                                                    )
-                                                except Exception:
-                                                    pass
-                                                try:
-                                                    base_xp = 12
-                                                    self.player_xp += int(
-                                                        round(
-                                                            base_xp
-                                                            * getattr(
-                                                                self,
-                                                                "xp_multiplier",
-                                                                1.0,
-                                                            )
-                                                        )
-                                                    )
-                                                    if (
-                                                        self.player_xp
-                                                        >= self.xp_to_next_level
-                                                    ):
-                                                        self.trigger_level_up()
-                                                except Exception:
-                                                    pass
-                                                try:
-                                                    if (
-                                                        targ.get(
-                                                            "burn_propagate_on_death",
-                                                            False,
-                                                        )
-                                                        or targ.get(
-                                                            "burn_propagate_hops", 0
-                                                        )
-                                                        > 0
-                                                    ):
-                                                        try:
-                                                            self._propagate_burn(targ)
-                                                        except Exception:
-                                                            pass
-                                                except Exception:
-                                                    pass
-
-                                                # storm_2: dict-style chain-kill explosion
-                                                try:
-                                                    if self.permanent_stats.get(
-                                                        "storm_2", 0
-                                                    ):
-                                                        cx, cy = targ.get(
-                                                            "x", 0
-                                                        ), targ.get("y", 0)
-                                                        explosion_radius = 120
-                                                        explosion_dmg = projectile.get(
-                                                            "damage", 0
-                                                        )
-                                                        all_targets = list(self.enemies)
-                                                        if (
-                                                            hasattr(self, "bosses")
-                                                            and self.bosses
-                                                        ):
-                                                            if hasattr(
-                                                                self.bosses, "sprites"
-                                                            ):
-                                                                all_targets.extend(
-                                                                    self.bosses.sprites()
-                                                                )
-                                                            else:
-                                                                all_targets.extend(
-                                                                    self.bosses
-                                                                )
-                                                        explosion_points = [(cx, cy)]
-                                                        for ex_target in all_targets:
-                                                            if ex_target is targ:
-                                                                continue
-                                                            try:
-                                                                (
-                                                                    ex,
-                                                                    ey,
-                                                                ) = self._enemy_pos(
-                                                                    ex_target
-                                                                )
-                                                            except Exception:
-                                                                continue
-                                                            dist = math.hypot(
-                                                                ex - cx, ey - cy
-                                                            )
-                                                            if dist <= explosion_radius:
-                                                                if isinstance(
-                                                                    ex_target, dict
-                                                                ):
-                                                                    ex_target[
-                                                                        "health"
-                                                                    ] = max(
-                                                                        0,
-                                                                        ex_target.get(
-                                                                            "health", 0
-                                                                        )
-                                                                        - explosion_dmg,
-                                                                    )
-                                                                else:
-                                                                    try:
-                                                                        ex_target.take_damage(
-                                                                            explosion_dmg
-                                                                        )
-                                                                    except Exception:
-                                                                        pass
-                                                                explosion_points.append(
-                                                                    (ex, ey)
-                                                                )
-                                                        if len(explosion_points) > 1:
-                                                            try:
-                                                                self.game_state.chain_lightning_effects.append(
-                                                                    {
-                                                                        "points": explosion_points,
-                                                                        "timer": 12,
-                                                                        "color": (
-                                                                            120,
-                                                                            220,
-                                                                            255,
-                                                                        ),
-                                                                        "explosion": True,
-                                                                        "radius": explosion_radius,
-                                                                    }
-                                                                )
-                                                            except Exception:
-                                                                pass
-                                                except Exception:
-                                                    pass
-
-                                                try:
-                                                    self.enemies.remove(targ)
-                                                except Exception:
-                                                    pass
-
-                                        if len(chain_points) > 1:
-                                            self.game_state.chain_lightning_effects.append(
-                                                {"points": chain_points, "timer": 8}
-                                            )
-                                        projectile["_chain_applied"] = True
-                                except Exception:
-                                    pass
-                                try:
-                                    self.projectiles.remove(projectile)
-                                except Exception:
-                                    pass
+                            # Legacy dict-style storm-statue handling removed — use object-style storm processing above
+                            pass
 
                 # Record this hit so projectile won't hit the same enemy again
                 try:
                     if hit_ids is None:
-                        if isinstance(projectile, dict):
-                            hit_ids = projectile.setdefault("_hit_ids", set())
-                        else:
-                            if not hasattr(projectile, "_hit_ids"):
-                                projectile._hit_ids = set()
-                            hit_ids = projectile._hit_ids
+                        if not hasattr(projectile, "_hit_ids"):
+                            projectile._hit_ids = set()
+                        hit_ids = projectile._hit_ids
                     hit_ids.add(id(enemy))
                     # For bosses, also remember the boss-type so multi-part bosses
                     # or duplicate boss sub-sprites won't be damaged multiple times
@@ -7075,23 +7158,14 @@ class Game:
                     except Exception:
                         pass
 
-                # Handle projectile piercing / kill (applies to all projectile types)
-                if isinstance(projectile, dict):
-                    p_pierce_all = projectile.get("pierce_all", False)
-                    p_pierce_count = projectile.get("pierce_count", 0)
-                    # ICE3: Ice projectiles pierce through all enemies
-                    if projectile.get(
-                        "appearance"
-                    ) == "ice_statue" and self.permanent_stats.get("ice_3", 0):
-                        p_pierce_all = True
-                else:
-                    p_pierce_all = getattr(projectile, "pierce_all", False)
-                    p_pierce_count = getattr(projectile, "pierce_count", 0)
-                    # ICE3: Ice projectiles pierce through all enemies
-                    if getattr(
-                        projectile, "appearance", None
-                    ) == "ice_statue" and self.permanent_stats.get("ice_3", 0):
-                        p_pierce_all = True
+                # Handle projectile piercing / kill (object-style only)
+                p_pierce_all = getattr(projectile, "pierce_all", False)
+                p_pierce_count = getattr(projectile, "pierce_count", 0)
+                # ICE3: Ice projectiles pierce through all enemies
+                if getattr(
+                    projectile, "appearance", None
+                ) == "ice_statue" and self.permanent_stats.get("ice_3", 0):
+                    p_pierce_all = True
 
                 if p_pierce_all:
                     pass  # Spear pierces through everything
@@ -7303,9 +7377,8 @@ class Game:
                             # Record that this projectile hit the chained target so it won't be hit again
                             try:
                                 if isinstance(projectile, dict):
-                                    projectile.setdefault("_hit_ids", set()).add(
-                                        id(targ)
-                                    )
+                                    projectile.setdefault("_hit_ids", set())
+                                    projectile["_hit_ids"].add(id(targ))
                                 else:
                                     if not hasattr(projectile, "_hit_ids"):
                                         projectile._hit_ids = set()
@@ -7482,19 +7555,87 @@ class Game:
                 continue
             else:
                 # Enemies stored as a simple iterable (dicts or object instances)
-                # Collect precise overlap candidates first and prefer the nearest one
-                candidates = []
+                # Quick boss check for list-backed enemy collections (ensure projectiles
+                # that hit bosses are handled even when enemies are not a Sprite Group)
                 try:
-                    proj_px = getattr(
-                        projectile,
-                        "x",
-                        projectile.get("x", 0) if isinstance(projectile, dict) else 0,
-                    )
-                    proj_py = getattr(
-                        projectile,
-                        "y",
-                        projectile.get("y", 0) if isinstance(projectile, dict) else 0,
-                    )
+                    if (
+                        hasattr(projectile, "rect")
+                        and hasattr(self, "bosses")
+                        and self.bosses
+                    ):
+                        boss_hits = pygame.sprite.spritecollide(
+                            projectile, self.bosses, False
+                        )
+                        if boss_hits:
+                            for boss in boss_hits:
+                                try:
+                                    # Apply direct damage to boss
+                                    bd_local = self._player_damage_vs_burning(
+                                        projectile,
+                                        boss,
+                                        getattr(projectile, "damage", 0),
+                                    )
+                                    boss.take_damage(bd_local)
+                                except Exception:
+                                    pass
+
+                                # Apply projectile effects to boss (burn/slow)
+                                try:
+                                    if getattr(projectile, "effect", None) == "slow":
+                                        if (
+                                            not hasattr(boss, "slow_timer")
+                                            or getattr(boss, "slow_timer", 0) <= 0
+                                        ):
+                                            boss.slow_timer = getattr(
+                                                projectile, "slow_duration", 120
+                                            )
+                                            boss.slow_factor = getattr(
+                                                projectile, "slow_factor", 0.5
+                                            )
+                                            if not hasattr(boss, "original_speed"):
+                                                boss.original_speed = boss.speed
+                                            boss.speed = boss.speed * boss.slow_factor
+                                    elif getattr(projectile, "effect", None) == "burn":
+                                        if (
+                                            not hasattr(boss, "burn_timer")
+                                            or getattr(boss, "burn_timer", 0) <= 0
+                                        ):
+                                            boss.burn_timer = burn_duration
+                                            boss.burn_damage_per_second = burn_dps
+                                            boss.burn_tick_timer = getattr(
+                                                self, "fps", 60
+                                            )
+                                except Exception:
+                                    pass
+
+                                # Record that this projectile has hit this boss/type so
+                                # it won't hit again on subsequent frames
+                                try:
+                                    if not hasattr(projectile, "_hit_ids"):
+                                        projectile._hit_ids = set()
+                                    projectile._hit_ids.add(id(boss))
+                                    if not hasattr(projectile, "_hit_boss_types"):
+                                        projectile._hit_boss_types = set()
+                                    projectile._hit_boss_types.add(
+                                        getattr(boss, "enemy_type", "")
+                                    )
+                                except Exception:
+                                    pass
+
+                                # Remove projectile after hitting a boss (default)
+                                try:
+                                    projectile.kill()
+                                except Exception:
+                                    try:
+                                        self.projectiles.remove(projectile)
+                                    except Exception:
+                                        pass
+                                # Mark as processed so we don't run the later boss-collision
+                                # branch again for the same projectile in this frame.
+                                processed_projectile = True
+                                continue
+                    proj_px = getattr(projectile, "x", 0)
+                    proj_py = getattr(projectile, "y", 0)
                     proj_pr = getattr(
                         projectile,
                         "radius",
@@ -7516,40 +7657,43 @@ class Game:
                     if dx * dx + dy * dy <= (er + proj_pr) * (er + proj_pr):
                         candidates.append((dx * dx + dy * dy, enemy))
 
-                if len(candidates) > 1:
-                    candidates.sort(key=lambda t: t[0])
-                    hit_enemies = [candidates[0][1]]
+                # Normalize candidate entries to (dist_sq, enemy) tuples so
+                # downstream code can assume a consistent structure.
+                normalized = []
+                for c in candidates:
+                    if isinstance(c, tuple) and len(c) >= 2:
+                        normalized.append((c[0], c[1]))
+                    else:
+                        try:
+                            ex, ey = self._enemy_pos(c)
+                            d2 = (ex - proj_px) ** 2 + (ey - proj_py) ** 2
+                        except Exception:
+                            d2 = 0
+                        normalized.append((d2, c))
+
+                if len(normalized) > 1:
+                    normalized.sort(key=lambda t: t[0])
+                    hit_enemies = [normalized[0][1]]
                 else:
-                    hit_enemies = [c[1] for c in candidates]
+                    hit_enemies = [n[1] for n in normalized]
 
                 # Process only the nearest overlapping enemy (if any)
                 for enemy in hit_enemies:
-                    # Support dict-shaped projectiles (tests/backwards-compat) as well as objects
-                    if isinstance(projectile, dict):
-                        px = projectile.get("x", 0)
-                        py = projectile.get("y", 0)
-                        pr = projectile.get("radius", 0)
-                        p_damage = projectile.get("damage", 0)
-                        p_pierce_all = projectile.get("pierce_all", False)
-                        p_pierce_count = projectile.get("pierce_count", 0)
-                    else:
-                        px = getattr(projectile, "x", 0)
-                        py = getattr(projectile, "y", 0)
-                        pr = getattr(projectile, "radius", 0)
-                        p_damage = getattr(projectile, "damage", 0)
-                        p_pierce_all = getattr(projectile, "pierce_all", False)
-                        p_pierce_count = getattr(projectile, "pierce_count", 0)
+                    # Canonical projectile attributes (object-style)
+                    px = getattr(projectile, "x", 0)
+                    py = getattr(projectile, "y", 0)
+                    pr = getattr(projectile, "radius", 0)
+                    p_damage = getattr(projectile, "damage", 0)
+                    p_pierce_all = getattr(projectile, "pierce_all", False)
+                    p_pierce_count = getattr(projectile, "pierce_count", 0)
 
                     # Hit
                     # Avoid multiple hits on the same enemy by this projectile
                     hit_ids = None
                     try:
-                        if isinstance(projectile, dict):
-                            hit_ids = projectile.setdefault("_hit_ids", set())
-                        else:
-                            if not hasattr(projectile, "_hit_ids"):
-                                projectile._hit_ids = set()
-                            hit_ids = projectile._hit_ids
+                        if not hasattr(projectile, "_hit_ids"):
+                            projectile._hit_ids = set()
+                        hit_ids = projectile._hit_ids
                         if id(enemy) in hit_ids:
                             continue
                     except Exception:
@@ -7564,12 +7708,9 @@ class Game:
                         # Record this hit so projectile won't hit the same enemy again
                         try:
                             if hit_ids is None:
-                                if isinstance(projectile, dict):
-                                    hit_ids = projectile.setdefault("_hit_ids", set())
-                                else:
-                                    if not hasattr(projectile, "_hit_ids"):
-                                        projectile._hit_ids = set()
-                                    hit_ids = projectile._hit_ids
+                                if not hasattr(projectile, "_hit_ids"):
+                                    projectile._hit_ids = set()
+                                hit_ids = projectile._hit_ids
                             hit_ids.add(id(enemy))
 
                         except Exception:
@@ -7609,13 +7750,9 @@ class Game:
                                 enemy["burn_damage_per_second"] = burn_dps
                                 enemy["burn_tick_counter"] = self.fps
 
-                        # Handle projectile piercing / kill (support dict or object projectiles)
-                        if isinstance(projectile, dict):
-                            p_pierce_all = projectile.get("pierce_all", False)
-                            p_pierce_count = projectile.get("pierce_count", 0)
-                        else:
-                            p_pierce_all = getattr(projectile, "pierce_all", False)
-                            p_pierce_count = getattr(projectile, "pierce_count", 0)
+                        # Handle projectile piercing / kill (object-style only)
+                        p_pierce_all = getattr(projectile, "pierce_all", False)
+                        p_pierce_count = getattr(projectile, "pierce_count", 0)
 
                         if p_pierce_all:
                             pass
@@ -7727,14 +7864,9 @@ class Game:
                                     pass
                                 # Record this hit to prevent further hits from the same projectile
                                 try:
-                                    if isinstance(projectile, dict):
-                                        projectile.setdefault("_hit_ids", set()).add(
-                                            id(targ)
-                                        )
-                                    else:
-                                        if not hasattr(projectile, "_hit_ids"):
-                                            projectile._hit_ids = set()
-                                        projectile._hit_ids.add(id(targ))
+                                    if not hasattr(projectile, "_hit_ids"):
+                                        projectile._hit_ids = set()
+                                    projectile._hit_ids.add(id(targ))
                                 except Exception:
                                     pass
                                 tx, ty = self._enemy_pos(targ)
@@ -7876,12 +8008,9 @@ class Game:
                         # Record this hit so projectile won't hit the same enemy again
                         try:
                             if hit_ids is None:
-                                if isinstance(projectile, dict):
-                                    hit_ids = projectile.setdefault("_hit_ids", set())
-                                else:
-                                    if not hasattr(projectile, "_hit_ids"):
-                                        projectile._hit_ids = set()
-                                    hit_ids = projectile._hit_ids
+                                if not hasattr(projectile, "_hit_ids"):
+                                    projectile._hit_ids = set()
+                                hit_ids = projectile._hit_ids
                             hit_ids.add(id(enemy))
                         except Exception:
                             pass
@@ -8122,11 +8251,27 @@ class Game:
             hit_bosses: List[Any] = []
             if hasattr(projectile, "rect"):
                 hit_bosses = pygame.sprite.spritecollide(projectile, self.bosses, False)
+            # Debug: show projectile -> boss collision detection (debug-level)
+            try:
+                LOG.debug(
+                    "projectile.appearance=%s, projectile.effect=%s, hit_bosses_count=%s",
+                    getattr(projectile, "appearance", None),
+                    getattr(projectile, "effect", None),
+                    len(hit_bosses),
+                )
+            except Exception:
+                pass
             for boss in hit_bosses:
                 # Skip if this projectile already hit this exact boss instance
                 try:
+                    LOG.debug(
+                        "handle_collisions: processing boss hit. projectile.effect=%s, effect_var=%s",
+                        getattr(projectile, "effect", None),
+                        locals().get("effect", None),
+                    )
                     if isinstance(projectile, dict):
-                        hit_ids_local = projectile.setdefault("_hit_ids", set())
+                        projectile.setdefault("_hit_ids", set())
+                        hit_ids_local = projectile["_hit_ids"]
                         hit_boss_types_local = projectile.setdefault(
                             "_hit_boss_types", set()
                         )
@@ -8161,11 +8306,27 @@ class Game:
                     )
                     boss.take_damage(bd)
 
-                # Apply status effects (burn/slow) to bosses when projectile carries them.
-                # Previously bosses didn't receive burn/slow from projectiles; fix so all
-                # enemies and bosses consistently get effects.
+                # Ensure projectiles that carry slow/burn also apply to bosses (defensive/duplicate path)
                 try:
-                    if effect == "burn":
+                    if getattr(projectile, "effect", None) == "slow":
+                        # apply slow metadata directly from projectile as a defensive path
+                        try:
+                            if (
+                                not hasattr(boss, "slow_timer")
+                                or getattr(boss, "slow_timer", 0) <= 0
+                            ):
+                                boss.slow_timer = getattr(
+                                    projectile, "slow_duration", 120
+                                )
+                                boss.slow_factor = getattr(
+                                    projectile, "slow_factor", 0.5
+                                )
+                                if not hasattr(boss, "original_speed"):
+                                    boss.original_speed = boss.speed
+                                boss.speed = boss.speed * boss.slow_factor
+                        except Exception:
+                            pass
+                    if getattr(projectile, "effect", None) == "burn":
                         # Only apply burn if not already burning
                         if (
                             not hasattr(boss, "burn_timer")
@@ -8184,7 +8345,7 @@ class Game:
                                     boss.burn_propagate_hops = 2
                             except Exception:
                                 pass
-                    elif effect == "slow":
+                    elif getattr(projectile, "effect", None) == "slow":
                         if (
                             not hasattr(boss, "slow_timer")
                             or getattr(boss, "slow_timer", 0) <= 0
@@ -8196,20 +8357,29 @@ class Game:
                             boss.speed = boss.speed * boss.slow_factor
                 except Exception:
                     pass
+
+                # Fallback: ensure slow from projectiles is applied to bosses even if
+                # the primary code path above was skipped due to an edge-case.
+                try:
+                    if (
+                        getattr(projectile, "effect", None) == "slow"
+                        and getattr(boss, "slow_timer", 0) <= 0
+                    ):
+                        boss.slow_timer = getattr(projectile, "slow_duration", 120)
+                        boss.slow_factor = getattr(projectile, "slow_factor", 0.5)
+                        if not hasattr(boss, "original_speed"):
+                            boss.original_speed = boss.speed
+                        boss.speed = boss.speed * boss.slow_factor
+                except Exception:
+                    pass
                 # Record that this projectile has hit this boss/type so it won't hit again
                 try:
-                    if isinstance(projectile, dict):
-                        projectile.setdefault("_hit_ids", set()).add(id(boss))
-                        projectile.setdefault("_hit_boss_types", set()).add(
-                            getattr(boss, "enemy_type", "")
-                        )
-                    else:
-                        if not hasattr(projectile, "_hit_ids"):
-                            projectile._hit_ids = set()
-                        projectile._hit_ids.add(id(boss))
-                        if not hasattr(projectile, "_hit_boss_types"):
-                            projectile._hit_boss_types = set()
-                        projectile._hit_boss_types.add(getattr(boss, "enemy_type", ""))
+                    if not hasattr(projectile, "_hit_ids"):
+                        projectile._hit_ids = set()
+                    projectile._hit_ids.add(id(boss))
+                    if not hasattr(projectile, "_hit_boss_types"):
+                        projectile._hit_boss_types = set()
+                    projectile._hit_boss_types.add(getattr(boss, "enemy_type", ""))
                 except Exception:
                     pass
 
@@ -8478,9 +8648,14 @@ class Game:
                 dx = ex - self.player.x
                 dy = ey - self.player.y
                 if dx * dx + dy * dy <= (er + (self.player.width // 2)) ** 2:
-                    actual_damage = (
-                        enemy.get("damage", 5) / self.fps
-                    ) * self.damage_reduction_multiplier
+                    if isinstance(enemy, dict):
+                        actual_damage = (
+                            enemy.get("damage", 5) / self.fps
+                        ) * self.damage_reduction_multiplier
+                    else:
+                        actual_damage = (
+                            getattr(enemy, "damage", 5) / self.fps
+                        ) * self.damage_reduction_multiplier
                     self.player.take_damage(actual_damage)
                     contact_damage_to_enemy = 2.0 / self.fps
                     if isinstance(enemy, dict):
@@ -8497,22 +8672,41 @@ class Game:
                         self.shake_timer = 6
                         self.shake_intensity = max(self.shake_intensity, 6)
 
-                        # Add burn particles to dict enemy (visual only)
+                        # Add burn particles (supports dict and Enemy instances)
                         try:
-                            parts = enemy.setdefault("burn_particles", [])
-                            ex = enemy.get("x", 0)
-                            ey = enemy.get("y", 0)
-                            for _ in range(random.randint(3, 6)):
-                                parts.append(
-                                    {
-                                        "x": ex + random.uniform(-8, 8),
-                                        "y": ey - 8 + random.uniform(-4, 4),
-                                        "vx": random.uniform(-30, 30),
-                                        "vy": random.uniform(15, 40),
-                                        "life": random.randint(18, 44),
-                                        "size": random.randint(3, 5),
-                                    }
-                                )
+                            if isinstance(enemy, dict):
+                                parts = enemy.setdefault("burn_particles", [])
+                                ex = enemy.get("x", 0)
+                                ey = enemy.get("y", 0)
+                                for _ in range(random.randint(3, 6)):
+                                    parts.append(
+                                        {
+                                            "x": ex + random.uniform(-8, 8),
+                                            "y": ey - 8 + random.uniform(-4, 4),
+                                            "vx": random.uniform(-30, 30),
+                                            "vy": random.uniform(15, 40),
+                                            "life": random.randint(18, 44),
+                                            "size": random.randint(3, 5),
+                                        }
+                                    )
+                            else:
+                                # Enemy instance: append BurnParticle objects
+                                if not hasattr(enemy, "burn_particles"):
+                                    enemy.burn_particles = []
+                                for _ in range(random.randint(3, 6)):
+                                    vx = random.uniform(-30, 30)
+                                    vy = random.uniform(15, 40)
+                                    from src.entities.enemy import BurnParticle as _BP
+
+                                    p = _BP(
+                                        enemy.x + random.uniform(-8, 8),
+                                        enemy.y - 8 + random.uniform(-4, 4),
+                                        vx,
+                                        vy,
+                                        life=random.randint(18, 44),
+                                        size=random.randint(3, 5),
+                                    )
+                                    enemy.burn_particles.append(p)
                         except Exception:
                             pass
 
@@ -9665,6 +9859,11 @@ class Game:
             health = 160 * self.difficulty_multiplier  # Doubled from 80
             # Base non-boss giant speed (from balance)
             speed = ENEMY_BASE_SPEEDS.get("giant", 45)
+        # Allow a small chance for 'strong' already in waves 1-2 (10%), larger chance in later waves
+        elif self.wave < 3 and rand < 0.10:  # 10% chance for strong in waves 1-2
+            enemy_type = "strong"
+            health = 70 * self.difficulty_multiplier
+            speed = ENEMY_BASE_SPEEDS.get("strong", 60)
         elif self.wave >= 3 and rand < 0.15:  # 15% chance for strong after wave 3
             enemy_type = "strong"
             health = 70 * self.difficulty_multiplier  # Doubled from 35

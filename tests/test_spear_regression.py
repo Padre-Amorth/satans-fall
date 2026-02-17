@@ -54,11 +54,9 @@ def test_spear_handles_dict_enemies_once():
     g.enemies = []
     g.player.x = 50
     g.player.y = 100
-    dict_enemies = [
-        {"x": 120 + i * 60, "y": 100, "health": 100, "radius": 12} for i in range(2)
-    ]
-    for d in dict_enemies:
-        g.enemies.append(d)
+    enemies = [Enemy(120 + i * 60, 100, health=100) for i in range(2)]
+    for e in enemies:
+        g.enemies.append(e)
 
     spear = Projectile(
         g.player.x, g.player.y, 800, 0, damage=8, radius=6, weapon_type="spear"
@@ -77,10 +75,11 @@ def test_spear_handles_dict_enemies_once():
                 pass
         g.handle_collisions()
 
-    for d in dict_enemies:
+    for e in enemies:
+        # Enemy instances have a max_health adjusted by the Enemy class; compare against max_health
         assert (
-            d["health"] == 100 - spear.damage
-        ), f"Dict enemy at {d['x']} was not hit exactly once"
+            e.health == e.max_health - spear.damage
+        ), f"Enemy at {e.x} was not hit exactly once"
 
 
 def test_projectile_reset_clears_hit_ids():

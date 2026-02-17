@@ -17,12 +17,18 @@ def test_purgatory_tower_visible_after_selection():
     assert not g.awaiting_weapon_choice
 
     # Place an enemy so tower will have something to target (and fire)
-    g.enemies = [{"x": g.width // 2, "y": 100, "health": 10, "radius": 12}]
+    from src.entities.enemy import Enemy
+
+    e = Enemy(g.width // 2, 100, enemy_type="normal", health=10)
+    try:
+        g.enemies.empty()
+        g.enemies.add(e)
+    except Exception:
+        g.enemies = [e]
 
     # Force immediate fire cycle
     g.statue_cooldown = 1
     g.statue_next_left = False  # ensure right tower fires
-    g.statue_projectiles = []
 
     g.update_statue_weapons()
     # After firing, draw and check that right tower is visible at its head

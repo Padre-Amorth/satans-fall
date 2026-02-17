@@ -4,6 +4,7 @@ import pytest
 pygame.init()
 pygame.font.init()
 from src.core.entities.tower import Tower  # noqa: E402
+from src.entities.enemy import Enemy  # tests use Enemy objects now  # noqa: E402
 from src.game import Game  # noqa: E402
 
 
@@ -34,25 +35,24 @@ def test_burn_applies_and_ticks():
     # Ensure FIRE tier 2 isn't active in test environment
     g.permanent_stats["fire_2"] = 0
     g.apply_permanent_stats()
-    # Use dict-based enemy for deterministic ticking
-    enemy = {
-        "x": 320,
-        "y": 520,
-        "health": 20,
-        "max_health": 20,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
+    # Use object-based Enemy (converted from former dict)
+    from src.entities.enemy import Enemy
+
+    enemy = Enemy(320, 520, enemy_type="normal", health=20)
+    # normalize attributes to match previous dict expectations
+    enemy.health = 20
+    enemy.max_health = 20
+    enemy.speed = 75
+    enemy.radius = 12
+    enemy.damage = 5
     g.enemies = [enemy]
 
     t = Tower(320, 530, tower_type="fire", projectile_speed=100.0, inaccuracy=0.0)
     proj = t.fire_at_closest([enemy])
     assert proj is not None
     # Make the projectile hit immediately by placing at same coords
-    proj.x = enemy["x"]
-    proj.y = enemy["y"]
+    proj.x = enemy.x
+    proj.y = enemy.y
     # Reduce burn tick interval to 1 for fast test
     proj.burn_duration = 3
     proj.burn_damage_per_second = 6
@@ -66,26 +66,26 @@ def test_burn_applies_and_ticks():
     g.handle_collisions()
 
     # Burn should have been applied
-    assert enemy.get("burn_timer", 0) > 0
-    assert enemy.get("burn_damage_per_second", 0) == 6
+    assert getattr(enemy, "burn_timer", 0) > 0
+    assert getattr(enemy, "burn_damage_per_second", 0) == 6
 
-    # Speed up ticking: set tick counter small so damage applies next update
-    enemy["burn_tick_counter"] = 1
+    # Speed up ticking: set tick *timer* so damage applies next update
+    enemy.burn_tick_timer = 1
 
     # Run one frame, which should apply a burn tick
     g.update_game()
 
     assert (
-        enemy["health"] < 20
-    ), f"Expected health < 20 after burn tick, got {enemy['health']}"
+        enemy.health < 20
+    ), f"Expected health < 20 after burn tick, got {enemy.health}"
 
     # Continue ticking until health <=0
-    while enemy["health"] > 0 and enemy.get("burn_timer", 0) > 0:
-        enemy["burn_tick_counter"] = 1  # Force tick
+    while enemy.health > 0 and getattr(enemy, "burn_timer", 0) > 0:
+        enemy.burn_tick_timer = 1  # Force tick
         g.update_game()
 
     # Enemy should be dead and removed
-    assert enemy["health"] <= 0
+    assert enemy.health <= 0
     assert enemy not in g.enemies
 
 
@@ -97,45 +97,33 @@ def test_fire_left_tier1_chained_propagation():
     g.permanent_stats["fire_1"] = 1
     g.apply_permanent_stats()
 
-    # three dict-based enemies arranged so propagation must chain: e1->e2->e3
-    e1 = {
-        "x": 320,
-        "y": 520,
-        "health": 30,
-        "max_health": 30,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
-    e2 = {
-        "x": 410,
-        "y": 520,
-        "health": 30,
-        "max_health": 30,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
+    # three object-based enemies arranged so propagation must chain: e1->e2->e3
+    e1 = Enemy(320, 520, enemy_type="normal", health=30)
+    e1.health = 30
+    e1.max_health = 30
+    e1.speed = 75
+    e1.radius = 12
+    e1.damage = 5
+    e2 = Enemy(410, 520, enemy_type="normal", health=30)
+    e2.health = 30
+    e2.max_health = 30
+    e2.speed = 75
+    e2.radius = 12
+    e2.damage = 5
     # place e3 further so e1's propagation won't reach it directly (force chaining e1->e2->e3)
-    e3 = {
-        "x": 530,
-        "y": 520,
-        "health": 30,
-        "max_health": 30,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
+    e3 = Enemy(530, 520, enemy_type="normal", health=30)
+    e3.health = 30
+    e3.max_health = 30
+    e3.speed = 75
+    e3.radius = 12
+    e3.damage = 5
     g.enemies = [e1, e2, e3]
 
     t = Tower(320, 530, tower_type="fire", projectile_speed=100.0, inaccuracy=0.0)
     proj = t.fire_at_closest([e1])
     assert proj is not None
-    proj.x = e1["x"]
-    proj.y = e1["y"]
+    proj.x = e1.x
+    proj.y = e1.y
     proj.burn_duration = 4
     proj.burn_damage_per_second = 4
 
@@ -146,31 +134,31 @@ def test_fire_left_tier1_chained_propagation():
 
     # initial collision
     g.handle_collisions()
-    assert e1.get("burn_timer", 0) > 0
-    assert e1.get("burn_propagate_on_death", False) is True
+    assert getattr(e1, "burn_timer", 0) > 0
+    assert getattr(e1, "burn_propagate_on_death", False) is True
     # initial hops should be 2 (we lowered the max chain length)
-    assert e1.get("burn_propagate_hops", 0) == 2
+    assert getattr(e1, "burn_propagate_hops", 0) == 2
 
     # trigger first propagation by killing e1 (e1 -> e2)
-    e1["health"] = 0
+    e1.health = 0
     g.update_game()
-    assert e2.get("burn_timer", 0) > 0
+    assert getattr(e2, "burn_timer", 0) > 0
     # after propagation hops should have been decremented to 1
-    assert e2.get("burn_propagate_on_death", False) is True
-    assert e2.get("burn_propagate_hops", 0) == 1
+    assert getattr(e2, "burn_propagate_on_death", False) is True
+    assert getattr(e2, "burn_propagate_hops", 0) == 1
 
     # trigger second propagation by killing e2 (e2 -> e3)
-    e2["health"] = 0
+    e2.health = 0
     g.update_game()
-    assert e3.get("burn_timer", 0) > 0
+    assert getattr(e3, "burn_timer", 0) > 0
     # e3 should have hops == 0 (chain limit reached)
-    assert e3.get("burn_propagate_hops", 0) == 0
+    assert getattr(e3, "burn_propagate_hops", 0) == 0
 
     # Verify burn ticks on e3
-    e3["burn_tick_counter"] = 1
-    prev = e3["health"]
+    e3.burn_tick_timer = 1
+    prev = e3.health
     g.update_game()
-    assert e3["health"] < prev
+    assert e3.health < prev
 
 
 def test_fire_right_column_increases_burn_damage():
@@ -214,24 +202,20 @@ def test_fire_left_tier2_doubles_burn():
     g.permanent_stats["fire_2"] = 1
     g.apply_permanent_stats()
 
-    # single dict-based enemy
-    enemy = {
-        "x": 320,
-        "y": 520,
-        "health": 20,
-        "max_health": 20,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
+    # single object-based enemy (converted from dict)
+    enemy = Enemy(320, 520, enemy_type="normal", health=20)
+    enemy.health = 20
+    enemy.max_health = 20
+    enemy.speed = 75
+    enemy.radius = 12
+    enemy.damage = 5
     g.enemies = [enemy]
 
     # Use a fire tower projectile and force immediate hit
     t = Tower(320, 530, tower_type="fire", projectile_speed=100.0, inaccuracy=0.0)
     proj = t.fire_at_closest([enemy])
-    proj.x = enemy["x"]
-    proj.y = enemy["y"]
+    proj.x = enemy.x
+    proj.y = enemy.y
     proj.burn_duration = 3
     proj.burn_damage_per_second = 5
 
@@ -242,8 +226,8 @@ def test_fire_left_tier2_doubles_burn():
 
     # Collision should apply burn — values must be doubled by fire_2
     g.handle_collisions()
-    assert enemy.get("burn_timer", 0) == 6
-    assert enemy.get("burn_damage_per_second", 0) == 10
+    assert getattr(enemy, "burn_timer", 0) == 6
+    assert getattr(enemy, "burn_damage_per_second", 0) == 10
 
 
 def test_fire_left_tier3_increases_player_weapon_damage_vs_burning():
@@ -257,25 +241,21 @@ def test_fire_left_tier3_increases_player_weapon_damage_vs_burning():
     g.permanent_stats["fire_3"] = 1
     g.apply_permanent_stats()
 
-    # dict-based burning enemy
-    enemy = {
-        "x": 320,
-        "y": 520,
-        "health": 50,
-        "max_health": 50,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-        "burn_timer": 3,
-        "burn_damage_per_second": 1,
-    }
+    # object-based burning enemy (converted from dict)
+    enemy = Enemy(320, 520, enemy_type="normal", health=50)
+    enemy.health = 50
+    enemy.max_health = 50
+    enemy.speed = 75
+    enemy.radius = 12
+    enemy.damage = 5
+    enemy.burn_timer = 3
+    enemy.burn_damage_per_second = 1
     g.enemies = [enemy]
 
     # create a player projectile (not a statue) and force immediate hit
     proj = Projectile(g.player.x, g.player.y, 0, 0, damage=20)
-    proj.x = enemy["x"]
-    proj.y = enemy["y"]
+    proj.x = enemy.x
+    proj.y = enemy.y
 
     try:
         g.projectiles.add(proj)
@@ -284,7 +264,7 @@ def test_fire_left_tier3_increases_player_weapon_damage_vs_burning():
 
     # Handle collision -> damage should be 20 * 1.25 == 25
     g.handle_collisions()
-    assert enemy["health"] == 50 - int(round(20 * 1.25))
+    assert enemy.health == 50 - int(round(20 * 1.25))
 
     # Damage number should be shown and highlighted yellow when the +25% bonus applied
     expected_text = str(int(round(20 * 1.25)))
@@ -303,24 +283,20 @@ def test_fire_left_tier3_does_not_affect_tower_projectiles():
     g.permanent_stats["fire_3"] = 1
     g.apply_permanent_stats()
 
-    enemy = {
-        "x": 320,
-        "y": 520,
-        "health": 40,
-        "max_health": 40,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-        "burn_timer": 3,
-        "burn_damage_per_second": 1,
-    }
+    enemy = Enemy(320, 520, enemy_type="normal", health=40)
+    enemy.health = 40
+    enemy.max_health = 40
+    enemy.speed = 75
+    enemy.radius = 12
+    enemy.damage = 5
+    enemy.burn_timer = 3
+    enemy.burn_damage_per_second = 1
     g.enemies = [enemy]
 
     t = Tower(320, 530, tower_type="fire", projectile_speed=100.0, inaccuracy=0.0)
     p = t.fire_at_closest([enemy])
-    p.x = enemy["x"]
-    p.y = enemy["y"]
+    p.x = enemy.x
+    p.y = enemy.y
     base = p.damage if not isinstance(p, dict) else p.get("damage")
 
     try:
@@ -330,7 +306,7 @@ def test_fire_left_tier3_does_not_affect_tower_projectiles():
 
     g.handle_collisions()
     # tower damage should be unchanged (no 1.25 multiplier)
-    assert enemy["health"] == 40 - base
+    assert enemy.health == 40 - base
 
 
 def test_fire_left_tier3_applies_to_multiple_player_weapons():
@@ -355,23 +331,18 @@ def test_fire_left_tier3_applies_to_multiple_player_weapons():
             g.projectiles.add(proj)
         except Exception:
             g.projectiles.append(proj)
-        g.enemies = [
-            {
-                "x": 320,
-                "y": 520,
-                "health": enemy_health_before,
-                "max_health": enemy_health_before,
-                "speed": 75,
-                "radius": 12,
-                "damage": 5,
-                "type": "normal",
-                "burn_timer": 3,
-                "burn_damage_per_second": 1,
-            }
-        ]
+        enemy_obj = Enemy(320, 520, enemy_type="normal", health=enemy_health_before)
+        enemy_obj.health = enemy_health_before
+        enemy_obj.max_health = enemy_health_before
+        enemy_obj.speed = 75
+        enemy_obj.radius = 12
+        enemy_obj.damage = 5
+        enemy_obj.burn_timer = 3
+        enemy_obj.burn_damage_per_second = 1
+        g.enemies = [enemy_obj]
         g.handle_collisions()
         expected = enemy_health_before - int(round(base_damage * 1.25))
-        assert g.enemies[0]["health"] == expected
+        assert enemy_obj.health == expected
         expected_text = str(int(round(base_damage * 1.25)))
         assert any(
             getattr(ft, "text", "") == expected_text
@@ -424,35 +395,27 @@ def test_fire_left_tier1_propagates_burn_to_nearby_enemies():
     g.permanent_stats["fire_2"] = 0
     g.apply_permanent_stats()
 
-    # two dict-based enemies close to each other
-    e1 = {
-        "x": 320,
-        "y": 520,
-        "health": 20,
-        "max_health": 20,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
-    e2 = {
-        "x": 360,  # within 80px radius of e1
-        "y": 520,
-        "health": 20,
-        "max_health": 20,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
+    # two object-based enemies close to each other (converted from dict)
+    e1 = Enemy(320, 520, enemy_type="normal", health=20)
+    e1.health = 20
+    e1.max_health = 20
+    e1.speed = 75
+    e1.radius = 12
+    e1.damage = 5
+    e2 = Enemy(360, 520, enemy_type="normal", health=20)
+    e2.health = 20
+    e2.max_health = 20
+    e2.speed = 75
+    e2.radius = 12
+    e2.damage = 5
     g.enemies = [e1, e2]
 
     t = Tower(320, 530, tower_type="fire", projectile_speed=100.0, inaccuracy=0.0)
     proj = t.fire_at_closest([e1])
     assert proj is not None
     # make projectile hit immediately
-    proj.x = e1["x"]
-    proj.y = e1["y"]
+    proj.x = e1.x
+    proj.y = e1.y
     proj.burn_duration = 3
     proj.burn_damage_per_second = 6
 
@@ -463,18 +426,18 @@ def test_fire_left_tier1_propagates_burn_to_nearby_enemies():
 
     # collision should apply burn and mark e1 to propagate on death
     g.handle_collisions()
-    assert e1.get("burn_timer", 0) > 0
-    assert e1.get("burn_propagate_on_death", False) is True
-    assert e1.get("burn_propagate_hops", 0) == 2
+    assert getattr(e1, "burn_timer", 0) > 0
+    assert getattr(e1, "burn_propagate_on_death", False) is True
+    assert getattr(e1, "burn_propagate_hops", 0) == 2
 
     # Simulate e1 dying to trigger propagation
-    e1["health"] = 0
+    e1.health = 0
     g.update_game()
 
     # After propagation, e2 should have received a burn and be marked for chained propagation
-    assert e2.get("burn_timer", 0) > 0
-    assert e2.get("burn_damage_per_second", 0) == 6
-    assert e2.get("burn_propagate_on_death", False) is True
+    assert getattr(e2, "burn_timer", 0) > 0
+    assert getattr(e2, "burn_damage_per_second", 0) == 6
+    assert getattr(e2, "burn_propagate_on_death", False) is True
 
 
 def test_fire_left_tier1_propagates_burn_even_if_projectile_not_fire():
@@ -488,32 +451,24 @@ def test_fire_left_tier1_propagates_burn_even_if_projectile_not_fire():
     g.permanent_stats["fire_1"] = 1
     g.apply_permanent_stats()
 
-    e1 = {
-        "x": 320,
-        "y": 520,
-        "health": 20,
-        "max_health": 20,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
-    e2 = {
-        "x": 360,
-        "y": 520,
-        "health": 20,
-        "max_health": 20,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
+    e1 = Enemy(320, 520, enemy_type="normal", health=20)
+    e1.health = 20
+    e1.max_health = 20
+    e1.speed = 75
+    e1.radius = 12
+    e1.damage = 5
+    e2 = Enemy(360, 520, enemy_type="normal", health=20)
+    e2.health = 20
+    e2.max_health = 20
+    e2.speed = 75
+    e2.radius = 12
+    e2.damage = 5
     g.enemies = [e1, e2]
 
     t = Tower(320, 530, tower_type="fire", projectile_speed=100.0, inaccuracy=0.0)
     proj = t.fire_at_closest([e1])
-    proj.x = e1["x"]
-    proj.y = e1["y"]
+    proj.x = e1.x
+    proj.y = e1.y
     # simulate a non-fire appearance (player shot / other source)
     try:
         proj.appearance = "player_shot"
@@ -532,14 +487,14 @@ def test_fire_left_tier1_propagates_burn_even_if_projectile_not_fire():
     g.handle_collisions()
 
     # e1 must be marked for propagation regardless of projectile.appearance
-    assert e1.get("burn_timer", 0) > 0
-    assert e1.get("burn_propagate_on_death", False) is True
+    assert getattr(e1, "burn_timer", 0) > 0
+    assert getattr(e1, "burn_propagate_on_death", False) is True
 
     # Kill e1 to trigger propagation
-    e1["health"] = 0
+    e1.health = 0
     g.update_game()
 
-    assert e2.get("burn_timer", 0) > 0
+    assert getattr(e2, "burn_timer", 0) > 0
 
 
 def test_fire_left_tier1_propagates_when_burning_enemy_killed_by_projectile():
@@ -551,34 +506,26 @@ def test_fire_left_tier1_propagates_when_burning_enemy_killed_by_projectile():
     g.permanent_stats["fire_1"] = 1
     g.apply_permanent_stats()
 
-    # two close dict enemies
-    e1 = {
-        "x": 320,
-        "y": 520,
-        "health": 12,
-        "max_health": 12,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
-    e2 = {
-        "x": 360,
-        "y": 520,
-        "health": 20,
-        "max_health": 20,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
+    # two close enemies (object-style)
+    e1 = Enemy(320, 520, enemy_type="normal", health=12)
+    e1.health = 12
+    e1.max_health = 12
+    e1.speed = 75
+    e1.radius = 12
+    e1.damage = 5
+    e2 = Enemy(360, 520, enemy_type="normal", health=20)
+    e2.health = 20
+    e2.max_health = 20
+    e2.speed = 75
+    e2.radius = 12
+    e2.damage = 5
     g.enemies = [e1, e2]
 
     # Apply burn to e1 (fire projectile)
     t = Tower(320, 530, tower_type="fire", projectile_speed=100.0, inaccuracy=0.0)
     p_fire = t.fire_at_closest([e1])
-    p_fire.x = e1["x"]
-    p_fire.y = e1["y"]
+    p_fire.x = e1.x
+    p_fire.y = e1.y
     p_fire.burn_duration = 6
     p_fire.burn_damage_per_second = 2
     try:
@@ -587,14 +534,12 @@ def test_fire_left_tier1_propagates_when_burning_enemy_killed_by_projectile():
         g.projectiles.append(p_fire)
     g.handle_collisions()
 
-    assert e1.get("burn_timer", 0) > 0
-    assert e1.get("burn_propagate_on_death", False) is True
+    assert getattr(e1, "burn_timer", 0) > 0
+    assert getattr(e1, "burn_propagate_on_death", False) is True
 
     # Now create a player projectile that will *kill* e1 immediately
     # Place it on top of e1 so collision resolves through the normal projectile path
-    killer = Projectile(
-        e1["x"], e1["y"], 0, -500, damage=20, radius=6, weapon_type=None
-    )
+    killer = Projectile(e1.x, e1.y, 0, -500, damage=20, radius=6, weapon_type=None)
     try:
         g.projectiles.add(killer)
     except Exception:
@@ -604,15 +549,15 @@ def test_fire_left_tier1_propagates_when_burning_enemy_killed_by_projectile():
     g.handle_collisions()
 
     # e2 must receive the propagated burn
-    assert e2.get("burn_timer", 0) > 0
+    assert getattr(e2, "burn_timer", 0) > 0
     # propagated target hops should be source_hops - 1 == 1
-    assert e2.get("burn_propagate_hops", 0) == 1
+    assert getattr(e2, "burn_propagate_hops", 0) == 1
 
     # Ensure burn actually ticks on e2
-    e2["burn_tick_counter"] = 1
-    prev_health = e2["health"]
+    e2.burn_tick_timer = 1
+    prev_health = e2.health
     g.update_game()
-    assert e2["health"] < prev_health
+    assert e2.health < prev_health
 
 
 def test_fire_left_tier1_propagates_when_burning_enemy_killed_by_beast_projectile():
@@ -624,33 +569,25 @@ def test_fire_left_tier1_propagates_when_burning_enemy_killed_by_beast_projectil
     g.permanent_stats["fire_1"] = 1
     g.apply_permanent_stats()
 
-    e1 = {
-        "x": 320,
-        "y": 520,
-        "health": 12,
-        "max_health": 12,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
-    e2 = {
-        "x": 360,
-        "y": 520,
-        "health": 20,
-        "max_health": 20,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
+    e1 = Enemy(320, 520, enemy_type="normal", health=12)
+    e1.health = 12
+    e1.max_health = 12
+    e1.speed = 75
+    e1.radius = 12
+    e1.damage = 5
+    e2 = Enemy(360, 520, enemy_type="normal", health=20)
+    e2.health = 20
+    e2.max_health = 20
+    e2.speed = 75
+    e2.radius = 12
+    e2.damage = 5
     g.enemies = [e1, e2]
 
     # Apply burn to e1
     t = Tower(320, 530, tower_type="fire", projectile_speed=100.0, inaccuracy=0.0)
     p_fire = t.fire_at_closest([e1])
-    p_fire.x = e1["x"]
-    p_fire.y = e1["y"]
+    p_fire.x = e1.x
+    p_fire.y = e1.y
     p_fire.burn_duration = 6
     p_fire.burn_damage_per_second = 2
     try:
@@ -659,13 +596,11 @@ def test_fire_left_tier1_propagates_when_burning_enemy_killed_by_beast_projectil
         g.projectiles.append(p_fire)
     g.handle_collisions()
 
-    assert e1.get("burn_timer", 0) > 0
-    assert e1.get("burn_propagate_on_death", False) is True
+    assert getattr(e1, "burn_timer", 0) > 0
+    assert getattr(e1, "burn_propagate_on_death", False) is True
 
     # Now kill e1 using a Beast projectile (weapon_type="beast")
-    killer = Projectile(
-        e1["x"], e1["y"], 0, -500, damage=20, radius=6, weapon_type="beast"
-    )
+    killer = Projectile(e1.x, e1.y, 0, -500, damage=20, radius=6, weapon_type="beast")
     try:
         g.projectiles.add(killer)
     except Exception:
@@ -674,8 +609,8 @@ def test_fire_left_tier1_propagates_when_burning_enemy_killed_by_beast_projectil
     # Process collisions -> e1 should die and propagation should occur
     g.handle_collisions()
 
-    assert e2.get("burn_timer", 0) > 0
-    assert e2.get("burn_propagate_hops", 0) == 1
+    assert getattr(e2, "burn_timer", 0) > 0
+    assert getattr(e2, "burn_propagate_hops", 0) == 1
 
 
 def test_fire_left_tier1_propagates_burn_to_sprite_enemies_on_death():
@@ -782,17 +717,13 @@ def test_fire_left_tier1_propagates_burn_to_boss_on_death():
     g.permanent_stats["fire_2"] = 0
     g.apply_permanent_stats()
 
-    # small dict enemy that will be burned and then killed
-    e = {
-        "x": 320,
-        "y": 520,
-        "health": 10,
-        "max_health": 10,
-        "speed": 0,
-        "radius": 12,
-        "damage": 0,
-        "type": "normal",
-    }
+    # small enemy that will be burned and then killed
+    e = Enemy(320, 520, enemy_type="normal", health=10)
+    e.health = 10
+    e.max_health = 10
+    e.speed = 0
+    e.radius = 12
+    e.damage = 0
     g.enemies = [e]
 
     # simple Boss sprite implementing minimal fields used by propagation
@@ -838,8 +769,8 @@ def test_fire_left_tier1_propagates_burn_to_boss_on_death():
     # Apply a fire projectile to the small enemy
     t = Tower(320, 530, tower_type="fire", projectile_speed=100.0, inaccuracy=0.0)
     proj = t.fire_at_closest([e])
-    proj.x = e["x"]
-    proj.y = e["y"]
+    proj.x = e.x
+    proj.y = e.y
     proj.burn_duration = 3
     proj.burn_damage_per_second = 8
 
@@ -850,7 +781,7 @@ def test_fire_left_tier1_propagates_burn_to_boss_on_death():
 
     g.handle_collisions()
     # simulate enemy death to trigger propagation
-    e["health"] = 0
+    e.health = 0
     g.update_game()
 
     # Boss should receive burn

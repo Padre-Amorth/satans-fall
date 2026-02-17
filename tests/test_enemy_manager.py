@@ -120,3 +120,23 @@ def test_non_boss_spawn_speed_matches_spawn_value():
     assert giant is not None
     # giant spawn speed aligned to non-boss spawn speed (from balance)
     assert abs(giant.speed - ENEMY_BASE_SPEEDS["giant"]) < 0.001
+
+
+def test_strong_can_spawn_in_first_two_waves():
+    """Ensure 'strong' has a 10% chance to appear in waves 1-2 (rand < 0.10)."""
+    from unittest.mock import patch
+
+    pygame.init()
+    g = Game(debug=True)
+    g.wave = 1
+    # Force random.random to a value within the 10% threshold
+    with patch("random.random", return_value=0.05):
+        g.spawn_enemy()
+
+    spawned = next(
+        (en for en in g.enemies if getattr(en, "enemy_type", None) == "strong"),
+        None,
+    )
+    assert (
+        spawned is not None
+    ), "Expected a 'strong' enemy to spawn for wave 1 with rand=0.05"

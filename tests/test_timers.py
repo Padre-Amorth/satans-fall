@@ -70,48 +70,48 @@ def test_limbo_statues_spawn_once_each():
     try:
         # Configure Limbo with at least one enemy so statues have targets
         game.selected_stage = "limbo"
-        # Provide fully populated enemy dicts to satisfy enemy update expectations
-        game.enemies = [
-            {
-                "x": 400,
-                "y": 100,
-                "health": 10,
-                "max_health": 10,
-                "speed": 75,
-                "radius": 12,
-                "damage": 5,
-                "type": "normal",
-            },
-            {
-                "x": 600,
-                "y": 120,
-                "health": 10,
-                "max_health": 10,
-                "speed": 75,
-                "radius": 12,
-                "damage": 5,
-                "type": "normal",
-            },
-        ]
+        # Provide fully populated Enemy instances to satisfy enemy update expectations
+        from src.entities.enemy import Enemy
+
+        e1 = Enemy(400, 100, enemy_type="normal", health=10)
+        e1.health = 10
+        e1.max_health = 10
+        e1.speed = 75
+        e1.radius = 12
+        e1.damage = 5
+        e2 = Enemy(600, 120, enemy_type="normal", health=10)
+        e2.health = 10
+        e2.max_health = 10
+        e2.speed = 75
+        e2.radius = 12
+        e2.damage = 5
+        game.enemies = [e1, e2]
         # Force statue to be ready to fire (alternating: left then right)
         game.statue_cooldown = 1
         game.statue_next_left = True
-        game.statue_projectiles = []
         game.paused = False
         game.awaiting_upgrade = False
 
         game.update_game()
 
         # Expect a single statue projectile (left fires first)
+        try:
+            proj_list = list(game.projectiles)
+        except Exception:
+            proj_list = game.projectiles
         assert (
-            len(game.statue_projectiles) == 1
-        ), f"Expected 1 statue projectile, got {len(game.statue_projectiles)}"
+            sum(1 for p in proj_list if getattr(p, "source", None) == "statue") == 1
+        ), f"Expected 1 statue projectile, got {sum(1 for p in proj_list if getattr(p, 'source', None) == 'statue')}"
 
         # Next cycle should spawn the other statue
         game.statue_cooldown = 1
         game.update_game()
+        try:
+            proj_list = list(game.projectiles)
+        except Exception:
+            proj_list = game.projectiles
         assert (
-            len(game.statue_projectiles) == 2
-        ), f"Expected 2 statue projectiles after second fire, got {len(game.statue_projectiles)}"
+            sum(1 for p in proj_list if getattr(p, "source", None) == "statue") == 2
+        ), f"Expected 2 statue projectiles after second fire, got {sum(1 for p in proj_list if getattr(p, 'source', None) == 'statue')}"
     finally:
         teardown_game(game, root)

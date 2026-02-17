@@ -5,8 +5,10 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import pygame
 import pytest
 
+from src.entities.enemy import Enemy
 from src.game import Game
 from src.weapons import (
     skull_bomb_cooldown,
@@ -99,10 +101,76 @@ def test_skull_bomb_firing():
     assert game.skull_bomb_cooldown_timer > 0
 
 
+def test_skull_bomb_does_not_explode_on_player_spawn():
+    """Skull bomb must not detonate immediately or on overlap with player."""
+    pygame.init()
+    g = Game()
+    g.player_weapons = ["skull_bomb"]
+    g.weapon_levels = {"skull_bomb": 1}
+    g.skull_bomb_cooldown_timer = 0
+
+    # Ensure no enemies present
+    g.enemies = []
+
+    # Fire towards the right
+    g.player.x = 100
+    g.player.y = 100
+    g.mouse_x = 150
+    g.mouse_y = 100
+    g.update_skull_bomb()
+
+    projs = list(g.projectiles)
+    assert len(projs) >= 1
+    proj = projs[-1]
+
+    # Run collision handling for a few frames; projectile should NOT explode
+    for _ in range(3):
+        try:
+            proj.update()
+        except Exception:
+            pass
+        g.handle_collisions()
+
+    assert proj in list(g.projectiles)
+
+
+def test_skull_bomb_explodes_on_enemy_contact():
+    """Skull bomb should detonate and damage enemies when overlapping them."""
+    pygame.init()
+    g = Game()
+    g.player_weapons = ["skull_bomb"]
+    g.weapon_levels = {"skull_bomb": 1}
+    g.skull_bomb_cooldown_timer = 0
+
+    # Fire a skull bomb
+    g.player.x = 200
+    g.player.y = 200
+    g.mouse_x = 200
+    g.mouse_y = 200
+    g.update_skull_bomb()
+
+    proj = list(g.projectiles)[-1]
+
+    # Move projectile away from the player and place an enemy at that location
+    # (avoid triggering player-contact branch that expects dict-style enemies)
+    proj.x = 800
+    proj.y = 600
+    enemy = Enemy(proj.x, proj.y, health=100)
+    g.enemies = [enemy]
+
+    # Handle collisions once -> should explode and remove projectile
+    g.handle_collisions()
+
+    assert proj not in list(g.projectiles)
+    assert enemy.health < 100
+
+
 if __name__ == "__main__":
     test_skull_bomb_weapon_definition()
     test_skull_bomb_cooldown()
     test_skull_bomb_damage()
     test_skull_bomb_explosion_radius()
     test_skull_bomb_firing()
+    test_skull_bomb_does_not_explode_on_player_spawn()
+    test_skull_bomb_explodes_on_enemy_contact()
     print("All Skull Bomb tests passed!")

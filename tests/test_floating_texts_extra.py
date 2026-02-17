@@ -27,17 +27,15 @@ def test_dict_burn_spawns_text():
     g.selected_stage = "prologo"
     g.showing_stage_menu = False
 
-    enemy = {
-        "x": 120,
-        "y": 80,
-        "health": 20,
-        "burn_timer": 10,
-        "burn_damage_per_second": 3,
-        "burn_tick_counter": 1,
-        "radius": 10,
-    }
-    # Use a list for dict-style enemies (matches legacy tests)
-    g.enemies = [enemy]
+    from src.entities.enemy import Enemy
+
+    enemy_obj = Enemy(120, 80, enemy_type="normal", health=20)
+    enemy_obj.health = 20
+    enemy_obj.burn_timer = 10
+    enemy_obj.burn_damage_per_second = 3
+    enemy_obj.burn_tick_timer = 1
+    enemy_obj.radius = 10
+    g.enemies = [enemy_obj]
 
     assert len(g.floating_texts) == 0
     g.update()

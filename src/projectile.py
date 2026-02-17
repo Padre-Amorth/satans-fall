@@ -1,7 +1,7 @@
 import importlib
 import math
 import random
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from pygame.surface import Surface
 
@@ -35,16 +35,16 @@ except Exception:
 class Projectile(BaseSprite):
     def __init__(
         self,
-        x,
-        y,
-        vel_x,
-        vel_y,
-        damage=15,
-        radius=5,
-        is_enemy_projectile=False,
-        weapon_type=None,
-        source=None,
-        appearance=None,
+        x: float,
+        y: float,
+        vel_x: float,
+        vel_y: float,
+        damage: int = 15,
+        radius: int = 5,
+        is_enemy_projectile: bool = False,
+        weapon_type: Optional[str] = None,
+        source: Optional[str] = None,
+        appearance: Optional[str] = None,
     ) -> None:
         super().__init__()
         self.x: Any = x
@@ -99,16 +99,16 @@ class Projectile(BaseSprite):
 
     def reset(
         self,
-        x,
-        y,
-        vel_x,
-        vel_y,
-        damage=15,
-        radius=5,
-        is_enemy_projectile=False,
-        weapon_type=None,
-        source=None,
-        appearance=None,
+        x: float,
+        y: float,
+        vel_x: float,
+        vel_y: float,
+        damage: int = 15,
+        radius: int = 5,
+        is_enemy_projectile: bool = False,
+        weapon_type: Optional[str] = None,
+        source: Optional[str] = None,
+        appearance: Optional[str] = None,
     ) -> None:
         """Reset an existing projectile instance for reuse from a pool."""
         self.x = x

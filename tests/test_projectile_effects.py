@@ -17,17 +17,15 @@ def test_projectile_effects_apply_to_dict_enemy_and_boss(source, expected_effect
     g = Game()
     g.selected_stage = "limbo"
 
-    # prepare a simple dict enemy (test-style)
-    e = {
-        "x": 320,
-        "y": 520,
-        "health": 30,
-        "max_health": 30,
-        "speed": 75,
-        "radius": 12,
-        "damage": 5,
-        "type": "normal",
-    }
+    # prepare an Enemy instance (object-style)
+    from src.entities.enemy import Enemy
+
+    e = Enemy(320, 520, enemy_type="normal", health=30)
+    e.health = 30
+    e.max_health = 30
+    e.speed = 75
+    e.radius = 12
+    e.damage = 5
     g.enemies = [e]
 
     # spawn a boss (use inquisitor as representative boss)
@@ -61,9 +59,9 @@ def test_projectile_effects_apply_to_dict_enemy_and_boss(source, expected_effect
 
     # place projectile on top of dict-enemy so collision is deterministic
     try:
-        proj.x = e["x"]
-        proj.y = e["y"]
-        proj.rect.center = (int(e["x"]), int(e["y"]))
+        proj.x = e.x
+        proj.y = e.y
+        proj.rect.center = (int(e.x), int(e.y))
     except Exception:
         pass
 
@@ -78,27 +76,35 @@ def test_projectile_effects_apply_to_dict_enemy_and_boss(source, expected_effect
     # run collision handling
     g.handle_collisions()
 
-    # check dict-enemy received the expected status
+    # check enemy received the expected status
     if expected_effect == "burn":
-        assert e.get("burn_timer", 0) > 0
-        assert e.get("burn_damage_per_second", 0) > 0
+        assert getattr(e, "burn_timer", 0) > 0
+        assert getattr(e, "burn_damage_per_second", 0) > 0
     elif expected_effect == "slow":
-        assert e.get("slow_timer", 0) > 0
-        assert e.get("slow_factor", 1.0) != 1.0
+        assert getattr(e, "slow_timer", 0) > 0
+        assert getattr(e, "slow_factor", 1.0) != 1.0
 
     # Now test boss was affected by the same projectile as well
-    try:
-        proj.rect.center = (int(getattr(boss, "x", 0)), int(getattr(boss, "y", 0)))
-    except Exception:
-        pass
+    # Use a fresh projectile placed directly on the boss to ensure boss receives the effect
+    from src.projectile import Projectile
 
-    # Re-add projectile if necessary (some sources remove on first hit)
+    proj2 = Projectile(
+        int(getattr(boss, "x", 0)),
+        int(getattr(boss, "y", 0)),
+        0,
+        0,
+        damage=getattr(proj, "damage", 0),
+        radius=6,
+    )
+    proj2.effect = getattr(proj, "effect", None)
+    proj2.slow_duration = getattr(proj, "slow_duration", 120)
+    proj2.slow_factor = getattr(proj, "slow_factor", 0.5)
     try:
-        if proj not in g.projectiles:
-            g.projectiles.add(proj)
+        if proj2 not in g.projectiles:
+            g.projectiles.add(proj2)
     except Exception:
-        if proj not in g.projectiles:
-            g.projectiles.append(proj)
+        if proj2 not in g.projectiles:
+            g.projectiles.append(proj2)
 
     g.handle_collisions()
 

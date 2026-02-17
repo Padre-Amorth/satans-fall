@@ -198,43 +198,28 @@ class TowerManager:
     def apply_homing(
         projectiles: List[Any], enemies: Iterable[Any], projectile_speed: float = 320.0
     ) -> None:
-        """Apply homing to projectiles.
+        """Apply homing to Projectile instances (object-style only).
 
-        Accepts either dict-like projectiles or Projectile instances. Mutates velocities in-place.
+        Mutates velocities in-place.
         """
         enemies_list = list(enemies) if enemies is not None else []
         if not enemies_list:
             return
 
         for proj in list(projectiles):
-            # Support dicts or objects
-            if isinstance(proj, dict):
-                px = proj.get("x", 0)
-                py = proj.get("y", 0)
+            # Expect object-like projectiles with x/vel_x/vel_y attributes
+            px = getattr(proj, "x", 0)
+            py = getattr(proj, "y", 0)
 
-                def get_vx(p):
-                    return p.get("vel_x", 0)
+            def get_vx(p):
+                return getattr(p, "vel_x", 0)
 
-                def get_vy(p):
-                    return p.get("vel_y", 0)
+            def get_vy(p):
+                return getattr(p, "vel_y", 0)
 
-                def set_v(p, vx, vy):
-                    p["vel_x"] = vx
-                    p["vel_y"] = vy
-
-            else:
-                px = getattr(proj, "x", 0)
-                py = getattr(proj, "y", 0)
-
-                def get_vx(p):
-                    return getattr(p, "vel_x", 0)
-
-                def get_vy(p):
-                    return getattr(p, "vel_y", 0)
-
-                def set_v(p, vx, vy):
-                    p.vel_x = vx
-                    p.vel_y = vy
+            def set_v(p, vx, vy):
+                p.vel_x = vx
+                p.vel_y = vy
 
             closest_enemy = min(
                 enemies_list,

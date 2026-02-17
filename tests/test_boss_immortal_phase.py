@@ -13,7 +13,9 @@ def test_boss_moves_to_center_and_shines_when_immortal():
     boss = Enemy(50, 50, "boss_final", health=1000, speed=10)
 
     center_x = game.width / 2
-    center_y = game.height / 2 - 50  # Slightly above center
+    center_y = (
+        game.height / 2 - 150
+    )  # Stopped 100px higher during immortal/regeneration phase
     initial_dist = math.hypot(boss.x - center_x, boss.y - center_y)
     initial_width = boss.width
 

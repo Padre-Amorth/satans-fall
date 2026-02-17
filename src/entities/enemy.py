@@ -88,13 +88,20 @@ class IceParticle:
 
 
 class Enemy(BaseSprite):
-    def __init__(self, x, y, enemy_type="basic", health=20, speed=60) -> None:
+    def __init__(
+        self,
+        x: float,
+        y: float,
+        enemy_type: str = "basic",
+        health: float = 20.0,
+        speed: float = 60.0,
+    ) -> None:
         super().__init__()
         self.x: Any = x
         self.y: Any = y
         self.enemy_type: str = enemy_type
-        self.max_health: int = health
-        self.health: int = health
+        self.max_health: int = int(health)
+        self.health: int = int(health)
         # Use the provided `speed` directly — no global reduction applied
         self.speed: float = float(speed)
         self.width = 30
@@ -103,12 +110,14 @@ class Enemy(BaseSprite):
 
         # Adjust size and damage based on type
         if enemy_type == "strong":
-            self.width = 40
-            self.height = 40
+            # Increase base size so final size (after +10 adjustment) is 70x70
+            self.width = 60
+            self.height = 60
             self.damage = 15
         elif enemy_type == "giant":
-            self.width = 50
-            self.height = 50
+            # Increase base size so final size (after +10 adjustment) is 70x70
+            self.width = 60
+            self.height = 60
             self.damage = 20
         elif enemy_type == "angel":
             self.width = 35
@@ -211,9 +220,73 @@ class Enemy(BaseSprite):
             # sometimes import Game as `game` (top-level) while runtime uses
             # `src.game` — handle both to ensure the kill counter is recorded.
             try:
-                from game import CURRENT_GAME
-            except Exception:
+                # Prefer the packaged module import path used by the test-suite/runtime
                 from src.game import CURRENT_GAME
+
+                # If that module's CURRENT_GAME is not set but a top-level `game`
+                # module exists (some tests import `game`), prefer that instead.
+                if CURRENT_GAME is None:
+                    try:
+                        from game import CURRENT_GAME as _ALT_CURRENT_GAME
+
+                        CURRENT_GAME = _ALT_CURRENT_GAME
+                    except Exception:
+                        pass
+            except Exception:
+                try:
+                    from game import CURRENT_GAME as _ALT_CURRENT_GAME
+
+                    CURRENT_GAME = _ALT_CURRENT_GAME
+                except Exception:
+                    CURRENT_GAME = None
+
+            # If multiple Game instances/modules are present in the test-runner
+            # prefer the Game instance that actually contains this enemy in its
+            # `enemies` container. This avoids recording kills on a different
+            # running Game when tests import both `game` and `src.game`.
+            try:
+                if CURRENT_GAME is not None:
+                    enemies_container = getattr(CURRENT_GAME, "enemies", None)
+                    found_here = False
+                    try:
+                        if enemies_container is not None:
+                            if hasattr(enemies_container, "sprites"):
+                                # pygame Group
+                                try:
+                                    if self in enemies_container.sprites():
+                                        found_here = True
+                                except Exception:
+                                    found_here = False
+                            else:
+                                if self in enemies_container:
+                                    found_here = True
+                    except Exception:
+                        found_here = False
+
+                    # If the current module's CURRENT_GAME doesn't own this enemy,
+                    # try the alternate top-level `game` module (if available).
+                    if not found_here:
+                        try:
+                            from game import CURRENT_GAME as _ALT_CURRENT_GAME
+
+                            alt_enemies = getattr(_ALT_CURRENT_GAME, "enemies", None)
+                            if alt_enemies is not None:
+                                if hasattr(alt_enemies, "sprites"):
+                                    try:
+                                        if self in alt_enemies.sprites():
+                                            CURRENT_GAME = _ALT_CURRENT_GAME
+                                    except Exception:
+                                        pass
+                                else:
+                                    try:
+                                        if self in alt_enemies:
+                                            CURRENT_GAME = _ALT_CURRENT_GAME
+                                    except Exception:
+                                        pass
+                        except Exception:
+                            pass
+            except Exception:
+                pass
             if not getattr(self, "_kill_recorded", False):
                 try:
                     if CURRENT_GAME is not None:
@@ -383,7 +456,8 @@ class Enemy(BaseSprite):
                 if game.prologo_final_boss_immortal and self.enemy_type == "boss_final":
                     # Stop floating, move toward the center of the screen (regeneration phase)
                     target_x = game.width / 2
-                    desired_y = game.height / 2 - 50  # Stop slightly above center
+                    # Stop 100px higher than the previous 'slightly above center' position
+                    desired_y = game.height / 2 - 150
                     # Smoothly interpolate toward center (even slower movement)
                     self.x += (target_x - self.x) * 0.01
                     self.y += (desired_y - self.y) * 0.01 + 0.3

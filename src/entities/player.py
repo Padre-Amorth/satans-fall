@@ -38,7 +38,7 @@ class Player(BaseSprite):
         self.height = 73  # Increased by another 10%
         self.max_health = PLAYER_BASE_HEALTH
         self.health: float = float(self.max_health)
-        self.speed: float = 300.0
+        self.speed: float = 250.0  # reduced from 300 to 250 px/s per user request
         self.velocity_x: float = 0.0
         # Vertical velocity for limited vertical movement (new feature)
         self.velocity_y: float = 0.0

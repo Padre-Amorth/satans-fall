@@ -8981,6 +8981,14 @@ class Game:
                     ),
                 },
                 {
+                    "id": "xp",
+                    "name": "XP +10%",
+                    "description": "Increase XP gain by 10%",
+                    "apply": lambda self=self: setattr(
+                        self, "xp_multiplier", getattr(self, "xp_multiplier", 1.0) * 1.1
+                    ),
+                },
+                {
                     "id": "armor",
                     "name": "Armor +5%",
                     "description": "Reduce damage taken by 5%",
@@ -8998,6 +9006,17 @@ class Game:
             try:
                 if getattr(self, "selected_stage", None) == "prologo":
                     patterns = [p for p in patterns if p.get("id") != "projectile_size"]
+            except Exception:
+                pass
+
+            # Make the XP upgrade slightly rarer than the rest by inserting it into
+            # the patterns only some fraction of the time. It is still allowed in
+            # all stages, but will appear less frequently in the random draws.
+            try:
+                import random
+
+                if random.random() > 0.33:
+                    patterns = [p for p in patterns if p.get("id") != "xp"]
             except Exception:
                 pass
 

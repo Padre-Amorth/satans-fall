@@ -8989,6 +8989,52 @@ class Game:
                     ),
                 },
                 {
+                    "id": "tower_fire_rate",
+                    "name": "Tower Fire Rate +10%",
+                    "description": "Increase the firing speed of towers by 10% (Purgatory+)",
+                    "apply": lambda self=self: (
+                        # Be defensive: ensure the multiplier dict exists, then increase it
+                        (
+                            setattr(
+                                self,
+                                "tower_fire_rate_multiplier",
+                                {
+                                    k: (
+                                        getattr(
+                                            self, "tower_fire_rate_multiplier", {}
+                                        ).get(k, 1.0)
+                                        * 1.1
+                                    )
+                                    for k in ("fire", "storm", "ice")
+                                },
+                            )
+                        ),
+                        # update any existing tower instances' cooldowns immediately
+                        [
+                            setattr(
+                                t,
+                                "fire_rate",
+                                max(
+                                    1,
+                                    int(
+                                        round(
+                                            getattr(t, "_base_fire_rate", t.fire_rate)
+                                            / getattr(
+                                                self, "tower_fire_rate_multiplier", {}
+                                            ).get(getattr(t, "tower_type", "fire"), 1.0)
+                                        )
+                                    ),
+                                ),
+                            )
+                            for t in (
+                                getattr(self, "left_tower", None),
+                                getattr(self, "right_tower", None),
+                            )
+                            if t is not None
+                        ],
+                    ),
+                },
+                {
                     "id": "armor",
                     "name": "Armor +5%",
                     "description": "Reduce damage taken by 5%",
@@ -9006,6 +9052,20 @@ class Game:
             try:
                 if getattr(self, "selected_stage", None) == "prologo":
                     patterns = [p for p in patterns if p.get("id") != "projectile_size"]
+            except Exception:
+                pass
+
+            # The tower-fire-rate upgrade is only available from Purgatory (and Hell).
+            try:
+                stage = getattr(self, "selected_stage", None)
+                if not (
+                    stage
+                    and (
+                        str(stage).startswith("purgatory")
+                        or str(stage).startswith("hell")
+                    )
+                ):
+                    patterns = [p for p in patterns if p.get("id") != "tower_fire_rate"]
             except Exception:
                 pass
 

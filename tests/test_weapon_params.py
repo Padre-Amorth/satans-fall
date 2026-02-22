@@ -9,11 +9,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from game import Game
 from src.weapons import (
+    flies_damage_heal_mult,
+    flies_projectile_count,
     orbital_cooldown_range,
     shotgun_cooldown,
     shotgun_pellets,
-    soul_drain_damage_heal_mult,
-    soul_drain_projectile_count,
     spear_cooldown,
 )
 
@@ -49,14 +49,14 @@ def test_shotgun_and_spear_cooldowns():
     assert abs(spear_cooldown(3) - max(0.15, 0.6 - 3 * 0.06)) < 1e-6
 
 
-def test_soul_drain_projectiles_and_mult():
+def test_flies_projectiles_and_mult():
     # Base changed: lv1 now fires 2 projectiles
-    assert soul_drain_projectile_count(1) == 2
-    assert soul_drain_projectile_count(2) == 3
-    assert soul_drain_projectile_count(4) == 4
-    m1, h1 = soul_drain_damage_heal_mult(1)
-    m3, h3 = soul_drain_damage_heal_mult(3)
-    m5, h5 = soul_drain_damage_heal_mult(5)
+    assert flies_projectile_count(1) == 2
+    assert flies_projectile_count(2) == 3
+    assert flies_projectile_count(4) == 4
+    m1, h1 = flies_damage_heal_mult(1)
+    m3, h3 = flies_damage_heal_mult(3)
+    m5, h5 = flies_damage_heal_mult(5)
     assert abs(m1 - 1.0) < 1e-6
     assert m3 > m1
     assert m5 > m3

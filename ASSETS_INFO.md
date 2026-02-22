@@ -1,5 +1,41 @@
 # Asset Esterni - Guida
 
+*Nota: i muri nei vari livelli usano ora un grigio scuro uniforme; la
+modifica non richiede immagini esterne.*
+
+### Nebbia di Purgatory
+I livelli di Purgatory hanno una copertura di nebbia statica grigia che viene
+sovrapposta all'intero schermo **dopo** che le mura e gli oggetti sono stati
+Disegnati, garantendo che persino i muri si vedano attraverso la foschia. La
+versione attuale non usa più particelle volumetriche laterali; l'effetto è
+realizzato esclusivamente con un semplice overlay semi‑trasparente.
+
+In aggiunta, un effetto più recente disegna **nuvole ovali molto grandi** che
+fluttuano nella metà superiore dello stage (dove i nemici compaiono).  Le
+nuvole nascono parzialmente tagliate dalla parte alta dello schermo — la
+costante `PURGATORY_CLOUD_SPAWN_Y_RANGE` include valori negativi per
+generarle oltre il bordo superiore — e rimangono confinate nella porzione
+superiore (15 % dell'altezza). Sono molto trasparenti: l'opacità base è
+controllata da `PURGATORY_CLOUD_ALPHA` (e i dossi irregolari da
+`PURGATORY_CLOUD_BUMP_ALPHA`).  La frequenza di apparizione è regolata da
+`PURGATORY_CLOUD_SPAWN_RATE`; per abbassare ancora la quantità basta ridurre
+questa costante (ora impostata a circa 0.033 per ridurre il numero di nuvole di
+un terzo rispetto al valore precedente).  Le precedenti "nuvole" sono state sostituite da un nuovo sistema di
+particelle più morbido e volumetrico.  Vengono mantenute un numero fisso di
+particelle (attualmente 12, regolabile tramite la costante `FOG_PARTICLE_COUNT`),
+ognuna con una texture sfumata generata al runtime.  Si muovono lentamente in
+orizzontale e oscillano verticalmente in modo sinusoidale; quando escono dal
+lato destro ricompaiono a sinistra.  I parametri principali (numero, dimensione
+del texture, velocità, ampiezza, ofset di timer, colore e alpha) si trovano
+nelle costanti `FOG_*` di `src/game_constants.py`.
+
+- L'opacità e il colore sono ora configurabili tramite le costanti
+  `PURGATORY_OVERLAY_ALPHA` e `PURGATORY_OVERLAY_COLOR` in
+  `src/game_constants.py`.  Il valore predefinito è un alpha di 60 con colore
+  grigio (200,200,200), ma può essere aumentato o diminuito se si desidera un
+  effetto più marcato o più leggero.  (Non ci sono particelle laterali.)
+- Non sono necessari asset esterni: il riempimento viene creato dinamicamente.
+
 Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme geometriche predefinite!
 
 ## Come Usare le Immagini
@@ -100,6 +136,20 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
   - Dimensione consigliata: 1280x720 (verrà ridimensionata automaticamente)
   - Immagine di sfondo per la parte interna delle mura nei livelli `limbo`, `limbo_2`, `limbo_3`.
   - Se mancante, il gioco userà il riempimento arancione di default.
+
+### Campo di battaglia (Purgatory)
+- **File:** `assets/purgatory_battlefield.png`
+  - Dimensione consigliata: 1280x720 (ridimensionata automaticamente dal gestore asset)
+  - Immagine di sfondo per la parte interna delle mura nei livelli `purgatory`, `purgatory_2` e `purgatory_3`.
+  - La grafica viene ritagliata alla forma interna delle mura oblique, proprio come accade per il campo di battaglia in Limbo o Prologo.
+  - Se non presente, viene usato il colore grigio di default.
+- **File:** `assets/purgatory_background.png`
+  - Dimensione consigliata: 1280x720
+  - Sfondo esterno (cielo / nubi ecc.) per i livelli purgatory; viene disegnata sull'intero schermo.
+  - Questo asset è completamente independentemente dall'immagine "campo di battaglia".
+    anche se non è presente nessuna immagine di campo, l'esterno rimane visibile;
+    l'interno delle mura verrà comunque riempito con il `floor_color`.
+  - In assenza dell'immagine esterna si usa il colore nero configurato in `STAGE_SETTINGS`.
 
 ## Consigli per le Immagini
 

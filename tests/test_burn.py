@@ -310,8 +310,8 @@ def test_fire_left_tier3_does_not_affect_tower_projectiles():
 
 
 def test_fire_left_tier3_applies_to_multiple_player_weapons():
-    """Ensure `fire_3` applies the +25% bonus across player weapons (basic, spear, shotgun, DemonStrike, Soul Drain) and shows visual indicator."""
-    from src.projectile import Projectile, SoulDrainProjectile
+    """Ensure `fire_3` applies the +25% bonus across player weapons (basic, spear, shotgun, DemonStrike, Flies) and shows visual indicator."""
+    from src.projectile import FliesProjectile, Projectile
 
     g = Game()
     g.selected_stage = "limbo"
@@ -380,8 +380,8 @@ def test_fire_left_tier3_applies_to_multiple_player_weapons():
     assert ds is not None
     assert_bonus_applies(ds, 100, getattr(ds, "damage", 0))
 
-    # Soul Drain (use explicit class)
-    sd = SoulDrainProjectile(0, 0, 0, 0, damage=10)
+    # Flies (use explicit class)
+    sd = FliesProjectile(0, 0, 0, 0, damage=10)
     assert_bonus_applies(sd, 40, 10)
 
 

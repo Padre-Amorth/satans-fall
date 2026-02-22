@@ -54,7 +54,7 @@ def test_game_handle_collisions_with_sprite_and_dict():
 
     from src.entities.enemy import Enemy
     from src.game import Game
-    from src.projectile import Projectile, SoulDrainProjectile
+    from src.projectile import FliesProjectile, Projectile
 
     g = Game(debug=True)
 
@@ -78,11 +78,11 @@ def test_game_handle_collisions_with_sprite_and_dict():
     # Enemy should have taken damage
     assert e.health < e.max_health
 
-    # Soul drain special case (projectile should be removed/attached)
+    # Flies special case (projectile should be removed/attached)
     e2 = Enemy(300, 300, enemy_type="normal", health=40)
     g.enemies.add(e2)
 
-    sd = SoulDrainProjectile(300, 300, 0, 0, damage=5, heal_amount=2, level=1)
+    sd = FliesProjectile(300, 300, 0, 0, damage=5, heal_amount=2, level=1)
     try:
         g.projectiles.add(sd)
     except Exception:

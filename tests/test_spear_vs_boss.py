@@ -41,3 +41,10 @@ def test_spear_hits_boss_only_once():
 
     # Boss should have been damaged exactly once (no multi-hit from spear)
     assert boss.health == boss.max_health - spear.damage
+
+    # Damage number should have been shown for the hit
+    texts = getattr(g, "floating_texts", [])
+    assert len(texts) >= 1, "Expected floating damage text when boss was hit"
+    assert any(
+        ft.text == str(spear.damage) for ft in texts
+    ), f"Expected a floating text equal to {spear.damage}, got {[ft.text for ft in texts]}"

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Gla/Desktop/Nuova cartella/giochi/satans fall/**)",
+      "Bash(git log:*)",
+      "Bash(cd:*)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
+    ]
+  }
+}

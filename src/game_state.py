@@ -387,6 +387,13 @@ class GameStateManager:
                         self.selected_stage and str(self.selected_stage) != "prologo"
                     ):
                         continue
+                elif af == "hell":
+                    # only allow in HELL stages (not purgatory)
+                    if not (
+                        self.selected_stage
+                        and str(self.selected_stage).startswith("hell")
+                    ):
+                        continue
             filtered.append(w)
 
         if not filtered:
@@ -470,7 +477,7 @@ class GameStateManager:
             "shotgun": "Hellgun",
             "orbital": "Orbitals",
             "spear": "Spear",
-            "Soul Drain": "Soul Drain",
+            "Flies": "Flies",
             "beast": "The number of the beast",
         }
         for weapon in self.player_weapons:
@@ -556,10 +563,22 @@ class GameStateManager:
         self.paused = not self.paused
 
     def add_score(self, points) -> None:
-        """Add points to score (respects `game.score_multiplier` if present).
+        """Add points to score via the main Game implementation.
 
-        Keeps `GameStateManager.score` and `Game.score` synchronized.
+        Delegating ensures that meta-XP awards are not bypassed when code
+        interacts with the game state directly.
         """
+        try:
+            # prefer using Game.add_score so that all side effects (meta XP)
+            # are handled in one place
+            if hasattr(self, "game") and getattr(self.game, "add_score", None):
+                self.game.add_score(points)
+                # mirror the value in this state
+                self.score = getattr(self.game, "score", self.score)
+                return
+        except Exception:
+            pass
+        # fallback to previous behavior
         try:
             mult = getattr(self.game, "score_multiplier", 1.0)
             amt = int(points * mult)

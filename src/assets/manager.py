@@ -25,11 +25,28 @@ def clear_cache() -> None:
 
 
 def _load_original(name: str) -> Optional[pygame.Surface]:
-    """Load original image and cache it (may be None on failure)."""
-    if name in _original_cache:
-        return _original_cache[name]
+    """Load original image and cache it (may be None on failure).
 
+    To support hot-reloading in tests, we allow a previously-failed lookup
+    to be retried if the file appears later on disk.  The cache stores None
+    for a missing file, but we only return that cached None immediately if
+    the path still does not exist.  Otherwise we clear the cache entry and
+    try loading again.
+    """
     path = os.path.join(_ASSETS_DIR, name)
+
+    if name in _original_cache:
+        cached = _original_cache[name]
+        if cached is None:
+            # if the file now exists on disk, remove the stale cache entry
+            # so that the subsequent load attempt will actually try again
+            if os.path.exists(path):
+                del _original_cache[name]
+            else:
+                return None
+        else:
+            return cached
+
     try:
         loaded = pygame.image.load(path)
         try:
@@ -40,6 +57,7 @@ def _load_original(name: str) -> Optional[pygame.Surface]:
         _original_cache[name] = surf
     except Exception as e:
         logger.warning("Asset %s could not be loaded: %s", path, e)
+        # cache None so we don't repeatedly log the same missing-file warnings
         _original_cache[name] = None
     return _original_cache[name]
 
@@ -50,10 +68,27 @@ def get_image(
     """Get an image by name, optionally scaled to `size` (w, h).
 
     Returned Surface is cached; callers should .copy() if they plan to modify it.
+    The cache will automatically retry loading if the file appears after an
+    earlier failure (see :func:`_load_original`).
     """
     key = (name, size)
+
+    # If we have a cached scaled result but it was None (previous failure),
+    # check whether the file exists now and purge the stale entry to force a
+    # reload.
     if key in _scaled_cache:
-        return _scaled_cache[key]
+        cached = _scaled_cache[key]
+        if cached is None:
+            path = os.path.join(_ASSETS_DIR, name)
+            if os.path.exists(path):
+                # clear both caches so the new file will be loaded below
+                del _scaled_cache[key]
+                if name in _original_cache:
+                    del _original_cache[name]
+            else:
+                return None
+        else:
+            return cached
 
     orig = _load_original(name)
     if orig is None:

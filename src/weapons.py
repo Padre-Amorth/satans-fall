@@ -43,13 +43,13 @@ WEAPON_DEFS: Dict[str, Dict] = {
             6: "Lv6: Max level",
         },
     },
-    "Soul Drain": {
-        "name": "Soul Drain",
-        "description": "Fires homing soul projectiles that drain life from enemies and heal the player",
+    "Flies": {
+        "name": "Flies",
+        "description": "Fires homing projectiles that latch onto enemies and heal the player",
         "max_level": 6,
         "available_from": "limbo",  # Not available in Prologo; available from Limbo onwards
         "upgrade_descriptions": {
-            1: "Lv1: Fires 2 homing projectiles that drain HP and heal the player",
+            1: "Lv1: Fires 2 homing fly projectiles that heal the player",
             2: "Lv2: +1 projectile",
             3: "Lv3: +10% damage & heal",
             4: "Lv4: +1 projectile",
@@ -70,8 +70,8 @@ WEAPON_DEFS: Dict[str, Dict] = {
             6: "Lv6: +5% damage and maximum burst rate",
         },
     },
-    "skull_bomb": {
-        "name": "Skull Bomb",
+    "skullboom": {
+        "name": "SkullBoom",
         "description": "Launches explosive skulls that detonate on enemy contact, dealing area damage",
         "max_level": 6,
         "upgrade_descriptions": {
@@ -182,8 +182,8 @@ WEAPON_DEFS["spear"].update(
 # DemonStrike tuning (custom scaling & visuals)
 WEAPON_DEFS["DemonStrike"].update(
     {
-        # Cooldown tuned similar to skull_bomb (kept at 1.8s here)
-        "base_cd": 1.8,  # roughly matched to Skull Bomb base_cd
+        # Cooldown tuned similar to skullboom (kept at 1.8s here)
+        "base_cd": 1.8,  # roughly matched to SkullBoom base_cd
         "cd_reduction_per_level": 0.12,
         "min_cd": 0.5,
         "damage_base_mult": 0.5,  # retains player-damage component multiplier
@@ -196,7 +196,7 @@ WEAPON_DEFS["DemonStrike"].update(
     }
 )
 
-WEAPON_DEFS["Soul Drain"].update(
+WEAPON_DEFS["Flies"].update(
     {
         "base_cd": 1.5,
         "cd_reduction_at_level_4": 0.3,
@@ -263,20 +263,85 @@ def beast_damage(level: int, base_damage: int) -> int:
     return int(scaled)
 
 
-WEAPON_DEFS["skull_bomb"].update(
+WEAPON_DEFS["skullboom"].update(
     {
         "base_cd": 1.8,
         # Linear reduction per level so Lv1=1.8s -> Lv6=1.0s (5 steps of 0.16s)
         "cd_reduction_per_level": 0.16,
         "min_cd": 0.5,
         # Pre-multiplied base + fractional per-level increment so final values
-        # (after existing *1.2 multiplier in skull_bomb_damage) are: Lv1=30, Lv6=50
+        # (after existing *1.2 multiplier in skullboom_damage) are: Lv1=30, Lv6=50
         "base_damage": 25,
         "damage_increase_per_level": 3.3333333333333335,
         "base_explosion_radius": 80,
         "radius_increase_per_level": 8,
     }
 )
+
+
+# Tenebrae weapon: arrow of tenebrae that pierces and decays per enemy
+WEAPON_DEFS["tenebrae"] = {
+    "name": "Tenebrae",
+    "description": (
+        "Arc of shadows that pierces enemies, " "losing power with each hit"
+    ),
+    "max_level": 6,
+    "upgrade_descriptions": {
+        1: "Lv1: Base damage 25, -20% per enemy hit",
+        2: "Lv2: +5 base damage, reduced cooldown",
+        3: "Lv3: -2% decay per target",
+        4: "Lv4: +5 base damage, reduced cooldown",
+        5: "Lv5: -2% decay per target",
+        6: "Lv6: Max base damage, minimal decay and cooldown",
+    },
+    # parametri usati dalle funzioni sottostanti
+    "base_damage": 25,  # tarato più basso
+    "damage_per_level": 5,
+    "decay_per_target": 0.20,  # 20 % in meno ad ogni nemico colpito (Lv1)
+    "decay_reduction_per_lvl": 0.02,  # ogni due livelli si riduce il decay
+    "base_cd": 2.0,
+    # cooldown improvement per level was 0.3; reduce so levels grant
+    # less cooldown benefit as requested
+    "cd_reduction_per_level": 0.15,
+    "min_cd": 0.4,
+    "speed": 400,  # relativamente lento
+    "available_from": "hell",  # only obtainable starting in HELL stages
+}
+
+
+def tenebrae_damage(level: int, base_player_damage: int, targets_hit: int) -> int:
+    """Danno inflitto al *targets_hit*-esimo nemico attraversato.
+
+    Il primo bersaglio prende il danno di base, ogni successivo subisce
+    un moltiplicatore (1‑decay) ripetuto per il numero di bersagli già
+    in fila. Il risultato viene poi scalato come nelle altre armi.
+    """
+    d = WEAPON_DEFS["tenebrae"]
+    lvl = max(1, min(int(level), d["max_level"]))
+
+    damage = d["base_damage"] + (lvl - 1) * d["damage_per_level"]
+
+    decay = max(
+        0.0,
+        d["decay_per_target"] - (lvl // 2) * d["decay_reduction_per_lvl"],
+    )
+
+    damage *= (1.0 - decay) ** targets_hit
+
+    # scala rispetto al danno del giocatore (rif.)
+
+    reference = 30.0
+    if base_player_damage is None:
+        base_player_damage = reference
+    damage *= base_player_damage / reference
+    return int(damage)
+
+
+def tenebrae_cooldown(level: int) -> float:
+    d = WEAPON_DEFS["tenebrae"]
+    lvl = max(1, min(int(level), d["max_level"]))
+    cd = d["base_cd"] - (lvl - 1) * d["cd_reduction_per_level"]
+    return max(d["min_cd"], cd)
 
 
 def get_orbital_count(level: int) -> int:
@@ -331,16 +396,16 @@ def DemonStrike_cooldown(level: int) -> float:
     return float(max(float(d.get("min_cd", 0.5) or 0.5), cd))
 
 
-def soul_drain_cd(level: int) -> float:
-    d = WEAPON_DEFS.get("Soul Drain", {})
+def flies_cd(level: int) -> float:
+    d = WEAPON_DEFS.get("Flies", {})
     base_cd = float(d.get("base_cd", 1.5) or 1.5)
     if level >= 4:
         base_cd -= float(d.get("cd_reduction_at_level_4", 0.3) or 0.3)
     return float(max(float(d.get("min_cd", 0.5) or 0.5), base_cd))
 
 
-def soul_drain_projectile_count(level: int) -> int:
-    d = WEAPON_DEFS.get("Soul Drain", {})
+def flies_projectile_count(level: int) -> int:
+    d = WEAPON_DEFS.get("Flies", {})
     # Base projectiles now come from definition (default 2)
     base = int(d.get("base_projectiles", 2) or 2)
     extra = 0
@@ -355,8 +420,8 @@ def soul_drain_projectile_count(level: int) -> int:
     return int(base + extra)
 
 
-def soul_drain_damage_heal_mult(level: int) -> tuple[float, float]:
-    d = WEAPON_DEFS.get("Soul Drain", {})
+def flies_damage_heal_mult(level: int) -> tuple[float, float]:
+    d = WEAPON_DEFS.get("Flies", {})
     incs = d.get("damage_heal_increments", {})
     mult = 1.0
     for thresh, inc in incs.items():
@@ -365,22 +430,22 @@ def soul_drain_damage_heal_mult(level: int) -> tuple[float, float]:
     return mult, mult
 
 
-def skull_bomb_cooldown(level: int) -> float:
-    d = WEAPON_DEFS.get("skull_bomb", {})
+def skullboom_cooldown(level: int) -> float:
+    d = WEAPON_DEFS.get("skullboom", {})
     base_cd = float(d.get("base_cd", 2.0) or 2.0)
     cd = base_cd - (level - 1) * float(d.get("cd_reduction_per_level", 0.15) or 0.15)
     return float(max(float(d.get("min_cd", 0.5) or 0.5), cd))
 
 
-def skull_bomb_damage(level: int) -> int:
-    d = WEAPON_DEFS.get("skull_bomb", {})
+def skullboom_damage(level: int) -> int:
+    d = WEAPON_DEFS.get("skullboom", {})
     base_damage = d.get("base_damage", 20)
     damage = base_damage + (level - 1) * d.get("damage_increase_per_level", 2)
     return int(damage * 1.2)  # 20% damage increase
 
 
-def skull_bomb_explosion_radius(level: int) -> int:
-    d = WEAPON_DEFS.get("skull_bomb", {})
+def skullboom_explosion_radius(level: int) -> int:
+    d = WEAPON_DEFS.get("skullboom", {})
     base_radius = int(d.get("base_explosion_radius", 50) or 50)
     return int(
         base_radius + (level - 1) * int(d.get("radius_increase_per_level", 5) or 5)
@@ -400,7 +465,7 @@ def get_weapon_upgrade_description(weapon: str, level: int) -> str:
 
     This function first attempts to return the explicit description from
     WEAPON_DEFS[weapon]["upgrade_descriptions"]. If not present, it will
-    try to normalize common naming differences (e.g., 'soul_drain' -> 'Soul Drain')
+    try to normalize common naming differences (e.g., 'flies' -> 'Flies')
     and finally attempt to infer a useful description from known weapon params
     (like projectile counts or damage increments) rather than returning a
     generic fallback.
@@ -441,9 +506,9 @@ def get_weapon_upgrade_description(weapon: str, level: int) -> str:
             cnt = get_orbital_count(level)
             return f"Lv{level}: {cnt} orbitals that auto-fire"
 
-        if weapon.lower() in ("soul drain", "soul_drain", "souldrain", "soul drain"):
-            projs = soul_drain_projectile_count(level)
-            dmg_mult, heal_mult = soul_drain_damage_heal_mult(level)
+        if weapon.lower() in ("flies", "fly", "flies"):
+            projs = flies_projectile_count(level)
+            dmg_mult, heal_mult = flies_damage_heal_mult(level)
             parts = [f"Lv{level}: Fires {projs} homing projectiles"]
             if abs(dmg_mult - 1.0) > 1e-6:
                 parts.append(f"Damage & heal x{dmg_mult:.2f}")
@@ -461,10 +526,10 @@ def get_weapon_upgrade_description(weapon: str, level: int) -> str:
                 f"Lv{level}: +{10 * level} base DemonStrike damage total (rough guide)"
             )
 
-        if weapon.lower() in ("skull_bomb", "skull bomb", "skullbomb"):
-            cd = skull_bomb_cooldown(level)
-            dmg = skull_bomb_damage(level)
-            radius = skull_bomb_explosion_radius(level)
+        if weapon.lower() in ("skullboom", "skull bomb", "skullboom"):
+            cd = skullboom_cooldown(level)
+            dmg = skullboom_damage(level)
+            radius = skullboom_explosion_radius(level)
             return f"Lv{level}: Damage {dmg}, radius {radius} (cooldown ~{cd:.2f}s)"
 
         if "damage_heal_increments" in w:
@@ -474,7 +539,7 @@ def get_weapon_upgrade_description(weapon: str, level: int) -> str:
                 if level >= thresh:
                     mult += inc
             if abs(mult - 1.0) > 1e-6:
-                return f"Lv{level}: +{int((mult-1.0)*100)}% damage & heal"
+                return f"Lv{level}: +{int((mult - 1.0) * 100)}% damage & heal"
     except Exception:
         pass
 

@@ -1,8 +1,15 @@
 """Centralized balance and gameplay tuning parameters."""
 
-# XP progression
+# XP progression (per-run leveling)
 XP_BASE: int = 100
 XP_GROWTH: float = 1.2
+
+# Meta‑progression (separate from per-run XP)
+# Used for permanent upgrade currency. Goals grow more steeply; players no
+# longer earn meta XP directly from score.  Instead XP must be granted
+# explicitly via game events or debug commands.
+META_XP_BASE: int = 100_000  # XP required for the first meta level (previously 1_000)
+META_XP_GROWTH: float = 1.3  # per-level multiplier for subsequent levels
 
 # Player defaults
 PLAYER_BASE_DAMAGE: int = 30  # doubled from 15 to increase base weapon damage

@@ -83,6 +83,10 @@ def test_projectile_effects_apply_to_dict_enemy_and_boss(source, expected_effect
     elif expected_effect == "slow":
         assert getattr(e, "slow_timer", 0) > 0
         assert getattr(e, "slow_factor", 1.0) != 1.0
+        # speed should drop compared to original
+        orig = getattr(e, "original_speed", None)
+        if orig is not None:
+            assert getattr(e, "speed", 0) < orig
 
     # Now test boss was affected by the same projectile as well
     # Use a fresh projectile placed directly on the boss to ensure boss receives the effect
@@ -114,3 +118,45 @@ def test_projectile_effects_apply_to_dict_enemy_and_boss(source, expected_effect
     elif expected_effect == "slow":
         assert getattr(boss, "slow_timer", 0) > 0
         assert getattr(boss, "slow_factor", 1.0) != 1.0
+        origb = getattr(boss, "original_speed", None)
+        if origb is not None:
+            assert getattr(boss, "speed", 0) < origb
+
+
+# regression test added for dict enemies slowing
+
+
+def test_ice_projectile_slow_applies_to_dict_enemy():
+    """Regression: ice projectiles must slow dictionary-style enemies without upgrades."""
+    from src.core.entities.tower import Tower
+
+    g = Game()
+    g.selected_stage = "limbo"
+    # ensure no ice skill tree upgrades
+    for k in list(g.permanent_stats.keys()):
+        if k.startswith("ice"):
+            g.permanent_stats[k] = 0
+    g.apply_permanent_stats()
+
+    enemy = {"x": 400, "y": 300, "radius": 12, "speed": 80}
+    g.enemies = [enemy]
+    proj = Tower(
+        320, 530, tower_type="ice", projectile_speed=100.0, inaccuracy=0.0
+    ).fire_at_closest([enemy])
+    proj.slow_duration = 120
+    proj.slow_factor = 0.5
+    proj.x = enemy["x"]
+    proj.y = enemy["y"]
+    try:
+        g.projectiles.add(proj)
+    except Exception:
+        g.projectiles.append(proj)
+
+    g.handle_collisions()
+
+    assert enemy.get("slow_timer", 0) > 0
+    assert enemy.get("slow_factor", 1.0) != 1.0
+    # speed reduction should be visible
+    assert enemy.get("speed", 0) < enemy.get(
+        "original_speed", enemy.get("speed", 0) / enemy.get("slow_factor", 1)
+    )

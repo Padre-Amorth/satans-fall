@@ -1,3 +1,9 @@
+import os
+
+# set dummy SDL driver for reliable headless test runs
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+
 import pygame
 
 from src.game import Game

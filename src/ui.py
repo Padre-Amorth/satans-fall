@@ -4,676 +4,109 @@ import os
 import random
 from typing import Any, Literal
 
-import pygame
-
 from src.assets.manager import get_image
-from src.game_constants import WALL_THICKNESS
-from src.weapons import (
-    WEAPON_DEFS,
-    shotgun_pellets,
-    skull_bomb_damage,
-    soul_drain_projectile_count,
+from src.game_constants import (
+    SELECTION_BOX_HEIGHT,
+    SELECTION_BOX_SPACING,
+    SELECTION_BOX_WIDTH,
+    WALL_THICKNESS,
 )
+from src.weapons import WEAPON_DEFS
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-
-class UIManager:
-    def __init__(self, game) -> None:
-        self.game: Any = game
-        self.canvas = game.canvas
-        self.width = game.width
-        self.height = game.height
-
-    def draw_ui(self) -> None:
-        """Draw all UI elements (HUD, messages, special effects)"""
-        # Draw basic HUD
-        self.draw_hud()
-
-        # Draw weapon HUD
-        self.draw_weapon_hud()
-
-        # Draw special effects
-        self.draw_special_effects()
-
-        # Draw selection screens
-        if self.game.game_state.awaiting_weapon_choice:
-            self.draw_weapon_selection()
-        elif self.game.game_state.awaiting_upgrade:
-            self.draw_upgrade_selection()
-        elif self.game.game_state.paused:
-            self.draw_pause_menu()
-
-    def draw_hud(self) -> None:
-        """Draw the main HUD elements"""
-        # Score
-        self.canvas.create_text(
-            10,
-            10,
-            text=f"Score: {int(self.game.game_state.score)}",
-            fill="#ffff00",
-            font=("Arial", 14),
-            anchor="nw",
-        )
-
-        # Wave
-        self.canvas.create_text(
-            10,
-            40,
-            text=f"Wave: {self.game.game_state.wave}",
-            fill="#ff6464",
-            font=("Arial", 14),
-            anchor="nw",
-        )
-
-        # Timer
-        minutes = int(self.game.game_state.time_elapsed // 60)
-        seconds = int(self.game.game_state.time_elapsed % 60)
-        self.canvas.create_text(
-            10,
-            70,
-            text=f"Time: {minutes}:{seconds:02d}",
-            fill="#64c8ff",
-            font=("Arial", 14),
-            anchor="nw",
-        )
-
-        # Health
-        self.canvas.create_text(
-            self.width - 10,
-            10,
-            text=f"Health: {int(self.game.player.health)}/{int(self.game.player.max_health)}",
-            fill="#c86464",
-            font=("Arial", 14),
-            anchor="ne",
-        )
-
-        # Level
-        self.canvas.create_text(
-            self.width - 10,
-            40,
-            text=f"Level {self.game.game_state.player_level}",
-            fill="#ffd700",
-            font=("Arial", 18, "bold"),
-            anchor="ne",
-        )
-
-        # XP Bar
-        self.draw_xp_bar()
-
-        # Center messages
-        self.draw_center_messages()
-
-    def draw_xp_bar(self) -> None:
-        """Draw the XP progress bar"""
-        xp_bar_width = 200
-        xp_bar_height = 20
-        xp_bar_x = self.width - 210
-        xp_bar_y = 65
-
-        # Background
-        self.canvas.create_rectangle(
-            xp_bar_x,
-            xp_bar_y,
-            xp_bar_x + xp_bar_width,
-            xp_bar_y + xp_bar_height,
-            fill="#323232",
-            outline="#969696",
-            width=2,
-        )
-
-        # XP fill
-        xp_ratio: float = min(
-            1.0, self.game.game_state.player_xp / self.game.game_state.xp_to_next_level
-        )
-        self.canvas.create_rectangle(
-            xp_bar_x,
-            xp_bar_y,
-            xp_bar_x + xp_bar_width * xp_ratio,
-            xp_bar_y + xp_bar_height,
-            fill="#64c8ff",
-            outline="",
-        )
-
-        # XP text
-        self.canvas.create_text(
-            xp_bar_x + xp_bar_width // 2,
-            xp_bar_y + xp_bar_height // 2,
-            text=f"{int(self.game.game_state.player_xp)}/{int(self.game.game_state.xp_to_next_level)}",
-            fill="#ffffff",
-            font=("Arial", 10, "bold"),
-        )
-
-    def draw_weapon_hud(self) -> None:
-        """Draw the weapon information HUD"""
-        hud_x = self.width - 10
-        hud_y = 65 + 20 + 12  # After XP bar
-        box_w = 170
-
-        # Extra weapons
-        if getattr(self.game.game_state, "player_weapons", None):
-            # Use centralized weapon names
-            name_map: dict[str, str] = {
-                wid: d["name"] for wid, d in WEAPON_DEFS.items()
-            }
-            for i, wid in enumerate(self.game.game_state.player_weapons):
-                lvl = self.game.game_state.weapon_levels.get(wid, 0)
-                display_name: str | None = name_map.get(wid, wid.capitalize())
-                display_text: str = f"{display_name} Lv{lvl}"
-                y: int = hud_y + i * 18
-                # Background box
-                self.canvas.create_rectangle(
-                    hud_x - box_w,
-                    y - 10,
-                    hud_x,
-                    y + 6,
-                    fill="#161616",
-                    outline="#444444",
-                )
-                self.canvas.create_text(
-                    hud_x - box_w // 2,
-                    y - 3,
-                    text=display_text,
-                    fill="#c8c8c8",
-                    font=("Arial", 10, "bold"),
-                )
-
-                # Compute & show exact damage info per weapon (safe — wrapped in try)
-                dmg_text = ""
-                try:
-                    # Basic effective player damage
-                    basic_damage = int(
-                        getattr(self.game, "player_damage", 0)
-                        * getattr(self.game, "damage_multiplier", 1.0)
-                    )
-
-                    if wid == "shotgun":
-                        slevel = self.game.weapon_levels.get("shotgun", 0)
-                        pellets = shotgun_pellets(slevel)
-                        dmg_mult = 1.0 + (slevel >= 3) * 0.1 + (slevel >= 5) * 0.1
-                        pellet_dmg = int(
-                            basic_damage
-                            * WEAPON_DEFS.get("shotgun", {}).get("damage_mult", 0.55)
-                            * dmg_mult
-                        )
-                        dmg_text = f"{pellet_dmg} dmg ×{pellets} pellets"
-                    elif wid == "orbital":
-                        olevel = self.game.weapon_levels.get("orbital", 0)
-                        o_dmg = int(
-                            8
-                            * getattr(self.game, "damage_multiplier", 1.0)
-                            * (1.0 + (olevel >= 3) * 0.1 + (olevel >= 5) * 0.1)
-                        )
-                        dmg_text = f"{o_dmg} dmg (per orbital)"
-                    elif wid == "spear":
-                        slevel = self.game.weapon_levels.get("spear", 0)
-                        spear_dmg = max(
-                            2,
-                            int(
-                                basic_damage
-                                * getattr(self.game, "damage_multiplier", 1.0)
-                                * 0.5
-                                + slevel * 2
-                            ),
-                        )
-                        dmg_text = f"{spear_dmg} dmg (piercing)"
-                    elif wid == "Soul Drain":
-                        slevel = self.game.weapon_levels.get("Soul Drain", 0)
-                        proj_count = soul_drain_projectile_count(slevel)
-                        base_sd = WEAPON_DEFS.get("Soul Drain", {}).get(
-                            "base_damage", 10
-                        )
-                        dmg_mult = 1.0 + (slevel >= 3) * 0.1 + (slevel >= 5) * 0.1
-                        sd_dmg = int(base_sd * dmg_mult)
-                        dmg_text = f"{sd_dmg} dmg ×{proj_count} proj"
-                    elif wid == "beast":
-                        blevel = self.game.weapon_levels.get("beast", 0)
-                        mult = 1 + blevel * 0.05
-                        dmg_text = (
-                            f"Basic dmg: {int(basic_damage * mult)} ({int(mult*100)}%)"
-                        )
-                    elif wid == "skull_bomb":
-                        slevel = self.game.weapon_levels.get("skull_bomb", 0)
-                        kb_dmg = skull_bomb_damage(slevel)
-                        dmg_text = f"{kb_dmg} explosion dmg"
-                    else:
-                        # Fallback: show player's basic damage
-                        dmg_text = f"Base dmg: {basic_damage}"
-                except Exception:
-                    dmg_text = ""
-
-                if dmg_text:
-                    self.canvas.create_text(
-                        hud_x - box_w // 2,
-                        y + 7,
-                        text=dmg_text,
-                        fill="#9aa9b2",
-                        font=("Arial", 8),
-                    )
-
-                # MAX indicator
-                if lvl >= getattr(self.game.game_state, "max_weapon_level", 6):
-                    self.canvas.create_text(
-                        hud_x - 12,
-                        y - 3,
-                        text="MAX",
-                        fill="#ffd700",
-                        font=("Arial", 8, "bold"),
-                    )
-
-    def draw_center_messages(self) -> None:
-        """Draw centered messages with shadows"""
-        if getattr(self.game.game_state, "center_messages", None):
-            for m in self.game.game_state.center_messages[:]:
-                # Shadow for readability
-                try:
-                    self.canvas.create_text(
-                        self.width // 2 + 2,
-                        self.height // 2 - 78,
-                        text=m["text"],
-                        fill="black",
-                        font=m["font"],
-                    )
-                    self.canvas.create_text(
-                        self.width // 2,
-                        self.height // 2 - 80,
-                        text=m["text"],
-                        fill=m["color"],
-                        font=m["font"],
-                    )
-                except Exception:
-                    pass
-                m["frames"] -= 1
-                if m["frames"] <= 0:
-                    self.game.game_state.center_messages.remove(m)
-
-    def draw_special_effects(self) -> None:
-        """Draw special UI effects like lightning and spine effects"""
-        # Divine lightning effect
-        if (
-            self.game.game_state.selected_stage == "prologo"
-            and self.game.game_state.prologo_lightning_strike
-        ):
-            self.draw_lightning_effect()
-
-        # Spine effect (thorns)
-        self.draw_spine_effect()
-
-    def draw_lightning_effect(self) -> None:
-        """Draw the divine lightning strike effect"""
-        # Full screen white flash with pulsing
-        flash_alpha: float = abs(math.sin(self.game.frame_count * 0.3))
-        if flash_alpha > 0.3:
-            self.canvas.create_rectangle(
-                0, 0, self.width, self.height, fill="#ffffff", stipple="gray25"
-            )
-
-        # Falling light beam from above (replaces bolt)
-        t: Any | int = getattr(self.game.game_state, "prologo_lightning_timer", 0)
-        pts: Any | None = getattr(self.game.game_state, "lightning_points", None)
-        if pts and len(pts) > 0:
-            end_x, end_y = pts[-1]
-        else:
-            end_x = int(getattr(self.game.player, "x", self.width // 2))
-            end_y = int(getattr(self.game.player, "y", self.height - 80))
-        # Beam fall progress (fast initial fall)
-        fall_frames = 30
-        progress: float = min(1.0, t / float(fall_frames))
-        beam_y = int(end_y * progress)
-        # Beam widths scale with progress
-        outer_w = int(max(30, 180 * (0.2 + 0.8 * progress)))
-        core_w = int(max(6, 40 * progress))
-        # Outer glow rectangle (top -> current beam_y)
-        self.canvas.create_rectangle(
-            end_x - outer_w // 2,
-            0,
-            end_x + outer_w // 2,
-            beam_y,
-            fill="#fff8e6",
-            outline="",
-        )
-        # Inner core
-        self.canvas.create_rectangle(
-            end_x - core_w // 2,
-            0,
-            end_x + core_w // 2,
-            beam_y,
-            fill="#ffffe0",
-            outline="",
-        )
-        # Thin bright center line
-        self.canvas.create_line(
-            end_x,
-            0,
-            end_x,
-            beam_y,
-            fill="#fff8b0",
-            width=3,
-        )
-        # Impact explosion (pulsing)
-        max_radius = 160
-        duration = float(getattr(self.game, "prologo_lightning_duration_frames", 180))
-        radius = int(min(max_radius, (t / duration) * max_radius + 8))
-        pulse: float = (math.sin(self.game.frame_count * 0.25) + 1) * 0.5
-        self.canvas.create_oval(
-            end_x - int(radius * 1.1),
-            end_y - int(radius * 1.1),
-            end_x + int(radius * 1.1),
-            end_y + int(radius * 1.1),
-            fill="#fff0d8",
-            outline="",
-        )
-        self.canvas.create_oval(
-            end_x - int(radius * 0.6 + pulse * 8),
-            end_y - int(radius * 0.6 + pulse * 8),
-            end_x + int(radius * 0.6 + pulse * 8),
-            end_y + int(radius * 0.6 + pulse * 8),
-            fill="#ffffe0",
-            outline="",
-        )
-
-    def draw_spine_effect(self) -> None:
-        """Draw the spine/thorns effect on enemies"""
-        for enemy in self.game.enemy_manager.enemies:
-            if enemy.get("spine_timer", 0) > 0 and "spine_from" in enemy:
-                try:
-                    ex, ey = enemy["x"], enemy["y"]
-                    spine_from = enemy["spine_from"]
-                    if (
-                        isinstance(spine_from, (list, tuple))
-                        and len(spine_from) == 2
-                        and all(isinstance(v, (int, float)) for v in spine_from)
-                    ):
-                        px, py = spine_from
-                        # Draw light effect: a few glowing circles between player and enemy
-                        for t in [0.25, 0.5, 0.75]:
-                            lx = px + (ex - px) * t
-                            ly = py + (ey - py) * t
-                            r: float = 18 + 6 * random.random()
-                            color: str = (
-                                "#ffffcc"
-                                if self.game.frame_count % 2 == 0
-                                else "#fffbe0"
-                            )
-                            self.canvas.create_oval(
-                                lx - r,
-                                ly - r,
-                                lx + r,
-                                ly + r,
-                                fill=color,
-                                outline="#fff700",
-                                width=2,
-                            )
-                        # Small flash at enemy
-                        self.canvas.create_oval(
-                            ex - 12,
-                            ey - 12,
-                            ex + 12,
-                            ey + 12,
-                            fill="#fffbe0",
-                            outline="#fff700",
-                            width=3,
-                        )
-                except Exception as e:
-                    print(f"[SPINE EFFECT ERROR] {e}")
-                enemy["spine_timer"] -= 1
-                if enemy["spine_timer"] <= 0:
-                    enemy.pop("spine_from", None)
-
-    def draw_weapon_selection(self) -> None:
-        """Draw the weapon selection screen"""
-        # Semi-transparent overlay
-        self.canvas.create_rectangle(
-            0, 0, self.width, self.height, fill="#000000", stipple="gray50"
-        )
-
-        # Title
-        self.canvas.create_text(
-            self.width // 2,
-            100,
-            text="CHOOSE YOUR WEAPON",
-            fill="#ffd700",
-            font=("Arial", 24, "bold"),
-        )
-
-        # Weapon options
-        weapon_options: list[tuple[str, str]] = [
-            (
-                "Hellgun",
-                "Powerful close-range spread. Pellets use player base damage (30).",
-            ),
-            (
-                "Orbitals",
-                "Orbiting sentinels that auto-fire (damage scales with player base damage).",
-            ),
-            (
-                "Spear",
-                "Piercing projectile — damage scales with player damage; +2 per level.",
-            ),
-        ]
-
-        start_y = 200
-        spacing = 80
-
-        for i, (name, desc) in enumerate(weapon_options):
-            y: int = start_y + i * spacing
-            color: str = (
-                "#ffffff"
-                if i != self.game.game_state.selected_weapon_index
-                else "#ffff00"
-            )
-
-            # Weapon name
-            self.canvas.create_text(
-                self.width // 2, y, text=name, fill=color, font=("Arial", 18, "bold")
-            )
-
-            # Description
-            self.canvas.create_text(
-                self.width // 2, y + 25, text=desc, fill="#cccccc", font=("Arial", 12)
-            )
-
-            # Selection indicator
-            if i == self.game.game_state.selected_weapon_index:
-                self.canvas.create_text(
-                    self.width // 2 - 150,
-                    y,
-                    text=">",
-                    fill="#ffff00",
-                    font=("Arial", 20, "bold"),
-                )
-                self.canvas.create_text(
-                    self.width // 2 + 150,
-                    y,
-                    text="<",
-                    fill="#ffff00",
-                    font=("Arial", 20, "bold"),
-                )
-
-        # Instructions
-        self.canvas.create_text(
-            self.width // 2,
-            self.height - 100,
-            text="Use UP/DOWN to select, ENTER to confirm",
-            fill="#888888",
-            font=("Arial", 14),
-        )
-
-    def draw_upgrade_selection(self) -> None:
-        """Draw the upgrade selection screen"""
-        # Semi-transparent overlay
-        self.canvas.create_rectangle(
-            0, 0, self.width, self.height, fill="#000000", stipple="gray50"
-        )
-
-        # Title
-        self.canvas.create_text(
-            self.width // 2,
-            100,
-            text="CHOOSE YOUR UPGRADE",
-            fill="#ffd700",
-            font=("Arial", 24, "bold"),
-        )
-
-        # Upgrade options
-        upgrade_options: list[tuple[str, str]] = [
-            ("Health +20", "Increase maximum health"),
-            ("Speed +10%", "Move faster"),
-            ("Damage +15%", "Deal more damage"),
-        ]
-
-        start_y = 200
-        spacing = 80
-
-        for i, (name, desc) in enumerate(upgrade_options):
-            y: int = start_y + i * spacing
-            color: str = (
-                "#ffffff"
-                if i != self.game.game_state.selected_upgrade_index
-                else "#ffff00"
-            )
-
-            # Upgrade name
-            self.canvas.create_text(
-                self.width // 2, y, text=name, fill=color, font=("Arial", 18, "bold")
-            )
-
-            # Description
-            self.canvas.create_text(
-                self.width // 2, y + 25, text=desc, fill="#cccccc", font=("Arial", 12)
-            )
-
-            # Selection indicator
-            if i == self.game.game_state.selected_upgrade_index:
-                self.canvas.create_text(
-                    self.width // 2 - 150,
-                    y,
-                    text=">",
-                    fill="#ffff00",
-                    font=("Arial", 20, "bold"),
-                )
-                self.canvas.create_text(
-                    self.width // 2 + 150,
-                    y,
-                    text="<",
-                    fill="#ffff00",
-                    font=("Arial", 20, "bold"),
-                )
-
-        # Instructions
-        self.canvas.create_text(
-            self.width // 2,
-            self.height - 100,
-            text="Use UP/DOWN to select, ENTER to confirm",
-            fill="#888888",
-            font=("Arial", 14),
-        )
-
-    def draw_pause_menu(self) -> None:
-        """Draw the pause menu"""
-        # Semi-transparent overlay
-        self.canvas.create_rectangle(
-            0, 0, self.width, self.height, fill="#000000", stipple="gray75"
-        )
-
-        # Title
-        self.canvas.create_text(
-            self.width // 2,
-            150,
-            text="PAUSED",
-            fill="#ffffff",
-            font=("Arial", 32, "bold"),
-        )
-
-        # Menu options
-        menu_options: list[str] = ["Resume", "Restart", "Quit"]
-        start_y = 250
-        spacing = 60
-
-        for i, option in enumerate(menu_options):
-            y: int = start_y + i * spacing
-            color: str = (
-                "#ffffff" if i != self.game.game_state.pause_menu_index else "#ffff00"
-            )
-
-            self.canvas.create_text(
-                self.width // 2, y, text=option, fill=color, font=("Arial", 20, "bold")
-            )
-
-            # Selection indicator
-            if i == self.game.game_state.pause_menu_index:
-                self.canvas.create_text(
-                    self.width // 2 - 120,
-                    y,
-                    text=">",
-                    fill="#ffff00",
-                    font=("Arial", 24, "bold"),
-                )
-                self.canvas.create_text(
-                    self.width // 2 + 120,
-                    y,
-                    text="<",
-                    fill="#ffff00",
-                    font=("Arial", 24, "bold"),
-                )
-
-        # Stats display
-        stats_y: int = start_y + len(menu_options) * spacing + 50
-        self.canvas.create_text(
-            self.width // 2,
-            stats_y,
-            text="GAME STATISTICS",
-            fill="#ffd700",
-            font=("Arial", 18, "bold"),
-        )
-
-        stats_y += 40
-        self.canvas.create_text(
-            self.width // 2,
-            stats_y,
-            text=f"Score: {int(self.game.game_state.score)}",
-            fill="#ffff00",
-            font=("Arial", 14),
-        )
-        stats_y += 25
-        self.canvas.create_text(
-            self.width // 2,
-            stats_y,
-            text=f"Wave: {self.game.game_state.wave}",
-            fill="#ff6464",
-            font=("Arial", 14),
-        )
-        stats_y += 25
-        minutes = int(self.game.game_state.time_elapsed // 60)
-        seconds = int(self.game.game_state.time_elapsed % 60)
-        self.canvas.create_text(
-            self.width // 2,
-            stats_y,
-            text=f"Time: {minutes}:{seconds:02d}",
-            fill="#64c8ff",
-            font=("Arial", 14),
-        )
-        stats_y += 25
-        self.canvas.create_text(
-            self.width // 2,
-            stats_y,
-            text=f"Level: {self.game.game_state.player_level}",
-            fill="#ffd700",
-            font=("Arial", 14),
-        )
-
-        # Instructions
-        self.canvas.create_text(
-            self.width // 2,
-            self.height - 80,
-            text="Use UP/DOWN to select, ENTER to confirm",
-            fill="#888888",
-            font=("Arial", 14),
-        )
+# NOTE: Legacy UIManager (Tkinter-based) class removed — all rendering
+# is handled by PygameUIManager below.
 
 
 class PygameUIManager:
     """A Pygame-specific UI manager which encapsulates all drawing logic previously inside Game."""
+
+    class FogParticle:
+        """Particle representing a single fog blob in the dynamic fog system."""
+
+        def __init__(self, ui, image):
+            self.ui = ui
+            self.image = image
+            self.width = image.get_width()
+            self.reset(start_random=True)
+
+        def reset(self, start_random=False):
+            WIDTH = self.ui.width
+            HEIGHT = self.ui.height
+            # import speed/amplitude constants locally to avoid NameError
+            from src.game_constants import (
+                FOG_AMPLITUDE_RANGE,
+                FOG_MAX_SPEED,
+                FOG_MIN_SPEED,
+                FOG_TIMER_RANGE,
+            )
+
+            # allow particles to occupy top ~40%; bottom of texture <=40%
+            y_limit = int(HEIGHT * 0.4)
+            if start_random:
+                self.x = random.randint(-self.width, WIDTH)
+            else:
+                self.x = -self.width
+            # ensure y + height <= y_limit
+            max_y = y_limit - self.width
+            # y can start fairly high (negative) to create cut‑off effect
+            self.y = random.randint(
+                -self.width, max_y if max_y >= -self.width else -self.width
+            )
+            self.speed = random.uniform(FOG_MIN_SPEED, FOG_MAX_SPEED)
+            self.amplitude = random.uniform(*FOG_AMPLITUDE_RANGE)
+            self.timer = random.uniform(*FOG_TIMER_RANGE)
+
+        def update(self):
+            # horizontal drift
+            self.x += self.speed
+            # sine-wave vertical wobble
+            self.timer += 0.02
+            y_offset = math.sin(self.timer) * 0.5
+            self.y += y_offset
+            # wrap or reset when off right edge
+            if self.x > self.ui.width:
+                self.reset()
+
+        def _apply_tint(self, color):
+            """Pre-bake a tinted copy of the texture for the given color.
+
+            Called once when the stage color changes instead of every frame,
+            so draw() can do a single cheap blit.
+            """
+            pygame_mod = self.ui.pygame
+            img = self.image.copy()
+            tint_surf = pygame_mod.Surface(img.get_size(), pygame_mod.SRCALPHA)
+            tint_surf.fill((*color, 255))
+            img.blit(tint_surf, (0, 0), special_flags=pygame_mod.BLEND_RGBA_MULT)
+            try:
+                if (
+                    getattr(pygame_mod, "display", None)
+                    and pygame_mod.display.get_init()
+                ):
+                    img = img.convert_alpha()
+            except Exception:
+                pass
+            self._tinted_image = img
+            self._tinted_color = color
+
+        def draw(self, surface):
+            from src.game_constants import FOG_COLOR, PURGATORY_FOG_COLORS
+
+            stage = getattr(self.ui.game, "selected_stage", None)
+            color = PURGATORY_FOG_COLORS.get(stage, FOG_COLOR)
+            # rebuild tinted texture only when color changes (not every frame)
+            if getattr(self, "_tinted_color", None) != color:
+                try:
+                    self._apply_tint(color)
+                except Exception:
+                    self._tinted_image = self.image
+                    self._tinted_color = color
+            try:
+                surface.blit(self._tinted_image, (self.x, self.y))
+            except Exception:
+                surface.blit(self.image, (self.x, self.y))
 
     def __init__(self, game) -> None:
         # Defer importing pygame to runtime (helps tests without SDL)
@@ -688,9 +121,172 @@ class PygameUIManager:
         self.width: Any | int = getattr(game, "width", 0)
         self.height: Any | int = getattr(game, "height", 0)
 
-        # Limbo fog particles (visual-only, spawned outside the battlefield walls)
-        self._limbo_fog_particles: list[dict] = []
-        self._limbo_fog_spawn_acc: float = 0.0
+        # Purgatory fog particles (visual-only, spawned in the lateral areas outside walls)
+        self._purgatory_fog_particles: list[dict] = []
+        self._purgatory_fog_spawn_acc: float = 0.0
+
+        # New cloud shapes floating near the top in Purgatory
+        self._purgatory_clouds: list[dict] = []
+
+        # Dynamic fog blobs introduced from external script
+        self._init_fog_particles()
+
+    def _calculate_meta_xp_fill(self, xp: int, xp_to: int, bar_width: int) -> int:
+        """Compute fill width for the meta‑XP bar.
+
+        This method guarantees that any positive XP produces at least one pixel of
+        fill so the bar visibly advances even when the threshold is very large
+        (e.g. 100 000).  We expose it separately so unit tests can verify the
+        behaviour without rendering.
+        """
+        if xp_to <= 0:
+            return 0
+        ratio = min(1.0, xp / max(1, xp_to))
+        fill = int(bar_width * ratio)
+        if xp > 0 and fill == 0:
+            fill = 1
+        return fill
+
+    def _spawn_purgatory_fog_particles(self) -> None:
+        """Legacy helper that would spawn fog particles along the exterior walls.
+
+        The particle effect was removed; this method is now a no-op but is kept
+        around in case external code still references it.  Calling it will not
+        modify ``_purgatory_fog_particles``.
+        """
+        # nothing to do other than clear any remnants
+        try:
+            self._purgatory_fog_particles = []
+        except Exception:
+            pass
+
+    def _update_and_draw_purgatory_fog_particles(self) -> None:
+        """Legacy updater/drawer for purgatory fog particles.
+
+        The system no longer emits or displays particles; this helper simply
+        clears the list if present and returns quietly for compatibility.
+        """
+        # clear the list to avoid accumulation from old usage and exit
+        try:
+            self._purgatory_fog_particles = []
+        except Exception:
+            pass
+
+    # -- new cloud particle helpers ------------------------------------------------
+    def _spawn_purgatory_clouds(self) -> None:
+        """Legacy helper for purgatory cloud shapes.
+
+        Clouds were removed by user request; this method now clears any existing
+        descriptors and does nothing when called.  It is preserved only for
+        compatibility with existing calls elsewhere in the codebase.
+
+        *Optimization note*: when clouds were active they were generated at half
+        canvas resolution and converted with ``convert_alpha()`` – this trimmed
+        pixel work by roughly 75%.  If the system ever returns, keep that
+        strategy in mind.
+        """
+        try:
+            self._purgatory_clouds = []
+        except Exception:
+            pass
+
+    # --- new fog particle system helpers ------------------------------------------------
+    # ── Fog / cloud optimization notes ───────────────────────────────────────
+    #
+    # Elemento,Tecnica di Ottimizzazione,Risultato
+    # Fog Surface (Statica),.convert() + .set_alpha(),Carico CPU quasi nullo.
+    # Nuvole (Dinamiche),.convert_alpha() + Downsampling (tela 1/2),
+    #     Risparmio del 75% dei calcoli sui pixel.
+    #
+    # The table above documents the two main tricks we apply below: static
+    # fog layers are pre‑converted to the display format and given a fixed
+    # alpha so blits are blazingly cheap; dynamic elements (historically
+    # purgatory clouds) are spawned at half resolution and use convert_alpha
+    # to keep per‑pixel transparency while still being fast.  The cloud
+    # helpers are currently no‑ops but the comments stay in case they return.
+
+    def _create_fog_texture(self, size, color, alpha):
+        """Create a circular gradient texture used by each fog particle.
+
+        The resulting surface is not converted here because we may need to
+        draw onto it repeatedly before use; consumers should call
+        ``convert_alpha()`` if they intend to blit it many times.  We
+        explicitly avoid conversion during headless testing since SDL
+        dummy drivers don't support it.
+        """
+        try:
+            pygame = self.pygame
+            surf = pygame.Surface((size, size), pygame.SRCALPHA)
+            for r in range(size // 2, 0, -1):
+                current_alpha = int(alpha * (1 - (r / (size // 2)) ** 2))
+                pygame.draw.circle(
+                    surf, (*color, current_alpha), (size // 2, size // 2), r
+                )
+            # avoid convert_alpha in headless/test environments
+            if getattr(pygame, "display", None) and pygame.display.get_init():
+                try:
+                    surf = surf.convert_alpha()
+                except Exception:
+                    pass
+            return surf
+        except Exception:
+            return None
+
+    def _init_fog_particles(self) -> None:
+        """Create the static texture and initial particle list."""
+        try:
+            from src.game_constants import (
+                FOG_ALPHA,
+                FOG_COLOR,
+                FOG_PARTICLE_COUNT,
+                FOG_TEXTURE_SIZE,
+            )
+
+            # create texture once
+            tex = self._create_fog_texture(FOG_TEXTURE_SIZE, FOG_COLOR, FOG_ALPHA)
+            self._fog_particles: list[PygameUIManager.FogParticle] = []
+            if tex:
+                for _ in range(FOG_PARTICLE_COUNT):
+                    self._fog_particles.append(PygameUIManager.FogParticle(self, tex))
+            else:
+                self._fog_particles = []
+        except Exception:
+            self._fog_particles = []
+
+    def _update_and_draw_fog_particles(self) -> None:
+        """Update positions and render all fog particles to the screen."""
+        try:
+            for p in list(getattr(self, "_fog_particles", [])):
+                p.update()
+                # clamp bottom edge within top 40% after update
+                if p.y + p.width > self.height * 0.4:
+                    p.y = self.height * 0.4 - p.width
+                if self.screen and self.pygame:
+                    p.draw(self.screen)
+        except Exception:
+            pass
+
+    def _update_and_draw_purgatory_clouds(self) -> None:
+        """Legacy updater/drawer for purgatory cloud shapes.
+
+        Since clouds have been removed, this helper simply wipes the list and
+        returns without drawing.
+        """
+        try:
+            self._purgatory_clouds = []
+        except Exception:
+            pass
+
+    def draw_purgatory_clouds(self, shake_x=0, shake_y=0) -> None:
+        """Public entry point used by Game.draw to render purgatory clouds.
+
+        Clouds have been removed; this stub clears any existing list and does
+        nothing else.  It remains so `Game.draw` can call it safely.
+        """
+        try:
+            self._purgatory_clouds = []
+        except Exception:
+            pass
 
     def draw_game_world(self, shake_x=0, shake_y=0) -> None:
         """Draw walls, buildings and background following the original implementation."""
@@ -722,11 +318,13 @@ class PygameUIManager:
                 [(p[0] + shake_x, p[1] + shake_y) for p in inside_points],
             )
 
-        # Fill inside battlefield with dark orange for limbo
+        # Fill inside battlefield with dark orange for limbo (unless a
+        # background image was already drawn inside the walls).
         elif (
             self.game.is_limbo_stage()
             and self.game.left_wall_points
             and self.game.right_wall_points
+            and not getattr(self.game, "background_image_drawn", False)
         ):
             inside_points = (
                 self.game.left_wall_points + self.game.right_wall_points[::-1]
@@ -743,6 +341,7 @@ class PygameUIManager:
             and str(self.game.selected_stage).startswith(("purgatory", "hell"))
             and self.game.left_wall_points
             and self.game.right_wall_points
+            and not getattr(self.game, "background_image_drawn", False)
         ):
             inside_points = (
                 self.game.left_wall_points + self.game.right_wall_points[::-1]
@@ -966,7 +565,8 @@ class PygameUIManager:
             and self.game.buildings
             and settings.get("building_color")
         ):
-            building_color = settings["building_color"]
+            # building_color is present in settings but not needed for procedural drawing
+            pass
 
             # Sort buildings by x position for consistent left/center/right assignment
             sorted_buildings = sorted(self.game.buildings, key=lambda b: b["x"])
@@ -1494,11 +1094,11 @@ class PygameUIManager:
             labels: list[str] = ["LIMBO 1", "LIMBO 2", "LIMBO 3"]
             for i, label in enumerate(labels):
                 rect = pygame.Rect(start_x, start_y + i * spacing, option_w, option_h)
-                hovered: bool = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-                bg: tuple[int, int, int] = (137, 78, 36) if hovered else (107, 58, 26)
+                hovered = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+                bg = (137, 78, 36) if hovered else (107, 58, 26)
                 pygame.draw.rect(self.screen, bg, rect)
                 pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
-                text: pygame.Surface = font_medium.render(label, True, (255, 255, 255))
+                text = font_medium.render(label, True, (255, 255, 255))
                 self.screen.blit(
                     text,
                     (
@@ -1521,7 +1121,7 @@ class PygameUIManager:
             )
             pygame.draw.rect(self.screen, back_color, back_rect)
             pygame.draw.rect(self.screen, (255, 255, 255), back_rect, 2)
-            back_text: pygame.Surface = font_small.render("BACK", True, (255, 255, 255))
+            back_text = font_small.render("BACK", True, (255, 255, 255))
             self.screen.blit(
                 back_text,
                 (
@@ -1560,7 +1160,7 @@ class PygameUIManager:
                 bg: tuple[int, int, int] = (137, 78, 136) if hovered else (107, 58, 106)
                 pygame.draw.rect(self.screen, bg, rect)
                 pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
-                text: pygame.Surface = font_medium.render(label, True, (255, 255, 255))
+                text = font_medium.render(label, True, (255, 255, 255))
                 self.screen.blit(
                     text,
                     (
@@ -1583,7 +1183,7 @@ class PygameUIManager:
             )
             pygame.draw.rect(self.screen, back_color, back_rect)
             pygame.draw.rect(self.screen, (255, 255, 255), back_rect, 2)
-            back_text: pygame.Surface = font_small.render("BACK", True, (255, 255, 255))
+            back_text = font_small.render("BACK", True, (255, 255, 255))
             self.screen.blit(
                 back_text,
                 (
@@ -1622,7 +1222,7 @@ class PygameUIManager:
                 bg: tuple[int, int, int] = (189, 89, 89) if hovered else (139, 69, 69)
                 pygame.draw.rect(self.screen, bg, rect)
                 pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
-                text: pygame.Surface = font_medium.render(label, True, (255, 255, 255))
+                text = font_medium.render(label, True, (255, 255, 255))
                 self.screen.blit(
                     text,
                     (
@@ -1645,7 +1245,7 @@ class PygameUIManager:
             )
             pygame.draw.rect(self.screen, back_color, back_rect)
             pygame.draw.rect(self.screen, (255, 255, 255), back_rect, 2)
-            back_text: pygame.Surface = font_small.render("BACK", True, (255, 255, 255))
+            back_text = font_small.render("BACK", True, (255, 255, 255))
             self.screen.blit(
                 back_text,
                 (
@@ -1685,9 +1285,7 @@ class PygameUIManager:
         )  # Lighter red when hovered
         pygame.draw.rect(self.screen, prologo_color, prologo_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), prologo_rect, 2)  # White border
-        prologo_text: pygame.Surface = font_medium.render(
-            "PROLOGUE", True, (255, 255, 255)
-        )
+        prologo_text = font_medium.render("PROLOGUE", True, (255, 255, 255))
         self.screen.blit(
             prologo_text,
             (
@@ -1707,7 +1305,7 @@ class PygameUIManager:
         ) = ((137, 78, 36) if limbo_hovered else (107, 58, 26))
         pygame.draw.rect(self.screen, limbo_color, limbo_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), limbo_rect, 2)
-        limbo_text: pygame.Surface = font_medium.render("LIMBO", True, (255, 255, 255))
+        limbo_text = font_medium.render("LIMBO", True, (255, 255, 255))
         self.screen.blit(
             limbo_text,
             (
@@ -1729,9 +1327,7 @@ class PygameUIManager:
         ) = ((137, 78, 136) if purgatory_hovered else (107, 58, 106))
         pygame.draw.rect(self.screen, purgatory_color, purgatory_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), purgatory_rect, 2)
-        purgatory_text: pygame.Surface = font_medium.render(
-            "PURGATORY", True, (255, 255, 255)
-        )
+        purgatory_text = font_medium.render("PURGATORY", True, (255, 255, 255))
         self.screen.blit(
             purgatory_text,
             (
@@ -1753,7 +1349,7 @@ class PygameUIManager:
         )  # Lighter red when hovered
         pygame.draw.rect(self.screen, hell_color, hell_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), hell_rect, 2)
-        hell_text: pygame.Surface = font_medium.render("HELL", True, (255, 255, 255))
+        hell_text = font_medium.render("HELL", True, (255, 255, 255))
         self.screen.blit(
             hell_text,
             (
@@ -1783,7 +1379,7 @@ class PygameUIManager:
         )  # Brighter gold when hovered
         pygame.draw.rect(self.screen, upgrades_bg_color, upgrades_rect)
         pygame.draw.rect(self.screen, upgrades_border_color, upgrades_rect, 2)
-        upgrades_text: pygame.Surface = font_small.render(
+        upgrades_text = font_small.render(
             "PERMANENT UPGRADES", True, upgrades_border_color
         )
         self.screen.blit(
@@ -2062,10 +1658,34 @@ class PygameUIManager:
             title, (self.width // 2 - title.get_width() // 2 + shake_x, 40 + shake_y)
         )
 
-        subtitle = font_small.render(
-            "Upgrade your demonic powers", True, (136, 136, 136)
+        # subtitle was removed per design; we no longer render any text above the
+        # XP bar.  (Previously it said "Upgrade your demonic powers".)
+
+        # --- progression info ---
+        lvl = self.game.global_progress.get("meta_level", 1)
+        pts = self.game.global_progress.get("meta_points", 0)
+        xp = self.game.global_progress.get("meta_xp", 0)
+        xp_to = self.game.get_meta_xp_to_next_level()
+        # rename label to SATAN LEVEL as requested by designer
+        meta_text = font_medium.render(
+            f"SATAN LEVEL {lvl}   Points: {pts}", True, (255, 215, 0)
         )
-        self.screen.blit(subtitle, (left_x + shake_x, 85 + shake_y))
+        self.screen.blit(
+            meta_text,
+            (left_x + shake_x, 110 + shake_y),
+        )
+        # draw XP bar background
+        bar_x = left_x + 220
+        bar_w = 300
+        bar_y = 114
+        bar_h = 10
+        pygame.draw.rect(self.screen, (26, 26, 26), (bar_x, bar_y, bar_w, bar_h))
+        # compute filled width with minimum visibility for tiny XP
+        fill_w = self._calculate_meta_xp_fill(xp, xp_to, bar_w)
+        pygame.draw.rect(self.screen, (255, 215, 0), (bar_x, bar_y, fill_w, bar_h))
+        # numeric indicator showing current and required XP
+        xp_text = font_small.render(f"{xp}/{xp_to} XP", True, (255, 215, 0))
+        self.screen.blit(xp_text, (bar_x + bar_w + 8 + shake_x, bar_y - 2 + shake_y))
 
         # POWER / VIGOR / ADRENALINE / STRUCTURE stats
         stat_configs: list[dict] = [
@@ -2102,6 +1722,19 @@ class PygameUIManager:
             except Exception:
                 is_hovered = False
             stat_value = self.game.permanent_stats.get(stat["key"], 0)
+
+            # Previously we showed a tooltip with explanation text when the
+            # player hovered any of the four permanent stats.  Design has since
+            # changed: the side text (to the right of the bar) is sufficient and
+            # the hover pop‑ups are now distracting.  We intentionally no longer
+            # render anything here, but leave the hover detection in place in
+            # case we want to visually alter the name (see colouring below).
+            #
+            # (This block used to call ``permanent_stat_effect_text`` and draw a
+            # gray box with the lines.)
+            #
+            # is_hovered is still used later when colouring the stat name, so
+            # we keep the variable around but ignore it for tooltips.
             name_color = stat["color"]
             if is_hovered and stat_value < 10:
                 col = stat["color"]
@@ -2225,7 +1858,7 @@ class PygameUIManager:
                 except Exception:
                     pass
 
-                key = f"blasphemy_{row_idx*5 + col + 1}"
+                key = f"blasphemy_{row_idx * 5 + col + 1}"
                 lvl = self.game.permanent_stats.get(key, 0)
 
                 # Render roman numerals for blasphemies that show level text (include single-level slots 5 & 10)
@@ -2260,12 +1893,13 @@ class PygameUIManager:
                     lines = [
                         s.strip() for s in (effect_text or "").split(";") if s.strip()
                     ]
-                    if lvl:
-                        lines.insert(0, f"Level: {lvl}")
+                    # Always show tooltip for all blasphemy upgrades when hovered
                     if lines:
+                        if lvl:
+                            lines.insert(0, f"Level: {lvl}")
                         tip_x = bx
-                        # draw tooltip below the second row for both top and bottom slots
                         tip_y = box_y2 + box_height + 12 + shake_y
+                        padding_x, padding_y = 8, 6
                         try:
                             self.game._draw_tooltip(
                                 lines,
@@ -2275,30 +1909,28 @@ class PygameUIManager:
                                 anchor_center=True,
                             )
                         except Exception:
-                            padding_x, padding_y = 8, 6
-                            line_surfs = [
-                                font_small.render(l, True, (255, 255, 255))
-                                for l in lines
-                            ]
-                            width = (
-                                max(s.get_width() for s in line_surfs) + padding_x * 2
-                            )
-                            height = (
-                                sum(s.get_height() for s in line_surfs)
-                                + padding_y * 2
-                                + (len(line_surfs) - 1) * 4
-                            )
-                            tx = max(
-                                4, min(int(tip_x - width // 2), self.width - width - 4)
-                            )
-                            ty = max(4, min(tip_y, self.height - height - 4))
-                            bg_rect = pygame.Rect(tx, ty, width, height)
-                            pygame.draw.rect(self.screen, (30, 30, 30), bg_rect)
-                            pygame.draw.rect(self.screen, (120, 120, 120), bg_rect, 1)
-                            cur_y = ty + padding_y
-                            for s in line_surfs:
-                                self.screen.blit(s, (tx + padding_x, cur_y))
-                                cur_y += s.get_height() + 4
+                            pass
+                        line_surfs = [
+                            font_small.render(line_text, True, (255, 255, 255))
+                            for line_text in lines
+                        ]
+                        width = max(s.get_width() for s in line_surfs) + padding_x * 2
+                        height = (
+                            sum(s.get_height() for s in line_surfs)
+                            + padding_y * 2
+                            + (len(line_surfs) - 1) * 4
+                        )
+                        tx = max(
+                            4, min(int(tip_x - width // 2), self.width - width - 4)
+                        )
+                        ty = max(4, min(tip_y, self.height - height - 4))
+                        bg_rect = pygame.Rect(tx, ty, width, height)
+                        pygame.draw.rect(self.screen, (30, 30, 30), bg_rect)
+                        pygame.draw.rect(self.screen, (120, 120, 120), bg_rect, 1)
+                        cur_y = ty + padding_y
+                        for s in line_surfs:
+                            self.screen.blit(s, (tx + padding_x, cur_y))
+                            cur_y += s.get_height() + 4
 
         # Skill trees (FIRE, STORM, ICE)
         tree_types = [
@@ -2343,10 +1975,10 @@ class PygameUIManager:
                 )
 
                 left_active = bool(
-                    self.game.permanent_stats.get(f"{key_prefix}_{row+1}", 0)
+                    self.game.permanent_stats.get(f"{key_prefix}_{row + 1}", 0)
                 )
                 right_active = bool(
-                    self.game.permanent_stats.get(f"{key_prefix}_{4+row}", 0)
+                    self.game.permanent_stats.get(f"{key_prefix}_{4 + row}", 0)
                 )
                 left_bg = color if left_active else (26, 26, 26)
                 right_bg = color if right_active else (26, 26, 26)
@@ -2475,1021 +2107,6 @@ class PygameUIManager:
                 except Exception:
                     pass
 
-    # Removed legacy alias to avoid circular bindings — the class uses a single
-    # authoritative `_draw_permanent_upgrades_v2` implementation defined below.
-
-    def _canonical_draw_permanent_upgrades(self, shake_x=0, shake_y=0) -> None:
-        """Canonical permanent-upgrades renderer (BLASPHEMIES).
-
-        Simple, authoritative implementation used for both runtime and tests.
-        Ensures slots 1..10 render the imported `blasphemy_box.png` when present
-        and writes the test sentinel for the bottom row when requested.
-        """
-        pygame = self.pygame
-        if not self.screen or not pygame:
-            return
-
-        font_large = pygame.font.Font(None, 36)
-        font_medium = pygame.font.Font(None, 24)
-        font_small = pygame.font.Font(None, 18)
-
-        box_width = 80
-        box_height = box_width
-        box_spacing = 100
-        left_x = self.width // 2 - 420
-        start_x = left_x + box_spacing // 2 - 40
-        separator_y = 320
-        box_y1 = separator_y + 60
-        box_y2 = box_y1 + box_height + 12
-
-        asset_name = (
-            self.game.global_progress.get("blasphemy_box_asset")
-            if getattr(self.game, "global_progress", None)
-            else None
-        ) or "blasphemy_box.png"
-
-        box_asset = None
-        try:
-            from src.assets.manager import get_image
-
-            box_asset = get_image(asset_name, (box_width, box_height))
-        except Exception:
-            box_asset = None
-
-        for row_y in (box_y1, box_y2):
-            for col in range(5):
-                bx = start_x + col * box_spacing
-                rect = (
-                    bx - box_width // 2 + shake_x,
-                    row_y + shake_y,
-                    box_width,
-                    box_height,
-                )
-                if box_asset:
-                    try:
-                        self.screen.blit(box_asset, (rect[0], rect[1]))
-                    except Exception:
-                        pygame.draw.rect(self.screen, (26, 26, 26), rect)
-                else:
-                    pygame.draw.rect(self.screen, (26, 26, 26), rect)
-                try:
-                    pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
-                except Exception:
-                    pass
-                if row_y == box_y2:
-                    try:
-                        self._blasphemy_bottom_drawn = True
-                    except Exception:
-                        pass
-
-        # write test sentinel if requested (bottom-row)
-        try:
-            if getattr(self.game, "_test_blasphemy_sentinel", False) and self.screen:
-                sen_color = (123, 45, 67)
-                sen_x = int(start_x)
-                sen_y = int(box_y2 + box_height // 2 + 1)
-                self.screen.set_at((sen_x, sen_y), sen_color)
-        except Exception:
-            pass
-
-        # ensure center pixels match asset center when available
-        if box_asset and self.screen:
-            try:
-                center_color = box_asset.get_at((box_width // 2, box_height // 2))
-            except Exception:
-                center_color = None
-            if center_color:
-                try:
-                    self.screen.set_at(
-                        (int(start_x), int(box_y1 + box_height // 2)), center_color
-                    )
-                except Exception:
-                    pass
-                try:
-                    self.screen.set_at(
-                        (int(start_x), int(box_y2 + box_height // 2)), center_color
-                    )
-                except Exception:
-                    pass
-
-        # Removing the old/duplicated drawing code prevents bottom-row from being
-        # overwritten after the imported-asset blits.
-
-        # Defensive overwrite: ensure bottom-row blasphemy boxes use imported asset when available
-        try:
-            if box_asset:
-                for i in range(5):
-                    bx = start_x + i * box_spacing
-                    self.screen.blit(
-                        box_asset, (bx - box_width // 2 + shake_x, box_y2 + shake_y)
-                    )
-                    pygame.draw.rect(
-                        self.screen,
-                        (51, 51, 51),
-                        (
-                            bx - box_width // 2 + shake_x,
-                            box_y2 + shake_y,
-                            box_width,
-                            box_height,
-                        ),
-                        1,
-                    )
-        except Exception:
-            pass
-
-        # Ensure roman numerals are drawn on top for both rows (canonical path)
-        try:
-            roman_map = {1: "I", 2: "II", 3: "III"}
-            for row_idx, y in enumerate((box_y1, box_y2)):
-                for col in range(5):
-                    bx = start_x + col * box_spacing
-                    key = f"blasphemy_{row_idx*5 + col + 1}"
-                    lvl = self.game.permanent_stats.get(key, 0)
-                    if lvl and key in (
-                        "blasphemy_1",
-                        "blasphemy_2",
-                        "blasphemy_3",
-                        "blasphemy_4",
-                        "blasphemy_5",
-                        "blasphemy_6",
-                        "blasphemy_7",
-                        "blasphemy_8",
-                        "blasphemy_9",
-                        "blasphemy_10",
-                    ):
-                        roman = roman_map.get(lvl, "")
-                        if roman:
-                            tw, th = font_large.size(roman)
-                            sx = bx - tw // 2 + shake_x
-                            sy = y + box_height // 2 - th // 2 + shake_y
-                            bg_rect = pygame.Rect(sx - 6, sy - 4, tw + 12, th + 8)
-                            pygame.draw.rect(self.screen, (18, 18, 18), bg_rect)
-                            pygame.draw.rect(self.screen, (80, 80, 80), bg_rect, 1)
-                            shadow_surf = font_large.render(roman, True, (0, 0, 0))
-                            text_surf = font_large.render(roman, True, (220, 60, 60))
-                            self.screen.blit(shadow_surf, (sx + 1, sy + 1))
-                            self.screen.blit(text_surf, (sx, sy))
-        except Exception:
-            pass
-
-        # Skill trees (FIRE, STORM, ICE) on the right side
-        tree_types = [
-            ("FIRE", "fire", (255, 68, 68)),
-            ("STORM", "storm", (170, 68, 255)),
-            ("ICE", "ice", (100, 200, 255)),
-        ]
-        tree_box_w = 50
-        tree_box_h = 36
-        tree_v_spacing = 46
-        tree_col_spacing = 120
-        tree_base_x: int = left_x + 680
-        tree_top_y: int = separator_y - 150
-
-        for col, (label, key_prefix, color) in enumerate(tree_types):
-            col_x = tree_base_x + col * tree_col_spacing
-            lbl_surf: pygame.Surface = font_small.render(label, True, color)
-            self.screen.blit(
-                lbl_surf,
-                (
-                    col_x - lbl_surf.get_width() // 2 + shake_x,
-                    tree_top_y - 28 + shake_y,
-                ),
-            )
-
-            # Draw 3x2 boxes layout similar to legacy view and add hover/tooltips
-            inner_col_offset = tree_box_w // 2 + 1
-            left_col_x = col_x - inner_col_offset
-            right_col_x = col_x + inner_col_offset
-            for row in range(3):
-                y = tree_top_y + row * tree_v_spacing
-                left_rect = (
-                    left_col_x - tree_box_w // 2 + shake_x,
-                    y + shake_y,
-                    tree_box_w,
-                    tree_box_h,
-                )
-                right_rect = (
-                    right_col_x - tree_box_w // 2 + shake_x,
-                    y + shake_y,
-                    tree_box_w,
-                    tree_box_h,
-                )
-
-                left_active = bool(
-                    self.game.permanent_stats.get(f"{key_prefix}_{row+1}", 0)
-                )
-                right_active = bool(
-                    self.game.permanent_stats.get(f"{key_prefix}_{4+row}", 0)
-                )
-
-                left_bg = color if left_active else (26, 26, 26)
-                right_bg = color if right_active else (26, 26, 26)
-                left_border = (
-                    tuple(min(255, c + 20) for c in color)
-                    if left_active
-                    else (51, 51, 51)
-                )
-                right_border = (
-                    tuple(min(255, c + 20) for c in color)
-                    if right_active
-                    else (51, 51, 51)
-                )
-
-                # Hover detection for visual highlight
-                try:
-                    mouse_point = (self.game.mouse_x, self.game.mouse_y)
-                except Exception:
-                    mouse_point = (0, 0)
-
-                left_hovered = pygame.Rect(*left_rect).collidepoint(mouse_point)
-                right_hovered = pygame.Rect(*right_rect).collidepoint(mouse_point)
-
-                if left_hovered:
-                    # Gold border and slight background brighten
-                    left_border = (255, 224, 20)
-                    left_bg = tuple(min(255, v + 30) for v in left_bg)
-                if right_hovered:
-                    right_border = (255, 224, 20)
-                    right_bg = tuple(min(255, v + 30) for v in right_bg)
-
-                pygame.draw.rect(self.screen, left_bg, left_rect)
-                pygame.draw.rect(self.screen, left_border, left_rect, 1)
-                pygame.draw.rect(self.screen, right_bg, right_rect)
-                pygame.draw.rect(self.screen, right_border, right_rect, 1)
-
-                # Tooltip when hovering over left or right rects (use Game helpers for text)
-                if left_hovered:
-                    tooltip_lines = self.game._skill_tooltip_lines(key_prefix, row + 1)
-                    if tooltip_lines:
-                        tooltip_x = col_x
-                        tooltip_y = (
-                            tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
-                        )
-                        self.game._draw_tooltip(
-                            tooltip_lines,
-                            tooltip_x,
-                            tooltip_y,
-                            pygame.font.Font(None, 18),
-                            anchor_center=True,
-                        )
-
-                if right_hovered:
-                    tooltip_lines = self.game._skill_tooltip_lines(key_prefix, 4 + row)
-                    if tooltip_lines:
-                        tooltip_x = col_x
-                        tooltip_y = (
-                            tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
-                        )
-                        self.game._draw_tooltip(
-                            tooltip_lines,
-                            tooltip_x,
-                            tooltip_y,
-                            pygame.font.Font(None, 18),
-                            anchor_center=True,
-                        )
-            # Center bottom tier (7)
-            center_y = tree_top_y + 3 * tree_v_spacing
-            center_key = f"{key_prefix}_7"
-            center_active = bool(self.game.permanent_stats.get(center_key, 0))
-            center_bg = color if center_active else (26, 26, 26)
-            center_border = (
-                tuple(min(255, c + 20) for c in color)
-                if center_active
-                else (51, 51, 51)
-            )
-            center_rect = (
-                col_x - tree_box_w // 2 + shake_x,
-                center_y + shake_y,
-                tree_box_w,
-                tree_box_h,
-            )
-
-            # Center hover detection and highlight
-            try:
-                mouse_point = (self.game.mouse_x, self.game.mouse_y)
-            except Exception:
-                mouse_point = (0, 0)
-
-            center_hovered = pygame.Rect(*center_rect).collidepoint(mouse_point)
-            if center_hovered:
-                center_border = (255, 224, 20)
-                center_bg = tuple(min(255, v + 30) for v in center_bg)
-
-            pygame.draw.rect(self.screen, center_bg, center_rect)
-            pygame.draw.rect(self.screen, center_border, center_rect, 1)
-
-            if center_hovered:
-                tooltip_lines = self.game._skill_tooltip_lines(key_prefix, 7)
-                if tooltip_lines:
-                    tooltip_x = col_x
-                    tooltip_y = (
-                        tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y
-                    )
-                    self.game._draw_tooltip(
-                        tooltip_lines,
-                        tooltip_x,
-                        tooltip_y,
-                        pygame.font.Font(None, 18),
-                        anchor_center=True,
-                    )
-
-        # Instructions
-        instructions = font_medium.render(
-            "Left click to upgrade | Right click to downgrade | ESC to return",
-            True,
-            (200, 200, 200),
-        )
-        self.screen.blit(instructions, (left_x + shake_x, self.height - 50 + shake_y))
-
-        # Final enforcement: redraw both blasphemy rows (1..10) so imported asset
-        # is visible and cannot be accidentally overwritten by subsequent draws.
-        try:
-            box_y2_final = box_y1 + box_height + 20
-            for row in range(2):
-                y = box_y1 if row == 0 else box_y2_final
-                for i in range(5):
-                    bx = start_x + (i * box_spacing)
-                    rect = (
-                        bx - box_width // 2 + shake_x,
-                        y + shake_y,
-                        box_width,
-                        box_height,
-                    )
-                    final_asset = get_image(asset_name, (box_width, box_height))
-                    if final_asset:
-                        self.screen.blit(
-                            final_asset, (bx - box_width // 2 + shake_x, y + shake_y)
-                        )
-                        pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
-
-                    else:
-                        pygame.draw.rect(self.screen, (26, 26, 26), rect)
-                        pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
-                    k = f"blasphemy_{row*5 + i + 1}"
-                    lvl = self.game.permanent_stats.get(k, 0)
-                    if lvl:
-                        roman_map = {1: "I", 2: "II", 3: "III"}
-                        roman = roman_map.get(lvl, "")
-                        if roman:
-                            tw, th = font_large.size(roman)
-                            sx = bx - tw // 2 + shake_x
-                            sy = y + box_height // 2 - th // 2 + shake_y
-                            bg_rect = pygame.Rect(sx - 6, sy - 4, tw + 12, th + 8)
-                            pygame.draw.rect(self.screen, (18, 18, 18), bg_rect)
-                            pygame.draw.rect(self.screen, (80, 80, 80), bg_rect, 1)
-                            shadow_surf = font_large.render(roman, True, (0, 0, 0))
-                            text_surf = font_large.render(roman, True, (220, 60, 60))
-                            self.screen.blit(shadow_surf, (sx + 1, sy + 1))
-                            self.screen.blit(text_surf, (sx, sy))
-            # DEBUG: sample after this final enforcement pass
-            try:
-                _dbg_after_final_enforcement = tuple(
-                    self.screen.get_at(
-                        (start_x, box_y1 + box_height + 12 + box_height // 2)
-                    )[:3]
-                )
-                logger.debug(
-                    "draw_permanent_upgrades: after_first_final_enforcement bottom_sample=%s",
-                    _dbg_after_final_enforcement,
-                )
-            except Exception:
-                pass
-        except Exception:
-            pass
-
-        # Final pass: ensure blasphemy tooltip (if hovered) is drawn on top (supports two rows)
-        try:
-            mx = getattr(self.game, "mouse_x", None)
-            my = getattr(self.game, "mouse_y", None)
-            if mx is not None and my is not None:
-                band_left = start_x - box_width // 2
-                band_right = start_x + (4 * box_spacing) + box_width // 2
-                band_top = box_y1
-                band_bottom = (
-                    box_y1 + box_height + 12 + box_height
-                )  # include second row
-                if band_left <= mx <= band_right and band_top <= my <= band_bottom:
-                    # pick row by vertical position (top row if mouse is in upper half)
-                    row = 0 if my <= (box_y1 + box_height - 1) else 1
-                    rel_x = mx - start_x
-                    idx = int(round(rel_x / box_spacing))
-                    idx = max(0, min(4, idx))
-                    key = f"blasphemy_{row*5 + idx + 1}"
-                    lvl = self.game.permanent_stats.get(key, 0)
-                    lines = [
-                        s.strip()
-                        for s in (
-                            self.game.permanent_stat_effect_text(key, lvl) or ""
-                        ).split(";")
-                        if s.strip()
-                    ]
-                    # Fallback for blasphemy slots without descriptive text (6..10)
-                    if not lines and str(key).startswith("blasphemy"):
-                        try:
-                            slot_no = int(str(key).split("_", 1)[1])
-                            lines = [f"Blasphemy {slot_no}"]
-                        except Exception:
-                            lines = ["Blasphemy"]
-                    if lvl:
-                        lines.insert(0, f"Level: {lvl}")
-                    if lines:
-                        tooltip_x = start_x + (idx * box_spacing)
-                        # Use bottom-row anchor for top-row tooltips as well
-                        blasphemy_tip_y = box_y2 + box_height + 12 + shake_y
-
-                        logger.debug(
-                            "draw_permanent_upgrades(final pass): computed blasphemy tooltip anchor for key=%s -> (%s,%s)",
-                            key,
-                            tooltip_x,
-                            blasphemy_tip_y,
-                        )
-                        self.game._draw_tooltip(
-                            lines,
-                            tooltip_x,
-                            blasphemy_tip_y,
-                            pygame.font.Font(None, 18),
-                            anchor_center=True,
-                        )
-        except Exception:
-            pass
-        # Preserve both blasphemy rows — no final clear required.
-
-        # Final enforcement: redraw both blasphemy rows (1..10) so imported
-        # assets affect all slots and visuals remain consistent.
-        try:
-            box_y2 = box_y1 + box_height + 12
-            for row in range(2):
-                y = box_y1 if row == 0 else box_y2
-                for i in range(5):
-                    box_x = start_x + (i * box_spacing)
-                    final_asset = get_image(asset_name, (box_width, box_height))
-                    if final_asset:
-                        self.screen.blit(
-                            final_asset, (box_x - box_width // 2 + shake_x, y + shake_y)
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            (51, 51, 51),
-                            (
-                                box_x - box_width // 2 + shake_x,
-                                y + shake_y,
-                                box_width,
-                                box_height,
-                            ),
-                            1,
-                        )
-                        try:
-                            cx = int(box_x)
-                            cy = int(y + box_height // 2)
-                            logger.debug(
-                                "draw_permanent_upgrades: after_final_enforcement row=%s i=%s center_pixel=%s",
-                                row,
-                                i,
-                                tuple(self.screen.get_at((cx, cy))[:3]),
-                            )
-                        except Exception:
-                            pass
-                    else:
-                        pygame.draw.rect(
-                            self.screen,
-                            (26, 26, 26),
-                            (
-                                box_x - box_width // 2 + shake_x,
-                                y + shake_y,
-                                box_width,
-                                box_height,
-                            ),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            (51, 51, 51),
-                            (
-                                box_x - box_width // 2 + shake_x,
-                                y + shake_y,
-                                box_width,
-                                box_height,
-                            ),
-                            1,
-                        )
-                    key = f"blasphemy_{row*5 + i + 1}"
-                    lvl = self.game.permanent_stats.get(key, 0)
-                    if lvl:
-                        roman_map = {1: "I", 2: "II", 3: "III"}
-                        roman = roman_map.get(lvl, "")
-                        if roman:
-                            tw, th = font_large.size(roman)
-                            sx = box_x - tw // 2 + shake_x
-                            sy = y + box_height // 2 - th // 2 + shake_y
-                            bg_rect = pygame.Rect(sx - 6, sy - 4, tw + 12, th + 8)
-                            pygame.draw.rect(self.screen, (18, 18, 18), bg_rect)
-                            pygame.draw.rect(self.screen, (80, 80, 80), bg_rect, 1)
-                            shadow_surf = font_large.render(roman, True, (0, 0, 0))
-                            text_surf = font_large.render(roman, True, (220, 60, 60))
-                            self.screen.blit(shadow_surf, (sx + 1, sy + 1))
-                            self.screen.blit(text_surf, (sx, sy))
-        except Exception:
-            pass
-        # Defensive: ensure bottom-row (slots 6..10) definitely use the imported asset
-        try:
-            if box_asset:
-                for i in range(5):
-                    bx = start_x + i * box_spacing
-                    self.screen.blit(
-                        box_asset, (bx - box_width // 2 + shake_x, box_y2 + shake_y)
-                    )
-                    pygame.draw.rect(
-                        self.screen,
-                        (51, 51, 51),
-                        (
-                            bx - box_width // 2 + shake_x,
-                            box_y2 + shake_y,
-                            box_width,
-                            box_height,
-                        ),
-                        1,
-                    )
-                try:
-                    _dbg_after_defensive = tuple(
-                        self.screen.get_at((start_x, box_y2 + box_height // 2))[:3]
-                    )
-                    logger.debug(
-                        "draw_permanent_upgrades: after_defensive_blit bottom_sample=%s",
-                        _dbg_after_defensive,
-                    )
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-        # DEBUG: sample pixel after final enforcement
-        try:
-            try:
-                _sample_after_final = tuple(
-                    self.screen.get_at(
-                        (start_x, box_y1 + box_height + 12 + box_height // 2)
-                    )[:3]
-                )
-                logger.debug(
-                    "draw_permanent_upgrades: AFTER_FINAL_ENFORCEMENT sample=%s",
-                    _sample_after_final,
-                )
-            except Exception:
-                pass
-        except Exception:
-            pass
-        # Final safety: force bottom-row blit of imported asset if available
-        try:
-            if box_asset:
-                for i in range(5):
-                    bx = start_x + i * box_spacing
-                    self.screen.blit(
-                        box_asset, (bx - box_width // 2 + shake_x, box_y2 + shake_y)
-                    )
-                    pygame.draw.rect(
-                        self.screen,
-                        (51, 51, 51),
-                        (
-                            bx - box_width // 2 + shake_x,
-                            box_y2 + shake_y,
-                            box_width,
-                            box_height,
-                        ),
-                        1,
-                    )
-                try:
-                    _dbg_after_safety = tuple(
-                        self.screen.get_at((start_x, box_y2 + box_height // 2))[:3]
-                    )
-                    logger.debug(
-                        "draw_permanent_upgrades: after_final_safety bottom_sample=%s",
-                        _dbg_after_safety,
-                    )
-                except Exception:
-                    pass
-                try:
-                    logger.debug(
-                        "draw_permanent_upgrades: final safety blit executed box_asset=%s start_x=%s box_y2=%s",
-                        bool(box_asset),
-                        start_x,
-                        box_y2,
-                    )
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-        # Test-only sentinel: if the test requests it, write a unique pixel
-        # inside the bottom-row so unit tests can confirm whether this function
-        # executed the bottom-row drawing path under pytest.
-        try:
-            if getattr(self.game, "_test_blasphemy_sentinel", False) and self.screen:
-                try:
-                    sen_color = (123, 45, 67)
-                    sen_x = int(start_x)
-                    sen_y = int(box_y2 + box_height // 2 + 1)
-                    self.screen.set_at((sen_x, sen_y), sen_color)
-
-                    logger.debug(
-                        "draw_permanent_upgrades: sentinel_written %s %s",
-                        (sen_x, sen_y),
-                        sen_color,
-                    )
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-        # Ensure the exact center pixel(s) of the bottom-row boxes match the
-        # imported asset center color — some headless test environments can
-        # exhibit surprising blit ordering, so explicitly set the pixel(s).
-        try:
-            if box_asset and self.screen:
-                try:
-                    center_color = box_asset.get_at((box_width // 2, box_height // 2))
-                except Exception:
-                    center_color = None
-                if center_color:
-                    for i in range(5):
-                        bx = start_x + i * box_spacing
-                        cx = int(bx)
-                        cy = int(box_y2 + box_height // 2)
-                        try:
-                            self.screen.set_at((cx, cy), center_color)
-                        except Exception:
-                            pass
-                    logger.debug(
-                        "draw_permanent_upgrades: enforced bottom-row center pixels to asset color=%s",
-                        tuple(center_color[:3]) if center_color else None,
-                    )
-        except Exception:
-            pass
-
-        # Final force-write: ensure bottom-row boxes use imported asset (runs last)
-        try:
-            final_asset = get_image(asset_name, (box_width, box_height))
-            logger.debug(
-                "draw_permanent_upgrades: final_force_write asset_ok=%s",
-                bool(final_asset),
-            )
-            if final_asset and self.screen:
-                for i in range(5):
-                    bx = start_x + i * box_spacing
-                    self.screen.blit(
-                        final_asset, (bx - box_width // 2 + shake_x, box_y2 + shake_y)
-                    )
-                    pygame.draw.rect(
-                        self.screen,
-                        (51, 51, 51),
-                        (
-                            bx - box_width // 2 + shake_x,
-                            box_y2 + shake_y,
-                            box_width,
-                            box_height,
-                        ),
-                        1,
-                    )
-                if getattr(self.game, "_test_blasphemy_sentinel", False):
-                    try:
-                        sen_color = (123, 45, 67)
-                        sen_x = int(start_x)
-                        sen_y = int(box_y2 + box_height // 2 + 1)
-                        self.screen.set_at((sen_x, sen_y), sen_color)
-                        logger.debug(
-                            "draw_permanent_upgrades: final_force_write wrote_sentinel %s %s",
-                            (sen_x, sen_y),
-                            sen_color,
-                        )
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-        # Final safety: explicitly enforce bottom-row asset center pixels and write test sentinel
-        try:
-            asset_name = (
-                self.game.global_progress.get("blasphemy_box_asset")
-                if getattr(self.game, "global_progress", None)
-                else None
-            ) or "blasphemy_box.png"
-            final_asset = get_image(asset_name, (box_width, box_height))
-            if final_asset and self.screen:
-                try:
-                    center_color = final_asset.get_at((box_width // 2, box_height // 2))
-                except Exception:
-                    center_color = None
-                if center_color:
-                    for i in range(5):
-                        bx = start_x + i * box_spacing
-                        cx = int(bx)
-                        cy = int(box_y2 + box_height // 2)
-                        try:
-                            self.screen.set_at((cx, cy), center_color)
-                        except Exception:
-                            pass
-                if getattr(self.game, "_test_blasphemy_sentinel", False):
-                    try:
-                        sen_color = (123, 45, 67)
-                        sen_x = int(start_x)
-                        sen_y = int(box_y2 + box_height // 2 + 1)
-                        self.screen.set_at((sen_x, sen_y), sen_color)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-        # --- Final label pass: draw roman numerals on top of everything to guarantee visibility ---
-        try:
-            roman_map = {1: "I", 2: "II", 3: "III"}
-            for row in range(2):
-                y = box_y1 if row == 0 else box_y2
-                for i in range(5):
-                    box_x = start_x + i * box_spacing
-                    key = f"blasphemy_{row*5 + i + 1}"
-                    lvl = self.game.permanent_stats.get(key, 0)
-                    if lvl and key in (
-                        "blasphemy_1",
-                        "blasphemy_2",
-                        "blasphemy_3",
-                        "blasphemy_4",
-                        "blasphemy_6",
-                        "blasphemy_7",
-                        "blasphemy_8",
-                        "blasphemy_9",
-                    ):
-                        roman = roman_map.get(lvl, "")
-                        if roman:
-                            tw, th = font_large.size(roman)
-                            sx = box_x - tw // 2 + 0
-                            sy = y + box_height // 2 - th // 2 + 0
-                            bg_rect = pygame.Rect(sx - 6, sy - 4, tw + 12, th + 8)
-                            pygame.draw.rect(self.screen, (18, 18, 18), bg_rect)
-                            pygame.draw.rect(self.screen, (80, 80, 80), bg_rect, 1)
-                band_left = start_x - box_width // 2
-                band_right = start_x + (4 * box_spacing) + box_width // 2
-                band_top = box_y1
-                band_bottom = box_y1 + box_height + 12 + box_height
-                if band_left <= mx <= band_right and band_top <= my <= band_bottom:
-                    # pick row by vertical position (top row if mouse is in upper half)
-                    row = 0 if my <= (box_y1 + box_height - 1) else 1
-                    rel_x = mx - start_x
-                    idx = int(round(rel_x / box_spacing))
-                    idx = max(0, min(4, idx))
-                    key = f"blasphemy_{row*5 + idx + 1}"
-                    lvl = self.game.permanent_stats.get(key, 0)
-                    lines = [
-                        s.strip()
-                        for s in (
-                            self.game.permanent_stat_effect_text(key, lvl) or ""
-                        ).split(";")
-                        if s.strip()
-                    ]
-                    # Fallback for blasphemy slots without descriptive text (6..10)
-                    if not lines and str(key).startswith("blasphemy"):
-                        try:
-                            slot_no = int(str(key).split("_", 1)[1])
-                            lines = [f"Blasphemy {slot_no}"]
-                        except Exception:
-                            lines = ["Blasphemy"]
-                    if lvl:
-                        lines.insert(0, f"Level: {lvl}")
-                    if lines:
-                        tooltip_x = start_x + (idx * box_spacing)
-                        blasphemy_tip_y = box_y2 + box_height + 12 + shake_y
-                        try:
-                            self.game._draw_tooltip(
-                                lines,
-                                tooltip_x,
-                                blasphemy_tip_y,
-                                pygame.font.Font(None, 18),
-                                anchor_center=True,
-                            )
-                        except Exception:
-                            pass
-        except Exception:
-            pass
-
-        try:
-            self.game._last_drawn_menu = "permanent_upgrades"
-        except Exception:
-            pass
-
-    def _draw_permanent_upgrades_v2(self, shake_x=0, shake_y=0) -> None:
-        """Class-level v2 implementation of draw_permanent_upgrades."""
-        font_large = pygame.font.Font(None, 36)
-        font_medium = pygame.font.Font(None, 24)
-        font_small = pygame.font.Font(None, 18)
-
-        left_x = self.width // 2 - 420
-        title = font_large.render("PERMANENT UPGRADES", True, (255, 255, 0))
-        self.screen.blit(
-            title, (self.width // 2 - title.get_width() // 2 + shake_x, 40 + shake_y)
-        )
-
-        separator_y = 320
-        subtitle = font_small.render(
-            "Upgrade your demonic powers", True, (136, 136, 136)
-        )
-        self.screen.blit(subtitle, (left_x + shake_x, 85 + shake_y))
-
-        # Blasphemies header + layout
-        blasp_text = font_medium.render("BLASPHEMIES", True, (136, 136, 136))
-        self.screen.blit(blasp_text, (left_x + shake_x, separator_y + 30 + shake_y))
-
-        box_width = 80
-        box_height = box_width
-        box_spacing = 100
-        start_x = left_x + box_spacing // 2 - 40
-
-        asset_name = (
-            self.game.global_progress.get("blasphemy_box_asset")
-            if getattr(self.game, "global_progress", None)
-            else None
-        ) or "blasphemy_box.png"
-        box_asset = get_image(asset_name, (box_width, box_height))
-        try:
-            logger.warning(
-                "DBG _draw_permanent_upgrades_v2: asset_name=%s box_asset=%s",
-                asset_name,
-                bool(box_asset),
-            )
-        except Exception:
-            pass
-
-        box_y1 = separator_y + 60
-        box_y2 = box_y1 + box_height + 12
-
-        for row_idx, y in enumerate((box_y1, box_y2)):
-            for col in range(5):
-                bx = start_x + col * box_spacing
-                rect = (
-                    bx - box_width // 2 + shake_x,
-                    y + shake_y,
-                    box_width,
-                    box_height,
-                )
-
-                if box_asset:
-                    try:
-                        self.screen.blit(box_asset, (rect[0], rect[1]))
-                        if row_idx == 1:
-                            try:
-                                self._blasphemy_bottom_drawn = True
-                            except Exception:
-                                pass
-                    except Exception:
-                        pygame.draw.rect(self.screen, (26, 26, 26), rect)
-                else:
-                    pygame.draw.rect(self.screen, (26, 26, 26), rect)
-
-                try:
-                    pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
-                except Exception:
-                    pass
-
-                key = f"blasphemy_{row_idx*5 + col + 1}"
-                lvl = self.game.permanent_stats.get(key, 0)
-
-                # Render roman numerals for multi-level blasphemies (top-row 1..4 and blasphemy_6/7/8)
-                if lvl and key in (
-                    "blasphemy_1",
-                    "blasphemy_2",
-                    "blasphemy_3",
-                    "blasphemy_4",
-                    "blasphemy_6",
-                    "blasphemy_7",
-                    "blasphemy_8",
-                    "blasphemy_9",
-                ):
-                    roman_map = {1: "I", 2: "II", 3: "III"}
-                    roman = roman_map.get(lvl, "")
-                    if roman:
-                        tw, th = font_large.size(roman)
-                        sx = bx - tw // 2 + shake_x
-                        sy = y + box_height // 2 - th // 2 + shake_y
-                        bg_rect = pygame.Rect(sx - 6, sy - 4, tw + 12, th + 8)
-                        pygame.draw.rect(self.screen, (18, 18, 18), bg_rect)
-                        pygame.draw.rect(self.screen, (80, 80, 80), bg_rect, 1)
-                        shadow = font_large.render(roman, True, (0, 0, 0))
-                        text_surf = font_large.render(roman, True, (220, 60, 60))
-                        self.screen.blit(shadow, (sx + 1, sy + 1))
-                        self.screen.blit(text_surf, (sx, sy))
-
-                # Hover/tooltips (defensive)
-                try:
-                    mouse_point = (self.game.mouse_x, self.game.mouse_y)
-                except Exception:
-                    mouse_point = (0, 0)
-
-                if pygame.Rect(*rect).collidepoint(mouse_point):
-                    effect_text = self.game.permanent_stat_effect_text(key, lvl)
-                    lines = [
-                        s.strip() for s in (effect_text or "").split(";") if s.strip()
-                    ]
-                    if lvl:
-                        lines.insert(0, f"Level: {lvl}")
-                    if lines:
-                        tip_x = bx
-                        # anchor top-row tooltips to the bottom-row anchor
-                        tip_y = box_y2 + box_height + 12 + shake_y
-                        try:
-                            self.game._draw_tooltip(
-                                lines,
-                                tip_x,
-                                tip_y,
-                                pygame.font.Font(None, 18),
-                                anchor_center=True,
-                            )
-                        except Exception:
-                            padding_x, padding_y = 8, 6
-                            line_surfs = [
-                                font_small.render(l, True, (255, 255, 255))
-                                for l in lines
-                            ]
-                            width = (
-                                max(s.get_width() for s in line_surfs) + padding_x * 2
-                            )
-                            height = (
-                                sum(s.get_height() for s in line_surfs)
-                                + padding_y * 2
-                                + (len(line_surfs) - 1) * 4
-                            )
-                            tx = max(
-                                4, min(int(tip_x - width // 2), self.width - width - 4)
-                            )
-                            ty = max(4, min(tip_y, self.height - height - 4))
-                            bg_rect = pygame.Rect(tx, ty, width, height)
-                            pygame.draw.rect(self.screen, (30, 30, 30), bg_rect)
-                            pygame.draw.rect(self.screen, (120, 120, 120), bg_rect, 1)
-                            cur_y = ty + padding_y
-                            for s in line_surfs:
-                                self.screen.blit(s, (tx + padding_x, cur_y))
-                                cur_y += s.get_height() + 4
-
-        # Sentinel for tests (asset already drawn inside the box loop above roman numerals)
-        if box_asset and self.screen:
-            try:
-                if getattr(self.game, "_test_blasphemy_sentinel", False):
-                    sen_color = (123, 45, 67)
-                    sen_x = int(start_x)
-                    sen_y = int(box_y2 + box_height // 2 + 1)
-                    self.screen.set_at((sen_x, sen_y), sen_color)
-            except Exception:
-                pass
-
-        # Defensive: enforce center pixel color when asset present
-        if box_asset and self.screen:
-            try:
-                center_color = box_asset.get_at((box_width // 2, box_height // 2))
-            except Exception:
-                center_color = None
-            if center_color:
-                try:
-                    self.screen.set_at(
-                        (int(start_x), int(box_y1 + box_height // 2)), center_color
-                    )
-                except Exception:
-                    pass
-                try:
-                    self.screen.set_at(
-                        (int(start_x), int(box_y2 + box_height // 2)), center_color
-                    )
-                except Exception:
-                    pass
-
-        # --- Final label pass for _draw_permanent_upgrades_v2: draw roman numerals
-        # on top of the imported assets (guarantees visibility for bottom row)
-        try:
-            roman_map = {1: "I", 2: "II", 3: "III"}
-            for row in range(2):
-                y = box_y1 if row == 0 else box_y2
-                for i in range(5):
-                    bx = start_x + i * box_spacing
-                    key = f"blasphemy_{row*5 + i + 1}"
-                    lvl = self.game.permanent_stats.get(key, 0)
-                    if lvl and key in (
-                        "blasphemy_1",
-                        "blasphemy_2",
-                        "blasphemy_3",
-                        "blasphemy_4",
-                        "blasphemy_6",
-                        "blasphemy_7",
-                        "blasphemy_8",
-                        "blasphemy_9",
-                    ):
-                        roman = roman_map.get(lvl, "")
-                        if roman:
-                            tw, th = font_large.size(roman)
-                            sx = bx - tw // 2 + shake_x
-                            sy = y + box_height // 2 - th // 2 + shake_y
-                            bg_rect = pygame.Rect(sx - 6, sy - 4, tw + 12, th + 8)
-                            pygame.draw.rect(self.screen, (18, 18, 18), bg_rect)
-                            pygame.draw.rect(self.screen, (80, 80, 80), bg_rect, 1)
-                            shadow_surf = font_large.render(roman, True, (0, 0, 0))
-                            text_surf = font_large.render(roman, True, (220, 60, 60))
-                            self.screen.blit(shadow_surf, (sx + 1, sy + 1))
-                            self.screen.blit(text_surf, (sx, sy))
-        except Exception:
-            pass
-
     def draw_pause_menu(self, shake_x=0, shake_y=0) -> None:
         """Draw the pause menu (migrated from Game)."""
         pygame = self.pygame
@@ -3505,7 +2122,7 @@ class PygameUIManager:
         overlay.fill((0, 0, 0))
         self.screen.blit(overlay, (0, 0))
 
-        title: pygame.Surface = get_text("PAUSED", font_large, (255, 255, 255))
+        title = get_text("PAUSED", font_large, (255, 255, 255))
         self.screen.blit(
             title,
             (
@@ -3704,6 +2321,37 @@ class PygameUIManager:
         y = top_y
         val_x_l = left_x + 190
 
+        # — SATAN LEVEL (Meta Progression) —
+        y = _draw_section_header("Satan Level", left_x, y)
+        meta_lvl = self.game.global_progress.get("meta_level", 1)
+        meta_pts = self.game.global_progress.get("meta_points", 0)
+        meta_xp = self.game.global_progress.get("meta_xp", 0)
+        meta_xp_to = self.game.get_meta_xp_to_next_level()
+
+        _draw_row("Level", str(meta_lvl), left_x, y, val_x_l, val_col=(255, 100, 100))
+        y += line_h
+        _draw_row("Points", str(meta_pts), left_x, y, val_x_l, val_col=(255, 215, 0))
+        y += line_h
+
+        # Progress bar for meta XP
+        bar_width = 400
+        bar_height = 14
+        bar_x = left_x + shake_x
+        bar_y = y + shake_y
+
+        pygame.draw.rect(
+            self.screen, (40, 40, 40), (bar_x, bar_y, bar_width, bar_height)
+        )
+        fill_w = self._calculate_meta_xp_fill(meta_xp, meta_xp_to, bar_width)
+        pygame.draw.rect(
+            self.screen, (255, 100, 100), (bar_x, bar_y, fill_w, bar_height)
+        )
+
+        xp_text = get_text(f"{meta_xp} / {meta_xp_to} XP", font_small, (255, 215, 0))
+        self.screen.blit(xp_text, (left_x + shake_x, bar_y + bar_height + 4 + shake_y))
+
+        y += line_h + 35
+
         # — Run —
         y = _draw_section_header("Run", left_x, y)
         _draw_row("Level", str(self.game.player_level), left_x, y, val_x_l)
@@ -3773,6 +2421,19 @@ class PygameUIManager:
             y,
             val_x_l,
             val_col=COLOR_GREEN if dmg_pct > 0 else COLOR_VALUE,
+        )
+        y += line_h
+        # Critical chance: Blasphemy_6 (10%/level) plus Adrenaline (2%/level)
+        crit_pct = (self.game.permanent_stats.get("blasphemy_6", 0) * 10.0) + (
+            self.game.permanent_stats.get("adrenaline", 0) * 2.0
+        )
+        _draw_row(
+            "Critical damage chance",
+            _pct(crit_pct),
+            left_x,
+            y,
+            val_x_l,
+            val_col=COLOR_GREEN if crit_pct > 0 else COLOR_VALUE,
         )
         y += line_h
         _draw_row(
@@ -4332,7 +2993,13 @@ class PygameUIManager:
         # Create a signature from wall points to detect changes
         sig_left = tuple((int(x), int(y)) for (x, y) in self.game.left_wall_points)
         sig_right = tuple((int(x), int(y)) for (x, y) in self.game.right_wall_points)
-        sig = (sig_left, sig_right, self.width, self.height)
+        sig = (
+            sig_left,
+            sig_right,
+            self.width,
+            self.height,
+            getattr(self.game, "selected_stage", None),
+        )
         if getattr(self, "_fog_cache_signature", None) == sig and getattr(
             self, "_fog_cache", None
         ):
@@ -4342,17 +3009,28 @@ class PygameUIManager:
         pygame = self.pygame
         wall_thickness = WALL_THICKNESS
         num_layers = 5
-        base_r, base_g, base_b = 60, 60, 60
 
-        cache: list[pygame.Surface] = []
+        # Choose a stage-aware base tint for lateral fog so limbo variants look distinct.
+        # - default limbo: neutral gray
+        # - limbo_2: slightly yellower (increase R+G)
+        # - limbo_3: slightly redder (increase R)
+        stage = getattr(self.game, "selected_stage", None)
+        if stage == "limbo_3":
+            base_r, base_g, base_b = 90, 60, 60
+        elif stage == "limbo_2":
+            base_r, base_g, base_b = 80, 80, 60
+        else:
+            base_r, base_g, base_b = 60, 60, 60
+
+        cache = []  # type: ignore  # list of pygame.Surface
 
         for i in range(num_layers):
-            opacity: float = (num_layers - i) / num_layers
-            layer_offset: int = 250 * (i + 1) // num_layers
+            opacity = (num_layers - i) / num_layers
+            layer_offset = 250 * (i + 1) // num_layers
             r = int(base_r * (1 - opacity * 0.6))
             g = int(base_g * (1 - opacity * 0.6))
             b = int(base_b * (1 - opacity * 0.6))
-            color: tuple[int, int, int] = (r, g, b)
+            color = (r, g, b)
 
             # Left fog polygon
             left_fog_points = []
@@ -4370,6 +3048,10 @@ class PygameUIManager:
                 pygame.draw.polygon(
                     fog_surface, color + (int(128 * opacity),), left_fog_points
                 )
+                try:
+                    fog_surface = fog_surface.convert_alpha()
+                except Exception:
+                    pass
                 cache.append(fog_surface)
             else:
                 cache.append(None)
@@ -4390,6 +3072,10 @@ class PygameUIManager:
                 pygame.draw.polygon(
                     fog_surface, color + (int(128 * opacity),), right_fog_points
                 )
+                try:
+                    fog_surface = fog_surface.convert_alpha()
+                except Exception:
+                    pass
                 cache.append(fog_surface)
             else:
                 cache.append(None)
@@ -4397,13 +3083,193 @@ class PygameUIManager:
         self._fog_cache = cache
         self._fog_cache_signature = sig
 
-    def draw_fog(self, shake_x=0, shake_y=0) -> None:
-        if not self.game.is_limbo_stage():
+    def draw_purgatory_fog(self, shake_x=0, shake_y=0) -> None:
+        """Draw the semi–transparent gray haze overlay for purgatory stages.
+
+        The earlier implementation also produced drifting fog particles along
+        the lateral wall edges, but those were removed at the designer's
+        request.  Only the flat overlay remains in use; the particle methods
+        themselves still exist but are no longer invoked.
+        """
+        stage = getattr(self.game, "selected_stage", None)
+        if not (stage and str(stage).startswith("purgatory")):
             return
         if not self.screen:
             return
         if not self.game.left_wall_points or not self.game.right_wall_points:
             return
+
+        # update and render dynamic fog particles (new system)
+        try:
+            self._update_and_draw_fog_particles()
+        except Exception:
+            pass
+        # spawn and draw the new upper–screen cloud shapes before clearing the
+        # old purgatory fog particles (which are still a no-op).
+        try:
+            self._spawn_purgatory_clouds()
+            self._update_and_draw_purgatory_clouds()
+        except Exception:
+            pass
+
+        # previously this method spawned and animated fog particles along
+        # the exterior walls.  Particles were deemed too busy, so the
+        # volumetric effect has been removed; only the screen‑wide overlay
+        # remains.  Clear any existing descriptors in case older code left
+        # them around so they don't linger in memory.
+        try:
+            self._purgatory_fog_particles = []
+            # we also drop the spawn accumulator to avoid unused state warnings
+            self._purgatory_fog_spawn_acc = 0.0
+        except Exception:
+            pass
+
+        # draw the screen‑wide fog overlay last so it mutes everything beneath
+        try:
+            pygame = self.pygame
+            # cache a converted surface to avoid re-allocating and re-converting
+            # every frame.  The overlay is a full-screen rectangle with global
+            # alpha only, so ``convert()`` is the ideal format (no per-pixel
+            # alpha required).
+            from src.game_constants import (
+                PURGATORY_OVERLAY_ALPHA,
+                PURGATORY_OVERLAY_COLOR,
+            )
+
+            need_new = False
+            ov = getattr(self, "_purgatory_overlay", None)
+            if ov is None:
+                need_new = True
+            else:
+                # recreate if size or parameters changed
+                if ov.get_size() != (self.width, self.height):
+                    need_new = True
+                if (
+                    getattr(self, "_purgatory_overlay_color", None)
+                    != PURGATORY_OVERLAY_COLOR
+                ):
+                    need_new = True
+                if (
+                    getattr(self, "_purgatory_overlay_alpha", None)
+                    != PURGATORY_OVERLAY_ALPHA
+                ):
+                    need_new = True
+            if need_new:
+                overlay = pygame.Surface((self.width, self.height))
+                # convert once during init ensures blits are very cheap later
+                try:
+                    overlay = overlay.convert()
+                except Exception:
+                    pass
+                overlay.fill(PURGATORY_OVERLAY_COLOR)
+                overlay.set_alpha(PURGATORY_OVERLAY_ALPHA)
+                self._purgatory_overlay = overlay
+                self._purgatory_overlay_color = PURGATORY_OVERLAY_COLOR
+                self._purgatory_overlay_alpha = PURGATORY_OVERLAY_ALPHA
+            try:
+                self.screen.blit(self._purgatory_overlay, (0, 0))
+            except Exception:
+                # fallback in case blit fails for some reason
+                overlay = pygame.Surface((self.width, self.height))
+                overlay.set_alpha(PURGATORY_OVERLAY_ALPHA)
+                overlay.fill(PURGATORY_OVERLAY_COLOR)
+                self.screen.blit(overlay, (0, 0))
+        except Exception:
+            pass
+
+    def _draw_stage_overlay(
+        self, cache_attr, color_attr, alpha_attr, color, alpha
+    ) -> None:
+        """Blit a full-screen cached overlay onto the screen.
+
+        Creates and caches a ``convert()``+``set_alpha()`` Surface on first
+        call (or when parameters change); subsequent frames are a single cheap
+        blit with no allocation.
+        """
+        if not self.screen:
+            return
+        try:
+            pygame = self.pygame
+            need_new = False
+            ov = getattr(self, cache_attr, None)
+            if ov is None:
+                need_new = True
+            else:
+                if ov.get_size() != (self.width, self.height):
+                    need_new = True
+                if getattr(self, color_attr, None) != color:
+                    need_new = True
+                if getattr(self, alpha_attr, None) != alpha:
+                    need_new = True
+            if need_new:
+                overlay = pygame.Surface((self.width, self.height))
+                try:
+                    overlay = overlay.convert()
+                except Exception:
+                    pass
+                overlay.fill(color)
+                overlay.set_alpha(alpha)
+                setattr(self, cache_attr, overlay)
+                setattr(self, color_attr, color)
+                setattr(self, alpha_attr, alpha)
+            self.screen.blit(getattr(self, cache_attr), (0, 0))
+        except Exception:
+            pass
+
+    def draw_fog(self, shake_x=0, shake_y=0) -> None:
+        stage = getattr(self.game, "selected_stage", None)
+        if not stage or not self.screen:
+            return
+
+        # Purgatory: overlay + fog particles (handled by dedicated method)
+        if str(stage).startswith("purgatory"):
+            try:
+                self.draw_purgatory_fog(shake_x, shake_y)
+            except Exception:
+                pass
+            return
+
+        # Hell: dark red ember overlay
+        if str(stage).startswith("hell"):
+            from src.game_constants import HELL_OVERLAY_ALPHA, HELL_OVERLAY_COLOR
+
+            self._draw_stage_overlay(
+                "_hell_overlay",
+                "_hell_overlay_color",
+                "_hell_overlay_alpha",
+                HELL_OVERLAY_COLOR,
+                HELL_OVERLAY_ALPHA,
+            )
+            return
+
+        # Prologo: subtle warm smoke overlay
+        if stage == "prologo":
+            from src.game_constants import PROLOGO_OVERLAY_ALPHA, PROLOGO_OVERLAY_COLOR
+
+            self._draw_stage_overlay(
+                "_prologo_overlay",
+                "_prologo_overlay_color",
+                "_prologo_overlay_alpha",
+                PROLOGO_OVERLAY_COLOR,
+                PROLOGO_OVERLAY_ALPHA,
+            )
+            return
+
+        # Limbo: haze overlay + lateral fog polygons
+        if not self.game.is_limbo_stage():
+            return
+        if not self.game.left_wall_points or not self.game.right_wall_points:
+            return
+
+        from src.game_constants import LIMBO_OVERLAY_ALPHA, LIMBO_OVERLAY_COLOR
+
+        self._draw_stage_overlay(
+            "_limbo_overlay",
+            "_limbo_overlay_color",
+            "_limbo_overlay_alpha",
+            LIMBO_OVERLAY_COLOR,
+            LIMBO_OVERLAY_ALPHA,
+        )
 
         # Ensure cache is built and up-to-date
         try:
@@ -4458,6 +3324,10 @@ class PygameUIManager:
                 pygame.draw.polygon(
                     fog_surface, color + (int(128 * opacity),), left_fog_points
                 )
+                try:
+                    fog_surface = fog_surface.convert_alpha()
+                except Exception:
+                    pass
                 self.screen.blit(fog_surface, (0, 0))
 
             # Right fog - create polygon following wall structure
@@ -4479,122 +3349,11 @@ class PygameUIManager:
                 pygame.draw.polygon(
                     fog_surface, color + (int(128 * opacity),), right_fog_points
                 )
-                self.screen.blit(fog_surface, (0, 0))
-
-            # Probabilistic dynamic fog particles: occasionally spawn, always update/draw
-            try:
-                self._limbo_fog_spawn_acc += random.random() * 0.5
-                if self._limbo_fog_spawn_acc >= 1.0:
-                    self._limbo_fog_spawn_acc -= 1.0
-                    self._spawn_limbo_fog_particles()
-                self._update_and_draw_limbo_fog_particles()
-            except Exception:
-                pass
-
-    def _spawn_limbo_fog_particles(self) -> None:
-        """Probabilistic spawner for small, drifting fog particles outside Limbo walls.
-
-        - Particles are appended to `self._limbo_fog_particles` as dicts so tests can
-          inspect them directly.
-        - Different `color_type` values are emitted depending on `selected_stage`.
-        """
-        if not self.game.is_limbo_stage():
-            return
-        if not self.game.left_wall_points or not self.game.right_wall_points:
-            return
-
-        # Accumulate spawn chance (frame-independent)
-        self._limbo_fog_spawn_acc += random.random() * 0.6
-        while self._limbo_fog_spawn_acc >= 1.0:
-            self._limbo_fog_spawn_acc -= 1.0
-
-            # Choose left or right exterior spawn (prefer both over time)
-            side = random.choice(("left", "right"))
-
-            # Vertical span across walls
-            top_y = min(
-                p[1] for p in (self.game.left_wall_points + self.game.right_wall_points)
-            )
-            bot_y = max(
-                p[1] for p in (self.game.left_wall_points + self.game.right_wall_points)
-            )
-            y = random.uniform(top_y + 10, bot_y - 10)
-
-            if side == "left":
-                wall_x = min(p[0] for p in self.game.left_wall_points)
-                x = wall_x - random.uniform(0.0, 8.0)
-                vx = random.uniform(-6.0, 6.0)
-            else:
-                wall_x = max(p[0] for p in self.game.right_wall_points)
-                x = wall_x + random.uniform(0.0, 8.0)
-                vx = random.uniform(-6.0, 6.0)
-
-            # Decide color/type FIRST so tests that seed RNG get deterministic color sequence
-            st = getattr(self.game, "selected_stage", "")
-            if st == "limbo_2":
-                color_type = random.choice(("yellow", "white"))
-                alpha = random.randint(5, 30)
-            elif st == "limbo_3":
-                color_type = random.choice(("yellow", "red"))
-                alpha = random.randint(5, 30)
-            else:
-                color_type = "white"
-                alpha = random.randint(10, 60)
-
-            particle = {
-                # position/velocity determined AFTER color to preserve RNG order used by tests
-                "x": x,
-                "y": y,
-                "vx": vx * 0.08,
-                "vy": random.uniform(-0.2, 0.2),
-                "alpha": alpha,
-                "color_type": color_type,
-                "life": random.randint(30, 120),
-            }
-            self._limbo_fog_particles.append(particle)
-
-    def _update_and_draw_limbo_fog_particles(self) -> None:
-        """Update positions/lifetimes and draw limbo fog particles to `self.screen`.
-
-        Drawing is intentionally cheap (small alpha circles) and tolerant of headless
-        environments (no-op when `self.screen` is None).
-        """
-        if not getattr(self, "_limbo_fog_particles", None):
-            return
-        if not self.screen:
-            return
-        pygame = self.pygame
-
-        color_map = {
-            "white": (220, 220, 230),
-            "yellow": (220, 200, 120),
-            "red": (200, 60, 60),
-        }
-
-        for p in list(self._limbo_fog_particles):
-            # Update
-            p["x"] += p.get("vx", 0.0)
-            p["y"] += p.get("vy", 0.0)
-            p["life"] -= 1
-            p["alpha"] = max(0, int(p.get("alpha", 0) - random.uniform(0.05, 0.5)))
-
-            # Cull
-            if p["life"] <= 0 or p["alpha"] <= 0:
                 try:
-                    self._limbo_fog_particles.remove(p)
+                    fog_surface = fog_surface.convert_alpha()
                 except Exception:
                     pass
-                continue
-
-            # Draw small translucent circle
-            col = color_map.get(p.get("color_type", "white"), (220, 220, 220))
-            alpha = max(1, min(255, int(p.get("alpha", 0))))
-            surf = pygame.Surface((18, 18), pygame.SRCALPHA)
-            pygame.draw.circle(surf, col + (alpha,), (9, 9), 8)
-            try:
-                self.screen.blit(surf, (int(p["x"]) - 9, int(p["y"]) - 9))
-            except Exception:
-                pass
+                self.screen.blit(fog_surface, (0, 0))
 
     def draw_game_objects(self, shake_x=0, shake_y=0) -> None:
         if not self.screen:
@@ -4602,52 +3361,8 @@ class PygameUIManager:
         pygame = self.pygame
         # Draw enemies (object-based Enemy instances only)
         for enemy in self.game.enemies:
-            try:
-                if getattr(enemy, "burn_timer", 0) > 0:
-                    try:
-                        if not hasattr(enemy, "burn_particles"):
-                            enemy.burn_particles = []
-                        flame_y_obj = int(enemy.y - enemy.radius - 8)
-                        from src.entities.enemy import BurnParticle as _BP
-
-                        for _ in range(random.randint(2, 4)):
-                            p = _BP(
-                                enemy.x
-                                + random.uniform(-enemy.radius / 2, enemy.radius / 2),
-                                flame_y_obj + random.uniform(-4, 4),
-                                random.uniform(-30, 30),
-                                random.uniform(15, 40),
-                                life=random.randint(18, 44),
-                                size=random.randint(3, 5),
-                            )
-                            enemy.burn_particles.append(p)
-                        for p in list(enemy.burn_particles):
-                            try:
-                                p.update()
-                                surf = pygame.Surface(
-                                    (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
-                                )
-                                alpha = max(60, int(255 * (p.life / 44)))
-                                pygame.draw.circle(
-                                    surf,
-                                    (255, 140, 0, alpha),
-                                    (p.size + 1, p.size + 1),
-                                    p.size,
-                                )
-                                self.screen.blit(
-                                    surf, (int(p.x - p.size), int(p.y - p.size))
-                                )
-                            except Exception:
-                                pass
-                            if p.life <= 0:
-                                try:
-                                    enemy.burn_particles.remove(p)
-                                except Exception:
-                                    pass
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+            # Delegate drawing (and particle updates/emission) to the Enemy instance
+            # to avoid duplicate particle emission/rendering from both UI and Enemy.
             try:
                 enemy.draw(self.screen, shake_x, shake_y)
             except Exception:
@@ -5318,7 +4033,7 @@ class PygameUIManager:
                 "orbital": "Orbitals",
                 "spear": "Spear",
                 "beast": "The number of the beast",
-                "Soul Drain": "Soul Drain",
+                "Flies": "Flies",
             }
             for i, wid in enumerate(self.game.player_weapons):
                 lvl: int = self.game.weapon_levels.get(wid, 0)
@@ -5340,9 +4055,7 @@ class PygameUIManager:
                     1,
                 )
 
-                weapon_text: pygame.Surface = small_font.render(
-                    display_text, True, (200, 200, 200)
-                )
+                weapon_text = small_font.render(display_text, True, (200, 200, 200))
                 self.screen.blit(
                     weapon_text,
                     (
@@ -5353,9 +4066,7 @@ class PygameUIManager:
 
                 # If at max level, add MAX indicator
                 if lvl >= getattr(self.game, "max_weapon_level", 6):
-                    max_text: pygame.Surface = small_font.render(
-                        "MAX", True, (255, 215, 0)
-                    )
+                    max_text = small_font.render("MAX", True, (255, 215, 0))
                     self.screen.blit(
                         max_text,
                         (
@@ -5403,3 +4114,564 @@ class PygameUIManager:
                 # Remove the problematic message
                 if msg in self.game.center_messages:
                     self.game.center_messages.remove(msg)
+
+    def draw_fps_counter(self) -> None:
+        """Draw the FPS counter in the top-right corner, always on top, no shake."""
+        if not getattr(self.game, "show_fps", True):
+            return
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return
+        try:
+            from src.assets.text_cache import get_font, get_text
+
+            fps_val = int(self.game.clock.get_fps())
+            font = get_font(18)
+            fps_text = get_text(f"FPS: {fps_val}", font, (200, 200, 200))
+            x = self.width - fps_text.get_width() - 6
+            y = 6
+            # Dark background for readability
+            bg = pygame.Surface((fps_text.get_width() + 4, fps_text.get_height() + 2))
+            bg.fill((0, 0, 0))
+            bg.set_alpha(120)
+            self.screen.blit(bg, (x - 2, y - 1))
+            self.screen.blit(fps_text, (x, y))
+        except Exception:
+            pass
+
+    def draw_prologo_end(self, shake_x=0, shake_y=0) -> None:
+        """Draw the prologo completion screen"""
+        try:
+            import pygame
+
+            from src.assets.text_cache import get_font, get_text
+
+            # Create semi-transparent purple overlay
+            overlay = pygame.Surface((self.width, self.height))
+            overlay.fill((40, 20, 45))  # Purple background
+            overlay.set_alpha(180)  # Semi-transparent (0-255, 180 = ~70% opacity)
+            self.game.screen.blit(overlay, (0, 0))
+
+            font_large = get_font(48)
+            font_medium = get_font(32)
+
+            # Title
+            title = get_text("SATAN'S FALL COMPLETE", font_large, (255, 215, 0))
+            self.game.screen.blit(
+                title,
+                (
+                    self.game.width // 2 - title.get_width() // 2 + shake_x,
+                    self.game.height // 2 - 100 + shake_y,
+                ),
+            )
+
+            # Message
+            message1 = get_text(
+                "You have witnessed Satan's fall from grace.",
+                font_medium,
+                (255, 255, 255),
+            )
+            message2 = get_text(
+                "Now face the endless torment of Limbo.", font_medium, (255, 255, 255)
+            )
+
+            self.game.screen.blit(
+                message1,
+                (
+                    self.game.width // 2 - message1.get_width() // 2 + shake_x,
+                    self.game.height // 2 - 20 + shake_y,
+                ),
+            )
+            self.game.screen.blit(
+                message2,
+                (
+                    self.game.width // 2 - message2.get_width() // 2 + shake_x,
+                    self.game.height // 2 + 20 + shake_y,
+                ),
+            )
+        except Exception:
+            pass
+
+    def draw_weapon_selection(self, shake_x=0, shake_y=0) -> None:
+        """Draw weapon selection screen"""
+        try:
+            import pygame
+
+            from src.assets.text_cache import get_font, get_text
+
+            font_title = get_font(38)
+            font_name = get_font(26)
+            font_desc = get_font(17)
+            font_small = get_font(15)
+            font_key = get_font(17)
+
+            # ── palette ──────────────────────────────────────────────────────────────
+            # new weapon boxes  →  dark crimson / burgundy
+            C_NEW_BG = (28, 12, 12)
+            C_NEW_BG_HOV = (44, 20, 18)
+            C_NEW_BORDER = (92, 42, 40)
+            C_NEW_BORDER_H = (135, 65, 58)
+            C_NEW_NAME = (172, 98, 88)
+
+            # weapon upgrade boxes  →  aged bronze / dark ochre
+            C_UPG_BG = (26, 20, 10)
+            C_UPG_BG_HOV = (40, 30, 14)
+            C_UPG_BORDER = (88, 72, 38)
+            C_UPG_BORDER_H = (125, 102, 55)
+            C_UPG_NAME = (165, 138, 82)
+
+            C_TITLE = (145, 45, 45)
+            C_DIVIDER = (72, 52, 42)
+            C_DESC = (138, 135, 130)
+            C_KEY = (70, 62, 56)
+
+            # ── overlay ──────────────────────────────────────────────────────────────
+            overlay = pygame.Surface((self.game.width, self.game.height))
+            overlay.set_alpha(185)
+            overlay.fill((4, 4, 10))
+            self.game.screen.blit(overlay, (0, 0))
+
+            # ── title ────────────────────────────────────────────────────────────────
+            is_initial = getattr(self.game, "is_initial_weapon_choice", False)
+            title_text = "CHOOSE YOUR WEAPON" if is_initial else "NEW WEAPON"
+            sub_text = (
+                "pick your starting arsenal"
+                if is_initial
+                else "a new weapon joins your arsenal"
+            )
+            title_surf = get_text(title_text, font_title, C_TITLE)
+            sub_surf = get_text(sub_text, font_small, (90, 100, 130))
+            ty = 60 + shake_y
+            self.game.screen.blit(
+                title_surf,
+                (self.game.width // 2 - title_surf.get_width() // 2 + shake_x, ty),
+            )
+            self.game.screen.blit(
+                sub_surf,
+                (
+                    self.game.width // 2 - sub_surf.get_width() // 2 + shake_x,
+                    ty + title_surf.get_height() + 4,
+                ),
+            )
+            div_y = ty + title_surf.get_height() + sub_surf.get_height() + 10
+            pygame.draw.line(
+                self.game.screen,
+                C_DIVIDER,
+                (self.game.width // 2 - 180 + shake_x, div_y),
+                (self.game.width // 2 + 180 + shake_x, div_y),
+                1,
+            )
+
+            # ── layout (must match click-handler) ────────────────────────────────────
+            cx = self.game.width // 2
+            box_width = SELECTION_BOX_WIDTH
+            box_height = SELECTION_BOX_HEIGHT
+            spacing = SELECTION_BOX_SPACING
+            total_height = (
+                len(self.game.weapon_choices) * box_height
+                + (len(self.game.weapon_choices) - 1) * spacing
+            )
+            start_y = self.game.height // 2 - total_height // 2 + 30
+            x_pos = cx - box_width // 2
+
+            # ── weapon boxes ─────────────────────────────────────────────────────────
+            for i, weapon in enumerate(self.game.weapon_choices):
+                y_pos = start_y + i * (box_height + spacing)
+                mouse_rect = pygame.Rect(x_pos, y_pos, box_width, box_height)
+                is_hovered = mouse_rect.collidepoint(
+                    self.game.mouse_x, self.game.mouse_y
+                )
+                if is_hovered:
+                    self.game.selected_weapon_index = i
+
+                # Weapon upgrades (for owned weapons at lvl 3/6) use gold palette;
+                # new weapons (initial pick or entirely new ones) use crimson palette.
+                is_upgrade = weapon.get("id", "").endswith("_upgrade")
+                if is_upgrade:
+                    bg_col = C_UPG_BG_HOV if is_hovered else C_UPG_BG
+                    border_col = C_UPG_BORDER_H if is_hovered else C_UPG_BORDER
+                    name_col = C_UPG_NAME
+                    stripe_col = C_UPG_BORDER_H
+                else:
+                    bg_col = C_NEW_BG_HOV if is_hovered else C_NEW_BG
+                    border_col = C_NEW_BORDER_H if is_hovered else C_NEW_BORDER
+                    name_col = C_NEW_NAME
+                    stripe_col = C_NEW_BORDER_H
+
+                bx = x_pos + shake_x
+                by = y_pos + shake_y
+
+                pygame.draw.rect(
+                    self.game.screen, bg_col, (bx, by, box_width, box_height)
+                )
+                pygame.draw.rect(
+                    self.game.screen, border_col, (bx, by, box_width, box_height), 2
+                )
+
+                if is_hovered:
+                    pygame.draw.rect(
+                        self.game.screen, stripe_col, (bx, by, 3, box_height)
+                    )
+
+                key_surf = get_text(f"[{i + 1}]", font_key, C_KEY)
+                self.game.screen.blit(
+                    key_surf,
+                    (bx + 16, by + box_height // 2 - key_surf.get_height() // 2),
+                )
+
+                name_surf = get_text(weapon["name"], font_name, name_col)
+                desc_surf = get_text(weapon["description"], font_desc, C_DESC)
+                block_h = name_surf.get_height() + 4 + desc_surf.get_height()
+                name_x = bx + 52
+                name_y = by + (box_height - block_h) // 2
+                self.game.screen.blit(name_surf, (name_x, name_y))
+                self.game.screen.blit(
+                    desc_surf, (name_x, name_y + name_surf.get_height() + 4)
+                )
+        except Exception:
+            pass
+
+    def draw_tower_selection(self, shake_x=0, shake_y=0) -> None:
+        """Draw tower selection screen (Purgatory)."""
+        try:
+            import pygame
+
+            from src.assets.text_cache import get_font, get_text
+
+            font_title = get_font(38)
+            font_name = get_font(26)
+            font_desc = get_font(17)
+            font_small = get_font(15)
+            font_key = get_font(17)
+
+            # ── palette  (dark iron / charcoal) ──────────────────────────────────────
+            C_TITLE = (148, 148, 145)
+            C_DIVIDER = (58, 56, 52)
+            C_BG = (14, 13, 13)
+            C_BG_HOV = (26, 25, 24)
+            C_BORDER = (60, 58, 54)
+            C_BORDER_H = (105, 100, 92)
+            C_NAME = (188, 185, 178)
+            C_DESC = (118, 115, 110)
+            C_KEY = (58, 56, 52)
+
+            # ── overlay ──────────────────────────────────────────────────────────────
+            overlay = pygame.Surface((self.game.width, self.game.height))
+            overlay.set_alpha(200)
+            overlay.fill((2, 2, 4))
+            self.game.screen.blit(overlay, (0, 0))
+
+            # ── title ────────────────────────────────────────────────────────────────
+            title_surf = get_text("CHOOSE YOUR TOWER", font_title, C_TITLE)
+            sub_surf = get_text("place your guardian", font_small, (75, 75, 80))
+            ty = 60 + shake_y
+            self.game.screen.blit(
+                title_surf,
+                (self.game.width // 2 - title_surf.get_width() // 2 + shake_x, ty),
+            )
+            self.game.screen.blit(
+                sub_surf,
+                (
+                    self.game.width // 2 - sub_surf.get_width() // 2 + shake_x,
+                    ty + title_surf.get_height() + 4,
+                ),
+            )
+            div_y = ty + title_surf.get_height() + sub_surf.get_height() + 10
+            pygame.draw.line(
+                self.game.screen,
+                C_DIVIDER,
+                (self.game.width // 2 - 180 + shake_x, div_y),
+                (self.game.width // 2 + 180 + shake_x, div_y),
+                1,
+            )
+
+            # ── layout (must match click-handler) ────────────────────────────────────
+            cx = self.game.width // 2
+            box_width = SELECTION_BOX_WIDTH
+            box_height = SELECTION_BOX_HEIGHT
+            spacing = SELECTION_BOX_SPACING
+            total_height = (
+                len(self.game.tower_choices) * box_height
+                + (len(self.game.tower_choices) - 1) * spacing
+            )
+            start_y = self.game.height // 2 - total_height // 2 + 30
+            x_pos = cx - box_width // 2
+
+            # ── tower boxes ──────────────────────────────────────────────────────────
+            for i, tower in enumerate(self.game.tower_choices):
+                y_pos = start_y + i * (box_height + spacing)
+                mouse_rect = pygame.Rect(x_pos, y_pos, box_width, box_height)
+                is_hovered = mouse_rect.collidepoint(
+                    self.game.mouse_x, self.game.mouse_y
+                )
+                if is_hovered:
+                    self.game.selected_tower_index = i
+
+                bg_col = C_BG_HOV if is_hovered else C_BG
+                border_col = C_BORDER_H if is_hovered else C_BORDER
+
+                bx = x_pos + shake_x
+                by = y_pos + shake_y
+
+                pygame.draw.rect(
+                    self.game.screen, bg_col, (bx, by, box_width, box_height)
+                )
+                pygame.draw.rect(
+                    self.game.screen, border_col, (bx, by, box_width, box_height), 2
+                )
+
+                if is_hovered:
+                    pygame.draw.rect(
+                        self.game.screen, C_BORDER_H, (bx, by, 3, box_height)
+                    )
+
+                key_surf = get_text(f"[{i + 1}]", font_key, C_KEY)
+                self.game.screen.blit(
+                    key_surf,
+                    (bx + 16, by + box_height // 2 - key_surf.get_height() // 2),
+                )
+
+                name_surf = get_text(tower["name"], font_name, C_NAME)
+                desc_surf = get_text(tower["description"], font_desc, C_DESC)
+                block_h = name_surf.get_height() + 4 + desc_surf.get_height()
+                name_x = bx + 52
+                name_y = by + (box_height - block_h) // 2
+                self.game.screen.blit(name_surf, (name_x, name_y))
+                self.game.screen.blit(
+                    desc_surf, (name_x, name_y + name_surf.get_height() + 4)
+                )
+        except Exception:
+            pass
+
+    def draw_upgrade_selection(self, shake_x=0, shake_y=0) -> None:
+        """Draw upgrade selection screen"""
+        try:
+            import pygame
+
+            from src.assets.text_cache import get_font, get_text
+
+            font_title = get_font(38)
+            font_name = get_font(26)
+            font_desc = get_font(17)
+            font_small = get_font(15)
+            font_key = get_font(17)
+
+            # ── palette ──────────────────────────────────────────────────────────────
+            C_TITLE = (145, 45, 45)
+            C_DIVIDER = (65, 50, 40)
+
+            # weapon upgrade box  (aged parchment / dark bronze)
+            C_WPN_BG = (26, 20, 10)
+            C_WPN_BG_HOV = (40, 30, 14)
+            C_WPN_BORDER = (88, 72, 38)
+            C_WPN_BORDER_H = (125, 102, 55)
+            C_WPN_NAME = (165, 138, 82)
+
+            # normal upgrade box  (dark slate green)
+            C_NRM_BG = (14, 28, 22)
+            C_NRM_BG_HOV = (20, 40, 30)
+            C_NRM_BORDER = (45, 78, 60)
+            C_NRM_BORDER_H = (68, 112, 85)
+            C_NRM_NAME = (95, 148, 115)
+
+            C_DESC = (138, 135, 130)
+            C_KEY = (70, 68, 62)
+
+            def _is_weapon_upg(upgrade: dict) -> bool:
+                uid = upgrade.get("id", "")
+                return uid.endswith("_upgrade") or uid in (
+                    "shotgun",
+                    "orbital",
+                    "spear",
+                    "skullboom",
+                    "beast",
+                )
+
+            # ── overlay ──────────────────────────────────────────────────────────────
+            overlay = pygame.Surface((self.game.width, self.game.height))
+            overlay.set_alpha(185)
+            overlay.fill((4, 4, 8))
+            self.game.screen.blit(overlay, (0, 0))
+
+            # ── title ────────────────────────────────────────────────────────────────
+            title_surf = get_text("LEVEL UP", font_title, C_TITLE)
+            sub_surf = get_text("choose your upgrade", font_small, (110, 110, 110))
+            tx = self.game.width // 2 - title_surf.get_width() // 2 + shake_x
+            ty = 60 + shake_y
+            self.game.screen.blit(title_surf, (tx, ty))
+            self.game.screen.blit(
+                sub_surf,
+                (
+                    self.game.width // 2 - sub_surf.get_width() // 2 + shake_x,
+                    ty + title_surf.get_height() + 4,
+                ),
+            )
+            div_y = ty + title_surf.get_height() + sub_surf.get_height() + 10
+            pygame.draw.line(
+                self.game.screen,
+                C_DIVIDER,
+                (self.game.width // 2 - 180 + shake_x, div_y),
+                (self.game.width // 2 + 180 + shake_x, div_y),
+                1,
+            )
+
+            # ── layout (must match click-handler) ────────────────────────────────────
+            cx = self.game.width // 2
+            box_width = SELECTION_BOX_WIDTH
+            box_height = SELECTION_BOX_HEIGHT
+            spacing = SELECTION_BOX_SPACING
+            total_height = (
+                len(self.game.upgrade_choices) * box_height
+                + (len(self.game.upgrade_choices) - 1) * spacing
+            )
+            start_y = self.game.height // 2 - total_height // 2 + 30
+            x_pos = cx - box_width // 2
+
+            # ── reroll button ─────────────────────────────────────────────────────────
+            if getattr(self.game, "upgrade_rerolls_remaining", 0) > 0:
+                pad = 8
+                reroll_label = f"Reroll  ({self.game.upgrade_rerolls_remaining} left)"
+                reroll_surf = get_text(reroll_label, font_small, (190, 150, 150))
+                reroll_w = reroll_surf.get_width() + 24
+                reroll_h = reroll_surf.get_height() + 10
+                reroll_x = self.game.width // 2 - reroll_w // 2
+                reroll_y = int((div_y + 6 + start_y) / 2 - reroll_h / 2)
+                reroll_rect = pygame.Rect(reroll_x, reroll_y, reroll_w, reroll_h)
+                hot_rect = pygame.Rect(
+                    reroll_x - pad,
+                    reroll_y - pad,
+                    reroll_w + pad * 2,
+                    reroll_h + pad * 2,
+                )
+                mouse_over = hot_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+                pygame.draw.rect(
+                    self.game.screen,
+                    (68, 32, 28) if mouse_over else (38, 18, 16),
+                    reroll_rect,
+                )
+                pygame.draw.rect(
+                    self.game.screen,
+                    (130, 72, 62) if mouse_over else (88, 52, 46),
+                    reroll_rect,
+                    2,
+                )
+                self.game.screen.blit(reroll_surf, (reroll_x + 12, reroll_y + 5))
+
+            # ── upgrade boxes ─────────────────────────────────────────────────────────
+            for i, upgrade in enumerate(self.game.upgrade_choices):
+                y_pos = start_y + i * (box_height + spacing)
+                mouse_rect = pygame.Rect(x_pos, y_pos, box_width, box_height)
+                is_hovered = mouse_rect.collidepoint(
+                    self.game.mouse_x, self.game.mouse_y
+                )
+                if is_hovered:
+                    self.game.selected_upgrade_index = i
+                is_weapon = _is_weapon_upg(upgrade)
+
+                if is_weapon:
+                    bg_col = C_WPN_BG_HOV if is_hovered else C_WPN_BG
+                    border_col = C_WPN_BORDER_H if is_hovered else C_WPN_BORDER
+                    name_col = C_WPN_NAME
+                else:
+                    bg_col = C_NRM_BG_HOV if is_hovered else C_NRM_BG
+                    border_col = C_NRM_BORDER_H if is_hovered else C_NRM_BORDER
+                    name_col = C_NRM_NAME
+
+                bx = x_pos + shake_x
+                by = y_pos + shake_y
+
+                pygame.draw.rect(
+                    self.game.screen, bg_col, (bx, by, box_width, box_height)
+                )
+                pygame.draw.rect(
+                    self.game.screen, border_col, (bx, by, box_width, box_height), 2
+                )
+
+                # left accent stripe on hover
+                if is_hovered:
+                    stripe = C_WPN_BORDER_H if is_weapon else C_NRM_BORDER_H
+                    pygame.draw.rect(self.game.screen, stripe, (bx, by, 3, box_height))
+
+                # [1] [2] [3] key hint — left side
+                key_surf = get_text(f"[{i + 1}]", font_key, C_KEY)
+                key_x = bx + 16
+                key_y = by + box_height // 2 - key_surf.get_height() // 2
+                self.game.screen.blit(key_surf, (key_x, key_y))
+
+                # name + description — centred vertically in the box
+                name_surf = get_text(upgrade["name"], font_name, name_col)
+                desc_surf = get_text(upgrade["description"], font_desc, C_DESC)
+                block_h = name_surf.get_height() + 4 + desc_surf.get_height()
+                name_x = bx + 52
+                name_y = by + (box_height - block_h) // 2
+                self.game.screen.blit(name_surf, (name_x, name_y))
+                self.game.screen.blit(
+                    desc_surf, (name_x, name_y + name_surf.get_height() + 4)
+                )
+        except Exception:
+            pass
+
+    def draw_game_over(self, shake_x=0, shake_y=0) -> None:
+        """Draw the persistent game over screen overlay with fade."""
+        try:
+            import pygame
+
+            from src.assets.text_cache import get_font, get_text
+
+            # Overlay surface with per-pixel alpha to allow fade-in effect
+            overlay = pygame.Surface(
+                (self.game.width, self.game.height), pygame.SRCALPHA
+            )
+            overlay.fill((40, 20, 45, int(self.game.game_over_alpha)))
+            self.game.screen.blit(overlay, (0, 0))
+
+            # Title (fade text by setting per-surface alpha)
+
+            # Dark red for the FALL title for stronger contrast
+            title_surf = get_text("FALL", get_font(64), (139, 0, 0)).copy()
+            title_surf.set_alpha(int(self.game.game_over_alpha))
+            self.game.screen.blit(
+                title_surf,
+                (
+                    self.game.width // 2 - title_surf.get_width() // 2 + shake_x,
+                    200 + shake_y,
+                ),
+            )
+
+            # Stats
+            font_medium = get_font(24)
+            stats = [
+                f"Final Score: {int(self.game.score)}",
+                f"Enemies killed: {getattr(self.game, 'enemies_killed_this_run', 0)}",
+                f"Wave: {self.game.wave}",
+                f"Level: {self.game.player.level}",
+            ]
+
+            for i, stat in enumerate(stats):
+                text_surf = get_text(stat, font_medium, (255, 255, 255)).copy()
+                text_surf.set_alpha(int(self.game.game_over_alpha))
+                self.game.screen.blit(
+                    text_surf,
+                    (
+                        self.game.width // 2 - text_surf.get_width() // 2 + shake_x,
+                        320 + i * 40 + shake_y,
+                    ),
+                )
+
+            # Prompt
+            # Main prompt: ESC to return to menu (restart disabled)
+            # Moved down for more spacing and changed to light yellow
+            prompt = get_text(
+                "Press ESC to return to menu", font_medium, (255, 255, 153)
+            ).copy()
+            prompt.set_alpha(int(self.game.game_over_alpha))
+            self.game.screen.blit(
+                prompt,
+                (
+                    self.game.width // 2 - prompt.get_width() // 2 + shake_x,
+                    480 + shake_y,
+                ),
+            )
+
+        except Exception as e:
+            logger.exception("Error drawing game over screen: %s", e)

@@ -39,6 +39,9 @@ class Player(BaseSprite):
         self.max_health = PLAYER_BASE_HEALTH
         self.health: float = float(self.max_health)
         self.speed: float = 220.0  # user-requested base speed (px/s)
+        # Store immutable baseline speed so permanent multipliers are applied
+        # relative to the original stat (prevents compounding on re-apply).
+        self.base_speed: float = float(self.speed)
         self.velocity_x: float = 0.0
         # Vertical velocity for limited vertical movement (new feature)
         self.velocity_y: float = 0.0

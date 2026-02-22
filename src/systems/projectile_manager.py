@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
-from src.projectile import Projectile, SoulDrainProjectile
+from src.projectile import FliesProjectile, Projectile
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 class ProjectileManager:
     def __init__(self, game, initial_pool: int = 200) -> None:
         self.game = game
-        # Simple pools for Projectile and SoulDrainProjectile
+        # Simple pools for Projectile and FliesProjectile
         self.pool: List[Projectile] = []
-        self.pool_soul: List[SoulDrainProjectile] = []
+        self.pool_flies: List[FliesProjectile] = []
         for _ in range(initial_pool):
             try:
                 self.pool.append(Projectile(0, 0, 0, 0))
@@ -44,7 +44,7 @@ class ProjectileManager:
         source: Optional[str] = None,
         appearance: Optional[str] = None,
     ) -> Projectile:
-        cls = SoulDrainProjectile if weapon_type == "Soul Drain" else Projectile
+        cls = FliesProjectile if weapon_type == "Flies" else Projectile
         if cls is Projectile:
             if self.pool:
                 p = self.pool.pop()
@@ -74,8 +74,8 @@ class ProjectileManager:
                     appearance=appearance,
                 )
         else:
-            if self.pool_soul:
-                p = self.pool_soul.pop()
+            if self.pool_flies:
+                p = self.pool_flies.pop()
                 p.reset(
                     x,
                     y,
@@ -89,8 +89,8 @@ class ProjectileManager:
                     appearance=appearance,
                 )
             else:
-                p = SoulDrainProjectile(x, y, vel_x, vel_y, damage=damage)
-                # SoulDrainProjectile constructor sets needed fields
+                p = FliesProjectile(x, y, vel_x, vel_y, damage=damage)
+                # FliesProjectile constructor sets needed fields
         # Attach manager reference
         p.manager = self
 
@@ -181,8 +181,8 @@ class ProjectileManager:
             # continue silently in production; assertions help catch regressions during development
 
         # Put into correct pool
-        if isinstance(p, SoulDrainProjectile):
-            self.pool_soul.append(p)
+        if isinstance(p, FliesProjectile):
+            self.pool_flies.append(p)
         else:
             self.pool.append(p)
 

@@ -82,6 +82,21 @@ def test_spear_handles_dict_enemies_once():
         ), f"Enemy at {e.x} was not hit exactly once"
 
 
+def test_spear_image_not_squashed_in_any_direction():
+    """Spear projectile appearance should maintain width>height regardless of velocity."""
+    pygame.init()
+    from src.projectile import Projectile
+
+    for vx, vy in [(100, 0), (0, -100), (0, 100), (-100, 0)]:
+        proj = Projectile(0, 0, vx, vy, damage=5, radius=6, weapon_type="spear")
+        # simulate drawing to compute rotation+unsquash
+        proj.draw_projectile()
+        w, h = proj.image.get_size()
+        assert w >= h, f"Spear drawn squashed for velocity {(vx,vy)}: size={w}x{h}"
+        # ensure length at least 40px after enhancement
+        assert w >= 40, f"Spear too short ({w}px) for velocity {(vx,vy)}"
+
+
 def test_projectile_reset_clears_hit_ids():
     p = Projectile(0, 0, 0, 0)
     # Simulate hits

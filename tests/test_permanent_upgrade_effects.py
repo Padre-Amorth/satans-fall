@@ -26,7 +26,16 @@ def test_adrenaline_gives_five_percent_fire_rate_per_level():
     g = Game()
     g.permanent_stats["adrenaline"] = 4
     g.reset_game()
+    # fire-rate multiplier still tracked separately
     assert pytest.approx(g.player.fire_rate_multiplier, rel=1e-6) == 1.0 + 4 * 0.05
+
+
+def test_adrenaline_crit_description_includes_chance():
+    g = Game()
+    assert (
+        g.permanent_stat_effect_text("adrenaline", 2)
+        == "+5% fire rate/level (10% total); +2% crit chance/level (4% total)"
+    )
 
 
 def test_permanent_stat_effect_texts():
@@ -38,22 +47,32 @@ def test_permanent_stat_effect_texts():
     )
     assert (
         g.permanent_stat_effect_text("adrenaline", 2)
-        == "+5% fire rate/level (10% total)"
+        == "+5% fire rate/level (10% total); +2% crit chance/level (4% total)"
     )
     assert (
         g.permanent_stat_effect_text("structure", 4)
         == "-3% dmg taken/level (12% total); +3% XP/level (+12% XP total)"
     )
-    # Blasphemy 1 is +10% damage per level (3-level slot)
+    # Blasphemy 1 now gives HP per level instead of damage
     assert (
-        g.permanent_stat_effect_text("blasphemy_1", 3) == "+10% dmg/level (30% total)"
+        g.permanent_stat_effect_text("blasphemy_1", 3) == "+15 HP/level (45 HP total)"
     )
-    # New blasphemies: blasphemy_2 = +20 HP/level, blasphemy_3 = +10% FR/level, blasphemy_4 = +10% XP/level
+    # Blasphemy 2 provides flat regeneration, blasphemy 3 reduces damage taken
     assert (
-        g.permanent_stat_effect_text("blasphemy_2", 2) == "+20 HP/level (40 HP total)"
+        g.permanent_stat_effect_text("blasphemy_2", 2)
+        == "+1 HP every 5s/level (2 HP every 5s)"
     )
     assert (
         g.permanent_stat_effect_text("blasphemy_3", 2)
-        == "+10% fire rate/level (20% total)"
+        == "-10% dmg taken/level (20% total)"
     )
     assert g.permanent_stat_effect_text("blasphemy_4", 3) == "+10% XP/level (30% total)"
+    # Blasphemy 5 is a binary revive ability; show its description even at level 0
+    assert (
+        g.permanent_stat_effect_text("blasphemy_5", 0)
+        == "Revive once on death; restore 50% max HP"
+    )
+    assert (
+        g.permanent_stat_effect_text("blasphemy_5", 1)
+        == "Revive once on death; restore 50% max HP"
+    )

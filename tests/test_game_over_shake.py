@@ -1,3 +1,9 @@
+import os
+
+# headless display for tests
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+
 from src.game import Game
 
 

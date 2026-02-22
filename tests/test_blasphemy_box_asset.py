@@ -11,15 +11,18 @@ def setup_dummy_sdl():
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
 
-def test_blasphemy_boxes_use_imported_asset(tmp_path: Path) -> None:
+def test_blasphemy_boxes_use_imported_asset(tmp_path: Path, monkeypatch) -> None:
     """If an asset named `blasphemy_box.png` exists in `assets/`,
     all Blasphemy boxes use it as scaled background."""
     setup_dummy_sdl()
 
-    # create a distinctive image in the project's assets folder
-    repo_assets = Path(__file__).resolve().parents[1] / "assets"
-    repo_assets.mkdir(parents=True, exist_ok=True)
-    asset_path = repo_assets / "blasphemy_box.png"
+    # create a distinctive image in a temporary asset directory and patch
+    # the AssetManager to use it.  This prevents the test from touching the
+    # real repository assets and eliminates any race where the file might be
+    # deleted by cleanup.
+    temp_assets = tmp_path / "assets"
+    temp_assets.mkdir()
+    asset_path = temp_assets / "blasphemy_box.png"
 
     pygame.init()
     surf = pygame.Surface((80, 60))
@@ -27,8 +30,9 @@ def test_blasphemy_boxes_use_imported_asset(tmp_path: Path) -> None:
     surf.fill(color)
     pygame.image.save(surf, str(asset_path))
 
-    # clear asset cache so the new file is visible to AssetManager
+    # make AssetManager look in our temporary directory
     am.clear_cache()
+    monkeypatch.setattr(am, "_ASSETS_DIR", str(temp_assets))
 
     g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
     g.show_permanent_upgrades()
@@ -50,9 +54,5 @@ def test_blasphemy_boxes_use_imported_asset(tmp_path: Path) -> None:
         sampled == color
     ), "Blasphemy boxes should render the imported asset as background"
 
-    # cleanup
-    try:
-        asset_path.unlink()
-    except Exception:
-        pass
+    # clear cache again to remove our temporary image from memory
     am.clear_cache()

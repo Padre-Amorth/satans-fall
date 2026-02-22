@@ -18,6 +18,9 @@ def test_clicking_power_updates_damage_multiplier():
     g.showing_stage_menu = False
     g.showing_permanent_upgrades = True
 
+    # give ourselves a meta point so the stat can be purchased
+    g.global_progress["meta_points"] = 1
+
     left_x = g.width // 2 - 420
     # power stat is at y = 140 (as defined in the config)
     pos = (left_x + 5, 140 + 5)
@@ -32,9 +35,20 @@ def test_clicking_power_updates_damage_multiplier():
     g.handle_mouse_click(pos, button=1)  # left click to upgrade
     after = g.permanent_stats.get("power", 0)
     assert after == before + 1
+    # meta point spent
+    assert g.global_progress.get("meta_points", 0) == 0
     # multiplier should reflect the upgrade (+5% per level)
     assert g.damage_multiplier == pytest.approx(1.0 + after * 0.05)
     assert g.player.damage_multiplier == pytest.approx(g.damage_multiplier)
+
+    # right-click to refund and re-spend
+    g.handle_mouse_click(pos, button=3)
+    assert g.permanent_stats["power"] == before
+    assert g.global_progress.get("meta_points", 0) == 1
+    # spend again
+    g.handle_mouse_click(pos, button=1)
+    assert g.permanent_stats["power"] == before + 1
+    assert g.global_progress.get("meta_points", 0) == 0
 
 
 def test_clicking_blasphemy1_updates_damage_multiplier():
@@ -51,6 +65,8 @@ def test_clicking_blasphemy1_updates_damage_multiplier():
     pos = (box_x - 30 + 5, box_y1 + 5)  # small offset inside the box
 
     # ensure baseline (isolate blasphemy effect by zeroing POWER)
+    # Note: reset global_progress to ensure consistent test state (not loaded from persistent file)
+    g.global_progress["meta_points"] = 0
     g.permanent_stats["power"] = 0
     g.permanent_stats["blasphemy_1"] = 0
     g.save_permanent_stats()
@@ -70,7 +86,7 @@ def test_clicking_blasphemy1_updates_damage_multiplier():
     assert g.player.damage_multiplier == pytest.approx(g.damage_multiplier)
 
 
-def test_clicking_blasphemy2_updates_max_health():
+def test_clicking_blasphemy2_increases_regeneration():
     g = Game()
     g.showing_stage_menu = False
     g.showing_permanent_upgrades = True
@@ -86,24 +102,48 @@ def test_clicking_blasphemy2_updates_max_health():
     g.permanent_stats["vigor"] = 0
     g.permanent_stats["blasphemy_2"] = 0
     g.reset_game()
-    # reset_game toggles menus — re-open the Permanent Upgrades menu for clicks
     g.showing_stage_menu = False
     g.showing_permanent_upgrades = True
 
-    base_max = g.player.max_health
+    # apply some damage so we can observe healing
+    g.player.health = g.player.max_health * 0.5
 
     for expected in (1, 2, 3):
         g.handle_mouse_click(pos, button=1)
         assert g.permanent_stats["blasphemy_2"] == expected
-        assert g.player.max_health == base_max + expected * 20
+        # reset baseline health and frame counter so each level is tested independently
+        g.player.health = g.player.max_health * 0.5
+        g.frame_count = 0
+        frames = 5 * g.fps
+        # clear any enemies/projectiles to avoid incidental damage
+        try:
+            g.enemies = []
+        except Exception:
+            import pygame
 
-    # downgrade once
+            g.enemies = pygame.sprite.Group()
+        import pygame
+
+        g.enemy_projectiles = pygame.sprite.Group()
+        g.enemy_spawn_timer = 10**6
+        try:
+            g.enemy_manager.enemy_spawn_timer = 10**6
+        except Exception:
+            pass
+
+        for _ in range(frames):
+            g.update_game()
+        expected_heal = expected * 1.0  # 1 HP per level every 5s
+        assert g.player.health == pytest.approx(
+            min(g.player.max_health, g.player.max_health * 0.5 + expected_heal)
+        )
+
+    # downgrade once and ensure regen rate drops
     g.handle_mouse_click(pos, button=3)
     assert g.permanent_stats["blasphemy_2"] == 2
-    assert g.player.max_health == base_max + 2 * 20
 
 
-def test_clicking_blasphemy3_updates_fire_rate_multiplier():
+def test_clicking_blasphemy3_reduces_damage_taken():
     g = Game()
     g.showing_stage_menu = False
     g.showing_permanent_upgrades = True
@@ -115,21 +155,24 @@ def test_clicking_blasphemy3_updates_fire_rate_multiplier():
     box_y1 = 320 + 80
     pos = (box_x - 30 + 5, box_y1 + 5)
 
-    # isolate effect (no adrenaline)
-    g.permanent_stats["adrenaline"] = 0
+    # isolate effect (no structure or blasphemy_6)
+    g.permanent_stats["structure"] = 0
+    g.permanent_stats["blasphemy_6"] = 0
     g.permanent_stats["blasphemy_3"] = 0
     g.apply_permanent_stats()
 
     for expected in (1, 2, 3):
         g.handle_mouse_click(pos, button=1)
         assert g.permanent_stats["blasphemy_3"] == expected
-        assert g.fire_rate_multiplier == pytest.approx(1.0 + expected * 0.10)
-        assert g.player.fire_rate_multiplier == pytest.approx(g.fire_rate_multiplier)
+        assert g.damage_reduction_multiplier == pytest.approx(1.0 - expected * 0.10)
+        assert g.player.damage_reduction_multiplier == pytest.approx(
+            g.damage_reduction_multiplier
+        )
 
     # downgrade once
     g.handle_mouse_click(pos, button=3)
     assert g.permanent_stats["blasphemy_3"] == 2
-    assert g.fire_rate_multiplier == pytest.approx(1.0 + 2 * 0.10)
+    assert g.damage_reduction_multiplier == pytest.approx(1.0 - 2 * 0.10)
 
 
 def test_clicking_blasphemy4_updates_xp_multiplier():
@@ -161,8 +204,9 @@ def test_clicking_blasphemy4_updates_xp_multiplier():
 
 def test_vigor_regenerates_health_every_5s_per_level():
     g = Game()
-    # Apply permanent vigor and start a run
+    # Apply permanent vigor (blasphemy_2 also grants regen, but we leave it at 0 here)
     g.permanent_stats["vigor"] = 2
+    g.permanent_stats["blasphemy_2"] = 0
     g.reset_game()
 
     max_hp = g.player.max_health
@@ -209,7 +253,7 @@ def test_clicking_adrenaline_updates_fire_rate_multiplier():
 
     # set a known value then downgrade
     g.permanent_stats["adrenaline"] = 2
-    # isolate from Blasphemy bonuses (blasphemy_3 affects fire rate)
+    # isolate from Blasphemy bonuses (none of them affect fire rate now)
     g.permanent_stats["blasphemy_3"] = 0
     g.save_permanent_stats()
     g.apply_permanent_stats()
@@ -223,13 +267,159 @@ def test_clicking_adrenaline_updates_fire_rate_multiplier():
     assert g.player.fire_rate_multiplier == pytest.approx(g.fire_rate_multiplier)
 
 
+def test_adrenaline_grants_crit_chance_even_without_blasphemy6(monkeypatch):
+    # Ensure adrenaline alone contributes to crit chance and deals 50% extra
+    g = Game()
+    g.permanent_stats["adrenaline"] = 3
+    g.permanent_stats["blasphemy_6"] = 0
+    # make the collision system ready
+    cs = g.collision_system
+
+    class DummyProj:
+        def __init__(self):
+            self.is_enemy_projectile = False
+            self.damage = 10
+
+    class DummyEnemy:
+        def __init__(self):
+            self.burn_timer = 0
+
+    proj = DummyProj()
+    enemy = DummyEnemy()
+
+    # patch random.random to always return 0 (guaranteed crit)
+    monkeypatch.setattr("random.random", lambda: 0.0)
+    dmg = cs._player_damage_vs_burning(proj, enemy, proj.damage)
+    assert dmg == 15
+
+    # patch random.random to return high value (no crit)
+    monkeypatch.setattr("random.random", lambda: 0.99)
+    dmg = cs._player_damage_vs_burning(proj, enemy, proj.damage)
+    assert dmg == 10
+
+
+def test_crit_shows_only_one_floating_text(monkeypatch):
+    # create a simple collision scenario where a player projectile hits an enemy
+    import pygame
+
+    g = Game()
+
+    # position enemy in field
+    class DummyEnemy(pygame.sprite.Sprite):
+        def __init__(self):
+            super().__init__()
+            self.x = 100
+            self.y = 100
+            self.health = 100
+            self.max_health = 100
+            self.enemy_type = "normal"
+            self.rect = pygame.Rect(self.x - 10, self.y - 10, 20, 20)
+
+        def take_damage(self, damage, *, show_floating=True):
+            try:
+                self.health -= damage
+            except Exception:
+                pass
+
+    class DummyProj(pygame.sprite.Sprite):
+        def __init__(self):
+            super().__init__()
+            self.x = 100
+            self.y = 100
+            self.radius = 5
+            self.damage = 10
+            self.is_enemy_projectile = False
+            self.source = None
+            self.rect = pygame.Rect(self.x - 2, self.y - 2, 4, 4)
+
+    enemy = DummyEnemy()
+    proj = DummyProj()
+    g.enemies = pygame.sprite.Group()
+    g.enemies.add(enemy)
+    g.projectiles = pygame.sprite.Group()
+    g.projectiles.add(proj)
+
+    # ensure crit occurs
+    g.permanent_stats["adrenaline"] = 1
+    g.permanent_stats["blasphemy_6"] = 0
+    monkeypatch.setattr("random.random", lambda: 0.0)
+
+    g.collision_system.handle_collisions()
+    # only one floating text should be added, colored non-white
+    assert len(g.floating_texts) == 1
+    ft = g.floating_texts[0]
+    assert ft.color != (255, 255, 255)
+    # crited projectile base damage was 10; 50% extra means 15 displayed
+    assert ft.text == "15"
+    # enemy health should have dropped appropriately
+    assert enemy.health == 100 - 15
+
+
+def test_crit_shows_only_one_floating_text_plain_list_branch(monkeypatch):
+    # simulate situation where spatial grid hit detection fails so the
+    # fallback plain-list branch is used; this exercised the sections around
+    # lines 2100/2350 in collision_system.
+    import pygame
+
+    g = Game()
+    # simulate spatial grid failure by clearing it; helper will fall back to spritecollide
+    g.spatial_grid = None
+
+    class DummyEnemy(pygame.sprite.Sprite):
+        def __init__(self):
+            super().__init__()
+            self.x = 100
+            self.y = 100
+            self.health = 100
+            self.max_health = 100
+            self.enemy_type = "normal"
+            self.rect = pygame.Rect(self.x - 10, self.y - 10, 20, 20)
+
+        def take_damage(self, damage, *, show_floating=True):
+            try:
+                self.health -= damage
+            except Exception:
+                pass
+
+    class DummyProj(pygame.sprite.Sprite):
+        def __init__(self):
+            super().__init__()
+            self.x = 100
+            self.y = 100
+            self.radius = 5
+            self.damage = 10
+            self.is_enemy_projectile = False
+            self.source = None
+            self.rect = pygame.Rect(self.x - 2, self.y - 2, 4, 4)
+
+    enemy = DummyEnemy()
+    proj = DummyProj()
+    g.enemies = pygame.sprite.Group()
+    g.enemies.add(enemy)
+    g.projectiles = pygame.sprite.Group()
+    g.projectiles.add(proj)
+
+    # ensure crit occurs
+    g.permanent_stats["adrenaline"] = 1
+    g.permanent_stats["blasphemy_6"] = 0
+    monkeypatch.setattr("random.random", lambda: 0.0)
+
+    g.collision_system.handle_collisions()
+    assert len(g.floating_texts) == 1
+    ft = g.floating_texts[0]
+    assert ft.color != (255, 255, 255)
+    assert ft.text == "15"
+    assert enemy.health == 100 - 15
+
+
 def test_structure_reduces_damage_and_grants_xp_bonus_on_kill():
     import pygame
 
     g = Game()
     # give one point of structure (3% dmg reduction + 3% XP)
-    # ensure blasphemy_4 does not affect this test
+    # ensure blasphemy_4 and blasphemy_3 do not affect this test
     g.permanent_stats["blasphemy_4"] = 0
+    g.permanent_stats["blasphemy_3"] = 0
     g.permanent_stats["structure"] = 1
     g.reset_game()
 

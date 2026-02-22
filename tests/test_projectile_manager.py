@@ -1,7 +1,7 @@
 import pygame
 
 from src.game import Game
-from src.projectile import Projectile, SoulDrainProjectile
+from src.projectile import FliesProjectile, Projectile
 
 
 def test_spawn_and_recycle():
@@ -29,7 +29,7 @@ def test_spawn_and_recycle():
 
     # After kill and recycle, it should not be in active list and should be in a pool
     assert p not in pm.active
-    assert p in pm.pool or p in pm.pool_soul
+    assert p in pm.pool or p in pm.pool_flies
 
 
 def test_register_existing_projectile():
@@ -51,19 +51,19 @@ def test_register_existing_projectile():
     # Recycle
     pm.recycle(p)
     assert p not in pm.active
-    assert p in pm.pool or p in pm.pool_soul
+    assert p in pm.pool or p in pm.pool_flies
 
 
-def test_soul_drain_pooling():
+def test_flies_pooling():
     pygame.init()
     g = Game(debug=True)
     pm = g.projectile_manager
 
-    sd = pm.spawn(50, 50, 1, 1, weapon_type="Soul Drain", damage=3)
-    assert isinstance(sd, SoulDrainProjectile)
+    sd = pm.spawn(50, 50, 1, 1, weapon_type="Flies", damage=3)
+    assert isinstance(sd, FliesProjectile)
     try:
         sd.kill()
     except Exception:
         pass
     assert sd not in pm.active
-    assert sd in pm.pool_soul or sd in pm.pool
+    assert sd in pm.pool_flies or sd in pm.pool

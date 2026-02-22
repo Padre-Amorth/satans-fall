@@ -21,6 +21,11 @@ def test_permanent_stats_save_and_load(tmp_path):
     # Also set some arbitrary global progress
     g1.global_progress["bosses_defeated"] = 3
     g1.global_progress["tutorial_seen"] = True
+    # meta keys should round-trip
+    g1.global_progress["meta_xp"] = 5
+    g1.global_progress["meta_level"] = 2
+    g1.global_progress["meta_points"] = 1
+    g1.global_progress.setdefault("stages_cleared", {})["prologo"] = True
     g1.save_permanent_stats()
 
     # New game should load the saved values
@@ -29,6 +34,10 @@ def test_permanent_stats_save_and_load(tmp_path):
     assert g2.permanent_stats["vigor"] == 2
     assert g2.global_progress.get("bosses_defeated") == 3
     assert g2.global_progress.get("tutorial_seen") is True
+    assert g2.global_progress.get("meta_xp") == 5
+    assert g2.global_progress.get("meta_level") == 2
+    assert g2.global_progress.get("meta_points") == 1
+    assert g2.global_progress.get("stages_cleared", {}).get("prologo") is True
 
     # Clean up (tmp_path handled by pytest)
 

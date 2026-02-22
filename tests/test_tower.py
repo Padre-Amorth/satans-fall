@@ -17,8 +17,13 @@ class DummyEnemy(pygame.sprite.Sprite):
         self.slow_timer = 0  # For slow effects
         self.slow_factor = 1.0  # For slow effects
 
-    def take_damage(self, damage):
-        self.health -= damage
+    def take_damage(self, damage, *args, **kwargs):
+        # Accept extra args/kwargs such as ``show_floating`` for compatibility
+        # with production ``Enemy.take_damage`` signature.
+        try:
+            self.health -= damage
+        except Exception:
+            pass
 
 
 def test_tower_fires_at_closest():

@@ -187,6 +187,21 @@ def test_reinforcements_scheduled_when_boss_take_damage_kills():
     ), "Reinforcements were not spawned after USEREVENT+1 when boss was killed via take_damage"
 
 
+def test_boss_take_damage_direct_shows_floating_text():
+    """Calling take_damage on a boss should spawn a floating damage number."""
+    pygame.init()
+    g = Game(debug=True)
+    g.select_stage("purgatory")
+    boss = g.enemy_manager.spawn_boss("mid")
+    assert boss is not None
+
+    # no texts initially
+    assert getattr(g, "floating_texts", []) == []
+    boss.take_damage(12)
+    assert len(g.floating_texts) == 1
+    assert g.floating_texts[0].text == "12"
+
+
 def test_strong_can_spawn_in_first_two_waves():
     """Ensure 'strong' has a 10% chance to appear in waves 1-2 (rand < 0.10)."""
     from unittest.mock import patch

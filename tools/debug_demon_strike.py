@@ -36,11 +36,11 @@ for i in range(8):
         except Exception:
             pass
     print(
-        f'Frame {i} BEFORE: enemy.health={enemy.health}, ds._hit_ids={getattr(ds, "_hit_ids", None)}'
+        f"Frame {i} BEFORE: enemy.health={enemy.health}, ds._hit_ids={getattr(ds, '_hit_ids', None)}"
     )
     g.handle_collisions()
     print(
-        f'Frame {i} AFTER:  enemy.health={enemy.health}, ds._hit_ids={getattr(ds, "_hit_ids", None)}'
+        f"Frame {i} AFTER:  enemy.health={enemy.health}, ds._hit_ids={getattr(ds, '_hit_ids', None)}"
     )
 
 print("final enemy health:", enemy.health)

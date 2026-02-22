@@ -3,7 +3,7 @@ from src.weapons import get_weapon_upgrade_description
 
 def test_inferred_descriptions_for_common_weapons():
     # Ensure inference returns non-generic descriptions for underscored keys
-    d1 = get_weapon_upgrade_description("soul_drain", 2)
+    d1 = get_weapon_upgrade_description("flies", 2)
     assert not d1.startswith("Upgrade to level"), f"Bad fallback: {d1}"
     assert "projectile" in d1 or "projectiles" in d1
 

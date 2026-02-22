@@ -52,7 +52,11 @@ class Projectile(BaseSprite):
         self.vel_x: Any = vel_x
         self.vel_y: Any = vel_y
         self.damage: int = damage
+        # radius may be modified during flight for special weapons
         self.radius: int = radius
+        # remember original spawn point for distance-based effects
+        self.spawn_x: float = x
+        self.spawn_y: float = y
         self.is_enemy_projectile: bool = is_enemy_projectile
         self.weapon_type = weapon_type  # 'spear', 'shotgun', or None for regular
         self.source = source  # 'orbital' for orbital projectiles
@@ -117,6 +121,9 @@ class Projectile(BaseSprite):
         self.vel_y = vel_y
         self.damage = damage
         self.radius = radius
+        # reset spawn point as well
+        self.spawn_x = x
+        self.spawn_y = y
         self.is_enemy_projectile = is_enemy_projectile
         self.weapon_type = weapon_type
         self.source = source
@@ -168,24 +175,43 @@ class Projectile(BaseSprite):
     def draw_projectile(self) -> None:
         """Draw projectile, try to load image first"""
         # Special handling for different weapon types
-        if self.weapon_type == "spear":
-            # Create spear image: long shaft with arrowhead
-            length: int = max(30, self.radius * 6)
-            width: int = max(2, int(self.radius * 0.6))
-            self.image = pygame.Surface((length, width * 2), pygame.SRCALPHA)
+        # spear custom asset support
+        if getattr(self, "appearance", None) == "spear":
+            try:
+                from src.assets.manager import get_image
 
-            # Shaft (tan color)
+                asset = get_image(
+                    "spear.png",
+                    (
+                        max(4, int(self.radius * 1.2)),
+                        max(60, self.radius * 10),
+                    ),
+                )
+                if asset is not None:
+                    self.image = asset
+                    self.rect = self.image.get_rect(center=(self.x, self.y))
+                    return
+            except Exception:
+                pass
+
+        if self.weapon_type == "spear":
+            # Create spear image: long vertical shaft with arrowhead (lance proporzionata)
+            length: int = max(60, self.radius * 10)  # vertical length
+            width: int = max(4, int(self.radius * 1.2))  # horizontal width
+            self.image = pygame.Surface((width, length), pygame.SRCALPHA)
+
+            # Shaft (tan color) - vertical rectangle
             pygame.draw.rect(
                 self.image,
                 (217, 211, 183),
-                (0, width // 2, length - self.radius * 2, width),
+                (0, 0, width, length - self.radius * 2),
             )
 
-            # Arrowhead (light tan)
+            # Arrowhead (light tan) - triangle pointing up
             arrowhead_points: list[tuple[int, int]] = [
-                (length, width),  # tip
-                (length - self.radius * 2, width // 2),  # center back
-                (length, 0),  # top
+                (width // 2, 0),  # tip at top
+                (0, self.radius * 2),  # bottom left
+                (width, self.radius * 2),  # bottom right
             ]
             pygame.draw.polygon(self.image, (255, 220, 178), arrowhead_points)
 
@@ -229,8 +255,8 @@ class Projectile(BaseSprite):
                 except Exception:
                     pass
 
-        elif self.weapon_type == "skull_bomb":
-            # Skull bomb: slightly narrower and more tapered skull (affusolato)
+        elif self.weapon_type == "skullboom":
+            # SkullBoom: slightly narrower and more tapered skull (affusolato)
             self.image = pygame.Surface(
                 (self.radius * 2, self.radius * 2), pygame.SRCALPHA
             )
@@ -387,170 +413,229 @@ class Projectile(BaseSprite):
                 )
             # Ensure rect matches center
             self.rect = self.image.get_rect(center=(self.x, self.y))
-
-        elif getattr(self, "appearance", None) == "storm_statue":
-            # Storm statue projectile: dark blue outer and lighter blue core
-            self.image = pygame.Surface(
-                (self.radius * 2 + 6, self.radius * 2 + 6), pygame.SRCALPHA
-            )
-            center = (self.radius + 3, self.radius + 3)
-            try:
-                glow_surf = pygame.Surface(
-                    (self.radius * 2 + 12, self.radius * 2 + 12), pygame.SRCALPHA
-                )
-                pygame.draw.circle(
-                    glow_surf,
-                    (40, 70, 180, 80),
-                    (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
-                    self.radius + 5,
-                )
-                self.image.blit(
-                    glow_surf,
-                    (
-                        -((glow_surf.get_width() - self.image.get_width()) // 2),
-                        -((glow_surf.get_height() - self.image.get_height()) // 2),
-                    ),
-                )
-            except Exception:
-                pass
-            pygame.draw.circle(self.image, (20, 40, 140), center, self.radius)
-            inner_r = max(1, self.radius - 3)
-            pygame.draw.circle(self.image, (100, 150, 255), center, inner_r)
-        elif getattr(self, "appearance", None) == "fire_statue":
-            # Fire statue projectile: larger, yellow core and red outer ring with glow
-            self.image = pygame.Surface(
-                (self.radius * 2 + 6, self.radius * 2 + 6), pygame.SRCALPHA
-            )
-            center = (self.radius + 3, self.radius + 3)
-            # Glow: translucent orange slightly larger than outer radius
-            try:
-                glow_surf = pygame.Surface(
-                    (self.radius * 2 + 10, self.radius * 2 + 10), pygame.SRCALPHA
-                )
-                pygame.draw.circle(
-                    glow_surf,
-                    (255, 140, 0, 100),
-                    (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
-                    self.radius + 4,
-                )
-                self.image.blit(
-                    glow_surf,
-                    (
-                        -((glow_surf.get_width() - self.image.get_width()) // 2),
-                        -((glow_surf.get_height() - self.image.get_height()) // 2),
-                    ),
-                )
-            except Exception:
-                pass
-            # Outer red ring
-            pygame.draw.circle(self.image, (200, 30, 30), center, self.radius)
-            # Inner yellow core slightly smaller
-            inner_r = max(1, self.radius - 4)
-            pygame.draw.circle(self.image, (255, 220, 50), center, inner_r)
-        elif getattr(self, "appearance", None) == "ice_statue":
-            # Ice statue projectile: icy blue outer and white core with cold glow
-            self.image = pygame.Surface(
-                (self.radius * 2 + 6, self.radius * 2 + 6), pygame.SRCALPHA
-            )
-            center = (self.radius + 3, self.radius + 3)
-            # Glow: translucent icy blue slightly larger than outer radius
-            try:
-                glow_surf = pygame.Surface(
-                    (self.radius * 2 + 10, self.radius * 2 + 10), pygame.SRCALPHA
-                )
-                pygame.draw.circle(
-                    glow_surf,
-                    (100, 200, 255, 100),
-                    (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
-                    self.radius + 4,
-                )
-                self.image.blit(
-                    glow_surf,
-                    (
-                        -((glow_surf.get_width() - self.image.get_width()) // 2),
-                        -((glow_surf.get_height() - self.image.get_height()) // 2),
-                    ),
-                )
-            except Exception:
-                pass
-            # Outer icy blue ring
-            pygame.draw.circle(self.image, (150, 220, 255), center, self.radius)
-            # Inner white core slightly smaller
-            inner_r = max(1, self.radius - 4)
-            pygame.draw.circle(self.image, (255, 255, 255), center, inner_r)
-        elif getattr(self, "appearance", None) == "inquisitor":
-            # Inquisitor projectile: orange glow and core (enemy projectile)
-            self.image = pygame.Surface(
-                (self.radius * 2 + 8, self.radius * 2 + 8), pygame.SRCALPHA
-            )
-            center = (self.radius + 4, self.radius + 4)
-            try:
-                glow_surf = pygame.Surface(
-                    (self.radius * 2 + 14, self.radius * 2 + 14), pygame.SRCALPHA
-                )
-                pygame.draw.circle(
-                    glow_surf,
-                    (255, 165, 60, 110),
-                    (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
-                    self.radius + 6,
-                )
-                self.image.blit(
-                    glow_surf,
-                    (
-                        -((glow_surf.get_width() - self.image.get_width()) // 2),
-                        -((glow_surf.get_height() - self.image.get_height()) // 2),
-                    ),
-                )
-            except Exception:
-                pass
-            # Outer darker orange ring
-            pygame.draw.circle(self.image, (220, 100, 20), center, self.radius)
-            # Inner bright orange core
-            inner_r = max(1, self.radius - 3)
-            pygame.draw.circle(self.image, (255, 170, 60), center, inner_r)
-        elif getattr(self, "source", None) == "orbital":
-            # Orbital projectiles: light blue circles
-            self.image = pygame.Surface(
-                (self.radius * 2, self.radius * 2), pygame.SRCALPHA
-            )
-            pygame.draw.circle(
-                self.image, (102, 204, 255), (self.radius, self.radius), self.radius
-            )
-            pygame.draw.circle(
-                self.image, (51, 170, 255), (self.radius, self.radius), self.radius - 1
-            )
-
         else:
-            # Regular projectiles or enemy projectiles
-            image_name: str = (
-                "enemy_projectile.png" if self.is_enemy_projectile else "projectile.png"
-            )
-            try:
-                from src.assets.manager import get_image
+            # Custom appearance support: Tenebrae arc
+            if getattr(self, "appearance", None) == "tenebrae":
+                # try external asset first
+                try:
+                    from src.assets.manager import get_image
 
-                loaded_image: Surface | None = get_image(
-                    image_name, (self.radius * 2, self.radius * 2)
+                    asset = get_image(
+                        "tenebrae.png", (self.radius * 4, self.radius * 2)
+                    )
+                    if asset is not None:
+                        self.image = asset
+                        self.rect = self.image.get_rect(center=(self.x, self.y))
+                        return
+                except Exception:
+                    pass
+
+                # fallback: procedural wide arc
+                width = max(1, int(self.radius * 4))
+                height = max(1, int(self.radius * 2))
+                self.image = pygame.Surface((width, height), pygame.SRCALPHA)
+                try:
+                    # draw arc convex side forward (0..pi) using darker purple
+                    pygame.draw.arc(
+                        self.image,
+                        (100, 0, 100),
+                        (0, 0, width, height),
+                        0,
+                        math.pi,
+                        max(1, int(self.radius / 2)),
+                    )
+                except Exception:
+                    # if arc drawing fails, draw a simple ellipse with dark purple
+                    pygame.draw.ellipse(
+                        self.image, (100, 0, 100), (0, 0, width, height)
+                    )
+                self.rect = self.image.get_rect(center=(self.x, self.y))
+
+            elif getattr(self, "appearance", None) == "beast":
+                # Beast projectile: single red "6" text
+                self.image = pygame.Surface(
+                    (self.radius * 2, self.radius * 2), pygame.SRCALPHA
                 )
-                if loaded_image is None:
-                    raise RuntimeError("asset missing")
-                self.image = loaded_image.copy()
-            except Exception:
-                # Fallback to drawing - use simple shapes as fallback (log the error for debugging)
-                # print(f"Warning: projectile image load failed: {e}")  # Uncomment for debugging
-                if self.is_enemy_projectile:
-                    # Enemy projectile (golden/shiny)
+                try:
+                    font = pygame.font.Font(None, max(8, int(self.radius * 2)))
+                    txt = font.render("6", True, (255, 0, 0))
+                    txt_rect = txt.get_rect(center=(self.radius, self.radius))
+                    self.image.blit(txt, txt_rect)
+                except Exception:
                     pygame.draw.circle(
                         self.image,
-                        (255, 215, 0),
+                        (255, 0, 0),
                         (self.radius, self.radius),
                         self.radius,
-                    )  # Gold outer
+                    )
+            elif getattr(self, "appearance", None) == "storm_statue":
+                # Storm statue projectile: dark blue outer and lighter blue core
+                self.image = pygame.Surface(
+                    (self.radius * 2 + 6, self.radius * 2 + 6), pygame.SRCALPHA
+                )
+                center = (self.radius + 3, self.radius + 3)
+                try:
+                    glow_surf = pygame.Surface(
+                        (self.radius * 2 + 12, self.radius * 2 + 12), pygame.SRCALPHA
+                    )
                     pygame.draw.circle(
-                        self.image,
-                        (255, 255, 0),
-                        (self.radius, self.radius),
-                        self.radius - 1,
-                    )  # Bright yellow inner
+                        glow_surf,
+                        (40, 70, 180, 80),
+                        (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
+                        self.radius + 5,
+                    )
+                    self.image.blit(
+                        glow_surf,
+                        (
+                            -((glow_surf.get_width() - self.image.get_width()) // 2),
+                            -((glow_surf.get_height() - self.image.get_height()) // 2),
+                        ),
+                    )
+                except Exception:
+                    pass
+                pygame.draw.circle(self.image, (20, 40, 140), center, self.radius)
+                inner_r = max(1, self.radius - 3)
+                pygame.draw.circle(self.image, (100, 150, 255), center, inner_r)
+            elif getattr(self, "appearance", None) == "fire_statue":
+                # Fire statue projectile: larger, yellow core and red outer ring with glow
+                self.image = pygame.Surface(
+                    (self.radius * 2 + 6, self.radius * 2 + 6), pygame.SRCALPHA
+                )
+                center = (self.radius + 3, self.radius + 3)
+                # Glow: translucent orange slightly larger than outer radius
+                try:
+                    glow_surf = pygame.Surface(
+                        (self.radius * 2 + 10, self.radius * 2 + 10), pygame.SRCALPHA
+                    )
+                    pygame.draw.circle(
+                        glow_surf,
+                        (255, 140, 0, 100),
+                        (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
+                        self.radius + 4,
+                    )
+                    self.image.blit(
+                        glow_surf,
+                        (
+                            -((glow_surf.get_width() - self.image.get_width()) // 2),
+                            -((glow_surf.get_height() - self.image.get_height()) // 2),
+                        ),
+                    )
+                except Exception:
+                    pass
+                # Outer red ring
+                pygame.draw.circle(self.image, (200, 30, 30), center, self.radius)
+                # Inner yellow core slightly smaller
+                inner_r = max(1, self.radius - 4)
+                pygame.draw.circle(self.image, (255, 220, 50), center, inner_r)
+            elif getattr(self, "appearance", None) == "ice_statue":
+                # Ice statue projectile: icy blue outer and white core with cold glow
+                self.image = pygame.Surface(
+                    (self.radius * 2 + 6, self.radius * 2 + 6), pygame.SRCALPHA
+                )
+                center = (self.radius + 3, self.radius + 3)
+                # Glow: translucent icy blue slightly larger than outer radius
+                try:
+                    glow_surf = pygame.Surface(
+                        (self.radius * 2 + 10, self.radius * 2 + 10), pygame.SRCALPHA
+                    )
+                    pygame.draw.circle(
+                        glow_surf,
+                        (100, 200, 255, 100),
+                        (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
+                        self.radius + 4,
+                    )
+                    self.image.blit(
+                        glow_surf,
+                        (
+                            -((glow_surf.get_width() - self.image.get_width()) // 2),
+                            -((glow_surf.get_height() - self.image.get_height()) // 2),
+                        ),
+                    )
+                except Exception:
+                    pass
+                # Outer icy blue ring
+                pygame.draw.circle(self.image, (150, 220, 255), center, self.radius)
+                # Inner white core slightly smaller
+                inner_r = max(1, self.radius - 4)
+                pygame.draw.circle(self.image, (255, 255, 255), center, inner_r)
+            elif getattr(self, "appearance", None) == "inquisitor":
+                # Inquisitor projectile: orange glow and core (enemy projectile)
+                self.image = pygame.Surface(
+                    (self.radius * 2 + 8, self.radius * 2 + 8), pygame.SRCALPHA
+                )
+                center = (self.radius + 4, self.radius + 4)
+                try:
+                    glow_surf = pygame.Surface(
+                        (self.radius * 2 + 14, self.radius * 2 + 14), pygame.SRCALPHA
+                    )
+                    pygame.draw.circle(
+                        glow_surf,
+                        (255, 165, 60, 110),
+                        (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
+                        self.radius + 6,
+                    )
+                    self.image.blit(
+                        glow_surf,
+                        (
+                            -((glow_surf.get_width() - self.image.get_width()) // 2),
+                            -((glow_surf.get_height() - self.image.get_height()) // 2),
+                        ),
+                    )
+                except Exception:
+                    pass
+                # Outer darker orange ring
+                pygame.draw.circle(self.image, (220, 100, 20), center, self.radius)
+                # Inner bright orange core
+                inner_r = max(1, self.radius - 3)
+                pygame.draw.circle(self.image, (255, 170, 60), center, inner_r)
+            elif getattr(self, "source", None) == "orbital":
+                # Orbital projectiles: light blue circles
+                self.image = pygame.Surface(
+                    (self.radius * 2, self.radius * 2), pygame.SRCALPHA
+                )
+                pygame.draw.circle(
+                    self.image, (102, 204, 255), (self.radius, self.radius), self.radius
+                )
+                pygame.draw.circle(
+                    self.image,
+                    (51, 170, 255),
+                    (self.radius, self.radius),
+                    self.radius - 1,
+                )
+
+            else:
+                # Regular projectiles or enemy projectiles
+                image_name: str = (
+                    "enemy_projectile.png"
+                    if self.is_enemy_projectile
+                    else "projectile.png"
+                )
+                try:
+                    from src.assets.manager import get_image
+
+                    loaded_image: Surface | None = get_image(
+                        image_name, (self.radius * 2, self.radius * 2)
+                    )
+                    if loaded_image is None:
+                        raise RuntimeError("asset missing")
+                    self.image = loaded_image.copy()
+                except Exception:
+                    # Fallback to drawing - use simple shapes as fallback (log the error for debugging)
+                    # print(f"Warning: projectile image load failed: {e}")  # Uncomment for debugging
+                    if self.is_enemy_projectile:
+                        # Enemy projectile (golden/shiny)
+                        pygame.draw.circle(
+                            self.image,
+                            (255, 215, 0),
+                            (self.radius, self.radius),
+                            self.radius,
+                        )  # Gold outer
+                        pygame.draw.circle(
+                            self.image,
+                            (255, 255, 0),
+                            (self.radius, self.radius),
+                            self.radius - 1,
+                        )  # Bright yellow inner
                     # Shiny highlight
                     pygame.draw.circle(
                         self.image,
@@ -582,6 +667,46 @@ class Projectile(BaseSprite):
     def update(self) -> None:
         self.x += self.vel_x / 60  # Divide by FPS
         self.y += self.vel_y / 60
+
+        # Tenebrae enlargement effect: grow from 12→20 over screen travel
+        if (
+            getattr(self, "weapon_type", None) == "tenebrae"
+            or getattr(self, "appearance", None) == "tenebrae"
+        ):
+            # compute fraction of travelled distance relative to screen diagonal
+            dist = math.hypot(self.x - self.spawn_x, self.y - self.spawn_y)
+            maxd = None
+            if getattr(self, "manager", None) is not None:
+                g = getattr(self.manager, "game", None)
+                if g is not None and hasattr(g, "width") and hasattr(g, "height"):
+                    maxd = math.hypot(g.width, g.height)
+            if maxd is None or maxd <= 0:
+                maxd = 1000.0
+            t = min(1.0, dist / maxd)
+            # enlarged end size changed from 20 to 35 per further request
+            target_radius = 12 + t * (35 - 12)  # float target for smoothing
+            # initialize float radius tracker if missing
+            if not hasattr(self, "radius_f"):
+                self.radius_f = float(self.radius)
+            # move a fraction toward the target for smooth animation
+            # larger fraction per frame still feels smooth but nears target quicker
+            self.radius_f += (target_radius - self.radius_f) * 0.2
+            new_radius = int(self.radius_f)
+            if new_radius != self.radius:
+                self.radius = new_radius
+                try:
+                    self.image = pygame.Surface(
+                        (self.radius * 2, self.radius * 2), pygame.SRCALPHA
+                    )
+                    self.draw_projectile()
+                    # update rect to new size, maintain center
+                    try:
+                        self.rect = self.image.get_rect(center=(self.x, self.y))
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
         # Update rotation for DemonStrike to simulate rolling
         if getattr(self, "weapon_type", None) == "DemonStrike":
             speed = math.hypot(self.vel_x, self.vel_y)
@@ -655,9 +780,26 @@ class Projectile(BaseSprite):
             return
 
         if self.weapon_type == "spear":
-            # Rotate spear based on velocity direction
+            # Rotate spear based on velocity direction to align tip with movement
+            # Since spear is drawn vertically (pointing up), add 90° to align with velocity
             angle: float = math.degrees(math.atan2(self.vel_y, self.vel_x))
-            rotated_image: Surface | Any = pygame.transform.rotate(self.image, -angle)
+            rotated_image: Surface | Any = pygame.transform.rotate(
+                self.image, -(angle + 90)
+            )
+            rotated_rect: Rect | Any = rotated_image.get_rect(
+                center=(draw_x + self.radius, draw_y + self.radius)
+            )
+            screen.blit(rotated_image, rotated_rect)
+        elif (
+            self.weapon_type == "tenebrae"
+            or getattr(self, "appearance", None) == "tenebrae"
+        ):
+            # Orient Tenebrae arc toward its velocity so it points at the cursor
+            angle = math.degrees(math.atan2(self.vel_y, self.vel_x))
+            # Use same adjustment as spear to keep the convex side forward
+            rotated_image: Surface | Any = pygame.transform.rotate(
+                self.image, -(angle + 90)
+            )
             rotated_rect: Rect | Any = rotated_image.get_rect(
                 center=(draw_x + self.radius, draw_y + self.radius)
             )
@@ -699,7 +841,7 @@ class Projectile(BaseSprite):
                 pass
             # Draw the ball
             screen.blit(self.image, (draw_x, draw_y))
-        elif getattr(self, "weapon_type", None) == "skull_bomb":
+        elif getattr(self, "weapon_type", None) == "skullboom":
             # Draw skull image and render an emphasized animated flame + glow
             screen.blit(self.image, (draw_x, draw_y))
             try:
@@ -804,15 +946,15 @@ class Projectile(BaseSprite):
             screen.blit(self.image, (draw_x, draw_y))
 
 
-class SoulDrainProjectile(Projectile):
+class FliesProjectile(Projectile):
     def __init__(self, x, y, vel_x, vel_y, damage=10, heal_amount=2, level=1) -> None:
         super().__init__(
-            x, y, vel_x, vel_y, damage=damage, radius=6, weapon_type="Soul Drain"
+            x, y, vel_x, vel_y, damage=damage, radius=6, weapon_type="Flies"
         )
         self.heal_amount: int = heal_amount
         self.level: int = level
         self.homing_range = 200
-        # Reduced speed to make Soul Drain projectiles significantly slower
+        # Reduced speed to make Flies projectiles significantly slower
         self.speed = 75
         self.bounce: bool = level >= 6  # Lv6: can bounce
         self.bounced = False
@@ -932,5 +1074,5 @@ class SoulDrainProjectile(Projectile):
         self.rect.center = (self.x, self.y)
 
     def draw_projectile(self) -> None:
-        """Initial draw for soul projectile - will be updated in update()"""
+        """Initial draw for flies projectile - will be updated in update()"""
         pass

@@ -115,6 +115,20 @@ class Enemy(BaseSprite):
             self.width = 60
             self.height = 60
             self.damage = 15
+        elif enemy_type == "shielded":
+            self.width = 60
+            self.height = 60
+            self.damage = 15
+        elif enemy_type == "mage":
+            # Mage: 50x50 before +10 growth → 60x60 final; support caster, not melee
+            self.width = 50
+            self.height = 50
+            self.damage = 8
+        elif enemy_type == "custode":
+            # Custode: large enemy that splits at half health
+            self.width = 80
+            self.height = 80
+            self.damage = 20
         elif enemy_type == "giant":
             # Increase base size so final size (after +10 adjustment) is 70x70
             self.width = 60
@@ -156,6 +170,21 @@ class Enemy(BaseSprite):
         # Increase health by 20% for all enemies
         self.max_health = int(self.max_health * 1.2)
         self.health = self.max_health
+
+        # Custode are especially tough: double their health after global modifier
+        if enemy_type == "custode":
+            self.max_health *= 2
+            self.health = self.max_health
+
+        # Shield HP: shielded and mage enemies absorb damage through shield first
+        if enemy_type in ("shielded", "mage"):
+            self.shield_hp: int = self.max_health
+        # Mage support-caster state
+        if enemy_type == "mage":
+            self.shield_timer: int = 60 * 5  # frames until first shield cast
+        # Custode split flag: True means this custode is already a split half
+        if enemy_type == "custode":
+            self._custode_split: bool = False
 
         # Calculate radius from width/height (average)
         self.radius: int = (self.width + self.height) // 4
@@ -789,6 +818,203 @@ class Enemy(BaseSprite):
                         self.x = max(left_limit, min(right_limit, self.x))
                     self.y = max(top_margin, min(bottom_limit, self.y))
 
+                elif self.enemy_type == "mage" and game is not None:
+                    # Mage behaviour: a support caster that stays in the back
+                    # quarter of the arena and periodically grants shields.
+                    # --- movement toward rear zone ------------------------------------------------
+                    rear_y = max(30, game.height // 4)
+                    # vertical movement: if outside a small band around rear_y, move
+                    # at full speed until entering the rear area. once inside, keep a
+                    # gentle oscillation so the mage doesn't freeze.
+                    if self.y > rear_y + 10:
+                        # still below ideal zone, move upward at normal speed
+                        self.y -= self.speed / 60
+                    elif self.y < rear_y - 10:
+                        # above ideal zone, descend
+                        self.y += self.speed / 60
+                    else:
+                        # inside target band: small sinusoidal bobbing
+                        self.y += math.sin(getattr(self, "_mage_vert_phase", 0.0)) * 0.5
+                        self._mage_vert_phase = (
+                            getattr(self, "_mage_vert_phase", 0.0) + 0.05
+                        )
+                    # continuous horizontal motion (sinusoidal) for visibility
+                    self.x += math.sin(getattr(self, "_mage_drift_phase", 0.0)) * 0.5
+                    self._mage_drift_phase = (
+                        getattr(self, "_mage_drift_phase", 0.0) + 0.04
+                    )
+                    # clamp to walls/arena bounds
+                    try:
+                        self.x = game.clamp_to_walls(self.x)
+                    except Exception:
+                        self.x = max(30, min(game.width - 30, self.x))
+                    # keep within vertical margins too
+                    self.y = max(10, min(game.height - 30, self.y))
+
+                    # --- shield‑cast timer -----------------------------------------------------
+                    if not hasattr(self, "shield_timer"):
+                        # first timer initialised to a random 5‑10 second interval
+                        fps = getattr(game, "fps", 60)
+                        self.shield_timer = fps * random.randint(5, 10)
+                    self.shield_timer -= 1
+                    if self.shield_timer <= 0:
+                        # choose a random alive ally (not self) and give it a shield
+                        try:
+                            allies = [
+                                e
+                                for e in game.enemies
+                                if e is not self and getattr(e, "health", 0) > 0
+                            ]
+                            if allies:
+                                target = random.choice(allies)
+                                target.shield_hp = self.max_health
+                                target.shield_beam = {"remaining": 30, "source": self}
+                                if not hasattr(target, "shield_particles"):
+                                    target.shield_particles = []
+                                for _ in range(8):
+                                    target.shield_particles.append(
+                                        {
+                                            "x": target.x + random.uniform(-10, 10),
+                                            "y": target.y + random.uniform(-10, 10),
+                                            "vx": random.uniform(-1, 1),
+                                            "vy": random.uniform(-2, 0),
+                                            "life": random.randint(15, 30),
+                                        }
+                                    )
+                        except Exception:
+                            pass
+                        # reset timer for another random 5‑10 second interval
+                        fps = getattr(game, "fps", 60)
+                        self.shield_timer = fps * random.randint(5, 10)
+
+                    # update any shield particles on the mage itself
+                    if hasattr(self, "shield_particles"):
+                        self.shield_particles = [
+                            p for p in self.shield_particles if p.get("life", 0) > 0
+                        ]
+                        for p in self.shield_particles:
+                            p["x"] += p.get("vx", 0)
+                            p["y"] += p.get("vy", 0)
+                            p["life"] -= 1
+
+                elif self.enemy_type == "custode" and game is not None:
+                    # Custode: first, apply any initial outward push
+                    if getattr(self, "_custode_push_timer", 0) > 0:
+                        push_speed = self.speed * 0.5  # push magnitude ~half regular
+                        self.x += self._custode_push_dir * push_speed / 60
+                        self._custode_push_timer -= 1
+
+                    # then move toward player like a normal enemy
+                    dx = player.x - self.x
+                    dy = player.y - self.y
+                    distance: float = math.sqrt(dx * dx + dy * dy)
+                    if distance > 1:
+                        self.x += (dx / distance) * self.speed / 60
+                        self.y += (dy / distance) * self.speed / 60
+                    # Check for half-health split (only if not already a half)
+                    if (
+                        not getattr(self, "_custode_split", False)
+                        and self.health <= self.max_health / 2
+                    ):
+                        self._custode_split = True
+                        self.health = 0
+                        # Spawn two smaller custodes
+                        try:
+                            half_health = max(1, self.max_health // 2)
+                            half_w = max(10, self.width // 2 - 10)
+                            half_h = max(10, self.height // 2 - 10)
+                            # record the parent’s base speed (accounting for
+                            # any active slowdown). we’ll double that for the
+                            # children and also mark it as their `original_speed`
+                            orig_speed = getattr(self, "original_speed", self.speed)
+                            doubled = orig_speed * 2.0
+                            # choose separation distance based on current size so
+                            # halves start noticeably farther apart than before
+                            sep_dist = max(30, self.width // 2)
+                            for offset_x in (-sep_dist, sep_dist):
+                                # halves travel at a fixed 2× speed boost; they
+                                # should chomp after the player noticeably faster
+                                # than the parent
+                                child = Enemy(
+                                    self.x + offset_x,
+                                    self.y,
+                                    "custode",
+                                    half_health,
+                                    doubled,
+                                )
+                                # give the new halves a short outward push so they
+                                # visibly peel away from each other when spawned
+                                child._custode_push_dir = -1 if offset_x < 0 else 1
+                                child._custode_push_timer = 15
+                                child.width = half_w
+                                child.height = half_h
+                                child.max_health = int(half_health * 1.2)
+                                child.health = child.max_health
+                                # make sure collision/slow systems treat the new
+                                # halves as having the doubled speed, otherwise
+                                # they’ll reset back to the parent’s value
+                                child.original_speed = doubled
+                                child._custode_split = True  # halves do not split again
+                                child.image = pygame.Surface(
+                                    (child.width, child.height), pygame.SRCALPHA
+                                )
+                                child.draw_enemy()
+                                child.rect = child.image.get_rect(
+                                    center=(child.x, child.y)
+                                )
+                                if hasattr(game.enemies, "add"):
+                                    game.enemies.add(child)
+                                else:
+                                    game.enemies.append(child)
+                            # Explosion effect
+                            try:
+                                # explosion area effect with full metadata so drawing works
+                                game.skullboom_explosions.append(
+                                    {
+                                        "x": self.x,
+                                        "y": self.y,
+                                        "radius": 40,
+                                        "max_radius": 40,
+                                        "timer": 15,
+                                        "max_timer": 15,
+                                        # default glow colour
+                                        "color": (255, 150, 50),
+                                    }
+                                )
+                            except Exception:
+                                pass
+                            try:
+                                # spawn several burn particles using the same helper class
+                                for _ in range(6):
+                                    try:
+                                        p_burn = BurnParticle(
+                                            self.x,
+                                            self.y,
+                                            random.uniform(-3, 3),
+                                            random.uniform(-3, 3),
+                                            life=random.randint(10, 20),
+                                        )
+                                        game.skullboom_particles.append(p_burn)
+                                    except Exception:
+                                        # fall back to dict if BurnParticle fails for some reason
+                                        try:
+                                            game.skullboom_particles.append(
+                                                {
+                                                    "x": self.x,
+                                                    "y": self.y,
+                                                    "vx": random.uniform(-3, 3),
+                                                    "vy": random.uniform(-3, 3),
+                                                    "life": random.randint(10, 20),
+                                                }
+                                            )
+                                        except Exception:
+                                            pass
+                            except Exception:
+                                pass
+                        except Exception:
+                            pass
+                        self.kill()
+
                 else:
                     # Move towards player (default behaviour for other enemy types)
                     dx = player.x - self.x
@@ -877,6 +1103,20 @@ class Enemy(BaseSprite):
                             self.ice_particles.remove(p)
                         except Exception:
                             pass
+
+            # Update shield_particles (dict-based, used by mage shield-cast targets)
+            if hasattr(self, "shield_particles") and self.shield_particles:
+                alive = []
+                for p in self.shield_particles:
+                    try:
+                        p["x"] += p.get("vx", 0)
+                        p["y"] += p.get("vy", 0)
+                        p["life"] -= 1
+                        if p["life"] > 0:
+                            alive.append(p)
+                    except Exception:
+                        pass
+                self.shield_particles = alive
 
             self.rect.center = (self.x, self.y)
 
@@ -1220,6 +1460,15 @@ class Enemy(BaseSprite):
         except Exception:
             pass
 
+        # Shield absorption: shield_hp takes the hit first; health only decreases when shield is gone
+        if getattr(self, "shield_hp", 0) > 0:
+            absorbed = min(self.shield_hp, damage)
+            self.shield_hp -= absorbed
+            damage -= absorbed
+            if damage <= 0:
+                self.shake_timer = 10
+                return
+
         self.health -= damage
         try:
             logger.debug(
@@ -1357,6 +1606,49 @@ class Enemy(BaseSprite):
                 (255, 100, 100),
                 (bar_x, bar_y, bar_width * health_ratio, bar_height),
             )
+
+            # Draw shield bar (blue) below health bar when shield_hp > 0
+            if getattr(self, "shield_hp", 0) > 0:
+                sh_y = bar_y + 4
+                shield_ratio = max(0, min(1, self.shield_hp / max(1, self.max_health)))
+                pygame.draw.rect(
+                    screen, (20, 60, 120), (bar_x, sh_y, bar_width, bar_height)
+                )
+                pygame.draw.rect(
+                    screen,
+                    (100, 150, 255),
+                    (bar_x, sh_y, bar_width * shield_ratio, bar_height),
+                )
+            # draw a connecting beam if mage has recently granted shield
+            if getattr(self, "shield_beam", None):
+                try:
+                    beam = self.shield_beam
+                    if beam.get("remaining", 0) > 0 and beam.get("source"):
+                        src = beam["source"]
+                        # compute world-centre coordinates (ignore width/height)
+                        sx = int(getattr(src, "x", 0) + shake_x)
+                        sy = int(getattr(src, "y", 0) + shake_y)
+                        ex = int(self.x + shake_x)
+                        ey = int(self.y + shake_y)
+                        # build a 3‑point polyline with noisy midpoint for irregularity
+                        mx = (sx + ex) // 2 + random.randint(-6, 6)
+                        my = (sy + ey) // 2 + random.randint(-6, 6)
+                        pygame.draw.lines(
+                            screen,
+                            (200, 200, 255),
+                            False,
+                            [(sx, sy), (mx, my), (ex, ey)],
+                            2,
+                        )
+                        beam["remaining"] -= 1
+                    else:
+                        # clear when expired
+                        try:
+                            delattr(self, "shield_beam")
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
 
             # Draw burn status indicator (flame + optional text) if enemy is burning
             try:

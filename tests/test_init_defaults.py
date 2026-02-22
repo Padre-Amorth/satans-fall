@@ -19,7 +19,8 @@ def test_game_initialization_has_basic_state():
         "burst_count",
         "hellgun_cooldown_timer",
         "spear_cooldown_timer",
-        "soul_drain_cooldown_timer",
+        "flies_cooldown_timer",
+        "tenebrae_cooldown_timer",
         "fire_rate_multiplier",
         "orbital_count",
         "orbitals",
@@ -41,7 +42,8 @@ def test_weapon_cooldown_defaults_are_sane():
     g = Game(debug=True)
     assert g.hellgun_cooldown_timer == 0
     assert g.spear_cooldown_timer == 0
-    assert g.soul_drain_cooldown_timer == 0
+    assert g.flies_cooldown_timer == 0
+    assert g.tenebrae_cooldown_timer == 0
     assert isinstance(g.burst_fire_rate, int)
     assert g.burst_fire_rate > 0
 

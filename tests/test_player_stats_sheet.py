@@ -6,6 +6,12 @@ import sys
 
 import pygame
 
+
+def setup_dummy_sdl():
+    # some rendering tests rely on a dummy video driver
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -31,6 +37,34 @@ def test_draw_player_stats_does_not_crash():
 
     # Also draw UI to ensure integration point works
     g.draw_ui()
+
+
+def test_player_stats_shows_satan_label_and_xp_bar(tmp_path):
+    """The stats sheet should display the renamed meta progress section.
+
+    Verify that the "Satan Level" header and accompanying XP bar are painted
+    (i.e. not left as background pixels).  The exact coordinates aren't
+    critical; a small sample region around the expected area is sufficient.
+    """
+    setup_dummy_sdl()
+    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g.showing_player_stats = True
+    g.draw_player_stats()
+
+    surface = g.screen
+    bg = surface.get_at((0, 0))[:3]  # type: ignore[index]
+
+    left_x = g.width // 2 - 430
+    found = False
+    for dy in range(88, 120):
+        for dx in range(0, 300, 10):
+            px = left_x + dx
+            if tuple(surface.get_at((px, dy))[:3]) != bg:
+                found = True
+                break
+        if found:
+            break
+    assert found, "Satan Level label or XP bar not rendered (still background)"
 
 
 def test_enemy_kill_counter_and_displays(tmp_path):

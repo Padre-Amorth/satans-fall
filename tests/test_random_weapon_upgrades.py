@@ -28,7 +28,7 @@ def test_random_weapon_upgrades():
         weapon_upgrades = [c for c in upgrade_choices if "upgrade" in c["id"]]
         weapon_upgrade_counts.append(len(weapon_upgrades))
         print(
-            f"Run {i+1}: {len(upgrade_choices)} choices, {len(weapon_upgrades)} weapon upgrades"
+            f"Run {i + 1}: {len(upgrade_choices)} choices, {len(weapon_upgrades)} weapon upgrades"
         )
         for choice in upgrade_choices:
             if "upgrade" in choice["id"]:
@@ -36,7 +36,7 @@ def test_random_weapon_upgrades():
 
     print(f"\nWeapon upgrade counts across 10 runs: {weapon_upgrade_counts}")
     print(
-        f"Average weapon upgrades per run: {sum(weapon_upgrade_counts)/len(weapon_upgrade_counts)}"
+        f"Average weapon upgrades per run: {sum(weapon_upgrade_counts) / len(weapon_upgrade_counts)}"
     )
 
 

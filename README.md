@@ -112,7 +112,21 @@ The included `.pre-commit-config.yaml` will run `ruff --fix` on changed files so
   - Big boss (divine figure)
   - Final boss (large divine figure)
 - **Enemy Projectiles**: Angels and bosses shoot homing projectiles at the player
-- **Asset Loading**: Uses PNG images from assets/ folder for enhanced visuals
+- **Asset Loading**: Uses PNG images from assets/ folder for enhanced visuals (stage‑specific backgrounds such as limbo or purgatory can also be added)
+
+- **Wall color**: all stages now use a consistent dark gray wall color, replacing earlier stage‑specific hues.
+- **Purgatory fog**: every Purgatory variant draws a semi‑transparent gray overlay
+  to create a hazy atmosphere; no extra assets required.  The opacity and
+  color of this overlay are set via constants (`PURGATORY_OVERLAY_ALPHA` and
+  `PURGATORY_OVERLAY_COLOR` in `src/game_constants.py`), so you can make the
+  effect as light or heavy as you like.  (The previous particle effect has been
+  removed.)
+  A dynamic fog particle system now runs in Purgatory.  A fixed number of
+  semi‑transparent fog blobs slowly drift across the stage with gentle
+  vertical oscillation, wrapping horizontally when they reach the edge.  You
+  can adjust the particle count, texture size, speed range, oscillation
+  amplitude, color and opacity via the `FOG_*` constants in
+  `src/game_constants.py`.
 - **Periodic Giant Spawns**: Giant enemies spawn every 12 seconds for added challenge
 - **Burst Fire Mechanics**: Basic weapon fires in bursts for tactical gameplay
 

@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
+import os
+import sys
+
 import pygame
+
+# ensure project root on path when tests are run directly
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.entities.enemy import Enemy
 from src.game import Game
@@ -55,3 +61,16 @@ def test_spear_hits_enemy_only_once():
     assert (
         damage_taken == spear.damage
     ), f"Spear should damage once ({spear.damage}), got {damage_taken}"
+
+
+def test_spear_fire_radius_adjusted():
+    """Firing a spear should use the reduced base radius (7× multiplier)."""
+    g = Game(debug=True)
+    g.weapon_levels = {"spear": 1}
+    g.player_weapons = ["spear"]
+    g.fire_spear(1.0, 0.0)
+    projs = list(g.projectiles)
+    assert projs, "Expected spear projectile"
+    p = projs[-1]
+    expected = int(7 * g.projectile_size_multiplier * 1.1)
+    assert p.radius == expected, f"radius {p.radius} != expected {expected}"

@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased — Bug fixes & tests ✅
 
+- **Custode spawn bug:** on Hell stages, big enemy spawns now produce the new `custode` type instead of a regular giant.  The `Game.spawn_giant_enemy`, `Game.spawn_big_enemy` and `EnemyManager.spawn_giant_enemy` helpers all check `selected_stage` and choose the appropriate type.  Added new custode‑specific unit tests and updated the enemy manager tests to assert the replacement logic.
+- **Custode split visuals & movement:** explosion centre effect now includes full `max_radius`/`max_timer`/`color` metadata so the ring is drawn correctly; prior omission prevented the visual from ever appearing.  Child halves now receive a speed boost of exactly **1.65× the parent’s speed**. Tests updated to validate explosion metadata, spawn type, separation, and correct speed multiplier.
+- **Critical hit display bug:** floating text now shows the actual damage applied (50 % bonus on a crit) instead of the projectile’s base damage. The collision system’s text‑render logic was simplified, and regression tests added to cover both spatial‑grid and fallback branches.
+
+- **Balance regression fix:** restored original blasphemy behaviour after accidental rewrite.
+  * `blasphemy_1` now grants **+15 HP per level** (max 3) instead of damage.
+  * `blasphemy_2` now provides **+1 HP every 5s per level** (regen only, no HP bonus).
+  * `blasphemy_3` now gives **-10% damage taken per level** (not fire rate).
+  Code, UI tooltips, and tests updated to match the intended effects.
+- `ADRENALINE` now also grants **+2% crit chance per level**; UI stats and collision logic updated accordingly.
 - Fix: `The number of the beast` (Beast weapon) now correctly scales its projectile damage with the player's `base_damage` so **permanent upgrades** (`power`, `blasphemy_1`) affect Beast damage as intended. Added unit tests for damage scaling.
 - Fix: Prologo final boss **no longer dies** when reduced below 10% HP — it now reliably enters the immortal/regeneration phase (HP clamped to 10%). Centralized the immortal-transition in `Enemy.take_damage` and added unit tests for the immortal/regeneration flow.
 - Fix: Reinforcement waves are now scheduled reliably when a wave boss dies (including deaths from DOT/burn or direct `take_damage`). The centered HUD message and `USEREVENT+1` timer are scheduled consistently; added tests to cover the sequence.
@@ -39,7 +49,7 @@ All notable changes to this project are documented in this file.
 ## 2026-02-10 — Recent changes ✅
 
 ### Weapons
-- **Soul Drain**
+- **Flies**
   - Base projectile count increased: **Lv1 now fires 2 projectiles** (was 1).
   - Projectile homing speed reduced significantly (internal speed halved).
   - Initial fired velocity reduced (halved) so projectiles travel slower.
@@ -65,9 +75,9 @@ All notable changes to this project are documented in this file.
 ### Tests
 - Added tests:
   - `tests/test_weapon_upgrade_descriptions.py` — verifies explicit descriptions exist for every weapon level.
-  - `tests/test_weapon_upgrade_inference.py` — verifies fallback inference provides useful descriptions for common weapons (e.g., `soul_drain`, `orbital`).
+  - `tests/test_weapon_upgrade_inference.py` — verifies fallback inference provides useful descriptions for common weapons (e.g., `flies`, `orbital`).
   - `test_orbital.py` updated: added `test_orbital_targets_boss` to ensure orbitals target bosses.
-- Updated tests to reflect Soul Drain base projectile change and level-6 weapon-choice behavior.
+- Updated tests to reflect Flies base projectile change and level-6 weapon-choice behavior.
 - Full test suite passed locally: all tests green as of 2026-02-10.
 
 ### Misc

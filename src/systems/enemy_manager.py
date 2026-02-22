@@ -178,12 +178,18 @@ class EnemyManager:
             x = self.game.random_x_between_walls()
             y = -30
 
+        # Determine enemy type: hell stage uses custode instead of giant
+        stage = getattr(self.game, "selected_stage", "") or ""
+        if stage.startswith("hell"):
+            etype = "custode"
+        else:
+            etype = "giant"
         health = 200 * getattr(
             self.game, "difficulty_multiplier", 1.0
         )  # Doubled from 100
-        # Base non-boss giant speed (from balance)
+        # Base non-boss giant/custode speed (use giant value as fallback)
         speed = ENEMY_BASE_SPEEDS.get("giant", 45)
-        e = self.spawn(x, y, "giant", health, speed)
+        e = self.spawn(x, y, etype, health, speed)
         return e
 
     def update_big_enemy_timer(self) -> None:

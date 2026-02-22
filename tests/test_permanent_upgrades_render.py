@@ -30,6 +30,27 @@ def test_permanent_upgrades_shows_blasphemies_and_skill_trees(tmp_path: Path) ->
     surface = g.screen
     bg = surface.get_at((0, 0))[:3]  # type: ignore[index]
 
+    # subtitle used to be rendered at (left_x, 85).  With it gone, that point
+    # should still be background color.  Sample a small region to avoid
+    # accidental hits from nearby text.
+    left_x = g.width // 2 - 420
+    sub_x = left_x + 10
+    sub_y = 85
+    assert tuple(surface.get_at((sub_x, sub_y))[:3]) == bg, "Subtitle unexpected"
+
+    # the main meta/satan label appears around y=110..120; scan a small
+    # block of pixels to confirm that something other than background was drawn
+    found_nonbg = False
+    for dy in range(110, 125):
+        for dx in range(0, 200, 10):
+            px = left_x + dx
+            if tuple(surface.get_at((px, dy))[:3]) != bg:
+                found_nonbg = True
+                break
+        if found_nonbg:
+            break
+    assert found_nonbg, "SATAN LEVEL label not rendered (no non-bg pixels)"
+
     left_x = g.width // 2 - 420
 
     # Blasphemies title area (approx)

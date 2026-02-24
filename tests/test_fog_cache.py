@@ -28,10 +28,10 @@ def test_fog_cache_build_and_invalidate():
 
     # Mutate walls to force invalidation (change one point deterministically)
     old_sig = ui._fog_cache_signature
-    # change first left wall point slightly
+    # change first left wall point by enough to change its int() representation
     if g.left_wall_points:
         x0, y0 = g.left_wall_points[0]
-        g.left_wall_points[0] = (x0 + 1, y0)
+        g.left_wall_points[0] = (x0 + 5, y0)  # 5px change ensures int() differs
     ui._build_fog_cache()
     assert ui._fog_cache_signature != old_sig
 

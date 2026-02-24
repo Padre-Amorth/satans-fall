@@ -78,6 +78,7 @@ class FloatingText:
         y: float,
         *,
         color=(255, 255, 255),
+        outline_color: tuple[int,int,int] | None = None,
         font_size: int = 20,
         vy: float = -1.2,
         life: int = 70,
@@ -93,6 +94,7 @@ class FloatingText:
         self.life = int(life)
         self.max_life = int(life)
         self.color = tuple(color)
+        self.outline_color = tuple(outline_color) if outline_color is not None else None
         self.font_size = int(font_size)
 
     def update(self) -> None:
@@ -238,6 +240,8 @@ class Game:
 
         # Options: toggle for showing floating damage numbers
         self.show_damage_numbers: bool = True
+        # Option to mute/enable game sounds (procedural and assets)
+        self.sounds_enabled: bool = True
 
         # Track if background image was drawn this frame
         self.background_image_drawn: bool = False
@@ -268,6 +272,44 @@ class Game:
         self.left_tower = None
         self.right_tower = None
 
+        # Tower energy mechanic (shared pool for both towers)
+        self.tower_energy: int = 0
+        self.tower_energy_max: int = 100
+        # amount added per successful hit; tests and balance code may tweak
+        self.tower_energy_per_hit: int = 5
+
+        # Fire special state (fire tier‑7)
+        self.fire_special_charges: int = 0            # remaining shots
+        self.fire_special_timer: int = 0              # frames left to fire charges
+        self.fire_special_index: int = 0              # index into FIRE_SPECIAL_WORDS
+        # Tracks scheduled shots after click delay.  Each entry is a dict with
+        # `timer`, `x`, and `y` keys.  Processed in ``update``.
+        self.pending_fire_clicks: List[dict] = []
+        # Smoke particles emitted by fire special explosions
+        self.fire_smoke: List[dict] = []  # each: {'x', 'y', 'life', 'size'}
+
+        # Right‑mouse state tracked for hellectric beam control
+        self.right_mouse_held: bool = False
+
+        # Hellectric flux special state (storm tier‑7)
+        self.hellectric_active: bool = False
+        self.hellectric_time_left: int = 0
+        # current beam endpoint; will interpolate toward the mouse when active
+        self.hellectric_x: float = 0.0
+        self.hellectric_y: float = 0.0
+        # accumulator map for per-enemy hellectric damage (throttled text display)
+        self._hellectric_accum: dict[int, int] = {}
+        # copy constants to instance for convenience
+        try:
+            from src.game_constants import HELECTRIC_MAX_DURATION, HELECTRIC_IMPACT_RADIUS, HELECTRIC_SPEED
+            self.HELLECTRIC_MAX_DURATION = HELECTRIC_MAX_DURATION
+            self.HELLECTRIC_IMPACT_RADIUS = HELECTRIC_IMPACT_RADIUS
+            self.HELLECTRIC_SPEED = HELECTRIC_SPEED
+        except Exception:
+            self.HELLECTRIC_MAX_DURATION = 0
+            self.HELLECTRIC_IMPACT_RADIUS = 0
+            self.HELLECTRIC_SPEED = 0
+
         # Register self as current running game for modules that need quick access
         global CURRENT_GAME
         CURRENT_GAME = self
@@ -296,6 +338,458 @@ class Game:
         self.player_xp = 0
         self.player_level = 1
         self.xp_to_next_level = XP_BASE
+
+    def special_unlocked(self) -> bool:
+        """Return True if any placed tower has its last‑skill slot active.
+
+        The unlock is governed by permanent_stats like ``fire_7`` / ``storm_7`` /
+        ``ice_7``.  If neither tower exists or the appropriate stat is zero, the
+        special ability is considered unavailable.
+        """
+        # prologo never has towers/specials
+        if getattr(self, "selected_stage", None) == "prologo":
+            return False
+        try:
+            stats = getattr(self, "permanent_stats", {})
+            for t in (getattr(self, "left_tower", None), getattr(self, "right_tower", None)):
+                if t is None:
+                    continue
+                tp = getattr(t, "tower_type", None)
+                if not tp:
+                    continue
+                if stats.get(f"{tp}_7", 0):
+                    return True
+        except Exception:
+            pass
+        return False
+
+    def charge_tower_energy(self, amount: int | None = None) -> None:
+        """Increase tower energy by *amount* (or ``tower_energy_per_hit``).
+
+        Energy is clamped to ``tower_energy_max``.  ``amount`` may be negative to
+        subtract energy.  Charging only occurs when the special is unlocked.
+        """
+        # guard against charging when unlock missing
+        if not self.special_unlocked():
+            return
+        if amount is None:
+            amount = getattr(self, "tower_energy_per_hit", 0)
+        try:
+            cur = getattr(self, "tower_energy", 0)
+            mx = getattr(self, "tower_energy_max", 0)
+            new_val = cur + amount
+            if mx is not None and mx >= 0:
+                new_val = max(0, min(mx, new_val))
+            setattr(self, "tower_energy", new_val)
+        except Exception:
+            pass
+
+    def is_tower_special_ready(self) -> bool:
+        """Return True when the energy bar is full and the special is unlocked."""
+        try:
+            if not self.special_unlocked():
+                return False
+            return getattr(self, "tower_energy", 0) >= getattr(
+                self, "tower_energy_max", 0
+            )
+        except Exception:
+            return False
+
+    def _dist_point_to_segment(self, px: float, py: float, x1: float, y1: float, x2: float, y2: float) -> float:
+        """Return shortest distance from point (px,py) to line segment (x1,y1)-(x2,y2)."""
+        # based on projection formula
+        dx = x2 - x1
+        dy = y2 - y1
+        if dx == 0 and dy == 0:
+            return math.hypot(px - x1, py - y1)
+        t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
+        t = max(0.0, min(1.0, t))
+        proj_x = x1 + t * dx
+        proj_y = y1 + t * dy
+        return math.hypot(px - proj_x, py - proj_y)
+
+    def activate_tower_special(self) -> bool:
+        """Attempt to consume the full energy bar.
+
+        Clears ``tower_energy`` to zero if there was enough and returns True;
+        otherwise does nothing and returns False.  Routes to appropriate special
+        based on which tower types are actually placed.
+        """
+        if self.is_tower_special_ready():
+            try:
+                self.tower_energy = 0
+            except Exception:
+                setattr(self, "tower_energy", 0)
+
+            # Collect tower types that are both placed AND have their special unlocked
+            placed_types = set()
+            for t in (getattr(self, "left_tower", None), getattr(self, "right_tower", None)):
+                if t is None:
+                    continue
+                tp = getattr(t, "tower_type", None)
+                if tp and self.permanent_stats.get(f"{tp}_7", 0):
+                    placed_types.add(tp)
+
+            # Activate fire special first (if unlocked) since it's time-limited
+            if "fire" in placed_types:
+                try:
+                    from src.game_constants import (
+                        FIRE_SPECIAL_CHARGES,
+                        FIRE_SPECIAL_DURATION,
+                    )
+                except Exception:
+                    FIRE_SPECIAL_CHARGES = 0
+                    FIRE_SPECIAL_DURATION = 0
+                # grant full charges and schedule the first explosion after the
+                # configured click delay.  charges are still consumed immediately
+                # so the window countdown starts with one shot already pending.
+                self.fire_special_charges = FIRE_SPECIAL_CHARGES
+                self.fire_special_timer = FIRE_SPECIAL_DURATION
+                try:
+                    from src.game_constants import FIRE_SPECIAL_CLICK_DELAY
+                    delay = FIRE_SPECIAL_CLICK_DELAY
+                except Exception:
+                    delay = 0
+                try:
+                    self.pending_fire_clicks.append(
+                        {"timer": delay, "x": getattr(self, "mouse_x", 0), "y": getattr(self, "mouse_y", 0)}
+                    )
+                except Exception:
+                    pass
+                try:
+                    self.fire_special_charges = max(0, self.fire_special_charges - 1)
+                except Exception:
+                    pass
+            # Activate Blizzard if ice tower is placed with ice_7 unlocked
+            if "ice" in placed_types:
+                try:
+                    from src.game_constants import (
+                    BLIZZARD_RADIUS,
+                    BLIZZARD_MAX_DURATION,
+                    BLIZZARD_SLOW_FACTOR,
+                )
+                except Exception:
+                    BLIZZARD_RADIUS = 0
+                    BLIZZARD_MAX_DURATION = 0
+                    BLIZZARD_SLOW_FACTOR = 1.0
+                if not hasattr(self, "blizzard_puddles"):
+                    self.blizzard_puddles = []
+                self.blizzard_puddles.append(
+                    {
+                        "x": getattr(self, "mouse_x", 0),
+                        "y": getattr(self, "mouse_y", 0),
+                        "radius": BLIZZARD_RADIUS,
+                        "timer": BLIZZARD_MAX_DURATION,
+                        # Blizzard puddles should behave like ice puddles with respect to
+                        # slowing, so include a slow factor constant so the collision
+                        # system doesn't blow up when iterating over them.
+                        "slow_factor": BLIZZARD_SLOW_FACTOR,
+                        "blizzard": True,
+                    }
+                )
+
+            # Activate Hellectric Flux if storm tower is placed with storm_7 unlocked
+            if "storm" in placed_types:
+                # start the beam; it will run while right mouse held or until time runs out
+                try:
+                    import logging
+                    logging.getLogger(__name__).info("hellectric branch activated")
+                except Exception:
+                    pass
+                self.hellectric_active = True
+                # initialize the movable endpoint at the current mouse position so
+                # the beam doesn't jump from (0,0)
+                self.hellectric_x = getattr(self, "mouse_x", 0)
+                self.hellectric_y = getattr(self, "mouse_y", 0)
+                # fall back to constant if attribute missing
+                dur = getattr(self, "HELLECTRIC_MAX_DURATION", None)
+                if dur is None:
+                    try:
+                        from src.game_constants import HELECTRIC_MAX_DURATION
+                        dur = HELECTRIC_MAX_DURATION
+                    except Exception:
+                        dur = 0
+                self.hellectric_time_left = dur
+
+            return True
+        return False
+
+    def _spawn_fire_special(self, x: float, y: float) -> None:
+        """Spawn one fire-special explosion at the given coordinates.
+
+        Damages/ignites nearby targets and shows a cycling word.  The floating
+        text should appear at the explosion itself regardless of whether any
+        enemies are hit.  (Previous logic only spawned words when enemies were
+        damaged, which made tests and the UI inconsistent.)
+        """
+        try:
+            from src.game_constants import (
+                FIRE_SPECIAL_RADIUS,
+                FIRE_SPECIAL_DAMAGE,
+                FIRE_SPECIAL_WORDS,
+                FIRE_SPECIAL_EXPLOSION_COLOR,
+            )
+        except Exception:
+            FIRE_SPECIAL_RADIUS = 0
+            FIRE_SPECIAL_DAMAGE = 0
+            FIRE_SPECIAL_WORDS = []
+            FIRE_SPECIAL_EXPLOSION_COLOR = (200, 100, 40)
+
+        # display word at explosion location first; this happens even if there
+        # are no nearby enemies.  Use extended life so the word lingers at least
+        # two seconds as requested by design.  add tiny random offset to avoid
+        # duplicate-removal logic erasing earlier words.
+        try:
+            if FIRE_SPECIAL_WORDS:
+                word = FIRE_SPECIAL_WORDS[self.fire_special_index % len(FIRE_SPECIAL_WORDS)]
+            else:
+                word = ""
+            word = word.upper()
+            ox = x + random.uniform(-3, 3)
+            oy = y + random.uniform(-3, 3)
+            # make the text noticeably larger and ensure it floats like damage
+            self.spawn_floating_text(
+                word,
+                ox,
+                oy,
+                color=(150, 0, 0),
+                outline_color=(0, 0, 0),
+                life=getattr(__import__("src.game_constants", fromlist=["FIRE_SPECIAL_TEXT_LIFE"]), "FIRE_SPECIAL_TEXT_LIFE", 0),
+                font_size=40,
+                vy=-1.2,
+            )
+        except Exception:
+            pass
+
+        # normal enemies
+        try:
+            for enemy in list(self.enemies) if getattr(self, "enemies", None) else []:
+                ex, ey = self._enemy_pos(enemy)
+                dx = ex - x
+                dy = ey - y
+                if dx * dx + dy * dy <= FIRE_SPECIAL_RADIUS * FIRE_SPECIAL_RADIUS:
+                    try:
+                        enemy.health = max(0, enemy.health - FIRE_SPECIAL_DAMAGE)
+                    except Exception:
+                        pass
+                    try:
+                        if getattr(enemy, "burn_timer", 0) <= 0:
+                            enemy.burn_timer = 120
+                            enemy.burn_damage_per_second = 4.0
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        # bosses
+        try:
+            if hasattr(self, "bosses") and self.bosses:
+                items = (self.bosses.sprites() if hasattr(self.bosses, "sprites") else list(self.bosses))
+                for boss in items:
+                    bx, by = self._enemy_pos(boss)
+                    dx = bx - x
+                    dy = by - y
+                    if dx * dx + dy * dy <= FIRE_SPECIAL_RADIUS * FIRE_SPECIAL_RADIUS:
+                        try:
+                            boss.health = max(0, boss.health - FIRE_SPECIAL_DAMAGE)
+                        except Exception:
+                            pass
+                        try:
+                            if getattr(boss, "burn_timer", 0) <= 0:
+                                boss.burn_timer = 120
+                                boss.burn_damage_per_second = 4.0
+                        except Exception:
+                            pass
+                        try:
+                            word = FIRE_SPECIAL_WORDS[self.fire_special_index % len(FIRE_SPECIAL_WORDS)] if FIRE_SPECIAL_WORDS else ""
+                            self.spawn_floating_text(
+                                word,
+                                bx,
+                                by - self._enemy_radius(boss) - 8,
+                                color=(150, 0, 0),
+                                outline_color=(0, 0, 0),
+                                life=getattr(__import__("src.game_constants", fromlist=["FIRE_SPECIAL_TEXT_LIFE"]), "FIRE_SPECIAL_TEXT_LIFE", 0),
+                                font_size=40,
+                                vy=-1.2,
+                            )
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        # add visual effect entry (longer duration via constant)
+        try:
+            from src.game_constants import FIRE_SPECIAL_VISUAL_DURATION
+            vis = FIRE_SPECIAL_VISUAL_DURATION
+        except Exception:
+            vis = 8
+        try:
+            # include color so downstream draw code can use a nicer default and
+            # tests can inspect it directly
+            self.game_state.fire_explosions.append(
+                {"x": x, "y": y, "radius": FIRE_SPECIAL_RADIUS, "timer": vis, "max_timer": vis, "color": FIRE_SPECIAL_EXPLOSION_COLOR}
+            )
+        except Exception:
+            pass
+        # emit some smoke particles around the explosion
+        try:
+            for i in range(random.randint(10, 14)):
+                self.fire_smoke.append({
+                    "x": x + random.uniform(-12, 12),
+                    "y": y + random.uniform(-12, 12),
+                    "life": random.randint(25, 45),
+                    "size": random.uniform(4, 10),
+                })
+        except Exception:
+            pass
+        try:
+            self.fire_special_index = (self.fire_special_index + 1) % (len(FIRE_SPECIAL_WORDS) or 1)
+        except Exception:
+            pass
+
+    def update(self) -> None:
+        """Primary per-frame update called from ``update_game``.
+
+        This method contains the majority of in-game logic; ``update_game``
+        temporarily forces the game into in-game state so tests can call it
+        without menus interfering.
+        """
+        # update smoke particles if any
+        self._update_fire_smoke()
+
+    def _update_fire_smoke(self) -> None:
+        """Advance smoke particles emitted by fire special explosions."""
+        if not getattr(self, "fire_smoke", None):
+            return
+        alive = []
+        for p in list(self.fire_smoke):
+            try:
+                p["y"] -= 1.0  # drift upward faster
+                p["life"] -= 1
+                if p["life"] > 0:
+                    alive.append(p)
+            except Exception:
+                pass
+        self.fire_smoke = alive
+
+    def update_hellectric_flux(self) -> None:
+        """Update state for the held storm special (Hellectric flux).
+
+        Beams originate from each placed storm tower and stretch to the current
+        mouse position.  They damage any enemy whose hitbox comes within a
+        small radius of the line segment.  The ability auto-cancels when the
+        right mouse button is released or when the frame timer expires.
+        """
+        # If the special is not currently active we can clear any stored
+        # accumulators and bail early.  This ensures lingering entries don't
+        # persist between activations.
+        if not getattr(self, "hellectric_active", False):
+            self._hellectric_accum.clear()
+            return
+        # decrement timer and disable when expired; deactivate when the
+        # counter hits zero so that the effect ends immediately on the frame
+        # it expires rather than waiting for the next update call.
+        self.hellectric_time_left -= 1
+        if self.hellectric_time_left <= 0:
+            self.hellectric_active = False
+            self._hellectric_accum.clear()
+            return
+
+        # compute desired endpoint (mouse) and move current endpoint toward it
+        mx = getattr(self, "mouse_x", 0)
+        my = getattr(self, "mouse_y", 0)
+        # ensure we have endpoint coords in case activation failed to set them
+        hx = getattr(self, "hellectric_x", mx)
+        hy = getattr(self, "hellectric_y", my)
+        # move endpoint toward mouse using configured speed (pixels/sec)
+        try:
+            speed = getattr(self, "HELLECTRIC_SPEED", 0) / float(self.fps or 1)
+        except Exception:
+            speed = 0
+        # vector from current to target
+        dx = mx - hx
+        dy = my - hy
+        dist = math.hypot(dx, dy)
+        if dist <= speed or dist == 0:
+            hx, hy = mx, my
+        else:
+            frac = speed / dist
+            hx += dx * frac
+            hy += dy * frac
+        self.hellectric_x, self.hellectric_y = hx, hy
+
+        # damage radius: use enemy radius plus small margin
+        for tower in (getattr(self, "left_tower", None), getattr(self, "right_tower", None)):
+            if tower is None or getattr(tower, "tower_type", None) != "storm":
+                continue
+            tx, ty = getattr(tower, "x", 0), getattr(tower, "y", 0)
+            # visual feedback: append chain lightning effect from tower to current endpoint
+            try:
+                self.game_state.chain_lightning_effects.append(
+                    {"points": [(tx, ty), (hx, hy)], "timer": 4}
+                )
+                # impact circle at endpoint
+                self.game_state.chain_lightning_effects.append(
+                    {
+                        "points": [(hx, hy)],
+                        # explosion should linger a bit longer so player sees it
+                        "timer": 16,
+                        "explosion": True,
+                        "radius": getattr(self, "HELLECTRIC_IMPACT_RADIUS", 50),
+                        # brighter cyan for better contrast
+                        "color": (150, 240, 255),
+                    }
+                )
+            except Exception:
+                pass
+            # damage regular enemies and any bosses along segment
+            candidates = []
+            try:
+                candidates.extend(list(getattr(self, "enemies", [])))
+            except Exception:
+                pass
+            try:
+                # bosses may be Group or list
+                if hasattr(getattr(self, "bosses", None), "sprites"):
+                    candidates.extend(self.bosses.sprites())
+                elif getattr(self, "bosses", None) is not None:
+                    candidates.extend(list(self.bosses))
+            except Exception:
+                pass
+
+            for enemy in candidates:
+                try:
+                    ex, ey = self._enemy_pos(enemy)
+                except Exception:
+                    continue
+                er = self._enemy_radius(enemy)
+                # calculate distance against the current beam endpoint
+                dist = self._dist_point_to_segment(ex, ey, tx, ty, hx, hy)
+                if dist <= er + 3:  # small tolerance
+                    try:
+                        # silent damage; we'll show aggregated text separately
+                        enemy.take_damage(1, show_floating=False)
+                    except Exception:
+                        pass
+                    # accumulate damage for throttled display
+                    try:
+                        eid = id(enemy)
+                        total = self._hellectric_accum.get(eid, 0) + 1
+                        self._hellectric_accum[eid] = total
+                        if total >= 10:
+                            # show a bundled "10" above the enemy
+                            try:
+                                self.spawn_floating_text("10", ex, ey - 8)
+                            except Exception:
+                                pass
+                            self._hellectric_accum[eid] = total - 10
+                    except Exception:
+                        pass
+                    # drop the entry if the enemy died to avoid leaks
+                    try:
+                        if getattr(enemy, "health", 1) <= 0:
+                            self._hellectric_accum.pop(eid, None)
+                    except Exception:
+                        pass
+        # (existing code omitted here above, we will insert call)
 
     def _init_weapons(self) -> None:
         # Weapon and cooldown defaults needed by weapon update logic
@@ -519,6 +1013,18 @@ class Game:
         if permanent_stats_file is not None:
             self.load_permanent_stats()
 
+        # Apply saved audio preference (migrate from top-level to audio dict)
+        try:
+            aud = self.global_progress.setdefault("audio", {})
+            # legacy support: previously may have stored 'sounds_enabled' directly
+            if "sounds_enabled" in self.global_progress and "enabled" not in aud:
+                aud["enabled"] = self.global_progress.get("sounds_enabled", True)
+            self.sounds_enabled = aud.get("enabled", True)
+            aud["enabled"] = self.sounds_enabled
+        except Exception:
+            # fallback to default
+            self.sounds_enabled = True
+
         # Initialize Pygame UI manager (handles drawing)
         self.ui: PygameUIManager = PygameUIManager(self)
 
@@ -556,13 +1062,6 @@ class Game:
             self.projectile_manager = ProjectileManager(self)
         except Exception:
             self.projectile_manager = None
-
-        # Re-load persisted permanent stats after all initialization to ensure
-        # any later initialization code doesn't overwrite saved values.
-        try:
-            self.load_permanent_stats()
-        except Exception:
-            pass
 
         # Ensure skill-tree keys exist even if persistent file was missing
         try:
@@ -822,6 +1321,8 @@ class Game:
 
         self.left_wall_points = []
         self.right_wall_points = []
+        # Note: fog cache will auto-invalidate on next _build_fog_cache call because
+        # the list objects (id()) have changed
 
         for y in range(0, self.height + 1, 20):
             progress: float = y / self.height
@@ -1103,33 +1604,44 @@ class Game:
                             if bg_image:
                                 # Don't fill with bg_color here - let external background show through
 
-                                # Create mask from polygon
-                                mask_surface = pygame.Surface(
-                                    (bbox_width, bbox_height), pygame.SRCALPHA
-                                )
-                                mask_surface.fill((0, 0, 0, 0))  # Transparent
+                                # Check if cached masked image is still valid
+                                cache_key = (bg_image_name, id(self.left_wall_points), len(self.left_wall_points))
+                                if (getattr(self, "_masked_bg_cache_key", None) != cache_key or
+                                    not getattr(self, "_masked_bg_cache", None)):
+                                    # Cache miss or invalidated: rebuild masked surface
+                                    # Create mask from polygon
+                                    mask_surface = pygame.Surface(
+                                        (bbox_width, bbox_height), pygame.SRCALPHA
+                                    )
+                                    mask_surface.fill((0, 0, 0, 0))  # Transparent
 
-                                # Translate points to mask coordinates
-                                translated_points = [
-                                    (p[0] - min_x, p[1] - min_y) for p in inside_points
-                                ]
-                                pygame.draw.polygon(
-                                    mask_surface,
-                                    (255, 255, 255, 255),
-                                    translated_points,
-                                )
+                                    # Translate points to mask coordinates
+                                    translated_points = [
+                                        (p[0] - min_x, p[1] - min_y) for p in inside_points
+                                    ]
+                                    pygame.draw.polygon(
+                                        mask_surface,
+                                        (255, 255, 255, 255),
+                                        translated_points,
+                                    )
 
-                                # Create mask object
-                                mask = pygame.mask.from_surface(mask_surface)
+                                    # Create mask object
+                                    mask = pygame.mask.from_surface(mask_surface)
 
-                                # Create masked surface
-                                masked_image = mask.to_surface(
-                                    bg_image,
-                                    setsurface=bg_image.copy(),
-                                    unsetcolor=(0, 0, 0, 0),
-                                )
+                                    # Create masked surface
+                                    masked_image = mask.to_surface(
+                                        bg_image,
+                                        setsurface=bg_image.copy(),
+                                        unsetcolor=(0, 0, 0, 0),
+                                    )
 
-                                self.screen.blit(masked_image, (min_x, min_y))
+                                    # Store in cache for future frames
+                                    self._masked_bg_cache = masked_image
+                                    self._masked_bg_cache_pos = (min_x, min_y)
+                                    self._masked_bg_cache_key = cache_key
+
+                                # Use cached masked surface
+                                self.screen.blit(self._masked_bg_cache, self._masked_bg_cache_pos)
                                 self.background_image_drawn = True
                             else:
                                 # if the main battlefield image is missing, do not
@@ -1339,7 +1851,11 @@ class Game:
                     segment_angle = 2 * math.pi / num_segments
 
                     # Outer glow ring - use explosion-specific color when present
-                    base_col = explosion.get("color", (255, 150, 50))
+                    try:
+                        from src.game_constants import FIRE_SPECIAL_EXPLOSION_COLOR
+                    except Exception:
+                        FIRE_SPECIAL_EXPLOSION_COLOR = (200, 100, 40)
+                    base_col = explosion.get("color", FIRE_SPECIAL_EXPLOSION_COLOR)
                     glow_color = (base_col[0], base_col[1], base_col[2], alpha // 3)
                     for i in range(num_segments):
                         start_angle = i * segment_angle + random.uniform(
@@ -1487,6 +2003,7 @@ class Game:
         y: float,
         *,
         color=(255, 255, 255),
+        outline_color: tuple[int,int,int] | None = None,
         font_size: int = 20,
         vy: float = -1.2,
         life: int = 70,
@@ -1522,7 +2039,14 @@ class Game:
                     pass
 
             ft = FloatingText(
-                text, x, y, color=color, font_size=font_size, vy=vy, life=life
+                text,
+                x,
+                y,
+                color=color,
+                outline_color=outline_color,
+                font_size=font_size,
+                vy=vy,
+                life=life,
             )
             self.floating_texts.append(ft)
         except Exception:
@@ -1560,14 +2084,43 @@ class Game:
             for ft in list(self.floating_texts):
                 try:
                     font = get_font(ft.font_size)
-                    surf = get_text(ft.text, font, ft.color).copy()
+                    # determine alpha and screen coordinates up front so both outline
+                    # and fill use the same reference point.  Previously these were
+                    # computed *after* attempting to draw the outline which meant the
+                    # outline code referenced undefined variables (``alpha``/``sx``/``sy``)
+                    # and would abort via an exception, effectively drawing a second
+                    # standalone word instead of a stroked glyph.
                     alpha = ft.fade_alpha()
+                    sx = int(ft.x - get_text(ft.text, font, ft.color).get_width() / 2 + shake_x)
+                    sy = int(ft.y + shake_y) - get_text(ft.text, font, ft.color).get_height()
+
+                    # draw outline first if requested (use more offsets for a thicker
+                    # stroke so the effect is clearly visible; diagonals help avoid
+                    # holes in corners).
+                    if getattr(ft, "outline_color", None):
+                        outline_surf = get_text(ft.text, font, ft.outline_color).copy()
+                        try:
+                            outline_surf.set_alpha(alpha)
+                        except Exception:
+                            pass
+                        # blit around the center pixel
+                        for ox_off, oy_off in (
+                            (-1, 0),
+                            (1, 0),
+                            (0, -1),
+                            (0, 1),
+                            (-1, -1),
+                            (-1, 1),
+                            (1, -1),
+                            (1, 1),
+                        ):
+                            self.screen.blit(outline_surf, (sx + ox_off, sy + oy_off))
+
+                    surf = get_text(ft.text, font, ft.color).copy()
                     try:
                         surf.set_alpha(alpha)
                     except Exception:
                         pass
-                    sx = int(ft.x - surf.get_width() / 2 + shake_x)
-                    sy = int(ft.y + shake_y) - surf.get_height()
                     self.screen.blit(surf, (sx, sy))
                 except Exception:
                     pass
@@ -1609,14 +2162,38 @@ class Game:
             pass
 
     def draw_ice_puddles(self, shake_x=0, shake_y=0) -> None:
-        """Draw ice puddles that slow enemies with irregular, organic shapes"""
-        if not self.ice_puddles:
+        """Draw puddles (ice or blizzard) that slow enemies with organic shapes"""
+        any_puddles = (getattr(self, "ice_puddles", []) or []) + (
+            getattr(self, "blizzard_puddles", []) or []
+        )
+        if not any_puddles:
             return
         try:
-            for puddle in self.ice_puddles:
+            for puddle in any_puddles:
                 px = puddle["x"] + shake_x
                 py = puddle["y"] + shake_y
                 radius = puddle["radius"]
+
+                # For Blizzard puddles, radius should grow from 0 to max over time.
+                if puddle.get("blizzard"):
+                    try:
+                        from src.game_constants import (
+                            BLIZZARD_MAX_DURATION,
+                            BLIZZARD_GROWTH_MULTIPLIER,
+                        )
+                    except Exception:
+                        BLIZZARD_MAX_DURATION = 1
+                        BLIZZARD_GROWTH_MULTIPLIER = 1.0
+                    # compute progress of lifetime (0 at spawn, 1 at end) and
+                    # apply growth multiplier to make the expansion a bit quicker.
+                    growth = 1 - (puddle.get("timer", 0) / BLIZZARD_MAX_DURATION)
+                    growth *= BLIZZARD_GROWTH_MULTIPLIER
+                    if growth > 1:
+                        growth = 1
+                    radius = int(radius * growth)
+                    if radius < 1:
+                        radius = 1
+
                 # Fade out as timer decreases
                 progress = puddle["timer"] / (5 * 60)  # Max 5 seconds
                 alpha = int(100 * progress)  # Max 100 alpha
@@ -1631,8 +2208,16 @@ class Game:
 
                 for i in range(num_points):
                     angle = (2 * math.pi * i) / num_points
-                    # Vary radius by ±8% for subtle organic variation with very smooth curves
-                    radius_variation = radius * (0.92 + random.random() * 0.16)
+                    # Blizzard zones should look slightly irregular but with more
+                    # clearly defined edges than ordinary ice puddles.  Decrease
+                    # the amount of random variation when drawing blizzard shapes
+                    # and later draw a thicker border outline.
+                    if puddle.get("blizzard"):
+                        # ±4% instead of ±8% variation
+                        radius_variation = radius * (0.96 + random.random() * 0.08)
+                    else:
+                        # Vary radius by ±8% for subtle organic variation with very smooth curves
+                        radius_variation = radius * (0.92 + random.random() * 0.16)
 
                     x = px + math.cos(angle) * radius_variation
                     y = py + math.sin(angle) * radius_variation
@@ -1660,12 +2245,215 @@ class Game:
                     for p in points
                 ]
 
-                # Draw border as a clean polygon outline
-                pygame.draw.polygon(surf, (150, 220, 255, alpha // 2), border_points, 2)
+                # Draw border as a clean polygon outline.  Blizzard puddles get a
+                # thicker, more opaque stroke to make the edge stand out.
+                border_color = (150, 220, 255, alpha // 2)
+                border_width = 2
+                if puddle.get("blizzard"):
+                    border_color = (180, 240, 255, min(255, alpha))
+                    border_width = 4
+                pygame.draw.polygon(surf, border_color, border_points, border_width)
+
+                # Add a faint semi-transparent glow around the border for blizzard
+                # to soften the edges.  We draw a slightly larger polygon with low
+                # alpha on top of the existing border.
+                if puddle.get("blizzard"):
+                    glow_color = (180, 240, 255, alpha // 6)
+                    glow_width = border_width + 2
+                    pygame.draw.polygon(surf, glow_color, border_points, glow_width)
+
+                # For blizzard, also draw a faint perfect circle outline to give
+                # a hint of roundness beneath the organic shape.
+                if puddle.get("blizzard"):
+                    pygame.draw.circle(
+                        surf,
+                        (180, 240, 255, alpha // 3),
+                        (radius + 10, radius + 10),
+                        radius,
+                        1,
+                    )
 
                 self.screen.blit(surf, (int(px - radius - 10), int(py - radius - 10)))
+
+                # Draw spiral snowflake particles for blizzard puddles
+                if puddle.get("blizzard"):
+                    self._draw_blizzard_spiral_particles(puddle, px, py, radius)
         except Exception:
             pass
+
+    def _draw_blizzard_spiral_particles(self, puddle: dict, px: float, py: float, radius: int) -> None:
+        """Draw spiral snowflake particles rotating inward inside blizzard puddles"""
+        try:
+            from src.game_constants import (
+                BLIZZARD_PARTICLE_COUNT,
+                BLIZZARD_PARTICLE_SPEED,
+                BLIZZARD_PARTICLE_SPIRAL_SPEED,
+                BLIZZARD_PARTICLE_SIZE,
+                BLIZZARD_PARTICLE_MAX_ALPHA,
+                BLIZZARD_PARTICLE_SPAWN_DELAY,
+                BLIZZARD_PARTICLE_ALIGNED_RATIO,
+                BLIZZARD_PARTICLE_S_CURVE_AMPLITUDE,
+                BLIZZARD_PARTICLE_S_CURVE_RADIAL,
+                BLIZZARD_PARTICLE_EXPANSION,
+            )
+        except Exception:
+            BLIZZARD_PARTICLE_COUNT = 100
+            BLIZZARD_PARTICLE_SPEED = 0.5
+            BLIZZARD_PARTICLE_SPIRAL_SPEED = 0.03
+            BLIZZARD_PARTICLE_SIZE = 3
+            BLIZZARD_PARTICLE_MAX_ALPHA = 100
+            BLIZZARD_PARTICLE_SPAWN_DELAY = 2
+            BLIZZARD_PARTICLE_ALIGNED_RATIO = 0.7
+            BLIZZARD_PARTICLE_S_CURVE_AMPLITUDE = 0.25
+            BLIZZARD_PARTICLE_S_CURVE_RADIAL = 0.15
+            BLIZZARD_PARTICLE_EXPANSION = 0.35
+
+        # Initialize particle list on first frame
+        if "spiral_particles" not in puddle:
+            puddle["spiral_particles"] = []
+            puddle["_prev_timer"] = puddle.get("timer", 0)
+            puddle["_spawn_frame"] = 0  # track frame for gradual spawning
+            # Create particles but don't spawn them all at once - will spawn gradually
+            max_spawn_dist = radius * 0.70
+
+            # Determine which particles will have S-curve alignment
+            num_aligned = int(BLIZZARD_PARTICLE_COUNT * BLIZZARD_PARTICLE_ALIGNED_RATIO)
+            aligned_indices = set(random.sample(range(BLIZZARD_PARTICLE_COUNT), num_aligned))
+
+            for i in range(BLIZZARD_PARTICLE_COUNT):
+                angle = (2 * math.pi * i) / BLIZZARD_PARTICLE_COUNT
+                dist = max_spawn_dist * 0.85 + random.uniform(-10, 10)
+                # Random color variant for each particle (white/light blue shades)
+                color_variant = random.randint(0, 2)
+
+                # Check if this particle should follow S-curve alignment
+                is_aligned = i in aligned_indices
+
+                puddle["spiral_particles"].append({
+                    "angle": angle,
+                    "dist": dist,
+                    "spawn_dist": dist,  # track original spawn distance
+                    "color_variant": color_variant,  # 0=white, 1=light_blue, 2=pale_cyan
+                    "spawn_frame": i * BLIZZARD_PARTICLE_SPAWN_DELAY,  # delay spawning
+                    "active": False,  # not visible until spawn_frame is reached
+                    "aligned": is_aligned,  # follows S-curve pattern for rotatory effect
+                })
+
+        particles = puddle["spiral_particles"]
+        current_timer = puddle.get("timer", 0)
+        prev_timer = puddle.get("_prev_timer", current_timer)
+        time_delta = prev_timer - current_timer  # timer decreases over time
+        puddle["_prev_timer"] = current_timer
+        puddle["_spawn_frame"] += 1
+
+        screen_width = self.screen.get_width()
+        screen_height = self.screen.get_height()
+
+        for particle in particles:
+            # Check if particle should be active yet (gradual spawning)
+            if particle["spawn_frame"] > puddle["_spawn_frame"]:
+                continue  # Not yet time to spawn this particle
+            particle["active"] = True
+            # Update spiral animation: move inward while rotating
+            particle["angle"] += time_delta * BLIZZARD_PARTICLE_SPIRAL_SPEED
+            particle["dist"] -= time_delta * BLIZZARD_PARTICLE_SPEED
+
+            angle = particle["angle"]
+            dist = particle["dist"]
+
+            # For aligned particles, apply a strong S-curve offset based on angle
+            # This creates a visible wave-like pattern that emphasizes rotatory motion
+            if particle.get("aligned", False):
+                # Apply sine wave oscillation for rotatory S-curve effect (angular)
+                angle_offset = math.sin(angle * 2) * BLIZZARD_PARTICLE_S_CURVE_AMPLITUDE
+                angle += angle_offset
+
+                # Also apply radial offset for more visible S-curve displacement
+                radial_offset = math.sin(angle * 1.5) * (radius * BLIZZARD_PARTICLE_S_CURVE_RADIAL)
+                dist = dist + radial_offset
+
+                # Apply expansion effect near respawn: particles should bulge outward as they approach center
+                # This creates a "breathing" effect where particles push back out before respawning
+                spawn_dist = particle.get("spawn_dist", radius * 0.70)
+                normalized_dist = dist / spawn_dist if spawn_dist > 0 else 1.0  # 1.0 at spawn, ~0 at center
+                expansion_push = math.sin(normalized_dist * math.pi) * (spawn_dist * BLIZZARD_PARTICLE_EXPANSION)
+                dist = dist + expansion_push
+
+            # Respawn particles that have moved too far inward (limit to 70% radius)
+            max_spawn_dist = radius * 0.70
+            if dist <= BLIZZARD_PARTICLE_SIZE * 2:
+                particle["spawn_dist"] = max_spawn_dist * 0.85 + random.uniform(-10, 10)
+                particle["dist"] = particle["spawn_dist"]
+                particle["angle"] = random.uniform(0, 2 * math.pi)
+                angle = particle["angle"]
+                dist = particle["dist"]
+
+            # Clamp distance to avoid going negative
+            if dist < 0:
+                dist = 0
+
+            # Calculate screen position
+            px_particle = px + math.cos(angle) * dist
+            py_particle = py + math.sin(angle) * dist
+
+            # Skip if particle is outside screen bounds
+            if (px_particle < -50 or px_particle > screen_width + 50 or
+                py_particle < -50 or py_particle > screen_height + 50):
+                particle["spawn_dist"] = max_spawn_dist * 0.85 + random.uniform(-10, 10)
+                particle["dist"] = particle["spawn_dist"]
+                particle["angle"] = random.uniform(0, 2 * math.pi)
+                continue
+
+            # Skip inactive particles
+            if not particle.get("active", False):
+                continue
+
+            # Fade alpha based on distance to center (closer = more transparent)
+            # Use reduced alpha (max 100) for subtle effect
+            distance_ratio = dist / radius if radius > 0 else 0
+            particle_alpha = max(0, int(BLIZZARD_PARTICLE_MAX_ALPHA * distance_ratio))
+
+            if particle_alpha > 5:
+                # Select color based on variant (white/light_blue_violet/pale_cyan)
+                color_variant = particle.get("color_variant", 0)
+                if color_variant == 0:
+                    # Pure white
+                    color = (255, 255, 255, particle_alpha)
+                elif color_variant == 1:
+                    # Light blue-violet (more purple-blue)
+                    color = (220, 200, 255, particle_alpha)
+                else:
+                    # Pale cyan (unchanged)
+                    color = (180, 240, 250, particle_alpha)
+
+                # Draw snowflake using a small SRCALPHA surface for each visible particle
+                particle_size_pixels = BLIZZARD_PARTICLE_SIZE * 2 + 4
+                particle_surf = pygame.Surface((particle_size_pixels, particle_size_pixels), pygame.SRCALPHA)
+
+                # Draw snowflake circle
+                pygame.draw.circle(
+                    particle_surf,
+                    color,
+                    (particle_size_pixels // 2, particle_size_pixels // 2),
+                    BLIZZARD_PARTICLE_SIZE,
+                )
+
+                # Add very subtle glow
+                if particle_alpha > 30:
+                    glow_alpha = max(0, particle_alpha // 4)
+                    pygame.draw.circle(
+                        particle_surf,
+                        (color[0], color[1], color[2], glow_alpha),
+                        (particle_size_pixels // 2, particle_size_pixels // 2),
+                        BLIZZARD_PARTICLE_SIZE + 1,
+                        1,
+                    )
+
+                # Blit to screen
+                self.screen.blit(
+                    particle_surf,
+                    (int(px_particle - particle_size_pixels // 2), int(py_particle - particle_size_pixels // 2))
+                )
 
     def add_score(self, points) -> None:
         """Add points to the game's score applying the global `score_multiplier`.
@@ -2051,6 +2839,19 @@ class Game:
         )
 
     def show_stage_menu(self) -> None:
+        # opening the stage menu represents leaving the current level; energy
+        # should not persist when the player returns.
+        try:
+            self.tower_energy = 0
+        except Exception:
+            setattr(self, "tower_energy", 0)
+        # also clear any partial fire special state
+        try:
+            self.fire_special_charges = 0
+            self.fire_special_timer = 0
+            self.fire_special_index = 0
+        except Exception:
+            pass
         return self.input_handler.show_stage_menu() if self.input_handler else None
 
     def show_permanent_upgrades(self) -> None:
@@ -2107,7 +2908,19 @@ class Game:
                 tree["branches"].append(branch)
 
     def reset_run(self) -> None:
-        """Reset game state for a new run"""
+        """Reset game state for a new run
+
+        This also clears any accumulated tower energy.  Energy is stored on the
+        *Game* object and counts as run-specific; carrying it between runs would
+        allow players to stockpile specials when returning to the main menu, which
+        violates the design.  Tests ensure this behaviour.
+        """
+        # tower energy belongs to a single run/level, so clear it up front
+        try:
+            self.tower_energy = 0
+        except Exception:
+            setattr(self, "tower_energy", 0)
+
         # Reset player
         self.player.x = self.width // 2
         self.player.y = self.height - 80
@@ -2414,6 +3227,9 @@ class Game:
                 self.center_messages.remove(msg)
 
     def update(self) -> None:
+        # update any fire-special smoke particles that are drifting
+        self._update_fire_smoke()
+
         # Handle blasphemy_5 auto-resume timer (counts down even while paused).
         # When the timer expires, only auto-unpause if the pause was set by blasphemy_5.
         if getattr(self, "blasphemy_5_pause_timer", 0) > 0:
@@ -2489,6 +3305,43 @@ class Game:
 
         # Increment frame counter for animations
         self.frame_count += 1
+        # process delayed-fire shots first so expiration doesn't reset index prematurely
+        if getattr(self, "pending_fire_clicks", None):
+            for p in list(self.pending_fire_clicks):
+                try:
+                    p["timer"] -= 1
+                except Exception:
+                    pass
+                if p.get("timer", 0) <= 0:
+                    try:
+                        self._spawn_fire_special(p.get("x", 0), p.get("y", 0))
+                    except Exception:
+                        pass
+                    try:
+                        self.pending_fire_clicks.remove(p)
+                    except Exception:
+                        pass
+        # handle fire-special timer; expire remaining charges after duration
+        if getattr(self, "fire_special_timer", 0) > 0:
+            self.fire_special_timer -= 1
+            if self.fire_special_timer <= 0:
+                self.fire_special_charges = 0
+                try:
+                    self.fire_special_index = 0
+                except Exception:
+                    pass
+        # update fire-explosion visuals
+        if hasattr(self, "game_state"):
+            new_fx = []
+            for fx in getattr(self.game_state, "fire_explosions", []):
+                if fx.get("timer", 0) > 0:
+                    new_fx.append(fx)
+            self.game_state.fire_explosions = new_fx
+            for fx in self.game_state.fire_explosions:
+                try:
+                    fx["timer"] -= 1
+                except Exception:
+                    pass
 
         # Update time
         self.time_elapsed += 1 / self.fps
@@ -2521,6 +3374,12 @@ class Game:
 
         # Auto-attack system
         self.update_weapon_firing()
+
+        # Hellectric beam (storm special) updates and damages enemies
+        try:
+            self.update_hellectric_flux()
+        except Exception:
+            pass
 
         # Update game objects
         self.projectiles.update()
@@ -2880,6 +3739,75 @@ class Game:
         self.ice_puddles = [p for p in self.ice_puddles if p["timer"] > 0]
         for puddle in self.ice_puddles:
             puddle["timer"] -= 1
+
+        # Blizzard puddles share behaviour with ice puddles but use their own list.
+        # ensure they expire after the configured duration so the zone vanishes.
+        if hasattr(self, "blizzard_puddles"):
+            # collect those that will expire this frame
+            expired = []
+            new_puddles = []
+            for puddle in self.blizzard_puddles:
+                if puddle.get("timer", 0) <= 1:
+                    expired.append(puddle.copy())
+                else:
+                    new_puddles.append(puddle)
+            # apply explosion damage for expired blizzard zones
+            if expired:
+                try:
+                    from src.game_constants import BLIZZARD_EXPIRE_DAMAGE
+                except Exception:
+                    BLIZZARD_EXPIRE_DAMAGE = 0
+                for p in expired:
+                    # damage normal enemies
+                    for enemy in list(self.enemies):
+                        ex, ey = self._enemy_pos(enemy)
+                        dx = ex - p["x"]
+                        dy = ey - p["y"]
+                        if dx * dx + dy * dy <= p["radius"] * p["radius"]:
+                            try:
+                                enemy.health = max(
+                                    0, enemy.health - BLIZZARD_EXPIRE_DAMAGE
+                                )
+                            except Exception:
+                                pass
+                            # show damage text above enemy
+                            try:
+                                self.spawn_floating_text(
+                                    str(int(BLIZZARD_EXPIRE_DAMAGE)),
+                                    ex,
+                                    ey - self._enemy_radius(enemy) - 8,
+                                )
+                            except Exception:
+                                pass
+                    # damage bosses as well
+                    if hasattr(self, "bosses") and self.bosses:
+                        items = (
+                            self.bosses.sprites()
+                            if hasattr(self.bosses, "sprites")
+                            else list(self.bosses)
+                        )
+                        for boss in items:
+                            bx, by = self._enemy_pos(boss)
+                            dx = bx - p["x"]
+                            dy = by - p["y"]
+                            if dx * dx + dy * dy <= p["radius"] * p["radius"]:
+                                try:
+                                    boss.health = max(
+                                        0, boss.health - BLIZZARD_EXPIRE_DAMAGE
+                                    )
+                                except Exception:
+                                    pass
+                                try:
+                                    self.spawn_floating_text(
+                                        str(int(BLIZZARD_EXPIRE_DAMAGE)),
+                                        bx,
+                                        by - self._enemy_radius(boss) - 8,
+                                    )
+                                except Exception:
+                                    pass
+            self.blizzard_puddles = new_puddles
+            for puddle in self.blizzard_puddles:
+                puddle["timer"] -= 1
 
         # Update floating texts (drawn later)
         self._update_floating_texts()

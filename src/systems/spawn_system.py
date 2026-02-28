@@ -198,37 +198,42 @@ class SpawnSystem:
                 self.game.enemy_spawn_timer = next_rate
 
         # Periodic big enemy spawn (delegate to EnemyManager when present)
-        if self.game.enemy_manager is not None:
-            try:
-                self.game.enemy_manager.update_big_enemy_timer()
-            except Exception:
-                # Fallback to legacy behavior
+        # IMPORTANT: Don't spawn giants during victory screen OR horde completion
+        if not (
+            getattr(self.game, "limbo_horde_completed", False)
+            or getattr(self.game, "showing_victory", False)
+        ):
+            if self.game.enemy_manager is not None:
+                try:
+                    self.game.enemy_manager.update_big_enemy_timer()
+                except Exception:
+                    # Fallback to legacy behavior
+                    self.game.big_enemy_timer -= 1
+                    if (
+                        self.game.big_enemy_timer <= 0
+                        and not self.game.big_spawned_this_wave
+                    ):
+                        self.spawn_big_enemy()
+                        self.game.big_spawned_this_wave = True
+                        if self.game.wave >= 6:
+                            self.game.big_enemy_timer = self.game.big_enemy_fast_interval
+                        else:
+                            self.game.big_enemy_timer = 12 * self.game.fps
+
+                # Also allow EnemyManager to occasionally spawn non-boss inquisitors in Purgatory
+                try:
+                    self.game.enemy_manager.update_inquisitor_spawns()
+                except Exception:
+                    pass
+            else:
                 self.game.big_enemy_timer -= 1
-                if (
-                    self.game.big_enemy_timer <= 0
-                    and not self.game.big_spawned_this_wave
-                ):
+                if self.game.big_enemy_timer <= 0 and not self.game.big_spawned_this_wave:
                     self.spawn_big_enemy()
                     self.game.big_spawned_this_wave = True
                     if self.game.wave >= 6:
                         self.game.big_enemy_timer = self.game.big_enemy_fast_interval
                     else:
                         self.game.big_enemy_timer = 12 * self.game.fps
-
-            # Also allow EnemyManager to occasionally spawn non-boss inquisitors in Purgatory
-            try:
-                self.game.enemy_manager.update_inquisitor_spawns()
-            except Exception:
-                pass
-        else:
-            self.game.big_enemy_timer -= 1
-            if self.game.big_enemy_timer <= 0 and not self.game.big_spawned_this_wave:
-                self.spawn_big_enemy()
-                self.game.big_spawned_this_wave = True
-                if self.game.wave >= 6:
-                    self.game.big_enemy_timer = self.game.big_enemy_fast_interval
-                else:
-                    self.game.big_enemy_timer = 12 * self.game.fps
 
         # handle satan growth animation if active
         # (buffs are applied instantly; we no longer change the player's size)
@@ -414,22 +419,27 @@ class SpawnSystem:
         # additionally we enforce the 12‑second cooldown even for this
         # periodic call; if the cooldown prevents a spawn we simply leave
         # ``big_spawned_this_wave`` false so the check can try again later.
+        # ALSO: don't spawn during victory screen or horde completion
         if self.game.wave_time >= 12:
             if not (
                 self.game.selected_stage in ("limbo", "limbo_2", "limbo_3")
                 and getattr(self.game, "time_elapsed", 0.0) < 30.0
             ):
-                if self.game.enemy_manager is not None:
-                    if (
-                        not self.game.enemy_manager.big_spawned_this_wave
-                        and self._can_spawn_giant()
-                    ):
-                        self.spawn_big_enemy()
-                        self.game.enemy_manager.big_spawned_this_wave = True
-                else:
-                    if not self.game.big_spawned_this_wave:
-                        self.spawn_big_enemy()
-                        self.game.big_spawned_this_wave = True
+                if not (
+                    getattr(self.game, "limbo_horde_completed", False)
+                    or getattr(self.game, "showing_victory", False)
+                ):
+                    if self.game.enemy_manager is not None:
+                        if (
+                            not self.game.enemy_manager.big_spawned_this_wave
+                            and self._can_spawn_giant()
+                        ):
+                            self.spawn_big_enemy()
+                            self.game.enemy_manager.big_spawned_this_wave = True
+                    else:
+                        if not self.game.big_spawned_this_wave:
+                            self.spawn_big_enemy()
+                            self.game.big_spawned_this_wave = True
 
         # Ensure wave boss spawning is handled by manager when available
         if self.game.enemy_manager is not None:

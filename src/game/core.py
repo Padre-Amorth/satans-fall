@@ -37,6 +37,14 @@ from src.game_constants import (
 )
 from src.game_state import GameStateManager
 from src.game.weapons import init_weapons, init_player_weapons
+from src.game.persistence import (
+    load_last_profile_slot,
+    load_permanent_stats,
+    save_permanent_stats,
+    get_profile_info,
+    profile_path,
+    migrate_legacy_save,
+)
 from src.projectile import FliesProjectile
 from src.systems.collision_system import CollisionSystem
 from src.systems.enemy_manager import EnemyManager
@@ -140,45 +148,8 @@ class Game:
         return surf
 
     def _load_last_profile_slot(self) -> int | None:
-        """Load the last selected profile slot from any profile's save file.
-
-        Searches all 3 profile files to find which one was most recently played,
-        and returns that slot. Uses 'last_played' timestamp to determine order.
-        Returns the slot number (1-3) or None if no profiles exist.
-        """
-        import json
-        from datetime import datetime
-
-        profiles = []
-        for slot in range(1, 4):
-            path = self._profile_path(slot)
-            if not path.exists():
-                continue
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                last_played_str = data.get("last_played", "")
-                # Parse ISO format timestamp; if missing/invalid, use epoch (oldest)
-                try:
-                    last_played = datetime.fromisoformat(last_played_str)
-                except Exception:
-                    last_played = datetime.fromtimestamp(0)
-                profiles.append((slot, last_played))
-            except Exception:
-                pass
-
-        if not profiles:
-            return None
-
-        # Sort by most recent (descending order)
-        profiles.sort(key=lambda x: x[1], reverse=True)
-        most_recent_slot = profiles[0][0]
-        logger.debug(
-            "Loaded last profile slot: %s (last_played: %s)",
-            most_recent_slot,
-            profiles[0][1],
-        )
-        return most_recent_slot
+        """Load the last selected profile slot from any profile's save file."""
+        return load_last_profile_slot()
 
     def _init_game_state(self) -> None:
         # Early defaults to ensure robust construction even if later init fails
@@ -3357,159 +3328,23 @@ class Game:
 
     def _profile_path(self, slot: int):
         """Return the Path for a given profile slot (1-3)."""
-        from pathlib import Path
-
-        return Path(__file__).parent.parent / f"profile_{slot}.json"
+        return profile_path(slot)
 
     def _migrate_legacy_save(self) -> None:
         """Move permanent_stats.json → profile_1.json on first launch with new profile system."""
-        import shutil
-        from pathlib import Path
-
-        legacy = Path(__file__).parent.parent / "permanent_stats.json"
-        target = self._profile_path(1)
-        if legacy.exists() and not target.exists():
-            try:
-                shutil.copy2(str(legacy), str(target))
-                logger.info("Migrated %s → %s", legacy, target)
-            except Exception as e:
-                logger.warning("Could not migrate legacy save: %s", e)
+        migrate_legacy_save()
 
     def load_permanent_stats(self) -> None:
-        """Load permanent stats and global meta-progress from disk.
-
-        Reads the active profile file (``profile_N.json``) from the project root.
-        If the file does not exist (first launch / empty slot) or is corrupt the
-        method silently returns so the caller's ``setdefault`` calls supply safe
-        initial values.
-        """
-        import json
-
-        slot = getattr(self, "active_profile_slot", None)
-        if slot is None:
-            return
-        save_path = self._profile_path(slot)
-        if not save_path.exists():
-            logger.debug("No save file found at %s — starting fresh", save_path)
-            return
-        try:
-            with open(save_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            # Restore permanent upgrade levels
-            ps = data.get("permanent_stats", {})
-            if isinstance(ps, dict):
-                for k, v in ps.items():
-                    if isinstance(k, str) and isinstance(v, int):
-                        self.permanent_stats[k] = v
-
-            # Restore global meta-progress (XP, satan level, points, cleared stages)
-            gp = data.get("global_progress", {})
-            if isinstance(gp, dict):
-                for key in ("meta_xp", "meta_level", "meta_points"):
-                    if key in gp and isinstance(gp[key], (int, float)):
-                        self.global_progress[key] = int(gp[key])
-                sc = gp.get("stages_cleared")
-                if isinstance(sc, dict):
-                    self.global_progress["stages_cleared"] = sc
-                # Restore display / audio prefs if present
-                for key in ("display", "audio"):
-                    if key in gp and isinstance(gp[key], dict):
-                        self.global_progress[key] = gp[key]
-
-            # Restore profile name into global_progress for convenience
-            name = data.get("name")
-            if isinstance(name, str):
-                self.global_progress["profile_name"] = name
-
-            logger.debug("Loaded permanent stats from %s (slot %s)", save_path, slot)
-        except Exception as e:
-            logger.warning("Failed to load permanent stats from %s: %s", save_path, e)
+        """Load permanent stats and global meta-progress from disk."""
+        load_permanent_stats(self)
 
     def save_permanent_stats(self) -> None:
-        """Write permanent stats and global meta-progress to disk.
-
-        Saves to ``profile_N.json`` in the project root using an atomic write
-        (temp file + os.replace) so a crash mid-write never corrupts the save.
-        Does nothing if no profile slot is active.
-        """
-        import json
-        import os
-        from datetime import datetime
-
-        slot = getattr(self, "active_profile_slot", None)
-        if slot is None:
-            return
-        save_path = self._profile_path(slot)
-        tmp_path = save_path.with_suffix(".json.tmp")
-        profile_name = self.global_progress.get("profile_name", f"Profile {slot}")
-        # Always ensure active_profile_slot is set to current slot before saving
-        self.global_progress["active_profile_slot"] = slot
-        data = {
-            "version": 1,
-            "name": profile_name,
-            "last_played": datetime.now().isoformat(timespec="seconds"),
-            "permanent_stats": dict(self.permanent_stats),
-            "global_progress": {
-                "meta_xp": self.global_progress.get("meta_xp", 0),
-                "meta_level": self.global_progress.get("meta_level", 1),
-                "meta_points": self.global_progress.get("meta_points", 0),
-                "stages_cleared": dict(self.global_progress.get("stages_cleared", {})),
-                "display": self.global_progress.get("display", {}),
-                "audio": self.global_progress.get("audio", {}),
-                "active_profile_slot": slot,
-            },
-        }
-        try:
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-            os.replace(tmp_path, save_path)
-            logger.debug("Saved permanent stats to %s (slot %s)", save_path, slot)
-        except Exception as e:
-            logger.warning("Failed to save permanent stats: %s", e)
-            try:
-                tmp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
+        """Write permanent stats and global meta-progress to disk."""
+        save_permanent_stats(self)
 
     def get_profile_info(self, slot: int) -> dict:
-        """Return display info for a profile slot without loading full stats into game state.
-
-        Returns a dict with keys: exists, name, meta_level, meta_xp, meta_points, last_played.
-        """
-        import json
-
-        path = self._profile_path(slot)
-        if not path.exists():
-            return {
-                "exists": False,
-                "name": "",
-                "meta_level": 1,
-                "meta_xp": 0,
-                "meta_points": 0,
-                "last_played": "",
-            }
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            gp = data.get("global_progress", {})
-            return {
-                "exists": True,
-                "name": data.get("name", f"Profile {slot}"),
-                "meta_level": int(gp.get("meta_level", 1)),
-                "meta_xp": int(gp.get("meta_xp", 0)),
-                "meta_points": int(gp.get("meta_points", 0)),
-                "last_played": data.get("last_played", ""),
-            }
-        except Exception:
-            return {
-                "exists": False,
-                "name": "",
-                "meta_level": 1,
-                "meta_xp": 0,
-                "meta_points": 0,
-                "last_played": "",
-            }
+        """Return display info for a profile slot without loading full stats into game state."""
+        return get_profile_info(slot)
 
     def select_profile(self, slot: int) -> None:
         """Set the active profile slot and load its data."""

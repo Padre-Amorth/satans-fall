@@ -8,9 +8,6 @@ from pygame.key import ScancodeWrapper
 
 from src.assets.manager import get_image
 from src.balance import (
-    BURST_FIRE_RATE,
-    BURST_MAX,
-    BURST_PAUSE,
     DEFAULT_DAMAGE_REDUCTION_MULTIPLIER,
     DEFAULT_PROJECTILE_SIZE_MULTIPLIER,
     ENEMY_SCORE_PER_HEALTH,
@@ -39,6 +36,7 @@ from src.game_constants import (
     WALL_THICKNESS,
 )
 from src.game_state import GameStateManager
+from src.game.weapons import init_weapons, init_player_weapons
 from src.projectile import FliesProjectile
 from src.systems.collision_system import CollisionSystem
 from src.systems.enemy_manager import EnemyManager
@@ -630,32 +628,7 @@ class Game:
             self.tower_special.update_hellectric_flux()
 
     def _init_weapons(self) -> None:
-        # Weapon and cooldown defaults needed by weapon update logic
-        self.weapon_levels: Dict[str, int] = {}
-        self.burst_fire_rate = BURST_FIRE_RATE
-        self.burst_cooldown = 0
-        self.burst_max = BURST_MAX
-        self.burst_pause = BURST_PAUSE
-        self.burst_count = 0
-        self.fire_rate_multiplier = 1.0
-        self.hellgun_cooldown_timer = 0
-        self.spear_cooldown_timer = 0
-        self.DemonStrike_cooldown_timer = 0
-        self.flies_cooldown_timer = 0
-        self.skullboom_cooldown_timer = 0
-        self.tenebrae_cooldown_timer = 0
-        # SkullBoom particles and explosion effects
-        self.skullboom_particles: List[Any] = []
-        self.skullboom_explosions: List[Dict[str, Any]] = []
-        # Special-case particles for blasphemy_5 revive explosion (red)
-        self.blasphemy5_particles: List[Any] = []
-        # Ice particles for explosions
-        self.ice_particles: List[Any] = []
-        # Ice puddles for slowing enemies
-        self.ice_puddles: List[Dict[str, Any]] = []
-        # Orbital defaults
-        self.orbital_count = 3
-        self.orbitals: List[Dict[str, Any]] = []
+        init_weapons(self)
 
     def _init_player(self) -> None:
         # Game state
@@ -706,14 +679,8 @@ class Game:
         self.selected_upgrade_index = 0
         # Rerolls available for upgrades (initialized from blasphemy_9 per-run pool at run start)
         self.upgrade_rerolls_remaining: int = 0
-        # Weapon choice state (every 3 levels)
-        self.awaiting_weapon_choice = False
-        self.weapon_choices: List[Dict[str, Any]] = []
-        self.selected_weapon_index = 0
-        self.is_initial_weapon_choice = False
-        self.player_weapons = []
-        self._max_extra_weapons = MAX_EXTRA_WEAPONS
-        # Base weapon progression
+        # Weapon choice state and progression
+        init_player_weapons(self)
 
         # Track upgrade levels (how many times each has been taken)
         self.upgrade_levels: Dict[str, int] = {
@@ -723,9 +690,6 @@ class Game:
             "projectile_size": 0,
             "armor": 0,
         }
-
-        # Weapon levels
-        self.weapon_levels = {}
 
         # Permanent stats (meta-progression)
         # Ensure we don't overwrite loaded/persisted stats; set defaults only if missing

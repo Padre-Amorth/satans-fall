@@ -6,7 +6,11 @@
       "Bash(git stash:*)",
       "Bash(python:*)",
       "Bash(git stash pop:*)",
-      "Bash(git apply:*)"
+      "Bash(git apply:*)",
+      "Read(//c/Users/Gla/.claude/projects/c--Users-Gla-Desktop-Nuova-cartella-giochi-satans-fall/memory/**)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Gla\\.claude\\projects\\c--Users-Gla-Desktop-Nuova-cartella-giochi-satans-fall\\memory"
     ]
   }
 }

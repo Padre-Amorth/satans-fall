@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "name": "amorth",
+  "last_played": "2026-02-28T00:05:46",
+  "permanent_stats": {
+    "power": 0,
+    "vigor": 0,
+    "adrenaline": 0,
+    "structure": 0,
+    "blasphemy_1": 0
+  },
+  "global_progress": {
+    "meta_xp": 1719,
+    "meta_level": 1,
+    "meta_points": 0,
+    "stages_cleared": {},
+    "display": {
+      "window_size": [
+        2048,
+        1081
+      ]
+    },
+    "audio": {
+      "enabled": true
+    },
+    "active_profile_slot": 2
+  }
+}

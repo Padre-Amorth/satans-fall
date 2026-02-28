@@ -95,11 +95,17 @@ def test_storm_dict_projectile_with_spatial_grid_triggers_chain_and_removal():
 
     proj = Projectile(400, 100, 0.0, 0.0, damage=5, radius=6, appearance="storm_statue")
     proj.source = "statue"
+    proj.tower_type = "storm"
     proj.chain_targets = 2
     try:
         g.projectiles.add(proj)
     except Exception:
         g.projectiles = [proj]
+
+    # ensure no crits occur during the initial collision
+    import random
+
+    random.random = lambda: 1.0
 
     g.handle_collisions()
 
@@ -109,6 +115,28 @@ def test_storm_dict_projectile_with_spatial_grid_triggers_chain_and_removal():
     except Exception:
         assert proj not in g.projectiles
     assert len(getattr(g.game_state, "chain_lightning_effects", [])) >= 1
+
+    # chain hits should also spawn floating text for damage (1.5× multiplier)
+    # now verify crit color by forcing a crit
+    import random
+
+    random.random = lambda: 0.0
+    # give storm right bonus so crit chance exists
+    g.permanent_stats["storm_4"] = 1
+    # reset scenario
+    g.floating_texts.clear()
+    try:
+        g.enemies.empty()
+        g.enemies.add(e1)
+        g.enemies.add(e2)
+    except Exception:
+        g.enemies = [e1, e2]
+    try:
+        g.projectiles.add(proj)
+    except Exception:
+        g.projectiles = [proj]
+    g.handle_collisions()
+    assert any(getattr(ft, "color", None) == (255, 50, 50) for ft in g.floating_texts)
 
 
 def test_storm_left_slot2_chain_kill_triggers_explosion():

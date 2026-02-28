@@ -21,7 +21,7 @@ def get_top_bottom_widths(game: Game):
 
 def test_purgatory_wider_than_limbo(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     g.select_stage("limbo")
     limbo_top, limbo_bot = get_top_bottom_widths(g)

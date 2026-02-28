@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 import pygame
 
+from src.balance import ENEMY_SCORE_PER_HEALTH
 from src.entities.enemy import BurnParticle, IceParticle
 from src.weapons import tenebrae_damage
 
@@ -85,12 +86,33 @@ class CollisionSystem:
             # swallow errors so collision handling remains robust
             pass
 
+    def _maybe_charge_tower(self, projectile: Any, hits: int = 1) -> None:
+        """Increment tower energy for statue projectile hits.
+
+        ``hits`` allows batching multiple charges (e.g. storm chains).
+        """
+        try:
+            if getattr(projectile, "source", None) != "statue":
+                return
+            # ensure unlock exists for this tower type
+            tp = getattr(projectile, "tower_type", None)
+            if tp is None:
+                return
+            if not self.game.permanent_stats.get(f"{tp}_7", 0):
+                return
+            amt = getattr(self.game, "tower_energy_per_hit", 0) * hits
+            try:
+                self.game.charge_tower_energy(amt)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
     def _projectile_radius(self, proj: Any) -> int:
         """Return radius for a projectile object.
 
         - Handles Projectile instances and objects with a `rect`.
         """
-        g = self.game
         r = getattr(proj, "radius", None)
         if r is not None:
             try:
@@ -439,7 +461,6 @@ class CollisionSystem:
         If the projectile carried a critical hit marker (set by
         _player_damage_vs_burning), return a red color and slightly larger font.
         """
-        g = self.game
         try:
             is_crit = False
             if isinstance(projectile, dict):
@@ -475,10 +496,27 @@ class CollisionSystem:
             except Exception:
                 pass
 
-            # Only consider non-enemy projectiles that are not from statues
-            is_player_proj = (
-                not getattr(projectile, "is_enemy_projectile", False)
-            ) and (getattr(projectile, "source", None) != "statue")
+            # Only consider non-enemy projectiles.  Statues are normally
+            # excluded, unless they belong to a fire tower with right-column
+            # upgrades (those should be allowed to crit).  We start by assuming
+            # non-enemy projectiles are valid, then turn off the flag for a
+            # statue that doesn't meet the extra condition.
+            is_player_proj = not getattr(projectile, "is_enemy_projectile", False)
+            if getattr(projectile, "source", None) == "statue":
+                # statue projectiles are normally ignored; however, fire and storm
+                # towers gain crit chance from their right-column tiers so we need
+                # to let those shots pass through the player/crit logic when any
+                # such tier is active.
+                ttype = getattr(projectile, "tower_type", None)
+                if ttype in ("fire", "storm"):
+                    right_count = sum(
+                        self.game.permanent_stats.get(f"{ttype}_{i}", 0)
+                        for i in (4, 5, 6)
+                    )
+                    if not right_count:
+                        is_player_proj = False
+                else:
+                    is_player_proj = False
 
             # FIRE tier-3: bonus vs burning enemies (highest priority)
             try:
@@ -497,7 +535,25 @@ class CollisionSystem:
                     adrenaline_bonus = (
                         float(g.permanent_stats.get("adrenaline", 0)) * 0.02
                     )
-                    chance = min(1.0, base_chance + adrenaline_bonus)
+                    # additional crit chance from right-column slots on tower projectiles
+                    extra_crit = 0.0
+                    ttype = getattr(projectile, "tower_type", None)
+                    if ttype == "fire":
+                        extra_crit += (
+                            sum(
+                                g.permanent_stats.get(f"fire_{i}", 0) for i in (4, 5, 6)
+                            )
+                            * 0.10
+                        )
+                    elif ttype == "storm":
+                        extra_crit += (
+                            sum(
+                                g.permanent_stats.get(f"storm_{i}", 0)
+                                for i in (4, 5, 6)
+                            )
+                            * 0.10
+                        )
+                    chance = min(1.0, base_chance + adrenaline_bonus + extra_crit)
                     if chance > 0 and random.random() < chance:
                         try:
                             if isinstance(projectile, dict):
@@ -689,6 +745,11 @@ class CollisionSystem:
                                 except Exception:
                                     pass
                                 enemy.take_damage(dmg_to_apply, show_floating=False)
+                                # ICE3 piercing also counts as tower hits
+                                try:
+                                    self._maybe_charge_tower(projectile)
+                                except Exception:
+                                    pass
                                 try:
                                     LOG.debug(
                                         "handle_collisions ICE3-hit-done: proj_id=%s enemy_id=%s post_hit_ids=%s",
@@ -706,10 +767,11 @@ class CollisionSystem:
                             )
                             try:
                                 ex, ey = g._enemy_pos(enemy)
-                                final_color, final_font = (
-                                    self._floating_text_style_for_projectile(
-                                        projectile, (100, 200, 255), 20
-                                    )
+                                (
+                                    final_color,
+                                    final_font,
+                                ) = self._floating_text_style_for_projectile(
+                                    projectile, (100, 200, 255), 20
                                 )
                                 g.spawn_floating_text(
                                     str(dmg_to_apply),
@@ -821,6 +883,11 @@ class CollisionSystem:
                                         enemy.take_damage(
                                             dmg_to_apply, show_floating=False
                                         )
+                                        # charge energy for each successful hit
+                                        try:
+                                            self._maybe_charge_tower(projectile)
+                                        except Exception:
+                                            pass
 
                                     # Apply slow effect (object or dict) for explosion-area
                                     slow_duration = getattr(
@@ -835,10 +902,11 @@ class CollisionSystem:
 
                                     try:
                                         ex, ey = g._enemy_pos(enemy)
-                                        final_color, final_font = (
-                                            self._floating_text_style_for_projectile(
-                                                projectile, (100, 200, 255), 20
-                                            )
+                                        (
+                                            final_color,
+                                            final_font,
+                                        ) = self._floating_text_style_for_projectile(
+                                            projectile, (100, 200, 255), 20
                                         )
                                         g.spawn_floating_text(
                                             str(dmg_to_apply),
@@ -929,6 +997,11 @@ class CollisionSystem:
                                         enemy.take_damage(
                                             dmg_to_apply, show_floating=False
                                         )
+                                        # charge energy on each enemy hit by explosion
+                                        try:
+                                            self._maybe_charge_tower(projectile)
+                                        except Exception:
+                                            pass
 
                                     # Apply slow effect
                                     slow_duration = getattr(
@@ -942,10 +1015,11 @@ class CollisionSystem:
                                     )
                                     try:
                                         ex, ey = g._enemy_pos(enemy)
-                                        final_color, final_font = (
-                                            self._floating_text_style_for_projectile(
-                                                projectile, (100, 200, 255), 20
-                                            )
+                                        (
+                                            final_color,
+                                            final_font,
+                                        ) = self._floating_text_style_for_projectile(
+                                            projectile, (100, 200, 255), 20
                                         )
                                         g.spawn_floating_text(
                                             str(dmg_to_apply),
@@ -996,6 +1070,10 @@ class CollisionSystem:
                     try:
                         if hasattr(primary, "take_damage"):
                             primary.take_damage(dmg_to_apply, show_floating=False)
+                            try:
+                                self._maybe_charge_tower(projectile)
+                            except Exception:
+                                pass
                         else:
                             primary["health"] = max(
                                 0, primary.get("health", 0) - dmg_to_apply
@@ -1017,10 +1095,11 @@ class CollisionSystem:
                     # Floating text
                     try:
                         ex, ey = g._enemy_pos(primary)
-                        final_color, final_font = (
-                            self._floating_text_style_for_projectile(
-                                projectile, (100, 200, 255), 20
-                            )
+                        (
+                            final_color,
+                            final_font,
+                        ) = self._floating_text_style_for_projectile(
+                            projectile, (100, 200, 255), 20
                         )
                         g.spawn_floating_text(
                             str(dmg_to_apply),
@@ -1164,10 +1243,11 @@ class CollisionSystem:
                             )
                         except Exception:
                             color = (255, 255, 255)
-                        final_color, final_font = (
-                            self._floating_text_style_for_projectile(
-                                projectile, color, 20
-                            )
+                        (
+                            final_color,
+                            final_font,
+                        ) = self._floating_text_style_for_projectile(
+                            projectile, color, 20
                         )
                         g.spawn_floating_text(
                             str(int(dmg_to_apply)),
@@ -1333,10 +1413,11 @@ class CollisionSystem:
                                         )
                                     except Exception:
                                         color = (255, 255, 255)
-                                    final_color, final_font = (
-                                        self._floating_text_style_for_projectile(
-                                            projectile, color, 20
-                                        )
+                                    (
+                                        final_color,
+                                        final_font,
+                                    ) = self._floating_text_style_for_projectile(
+                                        projectile, color, 20
                                     )
                                     g.spawn_floating_text(
                                         str(dmg_to_apply),
@@ -1381,6 +1462,10 @@ class CollisionSystem:
                         )
                         enemy.take_damage(dmg_to_apply, show_floating=False)
                         try:
+                            self._maybe_charge_tower(projectile)
+                        except Exception:
+                            pass
+                        try:
                             ex, ey = g._enemy_pos(enemy)
                             try:
                                 base = (
@@ -1406,10 +1491,11 @@ class CollisionSystem:
                                 color = (255, 255, 255)
                             try:
                                 ex, ey = g._enemy_pos(enemy)
-                                final_color, final_font = (
-                                    self._floating_text_style_for_projectile(
-                                        projectile, color, 20
-                                    )
+                                (
+                                    final_color,
+                                    final_font,
+                                ) = self._floating_text_style_for_projectile(
+                                    projectile, color, 20
                                 )
                                 try:
                                     # display the actual damage applied (including crit bonus)
@@ -1467,13 +1553,46 @@ class CollisionSystem:
                                     to_chain = min(len(others), chain - 1)
                                     for _, targ in others[:to_chain]:
                                         try:
-                                            targ.take_damage(
-                                                projectile.damage * 2,
-                                                show_floating=False,
+                                            # calculate damage through helper so crits/burn
+                                            # bonuses apply to chain hits as well
+                                            # chain lightning now does 1.5× base damage
+                                            dmg_chain = self._player_damage_vs_burning(
+                                                projectile,
+                                                targ,
+                                                projectile.damage * 1.5,
                                             )
+                                            targ.take_damage(
+                                                dmg_chain, show_floating=False
+                                            )
+                                            # show damage number using computed value
+                                            try:
+                                                ex, ey = g._enemy_pos(targ)
+                                                (
+                                                    final_color,
+                                                    final_font,
+                                                ) = self._floating_text_style_for_projectile(
+                                                    projectile, (255, 255, 255), 20
+                                                )
+                                                g.spawn_floating_text(
+                                                    str(int(dmg_chain)),
+                                                    ex,
+                                                    ey - g._enemy_radius(targ) - 8,
+                                                    color=final_color,
+                                                    font_size=final_font,
+                                                )
+                                            except Exception:
+                                                pass
+                                            try:
+                                                self._maybe_charge_tower(projectile)
+                                            except Exception:
+                                                pass
                                         except Exception:
                                             try:
-                                                targ.health -= projectile.damage * 2
+                                                targ.health -= projectile.damage * 1.5
+                                            except Exception:
+                                                pass
+                                            try:
+                                                self._maybe_charge_tower(projectile)
                                             except Exception:
                                                 pass
                                         tx, ty = g._enemy_pos(targ)
@@ -1484,7 +1603,7 @@ class CollisionSystem:
                                             try:
                                                 g.add_score(
                                                     targ.max_health
-                                                    * 18
+                                                    * ENEMY_SCORE_PER_HEALTH
                                                     * g.difficulty_multiplier
                                                 )
                                             except Exception:
@@ -1757,7 +1876,11 @@ class CollisionSystem:
                     # Death handling for object-based enemies
                     if getattr(enemy, "health", None) is not None:
                         if enemy.health <= 0:
-                            g.add_score(enemy.max_health * 18 * g.difficulty_multiplier)
+                            g.add_score(
+                                enemy.max_health
+                                * ENEMY_SCORE_PER_HEALTH
+                                * g.difficulty_multiplier
+                            )
                             # Give XP on kill (per-type table, flat values)
                             type_xp_local = {
                                 "weak": 10,
@@ -1856,7 +1979,7 @@ class CollisionSystem:
                                 except Exception:
                                     pass
                                 targ.take_damage(
-                                    projectile.damage * 2, show_floating=False
+                                    projectile.damage * 1.5, show_floating=False
                                 )
                                 damaged = True
                                 try:
@@ -1871,7 +1994,7 @@ class CollisionSystem:
                                         pass
                                     except Exception:
                                         pass
-                                    targ.health -= projectile.damage * 2
+                                    targ.health -= projectile.damage * 1.5
                                     damaged = True
                                     try:
                                         # Chain: damage applied
@@ -1914,7 +2037,9 @@ class CollisionSystem:
                             # death handling for chained-target sprites
                             if getattr(targ, "health", 0) <= 0:
                                 g.add_score(
-                                    targ.max_health * 18 * g.difficulty_multiplier
+                                    targ.max_health
+                                    * ENEMY_SCORE_PER_HEALTH
+                                    * g.difficulty_multiplier
                                 )
                                 type_xp_local = {
                                     "weak": 10,
@@ -2331,7 +2456,7 @@ class CollisionSystem:
                         if getattr(enemy, "health", 0) <= 0:
                             g.add_score(
                                 enemy.get("max_health", 10)
-                                * 18
+                                * ENEMY_SCORE_PER_HEALTH
                                 * g.difficulty_multiplier
                             )
                             type_xp_local = {
@@ -2420,7 +2545,7 @@ class CollisionSystem:
                                 if targ["health"] <= 0:
                                     g.add_score(
                                         targ.get("max_health", 10)
-                                        * 18
+                                        * ENEMY_SCORE_PER_HEALTH
                                         * g.difficulty_multiplier
                                     )
                                     base_xp = 12
@@ -2623,7 +2748,11 @@ class CollisionSystem:
 
                         # Death handling for object enemies
                         if getattr(enemy, "health", 0) <= 0:
-                            g.add_score(enemy.max_health * 18 * g.difficulty_multiplier)
+                            g.add_score(
+                                enemy.max_health
+                                * ENEMY_SCORE_PER_HEALTH
+                                * g.difficulty_multiplier
+                            )
                             type_xp_local = {
                                 "weak": 10,
                                 "normal": 16,
@@ -2704,7 +2833,7 @@ class CollisionSystem:
                                     if targ["health"] <= 0:
                                         g.add_score(
                                             targ.get("max_health", 10)
-                                            * 18
+                                            * ENEMY_SCORE_PER_HEALTH
                                             * g.difficulty_multiplier
                                         )
                                         type_xp_local = {
@@ -2755,7 +2884,7 @@ class CollisionSystem:
                                     if getattr(targ, "health", 0) <= 0:
                                         g.add_score(
                                             targ.max_health
-                                            * 18
+                                            * ENEMY_SCORE_PER_HEALTH
                                             * g.difficulty_multiplier
                                         )
                                         type_xp_local = {
@@ -2837,10 +2966,25 @@ class CollisionSystem:
                         bd = self._player_damage_vs_burning(
                             projectile, boss, getattr(projectile, "damage", 0)
                         )
-                        # allow floating numbers when boss takes damage
                         boss.take_damage(bd)
+                        self._maybe_charge_tower(projectile)
                         if boss.health <= boss.max_health * 0.1:
                             g.prologo_final_boss_immortal = True
+                            boss.health = int(boss.max_health * 0.1)
+                elif (
+                    boss.enemy_type == "boss_limbo"
+                    and g.selected_stage == "limbo_final"
+                ):
+                    if g.limbo_final_boss_immortal:
+                        continue
+                    else:
+                        bd = self._player_damage_vs_burning(
+                            projectile, boss, getattr(projectile, "damage", 0)
+                        )
+                        boss.take_damage(bd)
+                        self._maybe_charge_tower(projectile)
+                        if boss.health <= boss.max_health * 0.1:
+                            g.limbo_final_boss_immortal = True
                             boss.health = int(boss.max_health * 0.1)
                 else:
                     bd = self._player_damage_vs_burning(
@@ -2848,6 +2992,7 @@ class CollisionSystem:
                     )
                     # boss should show floating damage numbers
                     boss.take_damage(bd)
+                    self._maybe_charge_tower(projectile)
 
                 # Ensure projectiles that carry slow/burn also apply to bosses (defensive/duplicate path)
                 try:
@@ -3062,7 +3207,9 @@ class CollisionSystem:
                             else:
                                 # Regular enemy death handling
                                 g.add_score(
-                                    targ.max_health * 18 * g.difficulty_multiplier
+                                    targ.max_health
+                                    * ENEMY_SCORE_PER_HEALTH
+                                    * g.difficulty_multiplier
                                 )
                                 type_xp_local = {
                                     "weak": 10,
@@ -3136,56 +3283,15 @@ class CollisionSystem:
                 contact_damage_to_enemy: float = 2.0 / g.fps
                 enemy.take_damage(contact_damage_to_enemy, show_floating=False)
                 if g.frame_count % 10 == 0:
-                    # Shorter, weaker shake for contact
+                    # Shorter, weaker shake for contact (burn particles disabled)
                     g.shake_timer = 6
                     g.shake_intensity = max(g.shake_intensity, 6)
 
-                    # Spawn burn particles on both enemy and player to show fiery contact (increased visibility)
-                    try:
-                        # Enemy particles (sprite) - slightly more and larger/longer-lived
-                        for _ in range(random.randint(3, 6)):
-                            vx = random.uniform(-30, 30)
-                            vy = random.uniform(15, 40)
-                            p_burn_enemy = BurnParticle(
-                                enemy.x + random.uniform(-8, 8),
-                                enemy.y - 8 + random.uniform(-4, 4),
-                                vx,
-                                vy,
-                                life=random.randint(18, 44),
-                                size=random.randint(3, 5),
-                            )
-                            try:
-                                enemy.burn_particles.append(p_burn_enemy)
-                            except Exception:
-                                pass
-                        # Player particles - same stronger effect
-                        if not hasattr(g.player, "burn_particles"):
-                            g.player.burn_particles = []
-                        for _ in range(random.randint(3, 6)):
-                            vx = random.uniform(-30, 30)
-                            vy = random.uniform(15, 40)
-                            p_burn_player_local = BurnParticle(
-                                g.player.x + random.uniform(-16, 16),
-                                g.player.y - 8 + random.uniform(-4, 4),
-                                vx,
-                                vy,
-                                life=random.randint(18, 44),
-                                size=random.randint(3, 5),
-                            )
-                            g.player.burn_particles.append(p_burn_player_local)
-                    except Exception:
-                        pass
-
-                # Armor spine effect
+                # Armor spine effect (visual removed)
                 if g.upgrade_levels.get("armor", 0) > 0:
                     reflect_ratio: float = min(0.3 * g.upgrade_levels["armor"], 0.9)
                     reflected = actual_damage * reflect_ratio
                     enemy.take_damage(reflected, show_floating=False)
-                    # Visual effect: draw red spikes from player to enemy
-                    if getattr(enemy, "spine_timer", 0) <= 0:
-                        enemy.spine_timer = 4  # show for 4 frames
-                    if not hasattr(enemy, "spine_from") or enemy.spine_from is None:
-                        enemy.spine_from = [g.player.x, g.player.y]
         else:
             for enemy in list(g.enemies):
                 ex, ey = g._enemy_pos(enemy)
@@ -3210,64 +3316,15 @@ class CollisionSystem:
                         except Exception:
                             pass
                     if g.frame_count % 10 == 0:
-                        # Shorter, weaker shake for contact
+                        # Shorter, weaker shake for contact (burn particles disabled)
                         g.shake_timer = 6
                         g.shake_intensity = max(g.shake_intensity, 6)
 
-                        # Enemy instance: append BurnParticle objects
-                        try:
-                            if not hasattr(enemy, "burn_particles"):
-                                enemy.burn_particles = []
-                            for _ in range(random.randint(3, 6)):
-                                vx = random.uniform(-30, 30)
-                                vy = random.uniform(15, 40)
-                                from src.entities.enemy import BurnParticle as _BP
-
-                                p = _BP(
-                                    enemy.x + random.uniform(-8, 8),
-                                    enemy.y - 8 + random.uniform(-4, 4),
-                                    vx,
-                                    vy,
-                                    life=random.randint(18, 44),
-                                    size=random.randint(3, 5),
-                                )
-                                enemy.burn_particles.append(p)
-                        except Exception:
-                            pass
-
-                        # Player particles
-                        try:
-                            if not hasattr(g.player, "burn_particles"):
-                                g.player.burn_particles = []
-                            for _ in range(random.randint(2, 4)):
-                                vx = random.uniform(-20, 20)
-                                vy = random.uniform(10, 30)
-                                from src.entities.enemy import BurnParticle as _BP
-
-                                p = _BP(
-                                    g.player.x + random.uniform(-12, 12),
-                                    g.player.y - 8 + random.uniform(-2, 2),
-                                    vx,
-                                    vy,
-                                    life=random.randint(12, 30),
-                                    size=random.randint(2, 4),
-                                )
-                                g.player.burn_particles.append(p)
-                        except Exception:
-                            pass
-
-                    # Armor spine effect
+                    # Armor spine effect (visual removed)
                     if g.upgrade_levels.get("armor", 0) > 0:
                         reflect_ratio = min(0.3 * g.upgrade_levels["armor"], 0.9)
                         reflected = actual_damage * reflect_ratio
                         enemy.take_damage(reflected, show_floating=False)
-                        if getattr(enemy, "spine_timer", 0) <= 0:
-                            enemy.spine_timer = 4
-                        if (
-                            not hasattr(enemy, "spine_from")
-                            or getattr(enemy, "spine_from", None) is None
-                        ):
-                            enemy.spine_from = [g.player.x, g.player.y]
         # Bosses hit player
         hit_bosses = pygame.sprite.spritecollide(g.player, g.bosses, False)
         for boss in hit_bosses:
@@ -3345,13 +3402,6 @@ class CollisionSystem:
                                     delattr(enemy, attr)
                                 except Exception:
                                     pass
-
-        # Update spine timers
-        for enemy in g.enemies:
-            if hasattr(enemy, "spine_timer") and enemy.spine_timer > 0:
-                enemy.spine_timer -= 1
-                if enemy.spine_timer <= 0:
-                    enemy.spine_from = None
 
         # Update slow timers for all enemies
         for enemy in g.enemies:
@@ -3454,10 +3504,30 @@ class CollisionSystem:
             in_puddle = False
             max_slow_factor = 1.0
 
+            # combine ice and blizzard puddles for processing
+            puddles = []
+            puddles.extend(getattr(g, "ice_puddles", []) or [])
+            puddles.extend(getattr(g, "blizzard_puddles", []) or [])
             # Check all active puddles
-            for puddle in g.ice_puddles:
+            for puddle in puddles:
                 px, py = puddle["x"], puddle["y"]
-                radius = puddle["radius"]
+                # compute effective radius for blizzard growth (with multiplier)
+                if puddle.get("blizzard"):
+                    try:
+                        from src.game_constants import (
+                            BLIZZARD_GROWTH_MULTIPLIER,
+                            BLIZZARD_MAX_DURATION,
+                        )
+                    except Exception:
+                        BLIZZARD_MAX_DURATION = 1
+                        BLIZZARD_GROWTH_MULTIPLIER = 1.0
+                    growth = 1 - (puddle.get("timer", 0) / BLIZZARD_MAX_DURATION)
+                    growth *= BLIZZARD_GROWTH_MULTIPLIER
+                    if growth > 1:
+                        growth = 1
+                    radius = puddle["radius"] * growth
+                else:
+                    radius = puddle["radius"]
                 slow_factor = puddle["slow_factor"]
 
                 dx = ex - px
@@ -3503,9 +3573,30 @@ class CollisionSystem:
                         max_slow_factor = 1.0
 
                         # Check all active puddles
-                        for puddle in g.ice_puddles:
+                        # include both types
+                        puddles = []
+                        puddles.extend(getattr(g, "ice_puddles", []) or [])
+                        puddles.extend(getattr(g, "blizzard_puddles", []) or [])
+                        for puddle in puddles:
                             px, py = puddle["x"], puddle["y"]
-                            radius = puddle["radius"]
+                            if puddle.get("blizzard"):
+                                try:
+                                    from src.game_constants import (
+                                        BLIZZARD_GROWTH_MULTIPLIER,
+                                        BLIZZARD_MAX_DURATION,
+                                    )
+                                except Exception:
+                                    BLIZZARD_MAX_DURATION = 1
+                                    BLIZZARD_GROWTH_MULTIPLIER = 1.0
+                                growth = 1 - (
+                                    puddle.get("timer", 0) / BLIZZARD_MAX_DURATION
+                                )
+                                growth *= BLIZZARD_GROWTH_MULTIPLIER
+                                if growth > 1:
+                                    growth = 1
+                                radius = puddle["radius"] * growth
+                            else:
+                                radius = puddle["radius"]
                             slow_factor = puddle["slow_factor"]
 
                             dx = bx - px

@@ -28,7 +28,11 @@ class GameStateManager:
         # Wave management
         self.wave = 0
         self.wave_time = 0
-        self.wave_duration = 40  # 40 seconds per wave
+        from src.game_constants import DEFAULT_WAVE_DURATION
+
+        # duration of each wave in seconds; pulled from constants for
+        # consistency so tuning only needs to change one value.
+        self.wave_duration = DEFAULT_WAVE_DURATION
         self.wave_boss_spawned = False
         self.big_spawned_this_wave = False
 
@@ -86,6 +90,8 @@ class GameStateManager:
         self.chain_lightning_effects: list[dict] = (
             []
         )  # List of chain effects with timer and points
+        # fire special explosion effects (orange circles)
+        self.fire_explosions: list[dict] = []
         self.showing_prologo_end: bool = False
 
         # Game state
@@ -118,8 +124,9 @@ class GameStateManager:
         ):
             self.advance_wave()
 
-        # Update difficulty multiplier
-        self.difficulty_multiplier = 1.0 + (self.wave * 0.12)
+        # Update difficulty multiplier using stage‑aware slope helper
+        per_wave = self.game.get_difficulty_multiplier_per_wave()
+        self.difficulty_multiplier = 1.0 + (self.wave * per_wave)
 
     def advance_wave(self) -> None:
         """Advance to the next wave"""
@@ -131,13 +138,23 @@ class GameStateManager:
 
         # Ramp spawn rate: gentler early, steeper after configured ramp wave
         if self.wave < SPAWN_RAMP_START_WAVE:  # spawn_ramp_start_wave
-            self.game.enemy_manager.enemy_spawn_rate = max(
+            rate = max(
                 SPAWN_MIN_RATE, int(BASE_SPAWN_RATE - self.wave * SPAWN_RAMP_SLOPE_PRE)
             )  # base_spawn_rate - wave * slope_pre
         else:
-            self.game.enemy_manager.enemy_spawn_rate = max(
+            rate = max(
                 SPAWN_MIN_RATE, int(BASE_SPAWN_RATE - self.wave * SPAWN_RAMP_SLOPE_POST)
             )  # base_spawn_rate - wave * slope_post
+        # apply limbo penalty after computing base rate
+        if getattr(self.game, "selected_stage", None) in (
+            "limbo",
+            "limbo_2",
+            "limbo_3",
+        ):
+            from src.balance import LIMBO_SPAWN_RATE_PENALTY
+
+            rate += LIMBO_SPAWN_RATE_PENALTY
+        self.game.enemy_manager.enemy_spawn_rate = rate
 
         # Show wave message
         self.add_center_message(
@@ -421,17 +438,17 @@ class GameStateManager:
             {
                 "id": "fire",
                 "name": "Fire Tower",
-                "description": "Damage: 10 — Burn nearby enemies (4 DPS, 3s)",
+                "description": "Burn enemies.",
             },
             {
                 "id": "storm",
                 "name": "Storm Tower",
-                "description": "Damage: 10 (projectile ~9) — Chains to multiple enemies",
+                "description": "Chain lightning damage.",
             },
             {
                 "id": "ice",
                 "name": "Ice Tower",
-                "description": "Damage: 15 — Slows enemies 50% for 2s",
+                "description": "Slow enemies.",
             },
         ]
 
@@ -578,10 +595,9 @@ class GameStateManager:
                 return
         except Exception:
             pass
-        # fallback to previous behavior
+        # fallback to previous behavior (multiplier ignored)
         try:
-            mult = getattr(self.game, "score_multiplier", 1.0)
-            amt = int(points * mult)
+            amt = int(points)
             self.score += amt
             try:
                 if (

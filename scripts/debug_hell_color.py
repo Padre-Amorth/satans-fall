@@ -9,7 +9,7 @@ from src.game import Game
 from src.game_constants import STAGE_SETTINGS
 
 print("creating game")
-g = Game(permanent_stats_file="permanent_stats.json")
+g = Game()
 print("selecting hell")
 g.select_stage("hell")
 # set the walls

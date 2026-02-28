@@ -11,6 +11,12 @@ def test_purgatory_initial_tower_choice_flow():
     # Countdown shouldn't start before tower selection
     assert g.stage_start_countdown == 0
 
+    # descriptions should be effect-only now
+    desc_map = {c["id"]: c["description"] for c in g.tower_choices}
+    assert desc_map.get("fire") == "Burn enemies."
+    assert desc_map.get("storm") == "Chain lightning damage."
+    assert desc_map.get("ice") == "Slow enemies."
+
     # Apply a weapon choice (simulate player's selection)
     assert len(g.weapon_choices) > 0
     g.apply_weapon(g.weapon_choices[0]["id"])
@@ -32,4 +38,44 @@ def test_purgatory_initial_tower_choice_flow():
     assert getattr(g.right_tower, "tower_type", None) == chosen
 
     # After both initial choices, countdown should start
+    assert g.stage_start_countdown == 3
+
+
+def test_limbo_final_initial_tower_choice_flow():
+    g = Game()
+
+    # Select limbo_final: weapon choice always active and tower choice should
+    # now also be requested (matching Purgatory behaviour).
+    g.select_stage("limbo_final")
+    # stage setup should configure placeholder towers which are hidden until
+    # the player makes a selection
+    assert getattr(g, "left_tower", None) is not None
+    assert getattr(g, "right_tower", None) is not None
+    assert g.left_tower.visible is False
+    assert g.right_tower.visible is False
+    assert g.awaiting_weapon_choice is True
+    assert g.awaiting_tower_choice is True
+    # Countdown shouldn't start while choices pending
+    assert g.stage_start_countdown == 0
+
+    # descriptions should still be effect-only
+    desc_map = {c["id"]: c["description"] for c in g.tower_choices}
+    assert desc_map.get("fire") == "Burn enemies."
+    assert desc_map.get("storm") == "Chain lightning damage."
+    assert desc_map.get("ice") == "Slow enemies."
+
+    # Apply a weapon and make sure only tower remains
+    assert len(g.weapon_choices) > 0
+    g.apply_weapon(g.weapon_choices[0]["id"])
+    assert g.awaiting_weapon_choice is False
+    assert g.awaiting_tower_choice is True
+    assert g.stage_start_countdown == 0
+
+    # Choose a tower and verify configuration
+    assert len(g.tower_choices) > 0
+    chosen = g.tower_choices[0]["id"]
+    g.apply_tower(chosen)
+    assert g.awaiting_tower_choice is False
+    assert getattr(g.left_tower, "tower_type", None) == chosen
+    assert getattr(g.right_tower, "tower_type", None) == chosen
     assert g.stage_start_countdown == 3

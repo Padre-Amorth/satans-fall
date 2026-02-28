@@ -1,3 +1,4 @@
 """Utility helpers used across the project."""
 
-__all__ = []
+# expose modules for convenient imports
+__all__ = ["sound"]

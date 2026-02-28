@@ -15,7 +15,7 @@ def setup_dummy_sdl():
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from game import Game
+from game import Game  # noqa: E402
 
 
 def test_draw_player_stats_does_not_crash():
@@ -47,7 +47,7 @@ def test_player_stats_shows_satan_label_and_xp_bar(tmp_path):
     critical; a small sample region around the expected area is sufficient.
     """
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
     g.showing_player_stats = True
     g.draw_player_stats()
 
@@ -70,7 +70,7 @@ def test_player_stats_shows_satan_label_and_xp_bar(tmp_path):
 def test_enemy_kill_counter_and_displays(tmp_path):
     from src.entities.enemy import Enemy
 
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
     # counter resets on new run
     g.reset_run()
     assert getattr(g, "enemies_killed_this_run", 0) == 0

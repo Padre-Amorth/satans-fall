@@ -11,9 +11,9 @@ from game import Game
 
 
 def test_skill_tree_unlock_and_persistence(tmp_path):
-    f = tmp_path / "perm_stats.json"
+    _ = tmp_path / "perm_stats.json"
 
-    g = Game(permanent_stats_file=f)
+    g = Game()
     g.showing_permanent_upgrades = True
     g.showing_stage_menu = False  # ensure clicks are routed to permanent upgrades
 
@@ -47,9 +47,7 @@ def test_skill_tree_unlock_and_persistence(tmp_path):
     assert g.permanent_stats.get("fire_1") == 0
     assert g.permanent_stats.get("fire_2") == 0
 
-    # Ensure persistence to file
+    # Persistence is disabled now; a new game should forget the change
     g.permanent_stats["storm_1"] = 1
-    g.save_permanent_stats()
-    # Load into new Game and verify
-    g2 = Game(permanent_stats_file=f)
-    assert g2.permanent_stats.get("storm_1") == 1
+    g2 = Game()
+    assert g2.permanent_stats.get("storm_1", 0) == 0

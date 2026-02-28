@@ -54,7 +54,49 @@ def test_fire_right_column_applies_to_fire_tower():
     g.apply_permanent_stats()
 
     assert g.left_tower.damage == _expected_damage(base_dmg, 1)
-    assert abs(g.left_tower.fire_rate - _expected_fire_rate(base_fr, 1)) <= 1
+    assert abs(g.left_tower.fire_rate - base_fr) <= 1
+
+    # also verify crit chance component for a fire tower projectile
+    class DummyProj:
+        def __init__(self):
+            self.is_enemy_projectile = False
+            self.damage = 10
+            self.tower_type = "fire"
+            self.source = "statue"
+
+    class DummyEnemy:
+        def __init__(self):
+            self.burn_timer = 0
+
+    proj = DummyProj()
+    enemy = DummyEnemy()
+    # right now only tier4 active -> +0.1 extra crit
+    cs = g.collision_system
+    import random
+
+    random.random = lambda: 0.0
+    dmg = cs._player_damage_vs_burning(proj, enemy, proj.damage)
+    assert dmg == 15  # crit applied
+    random.random = lambda: 0.99
+    dmg = cs._player_damage_vs_burning(proj, enemy, proj.damage)
+    assert dmg == 10
+
+    # repeat for a storm tower projectile
+    class DummyProj2(DummyProj):
+        def __init__(self):
+            super().__init__()
+            self.tower_type = "storm"
+
+    proj2 = DummyProj2()
+    # activate storm right slot as well
+    g.permanent_stats["storm_4"] = 1
+    cs = g.collision_system
+    random.random = lambda: 0.0
+    dmg2 = cs._player_damage_vs_burning(proj2, enemy, proj2.damage)
+    assert dmg2 == 15
+    random.random = lambda: 0.99
+    dmg2 = cs._player_damage_vs_burning(proj2, enemy, proj2.damage)
+    assert dmg2 == 10
 
     # Activate two more (stacking)
     g.permanent_stats["fire_5"] = 1
@@ -62,7 +104,7 @@ def test_fire_right_column_applies_to_fire_tower():
     g.apply_permanent_stats()
 
     assert g.left_tower.damage == _expected_damage(base_dmg, 3)
-    assert abs(g.left_tower.fire_rate - _expected_fire_rate(base_fr, 3)) <= 1
+    assert abs(g.left_tower.fire_rate - base_fr) <= 1
 
 
 def test_storm_and_ice_right_column_apply_correctly():
@@ -77,8 +119,9 @@ def test_storm_and_ice_right_column_apply_correctly():
     base_fr = g.left_tower.fire_rate
     g.permanent_stats["storm_4"] = 1
     g.apply_permanent_stats()
-    assert g.left_tower.damage == _expected_damage(base_dmg, 1)
-    # STORM uses +20% fire-rate per slot
+    # damage no longer increases for storm right-column slots
+    assert g.left_tower.damage == base_dmg
+    # STORM still uses +20% fire-rate per slot
     assert (
         abs(g.left_tower.fire_rate - _expected_fire_rate_with_mult(base_fr, 1, 0.2))
         <= 1

@@ -4,8 +4,8 @@ from src.game import Game
 
 
 def test_virtual_surface_and_window_sizes(tmp_path):
-    f = tmp_path / "permanent_stats.json"
-    g = Game(permanent_stats_file=str(f))
+    _ = tmp_path / "permanent_stats.json"
+    g = Game()
     # `screen` remains the virtual render surface used by game/UI
     assert g.screen.get_size() == (g.width, g.height)
     # window surface initially matches virtual size
@@ -18,8 +18,8 @@ def test_virtual_surface_and_window_sizes(tmp_path):
 
 
 def test_options_menu_resolution_preset_click(tmp_path):
-    f = tmp_path / "permanent_stats.json"
-    g = Game(permanent_stats_file=str(f))
+    _ = tmp_path / "permanent_stats.json"
+    g = Game()
     # Open main menu and options overlay
     g.showing_stage_menu = True
     g.showing_options = True
@@ -47,13 +47,11 @@ def test_options_menu_resolution_preset_click(tmp_path):
     item_y = dropdown_y + btn_h + preset_index * (item_h + item_spacing) + item_h // 2
     g.handle_mouse_click((item_x, item_y), 1)
 
-    # Verify window size changed and persisted
+    # Verify window size changed -- but persistence is disabled so a new
+    # game should start with default dimensions.
     assert (g.window_width, g.window_height) == (1280, 720)
-    g2 = Game(permanent_stats_file=str(f))
-    assert tuple(g2.global_progress.get("display", {}).get("window_size", [])) == (
-        1280,
-        720,
-    )
+    g2 = Game()
+    assert (g2.window_width, g2.window_height) == (g2.width, g2.height)
 
 
 def test_clicks_work_after_window_resize_event(tmp_path):
@@ -61,8 +59,8 @@ def test_clicks_work_after_window_resize_event(tmp_path):
 
     This verifies that window->virtual coordinate mapping is applied so clicks
     still hit UI elements even when the window is scaled."""
-    f = tmp_path / "permanent_stats.json"
-    g = Game(permanent_stats_file=str(f))
+    _ = tmp_path / "permanent_stats.json"
+    g = Game()
     g.showing_stage_menu = True
     g.showing_options = True
 
@@ -113,18 +111,16 @@ def test_clicks_work_after_window_resize_event(tmp_path):
     # Process events (this should map coords back to virtual and handle click)
     g.handle_events()
 
-    # Click should have applied the preset and updated window size/prefs
+    # Click should have applied the preset and updated window size
     assert (g.window_width, g.window_height) == (1280, 720)
-    g2 = Game(permanent_stats_file=str(f))
-    assert tuple(g2.global_progress.get("display", {}).get("window_size", [])) == (
-        1280,
-        720,
-    )
+    g2 = Game()
+    # new instance should forget the setting
+    assert (g2.window_width, g2.window_height) == (g2.width, g2.height)
 
 
 def test_options_menu_smooth_scaling_toggle_click(tmp_path):
-    f = tmp_path / "permanent_stats.json"
-    g = Game(permanent_stats_file=str(f))
+    _ = tmp_path / "permanent_stats.json"
+    g = Game()
     g.showing_stage_menu = True
     g.showing_options = True
 
@@ -140,15 +136,14 @@ def test_options_menu_smooth_scaling_toggle_click(tmp_path):
         (smooth_toggle_x + toggle_w // 2, smooth_toggle_y + toggle_h // 2), 1
     )
 
-    # Persisted smooth_scale flag should be toggled (default True -> becomes False)
-    g.save_permanent_stats()
-    g2 = Game(permanent_stats_file=str(f))
-    assert g2.global_progress.get("display", {}).get("smooth_scale", True) is False
+    # Persistence disabled so the toggle only affects current game instance
+    g2 = Game()
+    assert g2.global_progress.get("display", {}).get("smooth_scale", True) is True
 
 
 def test_draw_uses_smoothscale_when_enabled(monkeypatch, tmp_path):
-    f = tmp_path / "permanent_stats.json"
-    g = Game(permanent_stats_file=str(f))
+    _ = tmp_path / "permanent_stats.json"
+    g = Game()
 
     # Explicitly enable smooth scaling and resize window to be larger than virtual
     g.global_progress.setdefault("display", {})["smooth_scale"] = True
@@ -169,8 +164,8 @@ def test_draw_uses_smoothscale_when_enabled(monkeypatch, tmp_path):
 
 
 def test_draw_uses_scale_when_smooth_disabled(monkeypatch, tmp_path):
-    f = tmp_path / "permanent_stats.json"
-    g = Game(permanent_stats_file=str(f))
+    _ = tmp_path / "permanent_stats.json"
+    g = Game()
 
     # Disable smooth scaling and resize window to be larger than virtual
     g.global_progress.setdefault("display", {})["smooth_scale"] = False
@@ -202,19 +197,17 @@ def test_startup_ignores_saved_window_size(tmp_path):
             "display": {"window_size": [800, 600], "fullscreen": False}
         },
     }
-    f = tmp_path / "permanent_stats.json"
-    f.write_text(json.dumps(payload))
+    _ = tmp_path / "permanent_stats.json"
+    _.write_text(json.dumps(payload))
 
     # Game should still start at the default virtual resolution (1280x720)
-    g = Game(permanent_stats_file=str(f))
+    g = Game()
     assert (
         (g.window_width, g.window_height)
         == (g.width, g.height)
         == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
     )
 
-    # The persisted value remains stored but is not auto-applied on startup
-    assert tuple(g.global_progress.get("display", {}).get("window_size", [])) == (
-        800,
-        600,
-    )
+    # With persistence removed, the new game should not even see the
+    # stored window_size entry   (global_progress will be empty).
+    assert g.global_progress.get("display") in (None, {})

@@ -34,7 +34,7 @@ def test_blasphemy_boxes_use_imported_asset(tmp_path: Path, monkeypatch) -> None
     am.clear_cache()
     monkeypatch.setattr(am, "_ASSETS_DIR", str(temp_assets))
 
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
     g.show_permanent_upgrades()
     g.ui.draw_permanent_upgrades()
 

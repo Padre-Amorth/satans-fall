@@ -11,7 +11,7 @@ def setup_dummy_sdl():
 
 def test_hell_colors_fill_inside_and_outside(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # Set stage to hell and create simple wall points rectangle
     g.select_stage("hell")

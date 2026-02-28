@@ -14,11 +14,13 @@ def setup_dummy_sdl():
 def test_purgatory_drawn_on_click_and_logs(tmp_path: Path, caplog):
     setup_dummy_sdl()
     caplog.set_level(logging.DEBUG)
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
-    # Open the stage menu and click the purgatory button
-    g.show_stage_menu()
-    purg_rect = pygame.Rect(g.width // 2 - 100, g.height // 2 + 70, 200, 40)
+    # Navigate to stage selection and click the purgatory button
+    g.showing_main_menu = False
+    g.showing_stage_menu = True
+    # Purgatory button geometry matches draw_stage_menu (btn_w=280, btn_h=46, spacing=58, base_y=h//2-100, i=2)
+    purg_rect = pygame.Rect(g.width // 2 - 140, g.height // 2 + 16, 280, 46)
     g.handle_mouse_click(purg_rect.center, button=1)
 
     # The flag should be set

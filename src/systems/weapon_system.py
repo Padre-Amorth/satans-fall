@@ -11,6 +11,7 @@ from src.weapons import (
     DemonStrike_cooldown,
     beast_damage,
     flies_cd,
+    flies_damage_heal_mult,
     flies_projectile_count,
     orbital_cooldown_range,
     shotgun_cooldown,
@@ -27,6 +28,36 @@ if TYPE_CHECKING:
 
 from src.core.entities.tower import TowerManager
 from src.weapons import WEAPON_DEFS
+
+
+def statue_projectile_offsets(game: "Game") -> tuple[float, float]:
+    """Return (x,y) offsets applied to statue/tower projectiles for selected stage.
+
+    Horizontal offset is the distance from the tower center to the point where
+    projectiles are spawned; it is positive for towers on the left side and should
+    be negated for the right side.  Vertical offset is always applied downward.
+    Every piece of code that needs to know where projectiles originate (statue
+    weapons, storm‑tier special beam origins, etc.) must use this helper so they
+    stay in sync as stage artwork changes.
+    """
+    from src import game_constants
+
+    stage = getattr(game, "selected_stage", "") or ""
+    if stage.startswith("limbo"):
+        # Limbo Final projectiles originate further from centre than
+        # regular Limbo statues.  Total outward shift is currently 35px,
+        # so subtract that amount from the limbo constant (50) giving 15px.
+        stage_x = game_constants.STATUE_PROJECTILE_OFFSET_X_LIMBO
+        if stage == "limbo_final":
+            stage_x -= 35
+    elif stage.startswith("purgatory"):
+        stage_x = game_constants.STATUE_PROJECTILE_OFFSET_X_PURGATORY
+    elif stage.startswith("hell"):
+        stage_x = game_constants.STATUE_PROJECTILE_OFFSET_X_HELL
+    else:
+        stage_x = 0
+    stage_y = game_constants.STATUE_PROJECTILE_OFFSET_Y
+    return stage_x, stage_y
 
 
 class WeaponSystem:
@@ -314,12 +345,8 @@ class WeaponSystem:
         slevel: int = self.game.weapon_levels.get("Flies", 0)
         # Use centralized helper to determine projectile count (base is now 2)
         num_projectiles = flies_projectile_count(slevel)
-        damage_mult = (
-            1.0 + (slevel >= 3) * 0.1 + (slevel >= 5) * 0.1
-        )  # Lv3 & Lv5: +10% damage
-        heal_mult = (
-            1.0 + (slevel >= 3) * 0.1 + (slevel >= 5) * 0.1
-        )  # Lv3 & Lv5: +10% heal
+        # damage/heal multipliers are computed by helper function in weapons.py
+        damage_mult, heal_mult = flies_damage_heal_mult(slevel)
 
         # Read base_heal from weapon defs so changes propagate consistently
         base_heal = WEAPON_DEFS.get("Flies", {}).get("base_heal", 2)
@@ -594,41 +621,71 @@ class WeaponSystem:
                 return e.get("x", 0), e.get("y", 0)
             return getattr(e, "x", 0), getattr(e, "y", 0)
 
+        # Don't fire any statue projectiles while the player is choosing a
+        # tower in limbo_final; the towers are invisible and spawning shots
+        # before choice looks wrong.
+        if getattr(self.game, "selected_stage", "").startswith(
+            "limbo_final"
+        ) and getattr(self.game, "awaiting_tower_choice", False):
+            return
         # Statues alternate firing: single cooldown drives both sides and toggles the next side
         self.game.statue_cooldown -= 1
         if self.game.statue_cooldown <= 0:
             enemies_list = _enemy_iter()
+            # include bosses if any (Limbo boss should be targetable)
+            if hasattr(self.game, "bosses"):
+                try:
+                    boss_list = (
+                        self.game.bosses.sprites()
+                        if hasattr(self.game.bosses, "sprites")
+                        else list(self.game.bosses)
+                    )
+                    enemies_list.extend(boss_list)
+                except Exception:
+                    pass
             if enemies_list:
+                # Determine offset values for current stage
+                stage_x, stage_y = statue_projectile_offsets(self.game)
+
                 # Choose side based on flag (default to left)
-                if getattr(self.game, "statue_next_left", True):
-                    if self.game.left_tower is not None:
-                        proj = self.game.left_tower.fire_at_closest(enemies_list)
-                    else:
-                        proj = None
-                else:
-                    if self.game.right_tower is not None:
-                        proj = self.game.right_tower.fire_at_closest(enemies_list)
-                    else:
-                        proj = None
+                firing_left = getattr(self.game, "statue_next_left", True)
+                origin_shift = stage_x if firing_left else -stage_x
+                tower = self.game.left_tower if firing_left else self.game.right_tower
+                proj = None
+                if tower is not None:
+                    origin_x = getattr(tower, "x", 0) + origin_shift
+                    origin_y = getattr(tower, "y", 0) + stage_y
+                    proj = tower.fire_at_closest(
+                        enemies_list,
+                        origin_x=origin_x,
+                        origin_y=origin_y,
+                    )
                 if proj:
+                    # record offset for diagnostics/tests
+                    try:
+                        proj._statue_offset = (origin_shift, stage_y)
+                    except Exception:
+                        pass
+
+                    def _store(p):
+                        try:
+                            self.game.projectiles.add(p)
+                            if getattr(
+                                self.game, "projectile_manager", None
+                            ) is not None and not isinstance(p, dict):
+                                try:
+                                    mgr = self.game.projectile_manager
+                                    if mgr is not None:
+                                        mgr.register(p)
+                                except Exception:
+                                    pass
+                        except Exception:
+                            self.game.projectiles.append(p)
+
                     # Support both single Projectile and list of Projectiles
                     if isinstance(proj, list):
                         for p in proj:
-                            try:
-                                self.game.projectiles.add(p)
-                                # Register with projectile manager if applicable
-                                if getattr(
-                                    self.game, "projectile_manager", None
-                                ) is not None and not isinstance(p, dict):
-                                    try:
-                                        mgr = self.game.projectile_manager
-                                        if mgr is not None:
-                                            mgr.register(p)
-                                    except Exception:
-                                        pass
-                            except Exception:
-                                self.game.projectiles.append(p)
-                            # Normalize statue projectile to a small object (no dicts)
+                            _store(p)
                             try:
                                 sp = type("StatueProj", (), {})()
                                 sp.x = getattr(p, "x", 0)
@@ -642,19 +699,7 @@ class WeaponSystem:
                             except Exception:
                                 pass
                     else:
-                        try:
-                            self.game.projectiles.add(proj)
-                            if self.game.projectile_manager is not None and isinstance(
-                                proj, Projectile
-                            ):
-                                try:
-                                    mgr = self.game.projectile_manager
-                                    if mgr is not None:
-                                        mgr.register(proj)
-                                except Exception:
-                                    pass
-                        except Exception:
-                            self.game.projectiles.append(proj)
+                        _store(proj)
                         try:
                             sp = type("StatueProj", (), {})()
                             sp.x = getattr(proj, "x", 0)
@@ -675,6 +720,17 @@ class WeaponSystem:
 
         # Update statue projectiles with homing (delegated to TowerManager)
         enemies_list = _enemy_iter()
+        # include bosses so homing tracks them too
+        if hasattr(self.game, "bosses"):
+            try:
+                boss_list = (
+                    self.game.bosses.sprites()
+                    if hasattr(self.game.bosses, "sprites")
+                    else list(self.game.bosses)
+                )
+                enemies_list.extend(boss_list)
+            except Exception:
+                pass
         # Collect statue projectiles from the main projectile pool
         statue_projs = []
         try:

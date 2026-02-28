@@ -12,7 +12,7 @@ def setup_dummy_sdl():
 
 def test_permanent_upgrades_show_effect_text_and_alignment(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # Give some levels to stats so effect text and bar fill are shown
     g.permanent_stats["power"] = 3

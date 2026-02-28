@@ -1,13 +1,17 @@
 from src.game import Game
 
 
-def test_gear_button_opens_and_closes_options():
+def test_gear_button_opens_and_closes_options(tmp_path):
+    # use isolated stats file to avoid interference from prior runs
     g = Game()
-    assert g.showing_stage_menu is True
-    # Compute options button center (must match UI math)
-    opt_size = 40
-    opt_x = g.width - (opt_size + 14)
-    opt_y = max(20, g.height - (opt_size + 14))
+    # ensure sound toggle initially true (should be default)
+    g.sounds_enabled = True
+    # Game starts on the main menu
+    assert g.showing_main_menu is True
+    # Compute options button center (must match draw_main_menu math)
+    opt_size = 38
+    opt_x = g.width - opt_size - 14
+    opt_y = g.height - opt_size - 14
     opt_center = (opt_x + opt_size // 2, opt_y + opt_size // 2)
 
     # Click gear -> options should open
@@ -32,6 +36,22 @@ def test_gear_button_opens_and_closes_options():
     g.handle_mouse_click(toggle_center, button=1)
     assert g.show_damage_numbers is True
 
+    # Now compute sound toggle at dy+104 (matches draw_options_menu)
+    snd_toggle_y = dy + 104
+    snd_center = (toggle_x + toggle_w // 2, snd_toggle_y + toggle_h // 2)
+
+    # sounds enabled default True
+    assert g.sounds_enabled is True
+    g.handle_mouse_click(snd_center, button=1)
+    assert g.sounds_enabled is False
+    # verify persistence in global_progress
+    assert g.global_progress.get("audio", {}).get("enabled") is False
+
+    # toggle back on
+    g.handle_mouse_click(snd_center, button=1)
+    assert g.sounds_enabled is True
+    assert g.global_progress.get("audio", {}).get("enabled") is True
+
     # Compute close button center from dialog math in UI
     btn_w, btn_h = 120, 36
     btn_x = dx + (dialog_w - btn_w) // 2
@@ -45,10 +65,13 @@ def test_gear_button_opens_and_closes_options():
 
 def test_gear_not_active_when_stage_menu_hidden():
     g = Game()
+    # Simulate being in-game: no menu shown
+    g.showing_main_menu = False
     g.showing_stage_menu = False
-    opt_size = 40
-    opt_x = g.width - (opt_size + 14)
-    opt_y = max(20, g.height - (opt_size + 14))
+    # Compute gear button center (matches draw_main_menu)
+    opt_size = 38
+    opt_x = g.width - opt_size - 14
+    opt_y = g.height - opt_size - 14
     opt_center = (opt_x + opt_size // 2, opt_y + opt_size // 2)
     g.handle_mouse_click(opt_center, button=1)
     assert g.showing_options is False

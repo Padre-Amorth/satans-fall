@@ -45,6 +45,20 @@ class InputHandler:
                     event.pos
                 )
             elif event.type == pygame.MOUSEBUTTONDOWN:
+                # play soft click noise for left-button presses when sounds are active;
+                # this used to live in a utility helper but belongs here so every
+                # menu interaction (and any other click) makes audio feedback.
+                # ignore wheel buttons (4/5) by only handling button 1.
+                if event.button == 1 and getattr(self.game, "sounds_enabled", True):
+                    try:
+                        from src.utils import sound as sound_utils
+
+                        sound_utils.suono_click_soft().play()
+                    except Exception:
+                        # audio is purely cosmetic; fail silently if something
+                        # goes wrong (e.g. no mixer in headless tests)
+                        pass
+
                 # Map incoming (window) mouse click position to virtual coords
                 virt_pos = self.game._window_to_virtual(event.pos)
                 self.handle_mouse_click(virt_pos, event.button)
@@ -62,7 +76,6 @@ class InputHandler:
                     self.game.global_progress.setdefault("display", {})[
                         "window_size"
                     ] = [self.game.window_width, self.game.window_height]
-                    self.game.save_permanent_stats()
                 except Exception:
                     pass
             elif event.type == pygame.USEREVENT + 1:
@@ -86,12 +99,6 @@ class InputHandler:
                     logger.info("USEREVENT+2 handling: returning to menu")
                     self.show_stage_menu()
                     pygame.time.set_timer(pygame.USEREVENT + 2, 0)
-
-        # Final load to ensure persistent stats survive any later init code
-        try:
-            self.game.load_permanent_stats()
-        except Exception:
-            pass
 
     def handle_keydown(self, key):
         """Handle keyboard input based on game state."""
@@ -132,6 +139,29 @@ class InputHandler:
                 self.game.pause_confirmation = None
                 return
 
+        # Profile name text input
+        if getattr(self.game, "editing_profile_name", False):
+            self._handle_profile_name_keydown(key, pygame)
+            return
+
+        # ESC closes profiles menu
+        if getattr(self.game, "showing_profiles_menu", False):
+            if key == pygame.K_ESCAPE:
+                self.game.showing_profiles_menu = False
+                self.game.showing_main_menu = True
+                return
+
+        # Handle game over keys before any menu logic so ESC always returns to
+        # the main menu even if a stage menu flag was left true due to a bug.
+        if getattr(self.game, "showing_game_over", False):
+            if key == pygame.K_RETURN or key == pygame.K_SPACE:
+                # Restart is disabled — ignore Enter/Space
+                return
+            elif key == pygame.K_ESCAPE:
+                logger.info("Escape pressed on game over screen; returning to menu")
+                self.show_stage_menu()
+                return
+
         if self.game.showing_stage_menu:
             if key == pygame.K_p:
                 self.select_stage("prologo")
@@ -168,15 +198,10 @@ class InputHandler:
         elif self.game.showing_stage_menu and self.game.showing_hell_menu:
             if key == pygame.K_ESCAPE:
                 self.game.showing_hell_menu = False
-        elif self.game.showing_game_over:
-            # When the game-over overlay is active:
-            # Restart disabled: ignore Enter/Space, ESC returns to the main menu.
-            if key == pygame.K_RETURN or key == pygame.K_SPACE:
-                # Restart is disabled — ignore Enter/Space
-                return
-            elif key == pygame.K_ESCAPE:
-                logger.info("Escape pressed on game over screen; returning to menu")
-                self.show_stage_menu()
+        elif self.game.showing_stage_menu:
+            if key == pygame.K_ESCAPE:
+                self.game.showing_stage_menu = False
+                self.game.showing_main_menu = True
         elif self.game.showing_player_stats:
             # Close stats overlay with ESC or Tab
             if key == pygame.K_ESCAPE or key == pygame.K_TAB:
@@ -409,19 +434,193 @@ class InputHandler:
                         self.game.apply_upgrade(i)
                         return
 
+            if getattr(self.game, "showing_profiles_menu", False):
+                self._handle_profiles_menu_click(pos)
+                return
+
+            if getattr(self.game, "showing_main_menu", False):
+                # EXIT confirmation dialog has HIGHEST priority - blocks all other clicks
+                if getattr(self.game, "exit_confirm_pending", False):
+                    dialog_w, dialog_h = 400, 160
+                    dialog_x = self.game.width // 2 - dialog_w // 2
+                    dialog_y = self.game.height // 2 - dialog_h // 2
+
+                    # YES button (left)
+                    yes_w, yes_h = 75, 36
+                    yes_x = dialog_x + dialog_w // 2 - yes_w - 12
+                    yes_y = dialog_y + dialog_h - 52
+                    yes_rect = pygame.Rect(yes_x, yes_y, yes_w, yes_h)
+                    if yes_rect.collidepoint(pos):
+                        self.game.running = False
+                        return
+
+                    # NO button (right)
+                    no_w, no_h = 75, 36
+                    no_x = dialog_x + dialog_w // 2 + 12
+                    no_y = dialog_y + dialog_h - 52
+                    no_rect = pygame.Rect(no_x, no_y, no_w, no_h)
+                    if no_rect.collidepoint(pos):
+                        self.game.exit_confirm_pending = False
+                        return
+
+                    # Any other click on the overlay dismisses nothing, just return
+                    return
+
+                # Options overlay takes priority (gear on main menu)
+                if getattr(self.game, "showing_options", False):
+                    dialog_w, dialog_h = 520, 320
+                    dx = self.game.width // 2 - dialog_w // 2
+                    dy = self.game.height // 2 - dialog_h // 2
+                    toggle_w, toggle_h = 48, 24
+                    toggle_x = dx + dialog_w - 24 - toggle_w
+                    if pygame.Rect(toggle_x, dy + 64, toggle_w, toggle_h).collidepoint(
+                        pos
+                    ):
+                        try:
+                            self.game.show_damage_numbers = (
+                                not self.game.show_damage_numbers
+                            )
+                        except Exception:
+                            pass
+                        return
+                    if pygame.Rect(toggle_x, dy + 104, toggle_w, toggle_h).collidepoint(
+                        pos
+                    ):
+                        try:
+                            self.game.sounds_enabled = not getattr(
+                                self.game, "sounds_enabled", True
+                            )
+                            self.game.global_progress.setdefault("audio", {})[
+                                "enabled"
+                            ] = self.game.sounds_enabled
+                        except Exception:
+                            pass
+                        return
+                    if pygame.Rect(toggle_x, dy + 144, toggle_w, toggle_h).collidepoint(
+                        pos
+                    ):
+                        try:
+                            dsp = self.game.global_progress.setdefault("display", {})
+                            dsp["smooth_scale"] = not dsp.get("smooth_scale", True)
+                        except Exception:
+                            pass
+                        return
+                    try:
+                        from src.game_constants import DEFAULT_DISPLAY_PRESETS
+                    except Exception:
+                        DEFAULT_DISPLAY_PRESETS = [(1280, 720)]
+                    dd_w, dd_h = 140, 28
+                    dd_x = dx + 24
+                    dd_y = dy + 248
+                    if pygame.Rect(dd_x, dd_y, dd_w, dd_h).collidepoint(pos):
+                        self.game.options_resolution_dropdown_open = not getattr(
+                            self.game, "options_resolution_dropdown_open", False
+                        )
+                        return
+                    if getattr(self.game, "options_resolution_dropdown_open", False):
+                        item_h = 24
+                        for i, (pw, ph) in enumerate(DEFAULT_DISPLAY_PRESETS):
+                            iy = dd_y + dd_h + i * (item_h + 2)
+                            if pygame.Rect(dd_x, iy, dd_w, item_h).collidepoint(pos):
+                                try:
+                                    self.game.set_window_size(pw, ph)
+                                except Exception:
+                                    pass
+                                self.game.options_resolution_dropdown_open = False
+                                return
+                        return
+                    if pygame.Rect(
+                        dx + (dialog_w - 120) // 2, dy + dialog_h - 50, 120, 36
+                    ).collidepoint(pos):
+                        self.game.showing_options = False
+                        return
+                    return
+
+                # START button
+                btn_w, btn_h = 300, 68
+                start_rect = pygame.Rect(
+                    self.game.width // 2 - btn_w // 2,
+                    self.game.height // 2 - 34,
+                    btn_w,
+                    btn_h,
+                )
+                if start_rect.collidepoint(pos):
+                    # If no profile is selected, force player to pick one first
+                    if getattr(self.game, "active_profile_slot", None) is None:
+                        self._open_profiles_menu()
+                    else:
+                        self.game.showing_main_menu = False
+                        self.game.showing_stage_menu = True
+                    return
+
+                # Permanent upgrades button
+                up_rect = pygame.Rect(
+                    self.game.width // 2 - 125,
+                    self.game.height // 2 + 55,
+                    250,
+                    36,
+                )
+                if up_rect.collidepoint(pos):
+                    # Only allow permanent upgrades if a profile is active
+                    if getattr(self.game, "active_profile_slot", None) is not None:
+                        self.show_permanent_upgrades()
+                    else:
+                        # Force profile selection first
+                        self._open_profiles_menu()
+                    return
+
+                # PROFILES button (below Permanent Upgrades)
+                prof_rect = pygame.Rect(
+                    self.game.width // 2 - 110,
+                    self.game.height // 2 + 100,
+                    220,
+                    36,
+                )
+                if prof_rect.collidepoint(pos):
+                    self._open_profiles_menu()
+                    return
+
+                # EXIT button (bottom center)
+                exit_rect = pygame.Rect(
+                    self.game.width // 2 - 110,
+                    self.game.height - 110,
+                    220,
+                    36,
+                )
+                if exit_rect.collidepoint(pos):
+                    # Show confirmation prompt instead of exiting immediately
+                    self.game.exit_confirm_pending = True
+                    return
+
+                # Gear (options) button
+                opt_size = 38
+                main_options_rect = pygame.Rect(
+                    self.game.width - opt_size - 14,
+                    self.game.height - opt_size - 14,
+                    opt_size,
+                    opt_size,
+                )
+                if main_options_rect.collidepoint(pos):
+                    self.game.showing_options = True
+                    return
+
             if self.game.showing_stage_menu:
-                # Check stage selection buttons
-                prologo_rect = pygame.Rect(
-                    self.game.width // 2 - 100, self.game.height // 2 - 50, 200, 40
-                )
-                limbo_rect = pygame.Rect(
-                    self.game.width // 2 - 100, self.game.height // 2 + 10, 200, 40
-                )
+                # Stage selection buttons — geometry matches draw_stage_menu
+                btn_w, btn_h = 280, 46
+                btn_x = self.game.width // 2 - btn_w // 2
+                base_y = self.game.height // 2 - 100
+                spacing_stage = 58
+                prologo_rect = pygame.Rect(btn_x, base_y, btn_w, btn_h)
+                limbo_rect = pygame.Rect(btn_x, base_y + spacing_stage, btn_w, btn_h)
                 purgatory_rect = pygame.Rect(
-                    self.game.width // 2 - 100, self.game.height // 2 + 70, 200, 40
+                    btn_x, base_y + spacing_stage * 2, btn_w, btn_h
                 )
-                hell_rect = pygame.Rect(
-                    self.game.width // 2 - 100, self.game.height // 2 + 130, 200, 40
+                hell_rect = pygame.Rect(btn_x, base_y + spacing_stage * 3, btn_w, btn_h)
+                stage_back_rect = pygame.Rect(
+                    self.game.width // 2 - 55,
+                    base_y + 4 * spacing_stage + 10,
+                    110,
+                    32,
                 )
 
                 # If options overlay is open, check for clicks on its controls
@@ -445,9 +644,27 @@ class InputHandler:
                             pass
                         return
 
-                    # Smooth-scaling toggle (moved up after removing fullscreen option)
+                    # Sounds toggle at dy+104 (matches draw_options_menu)
+                    snd_toggle_x = dx + dialog_w - 24 - toggle_w
+                    snd_toggle_y = dy + 104
+                    snd_toggle_rect = pygame.Rect(
+                        snd_toggle_x, snd_toggle_y, toggle_w, toggle_h
+                    )
+                    if snd_toggle_rect.collidepoint(pos):
+                        try:
+                            self.game.sounds_enabled = not getattr(
+                                self.game, "sounds_enabled", True
+                            )
+                            self.game.global_progress.setdefault("audio", {})[
+                                "enabled"
+                            ] = self.game.sounds_enabled
+                        except Exception:
+                            pass
+                        return
+
+                    # Smooth-scaling toggle at dy+144 (matches draw_options_menu)
                     smooth_toggle_x = dx + dialog_w - 24 - toggle_w
-                    smooth_toggle_y = dy + 104
+                    smooth_toggle_y = dy + 144
                     smooth_toggle_rect = pygame.Rect(
                         smooth_toggle_x, smooth_toggle_y, toggle_w, toggle_h
                     )
@@ -455,7 +672,6 @@ class InputHandler:
                         try:
                             dsp = self.game.global_progress.setdefault("display", {})
                             dsp["smooth_scale"] = not dsp.get("smooth_scale", True)
-                            self.game.save_permanent_stats()
                         except Exception:
                             pass
                         return
@@ -506,13 +722,10 @@ class InputHandler:
                         return
                     # ignore other clicks while options overlay open
                     return
-                # Upgrades button moved to bottom of screen to avoid overlap and be more accessible
-                upgrades_rect = pygame.Rect(
-                    self.game.width // 2 - 125, max(20, self.game.height - 80), 250, 35
-                )
 
                 if self.game.showing_limbo_menu:
                     # Coordinates should match draw_stage_menu limbo layout
+                    # LIMBO has 4 options: 1, 2, 3, FINAL + BACK below all 4
                     option_w = 320
                     option_h = 48
                     start_x: int = self.game.width // 2 - option_w // 2
@@ -526,8 +739,11 @@ class InputHandler:
                     limbo3_rect = pygame.Rect(
                         start_x, start_y + spacing * 2, option_w, option_h
                     )
+                    limbo_final_rect = pygame.Rect(
+                        start_x, start_y + spacing * 3, option_w, option_h
+                    )
                     back_rect = pygame.Rect(
-                        self.game.width // 2 - 60, start_y + spacing * 3 + 10, 120, 36
+                        self.game.width // 2 - 55, start_y + spacing * 4 + 10, 110, 32
                     )
 
                     if limbo1_rect.collidepoint(pos):
@@ -541,6 +757,10 @@ class InputHandler:
                     elif limbo3_rect.collidepoint(pos):
                         self.game.showing_limbo_menu = False
                         self.select_stage("limbo_3")
+                        return
+                    elif limbo_final_rect.collidepoint(pos):
+                        self.game.showing_limbo_menu = False
+                        self.select_stage("limbo_final")
                         return
                     elif back_rect.collidepoint(pos):
                         self.game.showing_limbo_menu = False
@@ -561,7 +781,7 @@ class InputHandler:
                         start_x, start_y + spacing * 2, option_w, option_h
                     )
                     purg_back_rect = pygame.Rect(
-                        self.game.width // 2 - 60, start_y + spacing * 3 + 10, 120, 36
+                        self.game.width // 2 - 55, start_y + spacing * 3 + 10, 110, 32
                     )
 
                     if purg1_rect.collidepoint(pos):
@@ -601,7 +821,7 @@ class InputHandler:
                         start_x, start_y + spacing * 2, option_w, option_h
                     )
                     hell_back_rect = pygame.Rect(
-                        self.game.width // 2 - 60, start_y + spacing * 3 + 10, 120, 36
+                        self.game.width // 2 - 55, start_y + spacing * 3 + 10, 110, 32
                     )
 
                     if hell1_rect.collidepoint(pos):
@@ -625,38 +845,27 @@ class InputHandler:
                         pos,
                     )
 
-                # If no submenu handled the click, proceed to main menu handling
+                # If no submenu handled the click, check stage buttons / back
+                if stage_back_rect.collidepoint(pos):
+                    self.game.showing_stage_menu = False
+                    self.game.showing_main_menu = True
+                    return
                 if prologo_rect.collidepoint(pos):
                     self.select_stage("prologo")
                 elif limbo_rect.collidepoint(pos):
-                    # Open the limbo submenu (second menu)
                     self.game.showing_limbo_menu = True
                 elif purgatory_rect.collidepoint(pos):
-                    # Open the purgatory submenu (second menu)
                     logger.debug("Mouse click: opening Purgatory submenu")
                     self.game.showing_purgatory_menu = True
                     self.game.showing_limbo_menu = False
                     self.game.showing_hell_menu = False
-                    # Keep stage menu visible while showing submenu
                     self.game.showing_stage_menu = True
                 elif hell_rect.collidepoint(pos):
-                    # Open the HELL submenu (second menu)
                     logger.debug("Mouse click: opening HELL submenu")
                     self.game.showing_hell_menu = True
                     self.game.showing_limbo_menu = False
                     self.game.showing_purgatory_menu = False
-                    # Keep stage menu visible while showing submenu
                     self.game.showing_stage_menu = True
-                elif upgrades_rect.collidepoint(pos):
-                    self.show_permanent_upgrades()
-                # Options (gear) button bottom-right
-                options_rect = pygame.Rect(
-                    self.game.width - 54, max(20, self.game.height - 54), 40, 40
-                )
-                if options_rect.collidepoint(pos):
-                    # Only open options from main stage menu
-                    self.game.showing_options = True
-                    return
             elif self.game.showing_permanent_upgrades:
                 # Handle clicks on permanent stat upgrades
                 stat_configs = [
@@ -692,20 +901,20 @@ class InputHandler:
                     # Check if click is on the stat name area
                     name_rect = pygame.Rect(left_x, stat["y"], 120, 30)
                     if name_rect.collidepoint(pos):
+                        current_level = self.game.permanent_stats.get(stat["key"], 0)
                         if (
                             button == 1
-                            and self.game.permanent_stats[stat["key"]] < 10
+                            and current_level < 10
                             and self.game.global_progress.get("meta_points", 0) > 0
                         ):  # Left click to upgrade (must have a point)
-                            self.game.permanent_stats[stat["key"]] += 1
+                            self.game.permanent_stats[stat["key"]] = current_level + 1
                             # consume a meta point
                             self.game.global_progress["meta_points"] = (
                                 self.game.global_progress.get("meta_points", 0) - 1
                             )
-                            # Persist the change immediately
-                            self.game.save_permanent_stats()
-                            # Apply changes immediately in-game
+                            # Apply changes immediately in-game then persist
                             self.game.apply_permanent_stats()
+                            self.game.save_permanent_stats()
                             self.game.show_centered_message(
                                 f"{stat['name']} upgraded to level {self.game.permanent_stats[stat['key']]}!",
                                 120,
@@ -713,15 +922,15 @@ class InputHandler:
                                 24,
                             )
                         elif (
-                            button == 3 and self.game.permanent_stats[stat["key"]] > 0
+                            button == 3 and current_level > 0
                         ):  # Right click to downgrade and refund a meta point
-                            self.game.permanent_stats[stat["key"]] -= 1
+                            self.game.permanent_stats[stat["key"]] = current_level - 1
                             # refund currency so the player can reassign points freely
                             self.game.global_progress["meta_points"] = (
                                 self.game.global_progress.get("meta_points", 0) + 1
                             )
-                            self.game.save_permanent_stats()
                             self.game.apply_permanent_stats()
+                            self.game.save_permanent_stats()
                             self.game.show_centered_message(
                                 f"{stat['name']} downgraded to level {self.game.permanent_stats[stat['key']]}!",
                                 120,
@@ -761,8 +970,8 @@ class InputHandler:
                                 self.game.permanent_stats[key] = (
                                     self.game.permanent_stats.get(key, 0) + 1
                                 )
-                                self.game.save_permanent_stats()
                                 self.game.apply_permanent_stats()
+                                self.game.save_permanent_stats()
                                 self.game.show_centered_message(
                                     f"Blasphemy {i + 1} upgraded to level {self.game.permanent_stats[key]}!",
                                     100,
@@ -776,8 +985,8 @@ class InputHandler:
                                 self.game.permanent_stats[key] = (
                                     self.game.permanent_stats.get(key, 0) - 1
                                 )
-                                self.game.save_permanent_stats()
                                 self.game.apply_permanent_stats()
+                                self.game.save_permanent_stats()
                                 self.game.show_centered_message(
                                     f"Blasphemy {i + 1} downgraded to level {self.game.permanent_stats[key]}!",
                                     100,
@@ -790,8 +999,8 @@ class InputHandler:
                                 key, 0
                             ):
                                 self.game.permanent_stats[key] = 1
-                                self.game.save_permanent_stats()
                                 self.game.apply_permanent_stats()
+                                self.game.save_permanent_stats()
                                 self.game.show_centered_message(
                                     f"Blasphemy {i + 1} unlocked!",
                                     100,
@@ -800,8 +1009,8 @@ class InputHandler:
                                 )
                             elif button == 3 and self.game.permanent_stats.get(key, 0):
                                 self.game.permanent_stats[key] = 0
-                                self.game.save_permanent_stats()
                                 self.game.apply_permanent_stats()
+                                self.game.save_permanent_stats()
                                 self.game.show_centered_message(
                                     f"Blasphemy {i + 1} locked!",
                                     100,
@@ -833,8 +1042,8 @@ class InputHandler:
                                 self.game.permanent_stats[key] = (
                                     self.game.permanent_stats.get(key, 0) + 1
                                 )
-                                self.game.save_permanent_stats()
                                 self.game.apply_permanent_stats()
+                                self.game.save_permanent_stats()
                                 self.game.show_centered_message(
                                     f"Blasphemy {i + 6} upgraded to level {self.game.permanent_stats[key]}!",
                                     100,
@@ -848,8 +1057,8 @@ class InputHandler:
                                 self.game.permanent_stats[key] = (
                                     self.game.permanent_stats.get(key, 0) - 1
                                 )
-                                self.game.save_permanent_stats()
                                 self.game.apply_permanent_stats()
+                                self.game.save_permanent_stats()
                                 self.game.show_centered_message(
                                     f"Blasphemy {i + 6} downgraded to level {self.game.permanent_stats[key]}!",
                                     100,
@@ -862,8 +1071,8 @@ class InputHandler:
                                 key, 0
                             ):
                                 self.game.permanent_stats[key] = 1
-                                self.game.save_permanent_stats()
                                 self.game.apply_permanent_stats()
+                                self.game.save_permanent_stats()
                                 self.game.show_centered_message(
                                     f"Blasphemy {i + 6} unlocked!",
                                     100,
@@ -872,8 +1081,8 @@ class InputHandler:
                                 )
                             elif button == 3 and self.game.permanent_stats.get(key, 0):
                                 self.game.permanent_stats[key] = 0
-                                self.game.save_permanent_stats()
                                 self.game.apply_permanent_stats()
+                                self.game.save_permanent_stats()
                                 self.game.show_centered_message(
                                     f"Blasphemy {i + 6} locked!",
                                     100,
@@ -1112,6 +1321,63 @@ class InputHandler:
                         self.game.pause_menu_option = i
                         self.execute_pause_option()
                         return
+            # no UI element claimed the click.  only trigger a tower special
+            # when the player is actually in-game (menus should not activate it).
+            if button == 3 and not any(
+                (
+                    self.game.showing_main_menu,
+                    self.game.showing_stage_menu,
+                    self.game.showing_permanent_upgrades,
+                    self.game.awaiting_upgrade,
+                    self.game.awaiting_weapon_choice,
+                    self.game.awaiting_tower_choice,
+                )
+            ):
+                # if beam already active, a second click should cancel it
+                try:
+                    if getattr(self.game, "hellectric_active", False):
+                        # cancel active beam
+                        self.game.hellectric_active = False
+                        if getattr(self.game, "tower_special", None):
+                            self.game.tower_special._hellectric_accum.clear()
+                        try:
+                            self.game.right_mouse_held = False
+                        except Exception:
+                            pass
+                        # feedback so player knows the beam ended early
+                        try:
+                            self.game.show_centered_message(
+                                "Tower special cancelled", 100, (200, 200, 255), 20
+                            )
+                        except Exception:
+                            pass
+                        return
+                except Exception:
+                    pass
+
+                # otherwise attempt normal activation
+                try:
+                    # mark the property for consistency even though it's not relied on
+                    self.game.right_mouse_held = True
+                except Exception:
+                    pass
+                try:
+                    if (
+                        self.game.is_tower_special_ready()
+                        and self.game.activate_tower_special()
+                    ):
+                        try:
+                            self.game.show_centered_message(
+                                "Tower special activated!", 100, (255, 255, 255), 24
+                            )
+                        except Exception:
+                            pass
+                    elif self.game.fire_special_charges > 0:
+                        # consume next fire charge from the active window
+                        self.game.use_fire_charge()
+                except Exception:
+                    pass
+                return
         except Exception as e:
             logger.exception("Error handling mouse click: %s", e)
             try:
@@ -1122,9 +1388,212 @@ class InputHandler:
                 pass
             return
 
+    def _handle_profile_name_keydown(self, key, pygame) -> None:
+        """Handle text-input keyboard events while editing a profile name."""
+        slot = getattr(self.game, "editing_profile_slot", None)
+        current = getattr(self.game, "profile_name_input", "")
+        if key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
+            # Confirm: save the new name and exit edit mode
+            name = current.strip() or f"Profile {slot}"
+            self.game.global_progress["profile_name"] = name
+            # Check if this is a NEW profile (doesn't exist yet)
+            path = self.game._profile_path(slot)
+            is_new_profile = not path.exists()
+
+            # If this slot is the active one, persist immediately
+            if getattr(self.game, "active_profile_slot", None) == slot:
+                try:
+                    self.game.save_permanent_stats()
+                except Exception:
+                    pass
+            else:
+                # Save profile file
+                try:
+                    import json
+                    import os
+
+                    if path.exists():
+                        # Existing profile: update name only
+                        with open(path, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                        data["name"] = name
+                        tmp = path.with_suffix(".json.tmp")
+                        with open(tmp, "w", encoding="utf-8") as f:
+                            json.dump(data, f, indent=2)
+                        os.replace(tmp, path)
+                    else:
+                        # New profile: create with completely empty/reset stats
+                        from datetime import datetime
+
+                        data = {
+                            "version": 1,
+                            "name": name,
+                            "last_played": datetime.now().isoformat(timespec="seconds"),
+                            "permanent_stats": {},  # Empty — no upgrades selected
+                            "global_progress": {
+                                "meta_xp": 0,
+                                "meta_level": 1,
+                                "meta_points": 0,
+                                "stages_cleared": {},
+                                "display": {},
+                                "audio": {},
+                            },
+                        }
+                        tmp = path.with_suffix(".json.tmp")
+                        with open(tmp, "w", encoding="utf-8") as f:
+                            json.dump(data, f, indent=2)
+                        os.replace(tmp, path)
+                except Exception:
+                    pass
+
+            # If this was a NEW profile, activate it and reset game memory to clean state
+            if is_new_profile:
+                self.game.active_profile_slot = slot
+                # Reset game state to factory defaults
+                self.game.permanent_stats = {}
+                self.game.global_progress = {
+                    "meta_xp": 0,
+                    "meta_level": 1,
+                    "meta_points": 0,
+                    "stages_cleared": {},
+                    "profile_name": name,
+                    "display": {},
+                    "audio": {},
+                }
+                # Return to main menu (profile is now active)
+                self.game.showing_profiles_menu = False
+                self.game.showing_main_menu = True
+
+            self.game.editing_profile_name = False
+            self.game.editing_profile_slot = None
+            self.game.profile_name_input = ""
+        elif key == pygame.K_ESCAPE:
+            # Cancel edit
+            self.game.editing_profile_name = False
+            self.game.editing_profile_slot = None
+            self.game.profile_name_input = ""
+        elif key == pygame.K_BACKSPACE:
+            self.game.profile_name_input = current[:-1]
+        else:
+            # Append printable character (max 20)
+            try:
+                char = pygame.key.name(key)
+                if len(char) == 1 and len(current) < 20:
+                    self.game.profile_name_input = current + char
+            except Exception:
+                pass
+
+    def _handle_profiles_menu_click(self, pos) -> None:
+        """Handle mouse clicks in the profiles selection screen."""
+        try:
+            import pygame
+        except Exception:
+            return
+        g = self.game
+        w, h = g.width, g.height
+
+        # Layout constants (must match draw_profiles_menu in ui.py)
+        card_w, card_h = 460, 120
+        card_x = w // 2 - card_w // 2
+        start_y = h // 2 - 210
+        spacing = 140
+
+        for slot in range(1, 4):
+            cy = start_y + (slot - 1) * spacing
+            card_rect = pygame.Rect(card_x, cy, card_w, card_h)
+
+            # Only process clicks inside this card
+            if not card_rect.collidepoint(pos):
+                continue
+
+            info = g.get_profile_info(slot)
+            slot_exists = info["exists"]
+
+            # --- DELETE confirmation ---
+            if getattr(g, "profile_delete_confirm", {}).get(slot):
+                # YES button (confirm delete)
+                yes_rect = pygame.Rect(card_x + card_w - 120, cy + card_h - 30, 50, 22)
+                no_rect = pygame.Rect(card_x + card_w - 62, cy + card_h - 30, 50, 22)
+                if yes_rect.collidepoint(pos):
+                    g.profile_delete_confirm[slot] = False
+                    g.delete_profile(slot)
+                    return
+                if no_rect.collidepoint(pos):
+                    g.profile_delete_confirm[slot] = False
+                    return
+                return  # click inside card but not on YES/NO → ignore
+
+            # --- EDIT button (top-right of card) ---
+            edit_rect = pygame.Rect(card_x + card_w - 56, cy + 8, 48, 22)
+            if edit_rect.collidepoint(pos):
+                g.editing_profile_name = True
+                g.editing_profile_slot = slot
+                # Pre-fill with existing name or default
+                if slot_exists:
+                    g.profile_name_input = info["name"]
+                else:
+                    g.profile_name_input = f"Profile {slot}"
+                return
+
+            # --- DELETE button (right side, mid-card) ---
+            if slot_exists:
+                del_rect = pygame.Rect(card_x + card_w - 56, cy + 36, 48, 22)
+                if del_rect.collidepoint(pos):
+                    g.profile_delete_confirm = getattr(g, "profile_delete_confirm", {})
+                    g.profile_delete_confirm[slot] = True
+                    return
+
+            # --- SELECT button (bottom-right) or CREATE (empty slot) ---
+            select_rect = pygame.Rect(card_x + card_w - 80, cy + card_h - 30, 72, 22)
+            if select_rect.collidepoint(pos):
+                if not slot_exists:
+                    # Create: open name input first
+                    g.editing_profile_name = True
+                    g.editing_profile_slot = slot
+                    g.profile_name_input = f"Profile {slot}"
+                else:
+                    # Select and return to main menu
+                    g.select_profile(slot)
+                    g.showing_profiles_menu = False
+                    g.showing_main_menu = True
+                return
+
+            return  # click inside card but not on any button
+
+        # BACK button
+        back_rect = pygame.Rect(w // 2 - 55, start_y + 3 * spacing + 10, 110, 32)
+        if back_rect.collidepoint(pos):
+            g.showing_profiles_menu = False
+            g.showing_main_menu = True
+
+    def _open_profiles_menu(self) -> None:
+        """Open the profiles selection screen, clearing any residual game state."""
+        g = self.game
+        g.showing_profiles_menu = True
+        g.showing_main_menu = False
+        g.showing_stage_menu = False
+        g.showing_permanent_upgrades = False
+        g.showing_prologo_end = False
+        # Clear residual combat / game-over state so the menu is clean
+        try:
+            g.showing_game_over = False
+            g.game_over_alpha = 0
+        except Exception:
+            pass
+        try:
+            g.shake_timer = 0
+            g.shake_intensity = 0
+        except Exception:
+            pass
+        try:
+            g.paused = False
+        except Exception:
+            pass
+
     def show_stage_menu(self) -> None:
-        """Show stage selection menu."""
-        self.game.showing_stage_menu = True
+        """Return to the main menu."""
+        self.game.showing_main_menu = True
+        self.game.showing_stage_menu = False
         self.game.showing_permanent_upgrades = False
         self.game.showing_prologo_end = False
         # If we were showing the game over overlay, clear it and resume normal menu state
@@ -1140,6 +1609,7 @@ class InputHandler:
         Also pre-load the blasphemy box asset so the first UI frame renders the
         imported asset (avoids a visible fallback black rectangle on menu open).
         """
+        self.game.showing_main_menu = False
         self.game.showing_stage_menu = False
         self.game.showing_permanent_upgrades = True
         self.game.showing_prologo_end = False
@@ -1244,6 +1714,31 @@ class InputHandler:
                 )
                 self.game.right_tower._base_damage = self.game.right_tower.damage
                 self.game.right_tower._base_fire_rate = self.game.right_tower.fire_rate
+            elif stage == "limbo_final":
+                # Final limbo uses dynamic tower type chosen by player.
+                # Create placeholder towers and keep them hidden until selection.
+                from src.core.entities.tower import Tower
+
+                # use fire as a neutral default; it will be overwritten by apply_tower
+                self.game.left_tower = Tower(
+                    320,
+                    530,
+                    fire_rate=self.game.statue_fire_rate,
+                    tower_type="fire",
+                )
+                self.game.left_tower._base_damage = self.game.left_tower.damage
+                self.game.left_tower._base_fire_rate = self.game.left_tower.fire_rate
+                self.game.right_tower = Tower(
+                    960,
+                    530,
+                    fire_rate=self.game.statue_fire_rate,
+                    tower_type="fire",
+                )
+                self.game.right_tower._base_damage = self.game.right_tower.damage
+                self.game.right_tower._base_fire_rate = self.game.right_tower.fire_rate
+                # hide until player chooses option
+                self.game.left_tower.visible = False
+                self.game.right_tower.visible = False
         elif str(stage).startswith(("purgatory", "hell")):
             # Purgatory/HELL is a stage category with three variants. For parity with Limbo,
             # set up no buildings and trigger initial weapon/tower choice behavior.
@@ -1294,8 +1789,13 @@ class InputHandler:
             self.game.game_state.player_weapons = ["beast"]
             self.game.game_state.weapon_levels = {"beast": 1}
         elif str(stage).startswith("limbo"):
-            # For Limbo, ask GameStateManager to initiate an initial weapon choice
+            # For Limbo we always do an initial weapon choice.  The final Limbo
+            # level also requires the player to select a tower type, mirroring
+            # the behaviour of the Purgatory stages.
             self.game.is_initial_weapon_choice = True
+            is_final = stage == "limbo_final"
+            if is_final:
+                self.game.is_initial_tower_choice = True
             try:
                 self.game.game_state.show_initial_weapon_choice()
                 # Mirror immediately into Game local view for deterministic behavior in the same frame
@@ -1311,6 +1811,42 @@ class InputHandler:
                 self.game.awaiting_weapon_choice = True
                 self.game.weapon_choices = self.game.generate_initial_weapon_choices()
                 self.game.selected_weapon_index = 0
+
+            # If final limbo also prepare tower selection now
+            if is_final:
+                try:
+                    self.game.game_state.show_initial_tower_choice()
+                    self.game.awaiting_tower_choice = (
+                        self.game.game_state.awaiting_tower_choice
+                    )
+                    self.game.tower_choices = list(self.game.game_state.tower_choices)
+                    self.game.selected_tower_index = (
+                        self.game.game_state.tower_choice_index
+                    )
+                except Exception:
+                    self.game.awaiting_tower_choice = True
+                    self.game.tower_choices = (
+                        self.game.game_state.generate_initial_tower_choices()
+                        if hasattr(self.game, "game_state")
+                        else [
+                            {
+                                "id": "fire",
+                                "name": "Fire Tower",
+                                "description": "Damage: 10 — Burn nearby enemies (4 DPS, 3s)",
+                            },
+                            {
+                                "id": "storm",
+                                "name": "Storm Tower",
+                                "description": "Damage: 10 (projectile ~9) — Chains to multiple enemies",
+                            },
+                            {
+                                "id": "ice",
+                                "name": "Ice Tower",
+                                "description": "Damage: 15 — Slows enemies 50% for 2s",
+                            },
+                        ]
+                    )
+                    self.game.selected_tower_index = 0
 
             # Do not start countdown yet
         elif str(stage).startswith(("purgatory", "hell")):

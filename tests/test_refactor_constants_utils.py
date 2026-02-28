@@ -20,7 +20,7 @@ def setup_dummy_sdl():
 
 def test_game_uses_default_constants(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     assert g.width == DEFAULT_WIDTH
     assert g.height == DEFAULT_HEIGHT
@@ -32,7 +32,7 @@ def test_game_uses_default_constants(tmp_path: Path) -> None:
 
 def test_clamp_to_walls_respects_wall_thickness(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
     g.left_wall_points = [(100, 0)]
     g.right_wall_points = [(500, 0)]
 

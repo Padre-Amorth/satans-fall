@@ -588,6 +588,36 @@ class Projectile(BaseSprite):
                 # Inner bright orange core
                 inner_r = max(1, self.radius - 3)
                 pygame.draw.circle(self.image, (255, 170, 60), center, inner_r)
+            elif getattr(self, "appearance", None) == "inquisitor_horde":
+                # Horde variant: use greenish palette for visibility
+                self.image = pygame.Surface(
+                    (self.radius * 2 + 8, self.radius * 2 + 8), pygame.SRCALPHA
+                )
+                center = (self.radius + 4, self.radius + 4)
+                try:
+                    glow_surf = pygame.Surface(
+                        (self.radius * 2 + 14, self.radius * 2 + 14), pygame.SRCALPHA
+                    )
+                    pygame.draw.circle(
+                        glow_surf,
+                        (100, 255, 100, 110),
+                        (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
+                        self.radius + 6,
+                    )
+                    self.image.blit(
+                        glow_surf,
+                        (
+                            -((glow_surf.get_width() - self.image.get_width()) // 2),
+                            -((glow_surf.get_height() - self.image.get_height()) // 2),
+                        ),
+                    )
+                except Exception:
+                    pass
+                # Outer darker green ring
+                pygame.draw.circle(self.image, (20, 100, 20), center, self.radius)
+                # Inner bright green core
+                inner_r = max(1, self.radius - 3)
+                pygame.draw.circle(self.image, (60, 255, 60), center, inner_r)
             elif getattr(self, "source", None) == "orbital":
                 # Orbital projectiles: light blue circles
                 self.image = pygame.Surface(
@@ -948,16 +978,19 @@ class Projectile(BaseSprite):
 
 class FliesProjectile(Projectile):
     def __init__(self, x, y, vel_x, vel_y, damage=10, heal_amount=2, level=1) -> None:
+        # Slightly larger projectiles at max weapon level (level 6)
+        base_radius = 6
+        if level >= 6:
+            base_radius += 2  # +2 pixels when fully upgraded
         super().__init__(
-            x, y, vel_x, vel_y, damage=damage, radius=6, weapon_type="Flies"
+            x, y, vel_x, vel_y, damage=damage, radius=base_radius, weapon_type="Flies"
         )
         self.heal_amount: int = heal_amount
         self.level: int = level
         self.homing_range = 200
         # Reduced speed to make Flies projectiles significantly slower
         self.speed = 75
-        self.bounce: bool = level >= 6  # Lv6: can bounce
-        self.bounced = False
+        # bounce mechanic removed; projectiles always vanish on hit
         self.target = None
         self.lifetime = 5 * 60  # 5 seconds at 60 FPS
         self.timer = 0

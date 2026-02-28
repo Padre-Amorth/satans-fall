@@ -10,7 +10,7 @@ def setup_dummy_sdl():
 
 def test_skill_tree_tooltip_shows_on_hover(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # Open upgrades menu
     g.show_permanent_upgrades()
@@ -59,7 +59,7 @@ def test_skill_tree_tooltip_shows_on_hover(tmp_path: Path) -> None:
 def test_blasphemy_tooltip_shows_on_hover(tmp_path: Path) -> None:
     """Hovering over the first blasphemy box shows a tooltip with description + levels."""
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # Ensure the first blasphemy has a visible level
     g.permanent_stats["blasphemy_1"] = 2
@@ -113,7 +113,7 @@ def test_blasphemy_tooltip_shows_on_hover(tmp_path: Path) -> None:
 def test_blasphemy5_tooltip_shows_when_unleveled(tmp_path: Path) -> None:
     """Even without any ranks the fifth blasphemy should show a description."""
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # do not give any levels to blasphemy_5 (default is zero)
     g.show_permanent_upgrades()

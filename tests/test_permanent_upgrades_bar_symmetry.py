@@ -12,7 +12,7 @@ def setup_dummy_sdl():
 
 def test_bars_are_symmetric_and_shorter(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     g.permanent_stats["power"] = 3
     g.permanent_stats["vigor"] = 2

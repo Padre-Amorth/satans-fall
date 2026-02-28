@@ -52,15 +52,14 @@ def test_purgatory_tower_visibility_regression():
 
     g.ui.draw_game_objects()
     if not neighbourhood_has_nonblack(x=head_x, y=head_y):
-        # Try direct draw helpers as a fallback (helps surface-only test harness)
+        # Try direct draw helpers as a fallback (helps surface-only test harness).
+        # pedestal drawing is disabled so we only draw statue models.
         try:
             statue_base_y_left = int(g.left_tower.y - 20)
-            g.ui._draw_pedestal(int(g.left_tower.x), statue_base_y_left)
             g.ui._draw_statue_model(
                 int(g.left_tower.x), statue_base_y_left, g.left_tower.tower_type
             )
             statue_base_y_right = int(g.right_tower.y - 20)
-            g.ui._draw_pedestal(int(g.right_tower.x), statue_base_y_right)
             g.ui._draw_statue_model(
                 int(g.right_tower.x), statue_base_y_right, g.right_tower.tower_type
             )

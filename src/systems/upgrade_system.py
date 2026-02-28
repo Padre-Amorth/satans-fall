@@ -572,6 +572,10 @@ class UpgradeSystem:
                     self.game.tower_choices = self.generate_initial_tower_choices()
                     self.game.selected_tower_index = 0
             else:
+                try:
+                    self.game.tower_energy = 0
+                except Exception:
+                    setattr(self.game, "tower_energy", 0)
                 self.game.stage_start_countdown = 3
                 self.game.stage_start_timer = self.game.fps
 
@@ -581,17 +585,17 @@ class UpgradeSystem:
             {
                 "id": "fire",
                 "name": "Fire Tower",
-                "description": "Damage: 10 — Burn nearby enemies (4 DPS, 3s)",
+                "description": "Burn enemies.",
             },
             {
                 "id": "storm",
                 "name": "Storm Tower",
-                "description": "Damage: 10 (projectile ~9) — Chains to multiple enemies",
+                "description": "Chain lightning damage.",
             },
             {
                 "id": "ice",
                 "name": "Ice Tower",
-                "description": "Damage: 15 — Slows enemies 50% for 2s",
+                "description": "Slow enemies.",
             },
         ]
 
@@ -611,9 +615,7 @@ class UpgradeSystem:
         """Apply the selected tower type for Purgatory and place towers at the bottom outside walls."""
         tower_type = tower_id
 
-        desired_y = min(
-            self.game.height - 60, getattr(self.game.player, "y", self.game.height - 80)
-        )
+        desired_y = 600
         left_wall_x = self._wall_x_at("left", desired_y)
         right_wall_x = self._wall_x_at("right", desired_y)
         margin = 30
@@ -659,6 +661,10 @@ class UpgradeSystem:
         if self.game.is_initial_tower_choice:
             self.game.is_initial_tower_choice = False
             if not self.game.is_initial_weapon_choice:
+                try:
+                    self.game.tower_energy = 0
+                except Exception:
+                    setattr(self.game, "tower_energy", 0)
                 self.game.stage_start_countdown = 3
                 self.game.stage_start_timer = self.game.fps
 
@@ -741,14 +747,23 @@ class UpgradeSystem:
             right_count = sum(
                 self.game.permanent_stats.get(f"{prefix}_{i}", 0) for i in (4, 5, 6)
             )
+            # damage multiplier per right-column slot:
+            # * fire: +10% (crit handled separately)
+            # * ice: +20%
+            # * storm: no damage bonus any more
             if prefix == "ice":
                 dmg_mult = 1.0 + (right_count * 0.20)
+            elif prefix == "storm":
+                dmg_mult = 1.0
             else:
                 dmg_mult = 1.0 + (right_count * 0.10)
+            # fire rate multiplier: storm and ice benefit; fire no longer gets fire-rate
             if prefix == "storm":
                 fr_mult = 1.0 + (right_count * 0.20)
-            else:
+            elif prefix == "ice":
                 fr_mult = 1.0 + (right_count * 0.10)
+            else:
+                fr_mult = 1.0
             fr_mult = fr_mult * blasphemy8_mult
             self.game.tower_damage_multiplier[prefix] = dmg_mult
             self.game.tower_fire_rate_multiplier[prefix] = fr_mult
@@ -805,13 +820,12 @@ class UpgradeSystem:
         if key == "vigor":
             per = 10
             total = per * level
-            regen_per_tick = 0.5 * level
-            regen_str = (
-                f"{regen_per_tick:.1f}"
-                if regen_per_tick % 1
-                else f"{int(regen_per_tick)}"
+            # only show heal on second line; the first line shows flat HP bonus
+            # regen string now standardized per tick instead of total per interval
+            return (
+                f"+{per:d} HP/level ({total:d} HP total)\n"
+                f"Heal 0.5 HP every 5s/level (0.5 HP/5s)"
             )
-            return f"+{per:d} HP/level ({total:d} HP total); +0.5 HP every 5s/level ({regen_str} HP every 5s)"
         if key == "adrenaline":
             per = 5.0
             total = per * level
@@ -832,9 +846,12 @@ class UpgradeSystem:
                 total = per * level
                 return f"+{per:d} HP/level ({total:d} HP total)"
             if key == "blasphemy_2":
-                per = 1
+                # now gives 0.5 HP every 2s per level
+                per = 0.5
                 total = per * level
-                return f"+{per:d} HP every 5s/level ({total:d} HP every 5s)"
+                regen_str = f"{total:.1f}" if total % 1 else f"{int(total)}"
+                # add 'Heal' prefix to make regeneration explicit
+                return f"Heal {per:g} HP every 2s/level ({regen_str} HP every 2s)"
             if key == "blasphemy_3":
                 per = 10.0
                 total = per * level
@@ -878,11 +895,27 @@ class UpgradeSystem:
 
         if tier in (4, 5, 6):
             if key_prefix == "storm":
-                lines.append("+10% dmg, +20% fire rate")
+                lines.append("+10% crit chance, +20% fire rate")
             elif key_prefix == "ice":
                 lines.append("+20% dmg, +10% fire rate")
-            else:
-                lines.append("+10% dmg, +10% fire rate")
+            else:  # fire
+                lines.append("+10% dmg, +10% crit chance")
+        elif tier == 7:
+            # center-tier upgrades now have proper names
+            if key_prefix == "fire":
+                lines.append("AR.MAGA.EDDON")
+                lines.append(
+                    "Right-click fires up to 4 burning orbs (r=50px, 20 dmg); "
+                    "each shot appears 0.5s after click, words linger ≥2s, 5s window"
+                )
+            elif key_prefix == "storm":
+                lines.append("Hellectric flux")
+                lines.append("Right-click to fire controllable lightning from towers")
+                lines.append(
+                    "Endpoint moves toward cursor at limited speed (≈200px/sec)"
+                )
+            elif key_prefix == "ice":
+                lines.append("Blizzard")
         else:
             if key_prefix == "fire" and tier == 1:
                 lines.append("Burn spreads to nearby enemies on death (chains up to 2)")

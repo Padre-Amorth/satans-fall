@@ -6,7 +6,7 @@ import pytest
 from src.game import Game
 
 
-@pytest.mark.parametrize("stage", ["limbo", "limbo_2", "limbo_3"])
+@pytest.mark.parametrize("stage", ["limbo", "limbo_2", "limbo_3", "limbo_final"])
 def test_boss_big_sinusoidal_hover_in_all_limbo_stages(stage):
     pygame.init()
     random.seed(12345)
@@ -74,3 +74,44 @@ def test_boss_big_enters_scene_slowly_in_limbo():
     assert (
         increases >= 3
     ), f"Entrance did not accelerate progressively (increases={increases})"
+
+
+def test_boss_big_high_hover_in_prologue():
+    """In Prologo the big boss should stop high and only oscillate horizontally.
+
+    This verifies the new behaviour requested by the designer.  The boss must
+    never approach the player's Y coordinate and its vertical movement should
+    be minimal once it has entered the hover phase.
+    """
+    pygame.init()
+    random.seed(54321)
+    g = Game(debug=True)
+    g.select_stage("prologo")
+
+    boss = g.enemy_manager.spawn_boss("big")
+    # start off-screen above
+    boss.x = g.width // 2
+    boss.y = -50
+
+    reached_hover = False
+    for i in range(1000):
+        boss.update(g.player, g)
+        if hasattr(boss, "limbo_phase") and boss.limbo_phase == "hover":
+            reached_hover = True
+            break
+    assert reached_hover, "boss_big did not enter hover phase in prologo"
+
+    # boss should be high above the player and stay near the ceiling
+    assert boss.y < 150, f"Boss hovered too low: y={boss.y}"
+    assert boss.y < g.player.y - 100
+
+    # sample further frames to ensure X oscillates while Y stays stable
+    ys = []
+    xs = []
+    for i in range(60):
+        boss.update(g.player, g)
+        ys.append(boss.y)
+        xs.append(boss.x)
+
+    assert max(ys) - min(ys) < 5, "Vertical drift too large during hover"
+    assert max(xs) - min(xs) > 20, "Horizontal oscillation too small during hover"

@@ -1,8 +1,7 @@
 import logging
 import math
 import random
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, TypedDict
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import pygame
 from pygame.key import ScancodeWrapper
@@ -14,6 +13,7 @@ from src.balance import (
     BURST_PAUSE,
     DEFAULT_DAMAGE_REDUCTION_MULTIPLIER,
     DEFAULT_PROJECTILE_SIZE_MULTIPLIER,
+    ENEMY_SCORE_PER_HEALTH,
     GAME_OVER_FADE_DURATION_MS,
     MAX_EXTRA_WEAPONS,
     PLAYER_BASE_DAMAGE,
@@ -28,6 +28,7 @@ from src.balance import (
     XP_BASE,
 )
 from src.entities.player import Player
+from src.game.ui_helpers import FloatingText
 from src.game_constants import (
     DEFAULT_FPS,
     DEFAULT_HEIGHT,
@@ -46,17 +47,7 @@ from src.systems.spawn_system import SpawnSystem
 from src.systems.upgrade_system import UpgradeSystem
 from src.systems.weapon_system import WeaponSystem
 from src.ui import PygameUIManager
-from src.weapons import (
-    WEAPON_DEFS,
-)
-
-
-class StatConfig(TypedDict):
-    name: str
-    key: str
-    color: tuple[int, int, int]
-    y: int
-
+from src.weapons import WEAPON_DEFS
 
 if TYPE_CHECKING:
     from src.systems.projectile_manager import ProjectileManager
@@ -68,89 +59,37 @@ LOG = logging.getLogger(__name__)
 CURRENT_GAME = None
 
 
-class FloatingText:
-    """Simple floating text for damage/feedback displayed on screen."""
-
-    def __init__(
-        self,
-        text: str,
-        x: float,
-        y: float,
-        *,
-        color=(255, 255, 255),
-        outline_color: tuple[int,int,int] | None = None,
-        font_size: int = 20,
-        vy: float = -1.2,
-        life: int = 70,
-        max_rise_pixels: int = 12,
-    ):
-        self.text = str(text)
-        self.x = float(x)
-        self.y = float(y)
-        self.initial_y = float(y)
-        # Maximum number of pixels the text may rise before stopping
-        self.max_rise_pixels = int(max_rise_pixels)
-        self.vy = float(vy)
-        self.life = int(life)
-        self.max_life = int(life)
-        self.color = tuple(color)
-        self.outline_color = tuple(outline_color) if outline_color is not None else None
-        self.font_size = int(font_size)
-
-    def update(self) -> None:
-        # Move
-        self.y += self.vy
-
-        # Enforce maximum rise: do not allow the text to rise above initial_y - max_rise_pixels
-        try:
-            if (self.initial_y - self.y) > self.max_rise_pixels:
-                # Clamp position and stop upward motion
-                self.y = self.initial_y - float(self.max_rise_pixels)
-                self.vy = 0.0
-
-        except Exception:
-            pass
-
-        # While text is fading (past 60% of life), reduce movement speed smoothly
-        try:
-            if self.life < (self.max_life * 0.6):
-                # Damp velocity toward zero so upward motion slows as it fades
-                self.vy *= 0.92
-                # apply a smaller upward pull to keep slight motion
-                self.vy -= 0.02
-            else:
-                # normal upward acceleration early on
-                self.vy -= 0.05
-        except Exception:
-            # Fallback behavior
-            self.vy -= 0.03
-        self.life -= 1
-
-    @property
-    def alive(self) -> bool:
-        return self.life > 0
-
-    def fade_alpha(self) -> int:
-        try:
-            # Slower fade due to larger max_life; just map life ratio to alpha
-            return max(0, int(255 * (self.life / max(1, self.max_life))))
-        except Exception:
-            return 255
-
-
 class Game:
+    def __setattr__(self, name, value):
+        """Prevent use of the obsolete ``score_multiplier`` attribute.
+
+        Attempts to set or get ``score_multiplier`` now raise, so callers are
+        forced to remove their references rather than silently be ignored.
+        """
+        if name == "score_multiplier":
+            raise AttributeError("score_multiplier attribute has been removed")
+        super().__setattr__(name, value)
+
+    def __getattr__(self, name):
+        if name == "score_multiplier":
+            raise AttributeError("score_multiplier attribute has been removed")
+        raise AttributeError(
+            f"{type(self).__name__!r} object has no attribute {name!r}"
+        )
+
     def __init__(
         self,
         fast_forward_prologo: bool = False,
+        fast_forward_limbo_final: bool = False,
         fast_forward_prologo_force_lightning: bool = False,
         debug: bool = False,
-        permanent_stats_file: Optional[str | Path] = None,
     ) -> None:
         pygame.init()
         pygame.mixer.init()
 
         # Debug fast-forward flags (set by CLI/tests)
         self.fast_forward_prologo: bool = fast_forward_prologo
+        self.fast_forward_limbo_final: bool = fast_forward_limbo_final
         self.fast_forward_prologo_force_lightning: bool = (
             fast_forward_prologo_force_lightning
         )
@@ -164,11 +103,7 @@ class Game:
         self._init_player()
         self._init_weapons()
         self._init_entities()
-        # If no file is provided, use a default file in the game directory
-        if permanent_stats_file is None:
-            default_stats_path = Path(__file__).parent.parent / "permanent_stats.json"
-            permanent_stats_file = default_stats_path
-        self._init_managers(permanent_stats_file)
+        self._init_managers()
 
     def _init_display(self) -> None:
         # Virtual/internal resolution (keep `self.screen` API unchanged for UI/tests)
@@ -206,9 +141,61 @@ class Game:
             surf.fill((0, 0, 0))
         return surf
 
+    def _load_last_profile_slot(self) -> int | None:
+        """Load the last selected profile slot from any profile's save file.
+
+        Searches all 3 profile files to find which one was most recently played,
+        and returns that slot. Uses 'last_played' timestamp to determine order.
+        Returns the slot number (1-3) or None if no profiles exist.
+        """
+        import json
+        from datetime import datetime
+
+        profiles = []
+        for slot in range(1, 4):
+            path = self._profile_path(slot)
+            if not path.exists():
+                continue
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                last_played_str = data.get("last_played", "")
+                # Parse ISO format timestamp; if missing/invalid, use epoch (oldest)
+                try:
+                    last_played = datetime.fromisoformat(last_played_str)
+                except Exception:
+                    last_played = datetime.fromtimestamp(0)
+                profiles.append((slot, last_played))
+            except Exception:
+                pass
+
+        if not profiles:
+            return None
+
+        # Sort by most recent (descending order)
+        profiles.sort(key=lambda x: x[1], reverse=True)
+        most_recent_slot = profiles[0][0]
+        logger.debug(
+            "Loaded last profile slot: %s (last_played: %s)",
+            most_recent_slot,
+            profiles[0][1],
+        )
+        return most_recent_slot
+
     def _init_game_state(self) -> None:
         # Early defaults to ensure robust construction even if later init fails
-        self.showing_stage_menu = True
+        # Profile system state (check FIRST — before setting menu flags)
+        # active_profile_slot: 1, 2 or 3; None = no profile selected yet
+        self.active_profile_slot: int | None = self._load_last_profile_slot()
+        # If no profile selected, go straight to profiles menu on startup
+        if self.active_profile_slot is None:
+            self.showing_main_menu = False
+            self.showing_profiles_menu = True
+        else:
+            self.showing_main_menu = True
+            self.showing_profiles_menu = False
+
+        self.showing_stage_menu = False
         self.showing_permanent_upgrades = False
         self.showing_prologo_end = False
         # Submenu flags (Limbo / Purgatory / Hell) — ensure they exist on construction
@@ -230,8 +217,20 @@ class Game:
 
         # Pause confirmation state (None or dict with {'action': 'quit', 'selection': 0|1})
         self.pause_confirmation: dict | None = None
+        # Exit confirmation state (True when waiting for YES/NO confirmation)
+        self.exit_confirm_pending: bool = False
         # Currently-selected option in the pause menu (0 = Resume, 1 = Quit)
         self.pause_menu_option: int = 0
+        # Text-input state for naming a profile
+        self.editing_profile_name: bool = False
+        self.editing_profile_slot: int | None = None
+        self.profile_name_input: str = ""
+        # Per-slot delete confirmation: slot → True when pending confirmation
+        self.profile_delete_confirm: dict = (
+            {}
+            if not hasattr(self, "profile_delete_confirm")
+            else self.profile_delete_confirm
+        )
 
         # Options overlay state (opened from the main menu gear button)
         self.showing_options: bool = False
@@ -259,6 +258,10 @@ class Game:
 
         # Centralized floating text pool for damage numbers and feedback (world coords)
         self.floating_texts: List[FloatingText] = []
+        # Health drops spawned by wave bosses; each entry is a dict containing
+        # x, y, vy (falling velocity), heal amount and radius.  Updated every
+        # frame in ``_update_health_drops`` and rendered by the UI.
+        self.health_drops: List[Dict[str, Any]] = []
         # Center-screen messages (used by UI and GameStateManager)
         self.center_messages: List[Dict[str, Any]] = []
 
@@ -272,43 +275,29 @@ class Game:
         self.left_tower = None
         self.right_tower = None
 
-        # Tower energy mechanic (shared pool for both towers)
-        self.tower_energy: int = 0
-        self.tower_energy_max: int = 100
-        # amount added per successful hit; tests and balance code may tweak
-        self.tower_energy_per_hit: int = 5
+        # per-wave difficulty slope may vary by stage; limbo levels are slightly
+        # easier (see `get_difficulty_multiplier_per_wave`).
 
-        # Fire special state (fire tier‑7)
-        self.fire_special_charges: int = 0            # remaining shots
-        self.fire_special_timer: int = 0              # frames left to fire charges
-        self.fire_special_index: int = 0              # index into FIRE_SPECIAL_WORDS
-        # Tracks scheduled shots after click delay.  Each entry is a dict with
-        # `timer`, `x`, and `y` keys.  Processed in ``update``.
-        self.pending_fire_clicks: List[dict] = []
-        # Smoke particles emitted by fire special explosions
-        self.fire_smoke: List[dict] = []  # each: {'x', 'y', 'life', 'size'}
-
-        # Right‑mouse state tracked for hellectric beam control
-        self.right_mouse_held: bool = False
-
-        # Hellectric flux special state (storm tier‑7)
-        self.hellectric_active: bool = False
-        self.hellectric_time_left: int = 0
-        # current beam endpoint; will interpolate toward the mouse when active
-        self.hellectric_x: float = 0.0
-        self.hellectric_y: float = 0.0
-        # accumulator map for per-enemy hellectric damage (throttled text display)
+        # Tower special state owned by TowerSpecialSystem (self.tower_special).
+        # Backing fields are proxied via @property/@setter pairs below so that
+        # external code (tests, systems) can continue using game.tower_energy, etc.
+        self._tower_energy: int = 0
+        self._tower_energy_max: int = 100
+        self._tower_energy_per_hit: int = 5
+        self._fire_special_charges: int = 0
+        self._fire_special_timer: int = 0
+        self._fire_special_index: int = 0
+        self._pending_fire_clicks: List[dict] = []
+        self._fire_smoke: List[dict] = []
+        self._right_mouse_held: bool = False
+        self._hellectric_active: bool = False
+        self._hellectric_time_left: int = 0
+        self._hellectric_x: float = 0.0
+        self._hellectric_y: float = 0.0
         self._hellectric_accum: dict[int, int] = {}
-        # copy constants to instance for convenience
-        try:
-            from src.game_constants import HELECTRIC_MAX_DURATION, HELECTRIC_IMPACT_RADIUS, HELECTRIC_SPEED
-            self.HELLECTRIC_MAX_DURATION = HELECTRIC_MAX_DURATION
-            self.HELLECTRIC_IMPACT_RADIUS = HELECTRIC_IMPACT_RADIUS
-            self.HELLECTRIC_SPEED = HELECTRIC_SPEED
-        except Exception:
-            self.HELLECTRIC_MAX_DURATION = 0
-            self.HELLECTRIC_IMPACT_RADIUS = 0
-            self.HELLECTRIC_SPEED = 0
+        self._HELLECTRIC_MAX_DURATION: int = 0
+        self._HELLECTRIC_IMPACT_RADIUS: int = 0
+        self._HELLECTRIC_SPEED: int = 0
 
         # Register self as current running game for modules that need quick access
         global CURRENT_GAME
@@ -323,6 +312,9 @@ class Game:
         self.awaiting_weapon_choice = False
         self.selected_weapon_index = 0
         self.showing_game_over = False
+        self._game_over_triggered = (
+            False  # Prevents re-triggering game over during same run
+        )
         self.game_over_alpha = 0
         self.game_over_fade_duration_ms = GAME_OVER_FADE_DURATION_MS
         # Calculate per-frame fade speed for game over alpha
@@ -339,457 +331,303 @@ class Game:
         self.player_level = 1
         self.xp_to_next_level = XP_BASE
 
-    def special_unlocked(self) -> bool:
-        """Return True if any placed tower has its last‑skill slot active.
+    # --- Tower Special System: backward-compatible property forwarding ---
+    # When tower_special is initialized, these properties route through to it.
+    # Before that, they use private backing fields.
 
-        The unlock is governed by permanent_stats like ``fire_7`` / ``storm_7`` /
-        ``ice_7``.  If neither tower exists or the appropriate stat is zero, the
-        special ability is considered unavailable.
+    @property
+    def tower_energy(self) -> int:
+        ts = getattr(self, "tower_special", None)
+        return ts.tower_energy if ts is not None else self._tower_energy
+
+    @tower_energy.setter
+    def tower_energy(self, val: int) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.tower_energy = val
+        else:
+            self._tower_energy = val
+
+    @property
+    def tower_energy_max(self) -> int:
+        ts = getattr(self, "tower_special", None)
+        return ts.tower_energy_max if ts is not None else self._tower_energy_max
+
+    @tower_energy_max.setter
+    def tower_energy_max(self, val: int) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.tower_energy_max = val
+        else:
+            self._tower_energy_max = val
+
+    @property
+    def tower_energy_per_hit(self) -> int:
+        ts = getattr(self, "tower_special", None)
+        return ts.tower_energy_per_hit if ts is not None else self._tower_energy_per_hit
+
+    @tower_energy_per_hit.setter
+    def tower_energy_per_hit(self, val: int) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.tower_energy_per_hit = val
+        else:
+            self._tower_energy_per_hit = val
+
+    @property
+    def fire_special_charges(self) -> int:
+        ts = getattr(self, "tower_special", None)
+        return ts.fire_special_charges if ts is not None else self._fire_special_charges
+
+    @fire_special_charges.setter
+    def fire_special_charges(self, val: int) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.fire_special_charges = val
+        else:
+            self._fire_special_charges = val
+
+    @property
+    def fire_special_timer(self) -> int:
+        ts = getattr(self, "tower_special", None)
+        return ts.fire_special_timer if ts is not None else self._fire_special_timer
+
+    @fire_special_timer.setter
+    def fire_special_timer(self, val: int) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.fire_special_timer = val
+        else:
+            self._fire_special_timer = val
+
+    @property
+    def fire_special_index(self) -> int:
+        ts = getattr(self, "tower_special", None)
+        return ts.fire_special_index if ts is not None else self._fire_special_index
+
+    @fire_special_index.setter
+    def fire_special_index(self, val: int) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.fire_special_index = val
+        else:
+            self._fire_special_index = val
+
+    @property
+    def pending_fire_clicks(self) -> List[dict]:
+        ts = getattr(self, "tower_special", None)
+        return ts.pending_fire_clicks if ts is not None else self._pending_fire_clicks
+
+    @pending_fire_clicks.setter
+    def pending_fire_clicks(self, val: List[dict]) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.pending_fire_clicks = val
+        else:
+            self._pending_fire_clicks = val
+
+    @property
+    def fire_smoke(self) -> List[dict]:
+        ts = getattr(self, "tower_special", None)
+        return ts.fire_smoke if ts is not None else self._fire_smoke
+
+    @fire_smoke.setter
+    def fire_smoke(self, val: List[dict]) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.fire_smoke = val
+        else:
+            self._fire_smoke = val
+
+    @property
+    def right_mouse_held(self) -> bool:
+        """Legacy flag exposed for tests and compatibility.
+
+        Historically this tracked whether the player was holding the right
+        mouse button so the storm special could cancel when released.  With
+        the new toggle behaviour it now simply mirrors the active state of
+        the hellectric beam when possible; the input handler keeps it in sync.
         """
-        # prologo never has towers/specials
-        if getattr(self, "selected_stage", None) == "prologo":
-            return False
-        try:
-            stats = getattr(self, "permanent_stats", {})
-            for t in (getattr(self, "left_tower", None), getattr(self, "right_tower", None)):
-                if t is None:
-                    continue
-                tp = getattr(t, "tower_type", None)
-                if not tp:
-                    continue
-                if stats.get(f"{tp}_7", 0):
-                    return True
-        except Exception:
-            pass
-        return False
+        ts = getattr(self, "tower_special", None)
+        return ts.right_mouse_held if ts is not None else self._right_mouse_held
+
+    @right_mouse_held.setter
+    def right_mouse_held(self, val: bool) -> None:
+        # setter exists primarily so tests can manipulate the flag; the
+        # input handler will update it automatically when the special
+        # toggles.  The underlying value isn't relied on for game logic
+        # aside from legacy compatibility.
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.right_mouse_held = val
+        else:
+            self._right_mouse_held = val
+
+    @property
+    def hellectric_active(self) -> bool:
+        ts = getattr(self, "tower_special", None)
+        return ts.hellectric_active if ts is not None else self._hellectric_active
+
+    @hellectric_active.setter
+    def hellectric_active(self, val: bool) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.hellectric_active = val
+        else:
+            self._hellectric_active = val
+
+    @property
+    def hellectric_time_left(self) -> int:
+        ts = getattr(self, "tower_special", None)
+        return ts.hellectric_time_left if ts is not None else self._hellectric_time_left
+
+    @hellectric_time_left.setter
+    def hellectric_time_left(self, val: int) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.hellectric_time_left = val
+        else:
+            self._hellectric_time_left = val
+
+    @property
+    def hellectric_x(self) -> float:
+        ts = getattr(self, "tower_special", None)
+        return ts.hellectric_x if ts is not None else self._hellectric_x
+
+    @hellectric_x.setter
+    def hellectric_x(self, val: float) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.hellectric_x = val
+        else:
+            self._hellectric_x = val
+
+    @property
+    def hellectric_y(self) -> float:
+        ts = getattr(self, "tower_special", None)
+        return ts.hellectric_y if ts is not None else self._hellectric_y
+
+    @hellectric_y.setter
+    def hellectric_y(self, val: float) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.hellectric_y = val
+        else:
+            self._hellectric_y = val
+
+    @property
+    def _hellectric_accum(self) -> dict[int, int]:
+        ts = getattr(self, "tower_special", None)
+        return (
+            ts._hellectric_accum
+            if ts is not None
+            else getattr(self, "__hellectric_accum_backing", {})
+        )
+
+    @_hellectric_accum.setter
+    def _hellectric_accum(self, val: dict[int, int]) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts._hellectric_accum = val
+        else:
+            setattr(self, "__hellectric_accum_backing", val)
+
+    @property
+    def HELLECTRIC_MAX_DURATION(self) -> int:
+        ts = getattr(self, "tower_special", None)
+        return (
+            ts.HELLECTRIC_MAX_DURATION
+            if ts is not None
+            else self._HELLECTRIC_MAX_DURATION
+        )
+
+    @HELLECTRIC_MAX_DURATION.setter
+    def HELLECTRIC_MAX_DURATION(self, val: int) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.HELLECTRIC_MAX_DURATION = val
+        else:
+            self._HELLECTRIC_MAX_DURATION = val
+
+    @property
+    def HELLECTRIC_IMPACT_RADIUS(self) -> int:
+        ts = getattr(self, "tower_special", None)
+        return (
+            ts.HELLECTRIC_IMPACT_RADIUS
+            if ts is not None
+            else self._HELLECTRIC_IMPACT_RADIUS
+        )
+
+    @HELLECTRIC_IMPACT_RADIUS.setter
+    def HELLECTRIC_IMPACT_RADIUS(self, val: int) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.HELLECTRIC_IMPACT_RADIUS = val
+        else:
+            self._HELLECTRIC_IMPACT_RADIUS = val
+
+    @property
+    def HELLECTRIC_SPEED(self) -> int:
+        ts = getattr(self, "tower_special", None)
+        return ts.HELLECTRIC_SPEED if ts is not None else self._HELLECTRIC_SPEED
+
+    @HELLECTRIC_SPEED.setter
+    def HELLECTRIC_SPEED(self, val: int) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.HELLECTRIC_SPEED = val
+        else:
+            self._HELLECTRIC_SPEED = val
+
+    def special_unlocked(self) -> bool:
+        """Delegate to TowerSpecialSystem."""
+        return self.tower_special.special_unlocked() if self.tower_special else False
 
     def charge_tower_energy(self, amount: int | None = None) -> None:
-        """Increase tower energy by *amount* (or ``tower_energy_per_hit``).
-
-        Energy is clamped to ``tower_energy_max``.  ``amount`` may be negative to
-        subtract energy.  Charging only occurs when the special is unlocked.
-        """
-        # guard against charging when unlock missing
-        if not self.special_unlocked():
-            return
-        if amount is None:
-            amount = getattr(self, "tower_energy_per_hit", 0)
-        try:
-            cur = getattr(self, "tower_energy", 0)
-            mx = getattr(self, "tower_energy_max", 0)
-            new_val = cur + amount
-            if mx is not None and mx >= 0:
-                new_val = max(0, min(mx, new_val))
-            setattr(self, "tower_energy", new_val)
-        except Exception:
-            pass
+        """Delegate to TowerSpecialSystem."""
+        if self.tower_special:
+            self.tower_special.charge_tower_energy(amount)
 
     def is_tower_special_ready(self) -> bool:
-        """Return True when the energy bar is full and the special is unlocked."""
-        try:
-            if not self.special_unlocked():
-                return False
-            return getattr(self, "tower_energy", 0) >= getattr(
-                self, "tower_energy_max", 0
-            )
-        except Exception:
-            return False
+        """Delegate to TowerSpecialSystem."""
+        return (
+            self.tower_special.is_tower_special_ready() if self.tower_special else False
+        )
 
-    def _dist_point_to_segment(self, px: float, py: float, x1: float, y1: float, x2: float, y2: float) -> float:
-        """Return shortest distance from point (px,py) to line segment (x1,y1)-(x2,y2)."""
-        # based on projection formula
-        dx = x2 - x1
-        dy = y2 - y1
-        if dx == 0 and dy == 0:
-            return math.hypot(px - x1, py - y1)
-        t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
-        t = max(0.0, min(1.0, t))
-        proj_x = x1 + t * dx
-        proj_y = y1 + t * dy
-        return math.hypot(px - proj_x, py - proj_y)
+    def _dist_point_to_segment(
+        self, px: float, py: float, x1: float, y1: float, x2: float, y2: float
+    ) -> float:
+        """Delegate to TowerSpecialSystem."""
+        return (
+            self.tower_special._dist_point_to_segment(px, py, x1, y1, x2, y2)
+            if self.tower_special
+            else 0.0
+        )
 
     def activate_tower_special(self) -> bool:
-        """Attempt to consume the full energy bar.
+        """Delegate to TowerSpecialSystem."""
+        return (
+            self.tower_special.activate_tower_special() if self.tower_special else False
+        )
 
-        Clears ``tower_energy`` to zero if there was enough and returns True;
-        otherwise does nothing and returns False.  Routes to appropriate special
-        based on which tower types are actually placed.
-        """
-        if self.is_tower_special_ready():
-            try:
-                self.tower_energy = 0
-            except Exception:
-                setattr(self, "tower_energy", 0)
-
-            # Collect tower types that are both placed AND have their special unlocked
-            placed_types = set()
-            for t in (getattr(self, "left_tower", None), getattr(self, "right_tower", None)):
-                if t is None:
-                    continue
-                tp = getattr(t, "tower_type", None)
-                if tp and self.permanent_stats.get(f"{tp}_7", 0):
-                    placed_types.add(tp)
-
-            # Activate fire special first (if unlocked) since it's time-limited
-            if "fire" in placed_types:
-                try:
-                    from src.game_constants import (
-                        FIRE_SPECIAL_CHARGES,
-                        FIRE_SPECIAL_DURATION,
-                    )
-                except Exception:
-                    FIRE_SPECIAL_CHARGES = 0
-                    FIRE_SPECIAL_DURATION = 0
-                # grant full charges and schedule the first explosion after the
-                # configured click delay.  charges are still consumed immediately
-                # so the window countdown starts with one shot already pending.
-                self.fire_special_charges = FIRE_SPECIAL_CHARGES
-                self.fire_special_timer = FIRE_SPECIAL_DURATION
-                try:
-                    from src.game_constants import FIRE_SPECIAL_CLICK_DELAY
-                    delay = FIRE_SPECIAL_CLICK_DELAY
-                except Exception:
-                    delay = 0
-                try:
-                    self.pending_fire_clicks.append(
-                        {"timer": delay, "x": getattr(self, "mouse_x", 0), "y": getattr(self, "mouse_y", 0)}
-                    )
-                except Exception:
-                    pass
-                try:
-                    self.fire_special_charges = max(0, self.fire_special_charges - 1)
-                except Exception:
-                    pass
-            # Activate Blizzard if ice tower is placed with ice_7 unlocked
-            if "ice" in placed_types:
-                try:
-                    from src.game_constants import (
-                    BLIZZARD_RADIUS,
-                    BLIZZARD_MAX_DURATION,
-                    BLIZZARD_SLOW_FACTOR,
-                )
-                except Exception:
-                    BLIZZARD_RADIUS = 0
-                    BLIZZARD_MAX_DURATION = 0
-                    BLIZZARD_SLOW_FACTOR = 1.0
-                if not hasattr(self, "blizzard_puddles"):
-                    self.blizzard_puddles = []
-                self.blizzard_puddles.append(
-                    {
-                        "x": getattr(self, "mouse_x", 0),
-                        "y": getattr(self, "mouse_y", 0),
-                        "radius": BLIZZARD_RADIUS,
-                        "timer": BLIZZARD_MAX_DURATION,
-                        # Blizzard puddles should behave like ice puddles with respect to
-                        # slowing, so include a slow factor constant so the collision
-                        # system doesn't blow up when iterating over them.
-                        "slow_factor": BLIZZARD_SLOW_FACTOR,
-                        "blizzard": True,
-                    }
-                )
-
-            # Activate Hellectric Flux if storm tower is placed with storm_7 unlocked
-            if "storm" in placed_types:
-                # start the beam; it will run while right mouse held or until time runs out
-                try:
-                    import logging
-                    logging.getLogger(__name__).info("hellectric branch activated")
-                except Exception:
-                    pass
-                self.hellectric_active = True
-                # initialize the movable endpoint at the current mouse position so
-                # the beam doesn't jump from (0,0)
-                self.hellectric_x = getattr(self, "mouse_x", 0)
-                self.hellectric_y = getattr(self, "mouse_y", 0)
-                # fall back to constant if attribute missing
-                dur = getattr(self, "HELLECTRIC_MAX_DURATION", None)
-                if dur is None:
-                    try:
-                        from src.game_constants import HELECTRIC_MAX_DURATION
-                        dur = HELECTRIC_MAX_DURATION
-                    except Exception:
-                        dur = 0
-                self.hellectric_time_left = dur
-
-            return True
-        return False
+    def use_fire_charge(self) -> bool:
+        """Delegate to TowerSpecialSystem."""
+        return self.tower_special.use_fire_charge() if self.tower_special else False
 
     def _spawn_fire_special(self, x: float, y: float) -> None:
-        """Spawn one fire-special explosion at the given coordinates.
-
-        Damages/ignites nearby targets and shows a cycling word.  The floating
-        text should appear at the explosion itself regardless of whether any
-        enemies are hit.  (Previous logic only spawned words when enemies were
-        damaged, which made tests and the UI inconsistent.)
-        """
-        try:
-            from src.game_constants import (
-                FIRE_SPECIAL_RADIUS,
-                FIRE_SPECIAL_DAMAGE,
-                FIRE_SPECIAL_WORDS,
-                FIRE_SPECIAL_EXPLOSION_COLOR,
-            )
-        except Exception:
-            FIRE_SPECIAL_RADIUS = 0
-            FIRE_SPECIAL_DAMAGE = 0
-            FIRE_SPECIAL_WORDS = []
-            FIRE_SPECIAL_EXPLOSION_COLOR = (200, 100, 40)
-
-        # display word at explosion location first; this happens even if there
-        # are no nearby enemies.  Use extended life so the word lingers at least
-        # two seconds as requested by design.  add tiny random offset to avoid
-        # duplicate-removal logic erasing earlier words.
-        try:
-            if FIRE_SPECIAL_WORDS:
-                word = FIRE_SPECIAL_WORDS[self.fire_special_index % len(FIRE_SPECIAL_WORDS)]
-            else:
-                word = ""
-            word = word.upper()
-            ox = x + random.uniform(-3, 3)
-            oy = y + random.uniform(-3, 3)
-            # make the text noticeably larger and ensure it floats like damage
-            self.spawn_floating_text(
-                word,
-                ox,
-                oy,
-                color=(150, 0, 0),
-                outline_color=(0, 0, 0),
-                life=getattr(__import__("src.game_constants", fromlist=["FIRE_SPECIAL_TEXT_LIFE"]), "FIRE_SPECIAL_TEXT_LIFE", 0),
-                font_size=40,
-                vy=-1.2,
-            )
-        except Exception:
-            pass
-
-        # normal enemies
-        try:
-            for enemy in list(self.enemies) if getattr(self, "enemies", None) else []:
-                ex, ey = self._enemy_pos(enemy)
-                dx = ex - x
-                dy = ey - y
-                if dx * dx + dy * dy <= FIRE_SPECIAL_RADIUS * FIRE_SPECIAL_RADIUS:
-                    try:
-                        enemy.health = max(0, enemy.health - FIRE_SPECIAL_DAMAGE)
-                    except Exception:
-                        pass
-                    try:
-                        if getattr(enemy, "burn_timer", 0) <= 0:
-                            enemy.burn_timer = 120
-                            enemy.burn_damage_per_second = 4.0
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-        # bosses
-        try:
-            if hasattr(self, "bosses") and self.bosses:
-                items = (self.bosses.sprites() if hasattr(self.bosses, "sprites") else list(self.bosses))
-                for boss in items:
-                    bx, by = self._enemy_pos(boss)
-                    dx = bx - x
-                    dy = by - y
-                    if dx * dx + dy * dy <= FIRE_SPECIAL_RADIUS * FIRE_SPECIAL_RADIUS:
-                        try:
-                            boss.health = max(0, boss.health - FIRE_SPECIAL_DAMAGE)
-                        except Exception:
-                            pass
-                        try:
-                            if getattr(boss, "burn_timer", 0) <= 0:
-                                boss.burn_timer = 120
-                                boss.burn_damage_per_second = 4.0
-                        except Exception:
-                            pass
-                        try:
-                            word = FIRE_SPECIAL_WORDS[self.fire_special_index % len(FIRE_SPECIAL_WORDS)] if FIRE_SPECIAL_WORDS else ""
-                            self.spawn_floating_text(
-                                word,
-                                bx,
-                                by - self._enemy_radius(boss) - 8,
-                                color=(150, 0, 0),
-                                outline_color=(0, 0, 0),
-                                life=getattr(__import__("src.game_constants", fromlist=["FIRE_SPECIAL_TEXT_LIFE"]), "FIRE_SPECIAL_TEXT_LIFE", 0),
-                                font_size=40,
-                                vy=-1.2,
-                            )
-                        except Exception:
-                            pass
-        except Exception:
-            pass
-        # add visual effect entry (longer duration via constant)
-        try:
-            from src.game_constants import FIRE_SPECIAL_VISUAL_DURATION
-            vis = FIRE_SPECIAL_VISUAL_DURATION
-        except Exception:
-            vis = 8
-        try:
-            # include color so downstream draw code can use a nicer default and
-            # tests can inspect it directly
-            self.game_state.fire_explosions.append(
-                {"x": x, "y": y, "radius": FIRE_SPECIAL_RADIUS, "timer": vis, "max_timer": vis, "color": FIRE_SPECIAL_EXPLOSION_COLOR}
-            )
-        except Exception:
-            pass
-        # emit some smoke particles around the explosion
-        try:
-            for i in range(random.randint(10, 14)):
-                self.fire_smoke.append({
-                    "x": x + random.uniform(-12, 12),
-                    "y": y + random.uniform(-12, 12),
-                    "life": random.randint(25, 45),
-                    "size": random.uniform(4, 10),
-                })
-        except Exception:
-            pass
-        try:
-            self.fire_special_index = (self.fire_special_index + 1) % (len(FIRE_SPECIAL_WORDS) or 1)
-        except Exception:
-            pass
-
-    def update(self) -> None:
-        """Primary per-frame update called from ``update_game``.
-
-        This method contains the majority of in-game logic; ``update_game``
-        temporarily forces the game into in-game state so tests can call it
-        without menus interfering.
-        """
-        # update smoke particles if any
-        self._update_fire_smoke()
+        """Delegate to TowerSpecialSystem."""
+        if self.tower_special:
+            self.tower_special._spawn_fire_special(x, y)
 
     def _update_fire_smoke(self) -> None:
-        """Advance smoke particles emitted by fire special explosions."""
-        if not getattr(self, "fire_smoke", None):
-            return
-        alive = []
-        for p in list(self.fire_smoke):
-            try:
-                p["y"] -= 1.0  # drift upward faster
-                p["life"] -= 1
-                if p["life"] > 0:
-                    alive.append(p)
-            except Exception:
-                pass
-        self.fire_smoke = alive
+        """Delegate to TowerSpecialSystem."""
+        if self.tower_special:
+            self.tower_special._update_fire_smoke()
 
     def update_hellectric_flux(self) -> None:
-        """Update state for the held storm special (Hellectric flux).
-
-        Beams originate from each placed storm tower and stretch to the current
-        mouse position.  They damage any enemy whose hitbox comes within a
-        small radius of the line segment.  The ability auto-cancels when the
-        right mouse button is released or when the frame timer expires.
-        """
-        # If the special is not currently active we can clear any stored
-        # accumulators and bail early.  This ensures lingering entries don't
-        # persist between activations.
-        if not getattr(self, "hellectric_active", False):
-            self._hellectric_accum.clear()
-            return
-        # decrement timer and disable when expired; deactivate when the
-        # counter hits zero so that the effect ends immediately on the frame
-        # it expires rather than waiting for the next update call.
-        self.hellectric_time_left -= 1
-        if self.hellectric_time_left <= 0:
-            self.hellectric_active = False
-            self._hellectric_accum.clear()
-            return
-
-        # compute desired endpoint (mouse) and move current endpoint toward it
-        mx = getattr(self, "mouse_x", 0)
-        my = getattr(self, "mouse_y", 0)
-        # ensure we have endpoint coords in case activation failed to set them
-        hx = getattr(self, "hellectric_x", mx)
-        hy = getattr(self, "hellectric_y", my)
-        # move endpoint toward mouse using configured speed (pixels/sec)
-        try:
-            speed = getattr(self, "HELLECTRIC_SPEED", 0) / float(self.fps or 1)
-        except Exception:
-            speed = 0
-        # vector from current to target
-        dx = mx - hx
-        dy = my - hy
-        dist = math.hypot(dx, dy)
-        if dist <= speed or dist == 0:
-            hx, hy = mx, my
-        else:
-            frac = speed / dist
-            hx += dx * frac
-            hy += dy * frac
-        self.hellectric_x, self.hellectric_y = hx, hy
-
-        # damage radius: use enemy radius plus small margin
-        for tower in (getattr(self, "left_tower", None), getattr(self, "right_tower", None)):
-            if tower is None or getattr(tower, "tower_type", None) != "storm":
-                continue
-            tx, ty = getattr(tower, "x", 0), getattr(tower, "y", 0)
-            # visual feedback: append chain lightning effect from tower to current endpoint
-            try:
-                self.game_state.chain_lightning_effects.append(
-                    {"points": [(tx, ty), (hx, hy)], "timer": 4}
-                )
-                # impact circle at endpoint
-                self.game_state.chain_lightning_effects.append(
-                    {
-                        "points": [(hx, hy)],
-                        # explosion should linger a bit longer so player sees it
-                        "timer": 16,
-                        "explosion": True,
-                        "radius": getattr(self, "HELLECTRIC_IMPACT_RADIUS", 50),
-                        # brighter cyan for better contrast
-                        "color": (150, 240, 255),
-                    }
-                )
-            except Exception:
-                pass
-            # damage regular enemies and any bosses along segment
-            candidates = []
-            try:
-                candidates.extend(list(getattr(self, "enemies", [])))
-            except Exception:
-                pass
-            try:
-                # bosses may be Group or list
-                if hasattr(getattr(self, "bosses", None), "sprites"):
-                    candidates.extend(self.bosses.sprites())
-                elif getattr(self, "bosses", None) is not None:
-                    candidates.extend(list(self.bosses))
-            except Exception:
-                pass
-
-            for enemy in candidates:
-                try:
-                    ex, ey = self._enemy_pos(enemy)
-                except Exception:
-                    continue
-                er = self._enemy_radius(enemy)
-                # calculate distance against the current beam endpoint
-                dist = self._dist_point_to_segment(ex, ey, tx, ty, hx, hy)
-                if dist <= er + 3:  # small tolerance
-                    try:
-                        # silent damage; we'll show aggregated text separately
-                        enemy.take_damage(1, show_floating=False)
-                    except Exception:
-                        pass
-                    # accumulate damage for throttled display
-                    try:
-                        eid = id(enemy)
-                        total = self._hellectric_accum.get(eid, 0) + 1
-                        self._hellectric_accum[eid] = total
-                        if total >= 10:
-                            # show a bundled "10" above the enemy
-                            try:
-                                self.spawn_floating_text("10", ex, ey - 8)
-                            except Exception:
-                                pass
-                            self._hellectric_accum[eid] = total - 10
-                    except Exception:
-                        pass
-                    # drop the entry if the enemy died to avoid leaks
-                    try:
-                        if getattr(enemy, "health", 1) <= 0:
-                            self._hellectric_accum.pop(eid, None)
-                    except Exception:
-                        pass
-        # (existing code omitted here above, we will insert call)
+        """Delegate to TowerSpecialSystem."""
+        if self.tower_special:
+            self.tower_special.update_hellectric_flux()
 
     def _init_weapons(self) -> None:
         # Weapon and cooldown defaults needed by weapon update logic
@@ -822,6 +660,11 @@ class Game:
     def _init_player(self) -> None:
         # Game state
         self.player: Player = Player(self.width // 2, self.height - 80)
+        # allow player to access game flags (e.g. growth aura)
+        try:
+            self.player.game = self
+        except Exception:
+            pass
         self.enemies: Any = pygame.sprite.Group()
         self.projectiles: Any = pygame.sprite.Group()
         self.enemy_projectiles: Any = pygame.sprite.Group()
@@ -830,7 +673,7 @@ class Game:
         # Allow limited vertical movement (centered on player's baseline).
         # `player_vertical_range` is the total allowed vertical span in pixels.
         # Movement is allowed only *upwards* from the starting baseline.
-        self.player_vertical_range: int = 200  # user-requested default
+        self.player_vertical_range: int = 250  # +50px vertical range
         half_range = self.player_vertical_range // 2
         baseline_y = int(self.player.y)
         self.player_vertical_min_y = baseline_y - half_range
@@ -930,6 +773,44 @@ class Game:
         self.prologo_lightning_duration_frames = 180 + 2 * self.fps
         self._prologo_lightning_strike = False
         self.lightning_points = []
+        # Limbo Final boss
+        self._limbo_final_boss_spawned = False
+
+        # Limbo horde event (for regular limbo levels)
+        self.limbo_horde_started: bool = False
+        self.limbo_horde_initial: int = 0
+        self.limbo_horde_remaining: int = 0
+        self.limbo_horde_killed: int = 0
+        # timer used for spawn gating (resets each spawn)
+        self.limbo_horde_timer: int = 0
+        # track how many frames have elapsed since the horde began; needed to
+        # adjust the spawn rate partway through the event
+        self.limbo_horde_elapsed: int = 0
+        self.limbo_horde_active: bool = False
+        self.limbo_horde_completed: bool = False
+        # after explosion we countdown and then end with victory screen
+        self.limbo_horde_victory_timer: int = 0
+        # additional flag used to defer the victory countdown until *all*
+        # enemies have been cleared.  Previously we started the timer as soon
+        # as the kill count reached the expected horde size which could leave
+        # stray enemies still on-screen; the overlay would then flash early.
+        self.limbo_horde_ready_for_victory: bool = False
+        # Scripted satan growth event triggered after fourth horde phase.
+        self.satan_growth_active: bool = False
+        self.satan_growth_elapsed: int = 0
+        self.satan_growth_duration: int = 0  # will be set when triggered
+        # record initial player dimensions for scaling
+        self.satan_growth_orig_width: int | None = None
+        self.satan_growth_orig_height: int | None = None
+
+        # victory overlay state
+        self.showing_victory: bool = False
+        self.victory_alpha: int = 0
+        self.victory_fade_duration_ms: int = GAME_OVER_FADE_DURATION_MS
+        self.victory_fade_speed: int = max(
+            1, int(255 / ((self.victory_fade_duration_ms / 1000.0) * self.fps))
+        )
+        self.victory_display_timer: int = 0
 
         # Stage system
         self.selected_stage: Optional[str] = None
@@ -978,20 +859,19 @@ class Game:
         self.reinforcement_delay_ms = REINFORCEMENT_DELAY_MS
         self.reinforcement_count = REINFORCEMENT_COUNT
 
-    def _init_managers(self, permanent_stats_file: Optional[str | Path]) -> None:
+    def _init_managers(self) -> None:
         # Load assets
         self.load_assets()
 
-        # Persistence: determine file for storing permanent stats & global progress (can be overridden in tests)
-        # Only use persisted file when explicitly provided by caller — tests expect a clean default Game().
-        if permanent_stats_file is not None:
-            self.permanent_stats_file: Path = Path(permanent_stats_file)
-            # Container for other persistent global progress (flexible dict of JSON-serializable values)
-            self.global_progress: Dict[str, Any] = {}
-        else:
-            # No persistence file requested — do NOT auto-load repository `permanent_stats.json`
-            # Keep an empty global_progress so defaults remain deterministic for tests.
-            self.global_progress: Dict[str, Any] = {}
+        # Migrate legacy save file to profile system on first launch
+        self._migrate_legacy_save()
+
+        # Initialize global_progress dict, then load any persisted save data so
+        # the setdefault calls below only fill in keys missing from the file.
+        self.global_progress: Dict[str, Any] = {}
+        # Only load if a profile slot is already selected (e.g. on rematch)
+        if getattr(self, "active_profile_slot", None) is not None:
+            self.load_permanent_stats()
 
         # Meta‑progression defaults. keys here are safe to call repeatedly.
         self.global_progress.setdefault("meta_xp", 0)
@@ -1000,18 +880,11 @@ class Game:
         # tracks whether a stage has granted its one-time clear reward
         self.global_progress.setdefault("stages_cleared", {})
 
-        # Initialize PersistenceSystem early so load_permanent_stats() can delegate to it
+        # Apply any persisted display preferences (window size / fullscreen)
         try:
-            from src.systems.persistence_system import PersistenceSystem
-
-            self.persistence = PersistenceSystem(self)
-        except Exception as e:
-            self.persistence = None
-            logger.exception(f"Failed to initialize PersistenceSystem: {e}")
-
-        # Load persisted data when an explicit file path was supplied
-        if permanent_stats_file is not None:
-            self.load_permanent_stats()
+            self.apply_display_prefs()
+        except Exception:
+            pass
 
         # Apply saved audio preference (migrate from top-level to audio dict)
         try:
@@ -1055,6 +928,14 @@ class Game:
         except Exception:
             self.input_handler = None
 
+        # Initialize TowerSpecialSystem (handles energy bar and fire/blizzard/hellectric specials)
+        try:
+            from src.systems.tower_special_system import TowerSpecialSystem
+
+            self.tower_special = TowerSpecialSystem(self)
+        except Exception:
+            self.tower_special = None
+
         # Initialize ProjectileManager (handles pooling/spawn management)
         try:
             from src.systems.projectile_manager import ProjectileManager
@@ -1062,12 +943,6 @@ class Game:
             self.projectile_manager = ProjectileManager(self)
         except Exception:
             self.projectile_manager = None
-
-        # Ensure skill-tree keys exist even if persistent file was missing
-        try:
-            self._ensure_permanent_stat_keys()
-        except Exception:
-            pass
 
         # Final debug check to show what ended up in permanent_stats (use logger, not print)
         try:
@@ -1115,7 +990,6 @@ class Game:
         try:
             dsp = self.global_progress.setdefault("display", {})
             dsp["window_size"] = [self.window_width, self.window_height]
-            self.save_permanent_stats()
         except Exception:
             pass
 
@@ -1223,6 +1097,78 @@ class Game:
         else:
             self._prologo_final_boss_immortal = val
 
+    # Limbo Final boss flag (spawn at ~180s)
+    @property
+    def limbo_final_boss_spawned(self) -> bool:
+        if self.enemy_manager is not None:
+            return getattr(self.enemy_manager, "limbo_final_boss_spawned", False)
+        return getattr(self, "_limbo_final_boss_spawned", False)
+
+    @limbo_final_boss_spawned.setter
+    def limbo_final_boss_spawned(self, val: bool) -> None:
+        if self.enemy_manager is not None:
+            self.enemy_manager.limbo_final_boss_spawned = val
+        else:
+            self._limbo_final_boss_spawned = val
+
+    @property
+    def limbo_final_boss_immortal(self) -> bool:
+        if self.enemy_manager is not None:
+            return getattr(self.enemy_manager, "limbo_final_boss_immortal", False)
+        return getattr(self, "_limbo_final_boss_immortal", False)
+
+    @limbo_final_boss_immortal.setter
+    def limbo_final_boss_immortal(self, val: bool) -> None:
+        if self.enemy_manager is not None:
+            self.enemy_manager.limbo_final_boss_immortal = val
+        else:
+            self._limbo_final_boss_immortal = val
+
+    @property
+    def limbo_final_lightning_strike(self) -> bool:
+        if self.enemy_manager is not None:
+            return getattr(self.enemy_manager, "limbo_final_lightning_strike", False)
+        return getattr(self, "_limbo_final_lightning_strike", False)
+
+    @limbo_final_lightning_strike.setter
+    def limbo_final_lightning_strike(self, val: bool) -> None:
+        if self.enemy_manager is not None:
+            self.enemy_manager.limbo_final_lightning_strike = val
+        else:
+            self._limbo_final_lightning_strike = val
+
+    @property
+    def limbo_final_lightning_timer(self) -> int:
+        if self.enemy_manager is not None:
+            return getattr(self.enemy_manager, "limbo_final_lightning_timer", 0)
+        return getattr(self, "_limbo_final_lightning_timer", 0)
+
+    @limbo_final_lightning_timer.setter
+    def limbo_final_lightning_timer(self, val: int) -> None:
+        if self.enemy_manager is not None:
+            self.enemy_manager.limbo_final_lightning_timer = val
+        else:
+            self._limbo_final_lightning_timer = val
+
+    @property
+    def limbo_final_lightning_duration_frames(self) -> int:
+        if self.enemy_manager is not None:
+            return getattr(
+                self.enemy_manager,
+                "limbo_final_lightning_duration_frames",
+                180 + 2 * self.fps,
+            )
+        return getattr(
+            self, "_limbo_final_lightning_duration_frames", 180 + 2 * self.fps
+        )
+
+    @limbo_final_lightning_duration_frames.setter
+    def limbo_final_lightning_duration_frames(self, val: int) -> None:
+        if self.enemy_manager is not None:
+            self.enemy_manager.limbo_final_lightning_duration_frames = val
+        else:
+            self._limbo_final_lightning_duration_frames = val
+
     @property
     def prologo_lightning_strike(self) -> bool:
         if self.enemy_manager is not None:
@@ -1288,11 +1234,13 @@ class Game:
             "enemy_strong.png",
             "enemy_angel.png",
             "enemy_giant.png",
+            "enemy_crusader.png",  # optional custom asset for the new crusader type
             "enemy_inquisitor.png",  # optional custom sprite for non-boss inquisitor
             "boss_small.png",
             "boss_medium.png",
             "boss_big.png",
             "boss_final.png",
+            "boss_limbo_horde.png",  # optional asset for Limbo horde boss
             "projectile.png",
             "enemy_projectile.png",
             "battlefield_cross.png",  # Bloody cross for battlefield decoration
@@ -1301,6 +1249,11 @@ class Game:
             # optional Purgatory background(s) (see STAGE_SETTINGS)
             "purgatory_background.png",
             "purgatory_battlefield.png",
+            # optional custom statue/tower assets for the three tower types.  game
+            # will gracefully fall back to vector art if these are missing.
+            "statue_fire.png",
+            "statue_storm.png",
+            "statue_ice.png",
         ]
 
         # Preload originals for quick subsequent scaling
@@ -1528,21 +1481,29 @@ class Game:
             self.update()
             self.draw()
             self.clock.tick(self.fps)
+        self.save_permanent_stats()
         logger.info("Game ended")
-        # Save progress before exiting
-        try:
-            self.save_permanent_stats()
-            print("[EXIT] Saved permanent stats on game exit")
-        except Exception as e:
-            logger.exception(f"Failed to save on exit: {e}")
 
     def draw(self) -> None:
         """Main draw method"""
         try:
-            # Calculate screen shake
+            # Calculate screen shake — suppress during any pause/overlay state
             shake_x: int = 0
             shake_y: int = 0
-            if self.shake_timer > 0:
+            _game_is_paused = (
+                self.paused
+                or self.showing_main_menu
+                or self.showing_stage_menu
+                or self.showing_permanent_upgrades
+                or getattr(self, "showing_profiles_menu", False)
+                or self.showing_game_over
+                or getattr(self, "showing_victory", False)
+                or getattr(self, "showing_prologo_end", False)
+                or getattr(self, "awaiting_upgrade", False)
+                or getattr(self, "awaiting_weapon_choice", False)
+                or getattr(self, "awaiting_tower_choice", False)
+            )
+            if self.shake_timer > 0 and not _game_is_paused:
                 shake_x = random.randint(-self.shake_intensity, self.shake_intensity)
                 shake_y = random.randint(-self.shake_intensity, self.shake_intensity)
 
@@ -1605,9 +1566,16 @@ class Game:
                                 # Don't fill with bg_color here - let external background show through
 
                                 # Check if cached masked image is still valid
-                                cache_key = (bg_image_name, id(self.left_wall_points), len(self.left_wall_points))
-                                if (getattr(self, "_masked_bg_cache_key", None) != cache_key or
-                                    not getattr(self, "_masked_bg_cache", None)):
+                                cache_key = (
+                                    bg_image_name,
+                                    id(self.left_wall_points),
+                                    len(self.left_wall_points),
+                                )
+                                if getattr(
+                                    self, "_masked_bg_cache_key", None
+                                ) != cache_key or not getattr(
+                                    self, "_masked_bg_cache", None
+                                ):
                                     # Cache miss or invalidated: rebuild masked surface
                                     # Create mask from polygon
                                     mask_surface = pygame.Surface(
@@ -1617,7 +1585,8 @@ class Game:
 
                                     # Translate points to mask coordinates
                                     translated_points = [
-                                        (p[0] - min_x, p[1] - min_y) for p in inside_points
+                                        (p[0] - min_x, p[1] - min_y)
+                                        for p in inside_points
                                     ]
                                     pygame.draw.polygon(
                                         mask_surface,
@@ -1641,7 +1610,9 @@ class Game:
                                     self._masked_bg_cache_key = cache_key
 
                                 # Use cached masked surface
-                                self.screen.blit(self._masked_bg_cache, self._masked_bg_cache_pos)
+                                self.screen.blit(
+                                    self._masked_bg_cache, self._masked_bg_cache_pos
+                                )
                                 self.background_image_drawn = True
                             else:
                                 # if the main battlefield image is missing, do not
@@ -1705,11 +1676,6 @@ class Game:
                 # enemies and other objects; draw them after the world but before
                 # game objects are rendered.  The UI manager handles purgatory
                 # stages internally.
-                if hasattr(self, "ui") and hasattr(self.ui, "draw_purgatory_clouds"):
-                    try:
-                        self.ui.draw_purgatory_clouds(shake_x, shake_y)
-                    except Exception:
-                        pass
                 self.draw_game_objects(shake_x, shake_y)
                 # Fog must be drawn after world/objects so it tints enemies and player
                 try:
@@ -1782,7 +1748,12 @@ class Game:
         return None
 
     def draw_pedestals(self, shake_x=0, shake_y=0) -> None:
-        """Delegate pedestal drawing to Pygame UI manager."""
+        """Delegate pedestal drawing to Pygame UI manager.
+
+        Pedestals were removed from the visible game world; the UI implementation
+        now performs no drawing.  This method remains for compatibility with
+        existing codepaths.
+        """
         if hasattr(self, "ui") and hasattr(self.ui, "draw_pedestals"):
             self.ui.draw_pedestals(shake_x, shake_y)
         return None
@@ -1811,12 +1782,6 @@ class Game:
             self.ui.draw_lightning_effect(shake_x, shake_y)
         return None
 
-    def draw_spine_effect(self, shake_x=0, shake_y=0):
-        """Delegate spine effect drawing to Pygame UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_spine_effect"):
-            self.ui.draw_spine_effect(shake_x, shake_y)
-        return None
-
     def draw_skullboom_particles(self, shake_x=0, shake_y=0) -> None:
         """Draw SkullBoom explosion particles and area effects"""
         # Draw explosion area effects first (behind particles)
@@ -1830,12 +1795,15 @@ class Game:
                     progress = explosion["timer"] / explosion["max_timer"]
                     alpha = int(255 * progress * 0.6)  # Max 60% opacity
 
-                    # Compute current radius. Use a slower, eased expansion for revive
-                    # explosions so the ring finishes exactly when the auto-resume occurs.
-                    if explosion.get("revive"):
+                    # Compute current radius.  A fixed indicator stays at max_radius
+                    if explosion.get("indicator"):
+                        current_radius = explosion["max_radius"]
+                        # darker purple filled disc with greater transparency
+                        alpha = int(50)  # reduced opacity for interior
+                    elif explosion.get("revive"):
                         # eased progression (slower early, faster near the end)
                         eased = 1 - (progress**1.6)
-                        base_offset = 0.15  # ensure a small visible radius at spawn
+                        base_offset = 1.0  # revive uses full radius
                         current_radius = int(
                             explosion["max_radius"]
                             * (base_offset + eased * (1 - base_offset))
@@ -1857,6 +1825,63 @@ class Game:
                         FIRE_SPECIAL_EXPLOSION_COLOR = (200, 100, 40)
                     base_col = explosion.get("color", FIRE_SPECIAL_EXPLOSION_COLOR)
                     glow_color = (base_col[0], base_col[1], base_col[2], alpha // 3)
+
+                    # orange halo for normal (non-revive, non-indicator) explosions
+                    if not explosion.get("indicator") and not explosion.get("revive"):
+                        halo_alpha = int(120 * (1 - progress))
+                        try:
+                            # silver halo outline
+                            pygame.draw.circle(
+                                self.screen,
+                                (200, 200, 200, halo_alpha),  # silver halo
+                                (center_x, center_y),
+                                current_radius + int(10 * progress),
+                                2,
+                            )
+                            # transparent inner pulse particle, expands faster and more transparent
+                            inner_alpha = int(80 * (1 - progress))
+                            inner_rad = int(current_radius * (0.5 + 0.8 * progress))
+                            # draw inner particle on temp surface for alpha
+                            part = pygame.Surface(
+                                (inner_rad * 2 + 4, inner_rad * 2 + 4), pygame.SRCALPHA
+                            )
+                            pygame.draw.circle(
+                                part,
+                                (200, 200, 200, inner_alpha),
+                                (inner_rad + 2, inner_rad + 2),
+                                inner_rad,
+                            )
+                            self.screen.blit(
+                                part,
+                                (center_x - inner_rad - 2, center_y - inner_rad - 2),
+                            )
+                        except Exception:
+                            pass
+
+                    # if indicator, draw a solid translucent filled circle to mark area
+                    if explosion.get("indicator"):
+                        try:
+                            # translucent dark purple fill via temporary surface
+                            col = explosion.get("color", (100, 0, 100))
+                            surf = pygame.Surface(
+                                (current_radius * 2 + 4, current_radius * 2 + 4),
+                                pygame.SRCALPHA,
+                            )
+                            pygame.draw.circle(
+                                surf,
+                                (col[0], col[1], col[2], 40),
+                                (current_radius + 2, current_radius + 2),
+                                current_radius,
+                            )
+                            self.screen.blit(
+                                surf,
+                                (
+                                    center_x - current_radius - 2,
+                                    center_y - current_radius - 2,
+                                ),
+                            )
+                        except Exception:
+                            pass
                     for i in range(num_segments):
                         start_angle = i * segment_angle + random.uniform(
                             -0.3, 0.3
@@ -2003,7 +2028,7 @@ class Game:
         y: float,
         *,
         color=(255, 255, 255),
-        outline_color: tuple[int,int,int] | None = None,
+        outline_color: tuple[int, int, int] | None = None,
         font_size: int = 20,
         vy: float = -1.2,
         life: int = 70,
@@ -2072,6 +2097,58 @@ class Game:
                 pass
         self.floating_texts = alive
 
+    def _update_health_drops(self) -> None:
+        """Move health drops downward and handle collection by the player.
+
+        Each frame the drop's ``y`` is incremented by its ``vy`` value.  If the
+        player intersects a drop the player is healed and the drop is removed.
+        Drops that fall past the bottom of the screen are also discarded.
+        """
+        if not getattr(self, "health_drops", None):
+            return
+        alive: list[Dict[str, Any]] = []
+        # radius used for collision test; player radius is approximated as half
+        # of the larger dimension of the player sprite.
+        try:
+            pr = (
+                max(getattr(self.player, "width", 0), getattr(self.player, "height", 0))
+                / 2
+            )
+        except Exception:
+            pr = 0
+        for drop in list(self.health_drops):
+            # move
+            drop["y"] = drop.get("y", 0) + drop.get("vy", 0.5)
+
+            # check for collision with player
+            try:
+                dx = drop.get("x", 0) - getattr(self.player, "x", 0)
+                dy = drop.get("y", 0) - getattr(self.player, "y", 0)
+                dr = drop.get("radius", 12)
+                if dx * dx + dy * dy <= (pr + dr) * (pr + dr):
+                    heal_amt = drop.get("heal", 0)
+                    self.player.health = min(
+                        self.player.max_health, self.player.health + heal_amt
+                    )
+                    try:
+                        # let the player see the heal amount
+                        self.spawn_floating_text(
+                            f"+{int(heal_amt)}",
+                            drop.get("x", 0),
+                            drop.get("y", 0),
+                            color=(0, 255, 0),
+                        )
+                    except Exception:
+                        pass
+                    continue
+            except Exception:
+                pass
+
+            # keep if still on screen
+            if drop.get("y", 0) <= self.height + 50:
+                alive.append(drop)
+        self.health_drops = alive
+
     def draw_floating_texts(self, shake_x: int = 0, shake_y: int = 0) -> None:
         """Draw all floating texts to self.screen applying shake offsets."""
         if not getattr(self, "floating_texts", None):
@@ -2091,8 +2168,15 @@ class Game:
                     # and would abort via an exception, effectively drawing a second
                     # standalone word instead of a stroked glyph.
                     alpha = ft.fade_alpha()
-                    sx = int(ft.x - get_text(ft.text, font, ft.color).get_width() / 2 + shake_x)
-                    sy = int(ft.y + shake_y) - get_text(ft.text, font, ft.color).get_height()
+                    sx = int(
+                        ft.x
+                        - get_text(ft.text, font, ft.color).get_width() / 2
+                        + shake_x
+                    )
+                    sy = (
+                        int(ft.y + shake_y)
+                        - get_text(ft.text, font, ft.color).get_height()
+                    )
 
                     # draw outline first if requested (use more offsets for a thicker
                     # stroke so the effect is clearly visible; diagonals help avoid
@@ -2178,8 +2262,8 @@ class Game:
                 if puddle.get("blizzard"):
                     try:
                         from src.game_constants import (
-                            BLIZZARD_MAX_DURATION,
                             BLIZZARD_GROWTH_MULTIPLIER,
+                            BLIZZARD_MAX_DURATION,
                         )
                     except Exception:
                         BLIZZARD_MAX_DURATION = 1
@@ -2281,20 +2365,22 @@ class Game:
         except Exception:
             pass
 
-    def _draw_blizzard_spiral_particles(self, puddle: dict, px: float, py: float, radius: int) -> None:
+    def _draw_blizzard_spiral_particles(
+        self, puddle: dict, px: float, py: float, radius: int
+    ) -> None:
         """Draw spiral snowflake particles rotating inward inside blizzard puddles"""
         try:
             from src.game_constants import (
-                BLIZZARD_PARTICLE_COUNT,
-                BLIZZARD_PARTICLE_SPEED,
-                BLIZZARD_PARTICLE_SPIRAL_SPEED,
-                BLIZZARD_PARTICLE_SIZE,
-                BLIZZARD_PARTICLE_MAX_ALPHA,
-                BLIZZARD_PARTICLE_SPAWN_DELAY,
                 BLIZZARD_PARTICLE_ALIGNED_RATIO,
+                BLIZZARD_PARTICLE_COUNT,
+                BLIZZARD_PARTICLE_EXPANSION,
+                BLIZZARD_PARTICLE_MAX_ALPHA,
                 BLIZZARD_PARTICLE_S_CURVE_AMPLITUDE,
                 BLIZZARD_PARTICLE_S_CURVE_RADIAL,
-                BLIZZARD_PARTICLE_EXPANSION,
+                BLIZZARD_PARTICLE_SIZE,
+                BLIZZARD_PARTICLE_SPAWN_DELAY,
+                BLIZZARD_PARTICLE_SPEED,
+                BLIZZARD_PARTICLE_SPIRAL_SPEED,
             )
         except Exception:
             BLIZZARD_PARTICLE_COUNT = 100
@@ -2318,7 +2404,9 @@ class Game:
 
             # Determine which particles will have S-curve alignment
             num_aligned = int(BLIZZARD_PARTICLE_COUNT * BLIZZARD_PARTICLE_ALIGNED_RATIO)
-            aligned_indices = set(random.sample(range(BLIZZARD_PARTICLE_COUNT), num_aligned))
+            aligned_indices = set(
+                random.sample(range(BLIZZARD_PARTICLE_COUNT), num_aligned)
+            )
 
             for i in range(BLIZZARD_PARTICLE_COUNT):
                 angle = (2 * math.pi * i) / BLIZZARD_PARTICLE_COUNT
@@ -2329,15 +2417,18 @@ class Game:
                 # Check if this particle should follow S-curve alignment
                 is_aligned = i in aligned_indices
 
-                puddle["spiral_particles"].append({
-                    "angle": angle,
-                    "dist": dist,
-                    "spawn_dist": dist,  # track original spawn distance
-                    "color_variant": color_variant,  # 0=white, 1=light_blue, 2=pale_cyan
-                    "spawn_frame": i * BLIZZARD_PARTICLE_SPAWN_DELAY,  # delay spawning
-                    "active": False,  # not visible until spawn_frame is reached
-                    "aligned": is_aligned,  # follows S-curve pattern for rotatory effect
-                })
+                puddle["spiral_particles"].append(
+                    {
+                        "angle": angle,
+                        "dist": dist,
+                        "spawn_dist": dist,  # track original spawn distance
+                        "color_variant": color_variant,  # 0=white, 1=light_blue, 2=pale_cyan
+                        "spawn_frame": i
+                        * BLIZZARD_PARTICLE_SPAWN_DELAY,  # delay spawning
+                        "active": False,  # not visible until spawn_frame is reached
+                        "aligned": is_aligned,  # follows S-curve pattern for rotatory effect
+                    }
+                )
 
         particles = puddle["spiral_particles"]
         current_timer = puddle.get("timer", 0)
@@ -2369,14 +2460,20 @@ class Game:
                 angle += angle_offset
 
                 # Also apply radial offset for more visible S-curve displacement
-                radial_offset = math.sin(angle * 1.5) * (radius * BLIZZARD_PARTICLE_S_CURVE_RADIAL)
+                radial_offset = math.sin(angle * 1.5) * (
+                    radius * BLIZZARD_PARTICLE_S_CURVE_RADIAL
+                )
                 dist = dist + radial_offset
 
                 # Apply expansion effect near respawn: particles should bulge outward as they approach center
                 # This creates a "breathing" effect where particles push back out before respawning
                 spawn_dist = particle.get("spawn_dist", radius * 0.70)
-                normalized_dist = dist / spawn_dist if spawn_dist > 0 else 1.0  # 1.0 at spawn, ~0 at center
-                expansion_push = math.sin(normalized_dist * math.pi) * (spawn_dist * BLIZZARD_PARTICLE_EXPANSION)
+                normalized_dist = (
+                    dist / spawn_dist if spawn_dist > 0 else 1.0
+                )  # 1.0 at spawn, ~0 at center
+                expansion_push = math.sin(normalized_dist * math.pi) * (
+                    spawn_dist * BLIZZARD_PARTICLE_EXPANSION
+                )
                 dist = dist + expansion_push
 
             # Respawn particles that have moved too far inward (limit to 70% radius)
@@ -2397,8 +2494,12 @@ class Game:
             py_particle = py + math.sin(angle) * dist
 
             # Skip if particle is outside screen bounds
-            if (px_particle < -50 or px_particle > screen_width + 50 or
-                py_particle < -50 or py_particle > screen_height + 50):
+            if (
+                px_particle < -50
+                or px_particle > screen_width + 50
+                or py_particle < -50
+                or py_particle > screen_height + 50
+            ):
                 particle["spawn_dist"] = max_spawn_dist * 0.85 + random.uniform(-10, 10)
                 particle["dist"] = particle["spawn_dist"]
                 particle["angle"] = random.uniform(0, 2 * math.pi)
@@ -2428,7 +2529,9 @@ class Game:
 
                 # Draw snowflake using a small SRCALPHA surface for each visible particle
                 particle_size_pixels = BLIZZARD_PARTICLE_SIZE * 2 + 4
-                particle_surf = pygame.Surface((particle_size_pixels, particle_size_pixels), pygame.SRCALPHA)
+                particle_surf = pygame.Surface(
+                    (particle_size_pixels, particle_size_pixels), pygame.SRCALPHA
+                )
 
                 # Draw snowflake circle
                 pygame.draw.circle(
@@ -2452,18 +2555,21 @@ class Game:
                 # Blit to screen
                 self.screen.blit(
                     particle_surf,
-                    (int(px_particle - particle_size_pixels // 2), int(py_particle - particle_size_pixels // 2))
+                    (
+                        int(px_particle - particle_size_pixels // 2),
+                        int(py_particle - particle_size_pixels // 2),
+                    ),
                 )
 
     def add_score(self, points) -> None:
-        """Add points to the game's score applying the global `score_multiplier`.
+        """Add unmodified points to the game's score.
 
-        This keeps `Game.score` and `GameStateManager.score` in sync.
-        Also converts score to meta_xp at a 1:1 ratio (1 point = 1 meta_xp).
+        This keeps `Game.score` and `GameStateManager.score` in sync.  Meta-XP
+        is awarded at a 1:1 ratio with the raw points value; the previous
+        `score_multiplier` has been removed and is now ignored.
         """
         try:
-            mult = getattr(self, "score_multiplier", 1.0)
-            amt = int(points * mult)
+            amt = int(points)
             self.score += amt
 
             try:
@@ -2475,7 +2581,7 @@ class Game:
             except Exception:
                 pass
 
-            # Award meta_xp at 1:1 ratio with the multiplied score
+            # award meta xp using helper (handles leveling and points)
             try:
                 self.award_meta_xp(amt)
             except Exception as e:
@@ -2499,6 +2605,18 @@ class Game:
                 ),
             )
 
+        # If victory overlay active, draw that first and skip everything else
+        if getattr(self, "showing_victory", False):
+            if hasattr(self, "ui") and hasattr(self.ui, "draw_victory"):
+                self.ui.draw_victory(shake_x, shake_y)
+            return
+
+        # Draw menus (delegated to existing Game methods to preserve behavior)
+        # Profiles menu has highest priority — shown instead of anything else
+        if getattr(self, "showing_profiles_menu", False):
+            self.draw_profiles_menu(shake_x, shake_y)
+            return
+
         # If game over is active, draw overlay and skip other UI
         if self.showing_game_over:
             self.draw_game_over(shake_x, shake_y)
@@ -2507,13 +2625,15 @@ class Game:
         # Draw HUD if in game
         if (
             self.selected_stage
+            and not self.showing_main_menu
             and not self.showing_stage_menu
             and not self.showing_permanent_upgrades
         ):
             self.ui.draw_hud(shake_x, shake_y)
 
-        # Draw menus (delegated to existing Game methods to preserve behavior)
-        if self.showing_stage_menu:
+        if self.showing_main_menu:
+            self.draw_main_menu(shake_x, shake_y)
+        elif self.showing_stage_menu:
             self.draw_stage_menu(shake_x, shake_y)
         elif self.showing_permanent_upgrades:
             self.draw_permanent_upgrades(shake_x, shake_y)
@@ -2542,6 +2662,18 @@ class Game:
         """Backward-compatible wrapper: delegate to UI manager's implementation."""
         if hasattr(self, "ui") and hasattr(self.ui, "draw_center_messages"):
             self.ui.draw_center_messages(shake_x, shake_y)
+        return None
+
+    def draw_main_menu(self, shake_x=0, shake_y=0) -> None:
+        """Wrapper: delegate main menu drawing to UI manager."""
+        if hasattr(self, "ui") and hasattr(self.ui, "draw_main_menu"):
+            self.ui.draw_main_menu(shake_x, shake_y)
+        return None
+
+    def draw_profiles_menu(self, shake_x=0, shake_y=0) -> None:
+        """Wrapper: delegate profiles menu drawing to UI manager."""
+        if hasattr(self, "ui") and hasattr(self.ui, "draw_profiles_menu"):
+            self.ui.draw_profiles_menu(shake_x, shake_y)
         return None
 
     def draw_stage_menu(self, shake_x=0, shake_y=0) -> None:
@@ -2840,18 +2972,9 @@ class Game:
 
     def show_stage_menu(self) -> None:
         # opening the stage menu represents leaving the current level; energy
-        # should not persist when the player returns.
-        try:
-            self.tower_energy = 0
-        except Exception:
-            setattr(self, "tower_energy", 0)
-        # also clear any partial fire special state
-        try:
-            self.fire_special_charges = 0
-            self.fire_special_timer = 0
-            self.fire_special_index = 0
-        except Exception:
-            pass
+        # and special state should not persist when the player returns.
+        if self.tower_special is not None:
+            self.tower_special.reset()
         return self.input_handler.show_stage_menu() if self.input_handler else None
 
     def show_permanent_upgrades(self) -> None:
@@ -2860,48 +2983,107 @@ class Game:
         )
 
     def select_stage(self, stage) -> None:
-        return self.input_handler.select_stage(stage) if self.input_handler else None
+        result = self.input_handler.select_stage(stage) if self.input_handler else None
+        # if we just picked a limbo stage, apply the spawn rate penalty so wave0
+        # reflects the slower pace immediately.  final limbo should be treated the
+        # same as the other limbo variants.
+        if stage in ("limbo", "limbo_2", "limbo_3", "limbo_final"):
+            from src.balance import LIMBO_SPAWN_RATE_PENALTY
+
+            try:
+                self.enemy_spawn_rate += LIMBO_SPAWN_RATE_PENALTY
+                if hasattr(self, "enemy_manager") and self.enemy_manager is not None:
+                    self.enemy_manager.enemy_spawn_rate = self.enemy_spawn_rate
+            except Exception:
+                pass
+        return result
 
     def generate_dead_trees(self) -> None:
         """Generate dead tree data once for Limbo stage"""
         self.dead_trees = [
-            {"x": 400, "y": 80, "height": 70, "trunk_width": 4},
-            {"x": 520, "y": 50, "height": 90, "trunk_width": 5},
-            {"x": 640, "y": 100, "height": 55, "trunk_width": 3},
-            {"x": 760, "y": 65, "height": 80, "trunk_width": 6},
-            {"x": 880, "y": 85, "height": 65, "trunk_width": 4},
+            {"x": 390, "y": 76, "height": 58, "trunk_width": 3},
+            {"x": 515, "y": 52, "height": 68, "trunk_width": 4},
+            {"x": 645, "y": 96, "height": 46, "trunk_width": 3},
+            {"x": 772, "y": 62, "height": 62, "trunk_width": 5},
+            {"x": 898, "y": 84, "height": 52, "trunk_width": 3},
         ]
 
-        # Generate branches for each tree
         for tree in self.dead_trees:
+            h = tree["height"]
+            tw = tree["trunk_width"]
+
+            # Pre-generate trunk crack/texture marks for deterministic rendering
+            tree["cracks"] = []
+            for _ in range(random.randint(2, 4)):
+                tree["cracks"].append(
+                    {
+                        "x_off": random.randint(-tw + 1, tw - 1),
+                        "y_frac": random.uniform(0.15, 0.90),
+                        "length": random.randint(5, 14),
+                        "dir": random.choice([-1, 1]),
+                    }
+                )
+
+            # 40% chance of trunk splitting into two tines (Y-fork)
+            if random.random() < 0.40:
+                tree["split"] = {
+                    "frac": random.uniform(0.28, 0.55),
+                    "left_dx": random.randint(5, 12),
+                    "left_dy": random.randint(8, 18),
+                    "right_dx": random.randint(5, 12),
+                    "right_dy": random.randint(8, 18),
+                }
+            else:
+                tree["split"] = None
+
             tree["branches"] = []
             num_branches: int = random.randint(3, 5)
 
             for i in range(num_branches):
-                branch_y = tree["y"] + tree["height"] * (0.2 + i * 0.2)
-                branch_length: int = random.randint(15, 30)
+                # Branches ONLY in the upper half of the trunk (crown region).
+                # frac 0.0 = trunk tip (top of screen), frac 0.5 = midpoint.
+                frac = (i / max(num_branches - 1, 1)) * 0.5
+                branch_start_y = tree["y"] + h * frac
+
+                # Short, gnarled branches — lower ones slightly longer
+                length_base = int(8 + 10 * frac * 2)  # 8 at tip, ~18 at mid
+                branch_length: int = random.randint(
+                    max(6, length_base - 4), max(10, length_base + 5)
+                )
                 branch_angle: int = random.choice([-1, 1])
-                branch_end_y = branch_y - random.randint(5, 15)
+
+                # Crown twigs reach more upward; mid branches spread more horizontal
+                if frac < 0.20:
+                    rise = random.randint(8, 16)
+                else:
+                    rise = random.randint(3, 9)
+                branch_end_y = branch_start_y - rise
+
+                thickness = 2 if frac >= 0.15 else 1
 
                 branch = {
-                    "start_y": branch_y,
+                    "start_y": branch_start_y,
                     "end_x": tree["x"] + branch_length * branch_angle,
                     "end_y": branch_end_y,
+                    "thickness": thickness,
                     "sub_branches": [],
                 }
 
-                # Add sub-branches
-                if random.random() > 0.5:
-                    sub_x = tree["x"] + branch_length * branch_angle * 0.6
-                    sub_y = branch_y - random.randint(3, 8)
-                    sub_end_x = sub_x + random.randint(5, 12) * branch_angle
-                    sub_end_y = sub_y - random.randint(3, 8)
+                # Sub-branches: 0–1 per main branch (sparse)
+                if random.random() < 0.50:
+                    t = random.uniform(0.40, 0.70)
+                    sub_sx = tree["x"] + (branch["end_x"] - tree["x"]) * t
+                    sub_sy = branch_start_y + (branch_end_y - branch_start_y) * t
+                    sub_len = random.randint(4, 9)
+                    sub_ang = random.choice([-1, 1])
+                    sub_rise = random.randint(2, 6)
                     branch["sub_branches"].append(
                         {
-                            "start_x": sub_x,
-                            "start_y": sub_y,
-                            "end_x": sub_end_x,
-                            "end_y": sub_end_y,
+                            "start_x": sub_sx,
+                            "start_y": sub_sy,
+                            "end_x": sub_sx + sub_len * sub_ang,
+                            "end_y": sub_sy - sub_rise,
+                            "sub_branches": [],
                         }
                     )
 
@@ -2915,11 +3097,9 @@ class Game:
         allow players to stockpile specials when returning to the main menu, which
         violates the design.  Tests ensure this behaviour.
         """
-        # tower energy belongs to a single run/level, so clear it up front
-        try:
-            self.tower_energy = 0
-        except Exception:
-            setattr(self, "tower_energy", 0)
+        # tower energy and special state belongs to a single run/level, so clear it up front
+        if self.tower_special is not None:
+            self.tower_special.reset()
 
         # Reset player
         self.player.x = self.width // 2
@@ -2930,6 +3110,9 @@ class Game:
         self.blasphemy_5_pause_timer = 0
         self._paused_by_blasphemy5 = False
 
+        # Reset game over flag so it can be triggered again in this run
+        self._game_over_triggered = False
+
         # Reset run counters
         self.enemies_killed_this_run = 0
 
@@ -2939,7 +3122,7 @@ class Game:
         self.projectile_size_multiplier = 1.0
         # Apply STRUCTURE effect (3% damage reduction per level)
         self.damage_reduction_multiplier = 1.0 - (
-            self.permanent_stats["structure"] * 0.03
+            self.permanent_stats.get("structure", 0) * 0.03
         )
         # Ensure permanent stat effects are applied immediately (also sets xp_multiplier)
         self.apply_permanent_stats()
@@ -2966,6 +3149,13 @@ class Game:
         self.enemy_spawn_rate = self.base_spawn_rate
         self.spawn_accel_timer = 20 * self.fps
         self.time_elapsed = 0.0
+        # clear giant cooldown when a new run begins so the first giant
+        # isn't accidentally blocked by leftover state from a previous play.
+        if getattr(self, "spawn_system", None) is not None:
+            try:
+                self.spawn_system.last_giant_spawn_time = -float("inf")
+            except Exception:
+                pass
         self.big_enemy_timer = 12 * self.fps
         self.big_spawned_this_wave = False
         self.wave_boss_spawned = False
@@ -2977,6 +3167,31 @@ class Game:
         self.prologo_lightning_timer = 0
         self.prologo_lightning_strike = False
         self.lightning_points = []
+        self._limbo_final_boss_spawned = False
+        self.limbo_final_boss_immortal = False
+        self.limbo_final_lightning_timer = 0
+        self.limbo_final_lightning_strike = False
+
+        # Reset limbo horde tracking
+        self.limbo_horde_started = False
+        self.limbo_horde_initial = 0
+        self.limbo_horde_remaining = 0
+        self.limbo_horde_killed = 0
+        self.limbo_horde_timer = 0
+        self.limbo_horde_elapsed = 0
+        self.limbo_horde_active = False
+        self.limbo_horde_completed = False
+        self.limbo_horde_ready_for_victory = False
+        self.limbo_horde_schedule = []
+        self.limbo_horde_phase_index = 0
+        self.limbo_horde_ready_for_victory = False
+        # reset satan growth state
+        self.satan_growth_active = False
+        self.satan_growth_elapsed = 0
+        self.satan_growth_duration = 0
+        self.satan_growth_orig_width = None
+        self.satan_growth_orig_height = None
+        self.satan_growth_persistent = False
 
         # Reset stage start countdown
         self.stage_start_countdown = 0
@@ -2989,6 +3204,7 @@ class Game:
         self.burst_count = 0
         self.burst_cooldown = 0
         self.shake_timer = 0
+        self.shake_intensity = 0
         # Reset alternating statue cooldown and ensure left fires first
         self.statue_cooldown = 0
         self.statue_next_left = True
@@ -3000,25 +3216,28 @@ class Game:
         self.player.xp_to_next_level = XP_BASE
         # Permanent upgrade application:
         # 'power' gives +5% damage per level
-        self.player.damage_multiplier = 1.0 + (self.permanent_stats["power"] * 0.05)
+        self.player.damage_multiplier = 1.0 + (
+            self.permanent_stats.get("power", 0) * 0.05
+        )
         # 'adrenaline' gives +5% fire rate per level
         self.player.fire_rate_multiplier = 1.0 + (
-            self.permanent_stats["adrenaline"] * 0.05
+            self.permanent_stats.get("adrenaline", 0) * 0.05
         )
         self.player.projectile_size_multiplier = DEFAULT_PROJECTILE_SIZE_MULTIPLIER
         # Apply permanent STRUCTURE, Blasphemy 3 and Blasphemy 6 effects to player (damage reduction)
         self.player.damage_reduction_multiplier = max(
             0.0,
             DEFAULT_DAMAGE_REDUCTION_MULTIPLIER
-            - (self.permanent_stats["structure"] * 0.03)
+            - (self.permanent_stats.get("structure", 0) * 0.03)
             - (self.permanent_stats.get("blasphemy_3", 0) * 0.10)
             - (self.permanent_stats.get("blasphemy_6", 0) * 0.10),
         )
         # Apply VIGOR + Blasphemy 1 effects to player max health
-        # (blasphemy_2 no longer increases max HP; it only provides periodic regen)
+        # (blasphemy_2 no longer increases max HP; it only provides periodic regen
+        # at 0.5 HP every 2s per level)
         self.player.max_health = (
             PLAYER_BASE_HEALTH
-            + (self.permanent_stats["vigor"] * 10)
+            + (self.permanent_stats.get("vigor", 0) * 10)
             + (self.permanent_stats.get("blasphemy_1", 0) * 15)
         )
         self.player.health = self.player.max_health
@@ -3046,11 +3265,6 @@ class Game:
         self.tower_choices = []
         self.selected_tower_index = 0
         self.is_initial_tower_choice = False
-
-    def _ensure_permanent_stat_keys(self) -> None:
-        """Ensure full set of permanent stat keys (backwards compatibility)."""
-        if self.persistence is not None:
-            return self.persistence._ensure_permanent_stat_keys()
 
     # ------------------------------------------------------------------
     # Meta‑progression helpers
@@ -3084,6 +3298,7 @@ class Game:
         cur = self.global_progress.get("meta_xp", 0) + xp
         self.global_progress["meta_xp"] = cur
         # process level-ups
+        leveled_up = False
         while cur >= self.get_meta_xp_to_next_level():
             cur -= self.get_meta_xp_to_next_level()
             self.global_progress["meta_level"] = (
@@ -3092,7 +3307,10 @@ class Game:
             self.global_progress["meta_points"] = (
                 self.global_progress.get("meta_points", 0) + 1
             )
+            leveled_up = True
         self.global_progress["meta_xp"] = cur
+        if leveled_up:
+            self.save_permanent_stats()
 
     def award_stage_clear(self, stage: str) -> bool:
         """Award the one‑time completion reward for a stage.
@@ -3120,58 +3338,295 @@ class Game:
                 self.award_meta_xp(xp_reward)
         except Exception:
             pass
+        self.save_permanent_stats()
         return True
 
     def record_enemy_kill(self) -> None:
-        """Record a single enemy kill for the current run."""
-        if self.persistence is not None:
-            return self.persistence.record_enemy_kill()
-        # Fallback: if persistence system failed to initialize, award meta_xp directly
+        """Record a single enemy kill for the current run.
+
+        In addition to the existing meta-xp logic we track kills during the
+        Limbo horde event so we can trigger Satan's explosion once half the
+        horde has been dealt with.
+        """
+        # limbo horde tracking
+        try:
+            if getattr(self, "limbo_horde_active", False):
+                self.limbo_horde_killed += 1
+                # trigger explosion when at least half of the horde has been killed
+                # once the player has slain every member of the horde, finish level
+                if (
+                    not getattr(self, "limbo_horde_completed", False)
+                    and self.limbo_horde_killed >= self.limbo_horde_initial
+                ):
+                    # mark event completed (no more spawns) but *do not* start
+                    # the victory countdown until we actually clear all enemies.
+                    # previously the timer was started immediately which meant
+                    # stray/leftover foes could still be on-screen when the win
+                    # overlay appeared.
+                    self.limbo_horde_active = False
+                    self.limbo_horde_completed = True
+                    # track that we're eligible to show victory once the room is
+                    # empty; update() will trigger the countdown later
+                    self.limbo_horde_ready_for_victory = True
+                    # show celebratory message right away (still useful even if
+                    # some enemies linger)
+                    try:
+                        self.show_centered_message(
+                            "HORDE DEFEATED!", 2000, (255, 255, 0)
+                        )
+                    except Exception:
+                        pass
+                    # bump the wave time so no additional waves start; this can
+                    # happen immediately as it's independent of enemy count
+                    try:
+                        self.wave_time = self.wave_duration
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # Award meta_xp for enemy kills
         try:
             self.award_meta_xp(5)
         except Exception as e:
             logger.exception(f"Failed to award meta_xp: {e}")
 
+    def _profile_path(self, slot: int):
+        """Return the Path for a given profile slot (1-3)."""
+        from pathlib import Path
+
+        return Path(__file__).parent.parent / f"profile_{slot}.json"
+
+    def _migrate_legacy_save(self) -> None:
+        """Move permanent_stats.json → profile_1.json on first launch with new profile system."""
+        import shutil
+        from pathlib import Path
+
+        legacy = Path(__file__).parent.parent / "permanent_stats.json"
+        target = self._profile_path(1)
+        if legacy.exists() and not target.exists():
+            try:
+                shutil.copy2(str(legacy), str(target))
+                logger.info("Migrated %s → %s", legacy, target)
+            except Exception as e:
+                logger.warning("Could not migrate legacy save: %s", e)
+
     def load_permanent_stats(self) -> None:
-        """Load persistent data from disk if file exists. Backwards-compatible.
+        """Load permanent stats and global meta-progress from disk.
 
-        Supported formats:
-        - Older flat dict: {"power": 1, "vigor": 0, ...} -> treated as permanent_stats
-        - New wrapper: {"permanent_stats": {...}, "global_progress": {...}}"""
-        if self.persistence is not None:
-            return self.persistence.load_permanent_stats()
-
-    def _prune_legacy_permanent_keys(self) -> None:
-        """Remove legacy permanent_stats keys that refer to old tower/statue formats.
-
-        Keys containing 'tower' or 'statue' are considered legacy and removed to avoid
-        showing or persisting outdated data structures.
+        Reads the active profile file (``profile_N.json``) from the project root.
+        If the file does not exist (first launch / empty slot) or is corrupt the
+        method silently returns so the caller's ``setdefault`` calls supply safe
+        initial values.
         """
-        if self.persistence is not None:
-            return self.persistence._prune_legacy_permanent_keys()
+        import json
+
+        slot = getattr(self, "active_profile_slot", None)
+        if slot is None:
+            return
+        save_path = self._profile_path(slot)
+        if not save_path.exists():
+            logger.debug("No save file found at %s — starting fresh", save_path)
+            return
+        try:
+            with open(save_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            # Restore permanent upgrade levels
+            ps = data.get("permanent_stats", {})
+            if isinstance(ps, dict):
+                for k, v in ps.items():
+                    if isinstance(k, str) and isinstance(v, int):
+                        self.permanent_stats[k] = v
+
+            # Restore global meta-progress (XP, satan level, points, cleared stages)
+            gp = data.get("global_progress", {})
+            if isinstance(gp, dict):
+                for key in ("meta_xp", "meta_level", "meta_points"):
+                    if key in gp and isinstance(gp[key], (int, float)):
+                        self.global_progress[key] = int(gp[key])
+                sc = gp.get("stages_cleared")
+                if isinstance(sc, dict):
+                    self.global_progress["stages_cleared"] = sc
+                # Restore display / audio prefs if present
+                for key in ("display", "audio"):
+                    if key in gp and isinstance(gp[key], dict):
+                        self.global_progress[key] = gp[key]
+
+            # Restore profile name into global_progress for convenience
+            name = data.get("name")
+            if isinstance(name, str):
+                self.global_progress["profile_name"] = name
+
+            logger.debug("Loaded permanent stats from %s (slot %s)", save_path, slot)
+        except Exception as e:
+            logger.warning("Failed to load permanent stats from %s: %s", save_path, e)
 
     def save_permanent_stats(self) -> None:
-        """Persist current permanent stats and global progress to disk.
+        """Write permanent stats and global meta-progress to disk.
 
-        If no `permanent_stats_file` was supplied when the Game was created, this
-        function becomes a no-op (tests and some runtime usage expect that
-        creating a Game() without persistence doesn't attempt to write files).
+        Saves to ``profile_N.json`` in the project root using an atomic write
+        (temp file + os.replace) so a crash mid-write never corrupts the save.
+        Does nothing if no profile slot is active.
         """
-        if self.persistence is not None:
-            return self.persistence.save_permanent_stats()
+        import json
+        import os
+        from datetime import datetime
+
+        slot = getattr(self, "active_profile_slot", None)
+        if slot is None:
+            return
+        save_path = self._profile_path(slot)
+        tmp_path = save_path.with_suffix(".json.tmp")
+        profile_name = self.global_progress.get("profile_name", f"Profile {slot}")
+        # Always ensure active_profile_slot is set to current slot before saving
+        self.global_progress["active_profile_slot"] = slot
+        data = {
+            "version": 1,
+            "name": profile_name,
+            "last_played": datetime.now().isoformat(timespec="seconds"),
+            "permanent_stats": dict(self.permanent_stats),
+            "global_progress": {
+                "meta_xp": self.global_progress.get("meta_xp", 0),
+                "meta_level": self.global_progress.get("meta_level", 1),
+                "meta_points": self.global_progress.get("meta_points", 0),
+                "stages_cleared": dict(self.global_progress.get("stages_cleared", {})),
+                "display": self.global_progress.get("display", {}),
+                "audio": self.global_progress.get("audio", {}),
+                "active_profile_slot": slot,
+            },
+        }
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp_path, save_path)
+            logger.debug("Saved permanent stats to %s (slot %s)", save_path, slot)
+        except Exception as e:
+            logger.warning("Failed to save permanent stats: %s", e)
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    def get_profile_info(self, slot: int) -> dict:
+        """Return display info for a profile slot without loading full stats into game state.
+
+        Returns a dict with keys: exists, name, meta_level, meta_xp, meta_points, last_played.
+        """
+        import json
+
+        path = self._profile_path(slot)
+        if not path.exists():
+            return {
+                "exists": False,
+                "name": "",
+                "meta_level": 1,
+                "meta_xp": 0,
+                "meta_points": 0,
+                "last_played": "",
+            }
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            gp = data.get("global_progress", {})
+            return {
+                "exists": True,
+                "name": data.get("name", f"Profile {slot}"),
+                "meta_level": int(gp.get("meta_level", 1)),
+                "meta_xp": int(gp.get("meta_xp", 0)),
+                "meta_points": int(gp.get("meta_points", 0)),
+                "last_played": data.get("last_played", ""),
+            }
+        except Exception:
+            return {
+                "exists": False,
+                "name": "",
+                "meta_level": 1,
+                "meta_xp": 0,
+                "meta_points": 0,
+                "last_played": "",
+            }
+
+    def select_profile(self, slot: int) -> None:
+        """Set the active profile slot and load its data."""
+        self.active_profile_slot = slot
+        # Reset stats before loading so old data doesn't bleed in
+        self.permanent_stats = {}
+        self.global_progress = {}
+        self.global_progress.setdefault("meta_xp", 0)
+        self.global_progress.setdefault("meta_level", 1)
+        self.global_progress.setdefault("meta_points", 0)
+        self.global_progress.setdefault("stages_cleared", {})
+        self.load_permanent_stats()
+        # Fill any gaps with defaults
+        self.global_progress.setdefault("meta_xp", 0)
+        self.global_progress.setdefault("meta_level", 1)
+        self.global_progress.setdefault("meta_points", 0)
+        self.global_progress.setdefault("stages_cleared", {})
+        # Ensure profile_name is set
+        self.global_progress.setdefault("profile_name", f"Profile {slot}")
+        # Save selected slot so it persists across sessions
+        self.global_progress["active_profile_slot"] = slot
+        try:
+            self.save_permanent_stats()
+        except Exception:
+            pass
+        logger.info("Selected profile slot %s", slot)
+
+    def delete_profile(self, slot: int) -> None:
+        """Delete a profile slot file and deactivate if it was active."""
+        path = self._profile_path(slot)
+        try:
+            path.unlink(missing_ok=True)
+            logger.info("Deleted profile slot %s", slot)
+        except Exception as e:
+            logger.warning("Could not delete profile %s: %s", slot, e)
+        if getattr(self, "active_profile_slot", None) == slot:
+            self.active_profile_slot = None
+            self.permanent_stats = {}
+            self.global_progress = {}
+            self.global_progress.setdefault("meta_xp", 0)
+            self.global_progress.setdefault("meta_level", 1)
+            self.global_progress.setdefault("meta_points", 0)
+            self.global_progress.setdefault("stages_cleared", {})
 
     def reset_game(self) -> None:
-        """Reset everything EXCEPT permanent upgrades (they persist until player changes them)."""
+        """Reset everything EXCEPT permanent upgrades.
+
+        Upgrades are still stored in memory for the duration of the Game object,
+        but there is no longer any mechanism to save them between sessions.  A
+        fresh Game() will always start with zero permanent stats.
+        """
         self.reset_run()
         self.selected_stage = None
         # Preserve `permanent_stats` so assigned points remain across runs until the
         # player explicitly upgrades/downgrades them in the Permanent Upgrades menu.
-        # Ensure all expected keys exist for backward compatibility.
-        self._ensure_permanent_stat_keys()
-        self.showing_stage_menu = True
+        self.showing_main_menu = True
+        self.showing_stage_menu = False
+        self.showing_profiles_menu = False
+        self.showing_permanent_upgrades = False
+        # Reset game over overlay so it doesn't persist when returning to menu
+        self.showing_game_over = False
+        self.game_over_alpha = 0
 
     def toggle_pause(self) -> None:
         return self.input_handler.toggle_pause() if self.input_handler else None
+
+    def get_difficulty_multiplier_per_wave(self) -> float:
+        """Return the per-wave difficulty increment for the current stage.
+
+        The global ``DIFFICULTY_MULTIPLIER_PER_WAVE`` value applies everywhere
+        except on the three limbo stages, which use a slightly smaller value to
+        soften the curve due to the late-game horde event.
+        """
+        from src.balance import (
+            DIFFICULTY_MULTIPLIER_PER_WAVE,
+            LIMBO_DIFFICULTY_MULTIPLIER_PER_WAVE,
+        )
+
+        if getattr(self, "selected_stage", None) in ("limbo", "limbo_2", "limbo_3"):
+            return LIMBO_DIFFICULTY_MULTIPLIER_PER_WAVE
+        return DIFFICULTY_MULTIPLIER_PER_WAVE
 
     def update_game(self) -> None:
         """Compatibility wrapper used by tests to advance one frame of game logic.
@@ -3227,18 +3682,68 @@ class Game:
                 self.center_messages.remove(msg)
 
     def update(self) -> None:
+        """Primary per-frame update called from ``update_game``.
+
+        This method contains the majority of in-game logic; ``update_game``
+        temporarily forces the game into in-game state so tests can call it
+        without menus interfering.
+        """
         # update any fire-special smoke particles that are drifting
         self._update_fire_smoke()
 
         # Handle blasphemy_5 auto-resume timer (counts down even while paused).
-        # When the timer expires, only auto-unpause if the pause was set by blasphemy_5.
+        # When the timer expires, automatically unpause if the pause was set by
+        # blasphemy_5.  Previously this check only ran while the victory overlay
+        # was active which meant the game would remain stuck paused after the
+        # revive animation ended.  The new logic guarantees we resume regardless
+        # of other UI state as long as the pause flag was set by blasphemy_5.
         if getattr(self, "blasphemy_5_pause_timer", 0) > 0:
             self.blasphemy_5_pause_timer -= 1
-            if self.blasphemy_5_pause_timer <= 0 and getattr(
-                self, "_paused_by_blasphemy5", False
-            ):
+        # auto-unpause as soon as the timer reaches zero
+        if getattr(self, "blasphemy_5_pause_timer", 0) <= 0 and getattr(
+            self, "_paused_by_blasphemy5", False
+        ):
+            # only clear the paused flag if we're still paused
+            if self.paused:
                 self.paused = False
-                self._paused_by_blasphemy5 = False
+            self._paused_by_blasphemy5 = False
+
+        # If the horde has been defeated we don't immediately show the
+        # victory overlay; we want to wait until every enemy has actually
+        # vanished from the screen.  When record_enemy_kill detected the
+        # final horde kill it sets ``limbo_horde_ready_for_victory`` but the
+        # countdown is postponed until the enemy group empties.  The check is
+        # performed here during the normal per-frame update so the final
+        # removal (which usually happens just after record_enemy_kill is
+        # called) gets a chance to run first.
+        if getattr(self, "limbo_horde_ready_for_victory", False):
+            # wait for *all* foes to vanish: both normal enemies and any bosses
+            enemies_empty = (not getattr(self, "enemies", None)) or len(
+                self.enemies
+            ) == 0
+            bosses_empty = (not getattr(self, "bosses", None)) or len(self.bosses) == 0
+            if enemies_empty and bosses_empty:
+                try:
+                    self.limbo_horde_victory_timer = int(self.fps * 5)
+                except Exception:
+                    self.limbo_horde_victory_timer = 0
+                # consume the flag so we don't trigger again
+                self.limbo_horde_ready_for_victory = False
+
+        # After limbo explosion we wait a moment then show victory screen
+        if getattr(self, "limbo_horde_victory_timer", 0) > 0:
+            self.limbo_horde_victory_timer -= 1
+            if self.limbo_horde_victory_timer <= 0:
+                # begin full victory overlay sequence (will stay until keypress)
+                self.showing_victory = True
+                self.victory_alpha = 0
+        # update victory overlay fade if active
+        if getattr(self, "showing_victory", False):
+            if self.victory_alpha < 255:
+                self.victory_alpha = min(
+                    255, self.victory_alpha + self.victory_fade_speed
+                )
+            # do not auto-dismiss; input handler will clear the flag
 
         # Handle stage start countdown
         if self.stage_start_countdown > 0:
@@ -3255,7 +3760,11 @@ class Game:
         if (
             self.showing_stage_menu
             or self.showing_permanent_upgrades
+            or getattr(self, "showing_profiles_menu", False)
             or self.showing_prologo_end
+            or self.showing_options
+            or self.showing_main_menu
+            or not self.selected_stage
         ):
             self.update_center_messages()
             return
@@ -3305,43 +3814,10 @@ class Game:
 
         # Increment frame counter for animations
         self.frame_count += 1
-        # process delayed-fire shots first so expiration doesn't reset index prematurely
-        if getattr(self, "pending_fire_clicks", None):
-            for p in list(self.pending_fire_clicks):
-                try:
-                    p["timer"] -= 1
-                except Exception:
-                    pass
-                if p.get("timer", 0) <= 0:
-                    try:
-                        self._spawn_fire_special(p.get("x", 0), p.get("y", 0))
-                    except Exception:
-                        pass
-                    try:
-                        self.pending_fire_clicks.remove(p)
-                    except Exception:
-                        pass
-        # handle fire-special timer; expire remaining charges after duration
-        if getattr(self, "fire_special_timer", 0) > 0:
-            self.fire_special_timer -= 1
-            if self.fire_special_timer <= 0:
-                self.fire_special_charges = 0
-                try:
-                    self.fire_special_index = 0
-                except Exception:
-                    pass
-        # update fire-explosion visuals
-        if hasattr(self, "game_state"):
-            new_fx = []
-            for fx in getattr(self.game_state, "fire_explosions", []):
-                if fx.get("timer", 0) > 0:
-                    new_fx.append(fx)
-            self.game_state.fire_explosions = new_fx
-            for fx in self.game_state.fire_explosions:
-                try:
-                    fx["timer"] -= 1
-                except Exception:
-                    pass
+
+        # Update tower special system (fire/blizzard/hellectric)
+        if self.tower_special is not None:
+            self.tower_special.update()
 
         # Update time
         self.time_elapsed += 1 / self.fps
@@ -3355,14 +3831,20 @@ class Game:
         self.player.x = self.clamp_to_walls(self.player.x)
 
         # VIGOR: periodic regeneration (0.5 HP every 5s per level)
+        # BLASPHEMY_2: flat regen independent of VIGOR, now 0.5 HP every 2s per level
         vigor_level = self.permanent_stats.get("vigor", 0)
         blasphemy2_level = self.permanent_stats.get("blasphemy_2", 0)
-        # Heal every 5 seconds: vigor contributes 0.5 HP per level; blasphemy_2 now grants
-        # +1 HP every 5s per blasphemy_2 level (regen_per_tick = blasphemy2_level).
-        if (vigor_level or blasphemy2_level) and (
-            self.frame_count % (5 * self.fps) == 0
-        ):
-            heal = 0.5 * vigor_level + (blasphemy2_level * 1)
+        # Heal from vigor every 5 seconds
+        if vigor_level and (self.frame_count % (5 * self.fps) == 0):
+            heal = 0.5 * vigor_level
+            if heal:
+                self.player.health = min(
+                    self.player.max_health, self.player.health + heal
+                )
+
+        # Heal from blasphemy_2 every 2 seconds
+        if blasphemy2_level and (self.frame_count % (2 * self.fps) == 0):
+            heal = 0.5 * blasphemy2_level
             if heal:
                 self.player.health = min(
                     self.player.max_health, self.player.health + heal
@@ -3374,12 +3856,6 @@ class Game:
 
         # Auto-attack system
         self.update_weapon_firing()
-
-        # Hellectric beam (storm special) updates and damages enemies
-        try:
-            self.update_hellectric_flux()
-        except Exception:
-            pass
 
         # Update game objects
         self.projectiles.update()
@@ -3437,7 +3913,11 @@ class Game:
         if hasattr(self.enemies, "sprites"):
             for enemy in list(self.enemies.sprites()):
                 if hasattr(enemy, "health") and enemy.health <= 0:
-                    self.add_score(enemy.max_health * 18 * self.difficulty_multiplier)
+                    self.add_score(
+                        enemy.max_health
+                        * ENEMY_SCORE_PER_HEALTH
+                        * self.difficulty_multiplier
+                    )
                     type_xp_local = {
                         "weak": 10,
                         "normal": 16,
@@ -3474,7 +3954,7 @@ class Game:
                 if getattr(enemy, "health", 0) <= 0:
                     self.add_score(
                         getattr(enemy, "max_health", 10)
-                        * 18
+                        * ENEMY_SCORE_PER_HEALTH
                         * self.difficulty_multiplier
                     )
                     try:
@@ -3527,7 +4007,9 @@ class Game:
                 elif hasattr(enemy, "health") and enemy.health <= 0:
                     try:
                         self.add_score(
-                            enemy.max_health * 18 * self.difficulty_multiplier
+                            enemy.max_health
+                            * ENEMY_SCORE_PER_HEALTH
+                            * self.difficulty_multiplier
                         )
                     except Exception:
                         pass
@@ -3667,6 +4149,19 @@ class Game:
                                 pass
                     except Exception:
                         pass
+                    # spawn health drop for wave-style bosses
+                    try:
+                        et = boss.get("enemy_type", "")
+                        if et in ("boss_medium", "boss_big"):
+                            heal_amt = random.randint(10, 20)
+                            try:
+                                self.spawn_health_drop(
+                                    boss.get("x", 0), boss.get("y", 0), heal_amt
+                                )
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
                     try:
                         self.bosses.remove(boss)
                     except Exception:
@@ -3694,8 +4189,8 @@ class Game:
         # Update wave progression
         self.update_wave_progression()
 
-        # Update prologo events
-        if self.selected_stage == "prologo":
+        # Update prologo/limbo_final events (timed boss spawns & lightning)
+        if self.selected_stage in ("prologo", "limbo_final"):
             self.update_prologo_events()
 
         # Update chain lightning effects (for all stages)
@@ -3812,6 +4307,9 @@ class Game:
         # Update floating texts (drawn later)
         self._update_floating_texts()
 
+        # Update health drop positions / player collisions
+        self._update_health_drops()
+
         # Update floating texts
         self._update_floating_texts()
 
@@ -3856,8 +4354,21 @@ class Game:
         if self.player.health <= 0:
             if self._handle_blasphemy5_revive():
                 return
-            if not (self.selected_stage == "prologo" and self.prologo_lightning_strike):
-                self.game_over()
+            # During a lightning strike in either Prologo or Limbo Final we don't
+            # immediately enter game over; the end-of-stage screen will be shown
+            # later when the lightning timer completes.  This prevents the early
+            # "GAME OVER" overlay from popping up while the beam/explosion plays.
+            if not (
+                (self.selected_stage == "prologo" and self.prologo_lightning_strike)
+                or (
+                    self.selected_stage == "limbo_final"
+                    and getattr(self, "limbo_final_lightning_strike", False)
+                )
+            ):
+                # Only trigger game over once per run; use flag to prevent re-triggering
+                if not self._game_over_triggered:
+                    self._game_over_triggered = True
+                    self.game_over()
 
     def _handle_blasphemy5_revive(self) -> bool:
         """Handle blasphemy-5 one-time player revive on death.
@@ -3989,7 +4500,13 @@ class Game:
         keys: ScancodeWrapper = pygame.key.get_pressed()
 
         # Movement (disable during lightning)
-        if not (self.selected_stage == "prologo" and self.prologo_lightning_strike):
+        if not (
+            (self.selected_stage == "prologo" and self.prologo_lightning_strike)
+            or (
+                self.selected_stage == "limbo_final"
+                and getattr(self, "limbo_final_lightning_strike", False)
+            )
+        ):
             moving = False
             if keys[pygame.K_LEFT] or keys[pygame.K_a]:
                 self.player.velocity_x = -self.player.speed
@@ -4148,8 +4665,13 @@ class Game:
 
     def update_enemy_spawning(self) -> None:
         """Handle enemy spawning logic (delegates timing to EnemyManager when present)."""
-        if self.spawn_system is not None:
-            return self.spawn_system.update_enemy_spawning()
+        if self.spawn_system is None:
+            if getattr(self, "debug", False):
+                logger.debug("[Game] spawn_system is None")
+            return
+        if getattr(self, "debug", False):
+            logger.debug("[Game] delegate to spawn_system")
+        return self.spawn_system.update_enemy_spawning()
 
     def update_wave_progression(self) -> None:
         """Handle wave progression and boss spawning"""
@@ -4170,6 +4692,9 @@ class Game:
         """Enter the game over state (persistent) and reset fade animation."""
         # Ensure other end screens are not active
         self.showing_prologo_end = False
+        # If the stage menu was accidentally left open (seen on FALL), close it
+        self.showing_stage_menu = False
+
         # Show the game over overlay and stop gameplay updates
         self.showing_game_over = True
         self.paused = True
@@ -4180,12 +4705,6 @@ class Game:
         # Stop any screen shake immediately so the overlay is stable
         self.shake_timer = 0
         self.shake_intensity = 0
-
-        # Save progress (meta_xp, meta_level, etc.) before returning to menu
-        try:
-            self.save_permanent_stats()
-        except Exception:
-            pass
 
         # Do not schedule an automatic return to menu; require explicit key press
         logger.info("Game over triggered; showing game over screen (awaiting keypress)")
@@ -4222,18 +4741,29 @@ class Game:
         text = font_large.render("THE FALL", True, (139, 0, 0))
         self.screen.blit(text, (self.width // 2 - text.get_width() // 2, 150))
 
+    def limbo_final_defeat(self) -> None:
+        """Show Limbo Final stage end screen"""
+        # mimic Prologo's defeat layout but with custom Italian text explaining
+        # that Satan has been pushed back from Limbo and now faces Purgatory.
+        self.showing_prologo_end = True
+        self.paused = True
+        self.screen.fill((40, 20, 45))
+        font_large = pygame.font.Font(None, 54)
+        text = font_large.render("LIMBO FALL", True, (139, 0, 0))
+        self.screen.blit(text, (self.width // 2 - text.get_width() // 2, 150))
+
         # Description
         font_medium = pygame.font.Font(None, 18)
         text = font_medium.render(
-            "Struck down by divine wrath, begin your descent into the underworld",
+            "Satana è stato respinto dal Limbo e deve ora combattere nel Purgatorio",
             True,
             (200, 200, 200),
         )
         self.screen.blit(text, (self.width // 2 - text.get_width() // 2, 220))
 
-        # award meta reward on first defeat of prologo
+        # award meta reward on first defeat of the Limbo Final stage
         try:
-            if self.award_stage_clear("prologo"):
+            if self.award_stage_clear("limbo_final"):
                 self.show_centered_message("META POINT GAINED!", 1800, (255, 215, 0))
         except Exception:
             pass
@@ -4275,6 +4805,11 @@ class Game:
         if self.spawn_system is not None:
             return self.spawn_system.spawn_giant_enemy()
 
+    def spawn_crusader_enemy(self) -> None:
+        """Spawn a rare crusader enemy (very slow/tanky)."""
+        if self.spawn_system is not None:
+            return self.spawn_system.spawn_crusader_enemy()
+
     def spawn_big_enemy(self) -> None:
         """Spawn a big enemy (giant). Delegates to EnemyManager if available."""
         if self.spawn_system is not None:
@@ -4289,6 +4824,43 @@ class Game:
         """Spawn a boss of the specified type (delegates to EnemyManager)."""
         if self.spawn_system is not None:
             return self.spawn_system.spawn_boss(boss_type)
+
+    def spawn_health_drop(self, x: float, y: float, heal: int) -> None:
+        """Create a healing bonus that falls from (x,y).
+
+        ``heal`` is the hit point amount restored when the player picks it up.
+        The drop is represented as a simple dict and is processed by
+        ``_update_health_drops``.
+
+        Drops are always spawned within the visible battlefield: if the boss
+        died while still above the top edge we clamp ``y`` to zero so the item
+        is immediately visible.
+
+        A soft click sound is played when the drop is created, provided sounds
+        are enabled.  The call is performed lazily to avoid importing the
+        sound module at the top-level (which would in turn import pygame in
+        environments where it may not be available).
+        """
+        # ensure drop starts on-screen
+        if y < 0:
+            y = 0
+        # faster fall and now even smaller
+        drop = {"x": x, "y": y, "vy": 1.5, "heal": heal, "radius": 8}
+        try:
+            self.health_drops.append(drop)
+        except Exception:
+            self.health_drops = [drop]
+
+        # play accompanying sound if enabled
+        if getattr(self, "sounds_enabled", False):
+            try:
+                from src.utils import sound as sound_utils
+
+                sound_utils.suono_click_soft().play()
+            except Exception:
+                # if anything goes wrong we silently ignore, since sound is
+                # cosmetic and may not be available in test environments
+                pass
 
     def show_upgrades(self) -> None:
         """Show level up upgrade selection"""

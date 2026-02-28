@@ -279,6 +279,9 @@ def test_fire_left_tier3_does_not_affect_tower_projectiles():
     """Ensure `fire_3` only affects player weapons, not statue/tower projectiles."""
     g = Game()
     g.selected_stage = "limbo"
+    # ensure no fire right-column points pollute the test
+    for k in ("fire_4", "fire_5", "fire_6"):
+        g.permanent_stats[k] = 0
 
     g.permanent_stats["fire_3"] = 1
     g.apply_permanent_stats()

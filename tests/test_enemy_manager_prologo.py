@@ -1,5 +1,9 @@
-import pygame
+import math
 
+import pygame
+import pytest
+
+from src.entities.enemy import Enemy
 from src.game import Game
 
 
@@ -71,6 +75,222 @@ def test_prologo_final_boss_becomes_immortal_instead_of_dying():
     assert boss in g.bosses
     # The defeated flag must not be set
     assert g.prologo_final_boss_defeated is False
+
+
+def test_limbo_final_boss_spawns_at_three_minutes():
+    pygame.init()
+    g = Game(debug=True)
+    em = g.enemy_manager
+    g.selected_stage = "limbo_final"
+    # simulate running update loop until boss time
+    # start just before and step forward
+    for t in (179, 180, 181):
+        g.time_elapsed = t
+        g.update_enemy_spawning()
+        g.update_wave_progression()
+        # update_prologo_events is now called automatically in Game.update(); replicate here
+        g.update_prologo_events()
+    assert em.limbo_final_boss_spawned is True
+    assert any(b.enemy_type == "boss_limbo" for b in g.bosses)
+    # repeating should not spawn extra
+    pre = len(g.bosses)
+    g.update_prologo_events()
+    assert len(g.bosses) == pre
+
+
+def test_limbo_final_boss_becomes_immortal_and_triggers_lightning():
+    pygame.init()
+    g = Game(debug=True)
+    em = g.enemy_manager
+
+    # spawn limbo_final boss manually
+    g.selected_stage = "limbo_final"
+    boss = em.spawn_boss("limbo")
+    assert boss.enemy_type == "boss_limbo"
+    # apply damage to push into immortality
+    boss.health = boss.max_health * 0.12
+    boss.take_damage(boss.max_health)
+    assert g.limbo_final_boss_immortal is True
+    assert int(boss.health) == int(boss.max_health * 0.1)
+
+    # now simulate regen and lightning
+    em.limbo_final_lightning_strike = False
+    boss.health = boss.max_health - 1
+    em.update_prologo_events()
+    assert em.limbo_final_lightning_strike is True
+
+
+def test_towers_fire_at_limbo_boss():
+    """Statue/projectile weapons should target the Limbo boss when present."""
+    pygame.init()
+    g = Game(debug=True)
+    g.selected_stage = "limbo_final"
+    # place a boss and an enemy to ensure towers prefer closest
+    boss = g.enemy_manager.spawn_boss("limbo")
+    boss.x = 400
+    boss.y = 100
+    enemy = Enemy(0, 0, "normal", health=10, speed=1)
+    g.enemies = [enemy]
+    # setup towers
+    from src.core.entities.tower import Tower
+
+    # eliminate randomness for this validation
+    g.left_tower = Tower(400, 400, inaccuracy=0.0)
+    g.right_tower = Tower(800, 400, inaccuracy=0.0)
+    # tick weapon system once
+    ws = g.weapon_system
+    g.statue_cooldown = 1
+    ws.update_statue_weapons()
+
+    # projectiles should include a missile heading toward boss coordinates
+    # and the velocity vector should point from the offset origin to the boss
+    found = False
+    for p in g.projectiles:
+        px = getattr(p, "x", 0)
+        py = getattr(p, "y", 0)
+        vx = getattr(p, "vel_x", getattr(p, "vx", 0))
+        vy = getattr(p, "vel_y", getattr(p, "vy", 0))
+        # expect starting near tower y=400
+        if py >= 390:
+            # ensure projectile was spawned at offset origin
+            if hasattr(p, "_statue_offset"):
+                offx, offy = p._statue_offset
+                # origin should equal tower pos + offset
+                exp_x = g.left_tower.x + offx if px < 500 else g.right_tower.x + offx
+                exp_y = g.left_tower.y + offy
+                assert px == pytest.approx(exp_x)
+                assert py == pytest.approx(exp_y)
+            # verify direction alignment with boss position
+            dx = boss.x - px
+            dy = boss.y - py
+            if dx == 0 and dy == 0:
+                found = True
+                break
+            proj_angle = math.atan2(vy, vx)
+            target_angle = math.atan2(dy, dx)
+            # compute smallest circular difference
+            diff = abs(
+                ((proj_angle - target_angle + math.pi) % (2 * math.pi)) - math.pi
+            )
+            if diff < 0.1:
+                found = True
+                break
+    assert found, "No tower projectile spawned against boss in correct direction"
+
+
+def test_hellectric_beams_start_at_statue_offsets():
+    """Hellectric beam origins should equal statue projectile start points.
+
+    We configure left/right storm towers in each relevant stage and fire once.
+    The chain_lightning_effects list should contain a beam beginning at the
+    offset-adjusted coordinates identical to those produced by the statue logic.
+    """
+    pygame.init()
+    from src.core.entities.tower import Tower
+    from src.systems.weapon_system import statue_projectile_offsets
+
+    for stage, offset_attr in [
+        ("limbo", "STATUE_PROJECTILE_OFFSET_X_LIMBO"),
+        ("limbo_2", "STATUE_PROJECTILE_OFFSET_X_LIMBO"),
+        ("limbo_3", "STATUE_PROJECTILE_OFFSET_X_LIMBO"),
+        ("limbo_final", "STATUE_PROJECTILE_OFFSET_X_LIMBO"),
+        ("purgatory", "STATUE_PROJECTILE_OFFSET_X_PURGATORY"),
+        ("hell", "STATUE_PROJECTILE_OFFSET_X_HELL"),
+        ("prologo", None),
+    ]:
+        g = Game(debug=True)
+        g.selected_stage = stage
+        # place two storm towers at known coords
+        g.left_tower = Tower(100, 200, tower_type="storm")
+        g.right_tower = Tower(500, 200, tower_type="storm")
+        # activate hellectric with at least two frames of duration so we don't
+        # expire before the first update (see update_hellectric_flux logic)
+        g.hellectric_active = True
+        g.hellectric_time_left = 2
+        # record expected origins using the shared helper; this ensures the test
+        # mirrors production logic exactly and will catch drift if the helper
+        # ever changes.
+        stage_x, stage_y = statue_projectile_offsets(g)
+        # limbo_final offset is computed in helper (now should be 35)
+        left_origin = (100 + stage_x, 200 + stage_y)
+        right_origin = (500 - stage_x, 200 + stage_y)
+        # run update once
+        g.tower_special.update_hellectric_flux()
+        beams = g.game_state.chain_lightning_effects
+        assert beams, f"No hellectric beam produced for stage {stage}"
+        origs = [
+            b["points"][0] for b in beams if "points" in b and len(b["points"]) > 0
+        ]
+        assert (
+            left_origin in origs or right_origin in origs
+        ), f"Beam origins {origs} didn't include expected offsets for {stage}"
+
+
+def test_statue_projectile_offsets_helper():
+    """The shared helper should agree with the constants for each stage."""
+    from src import game_constants
+    from src.systems.weapon_system import statue_projectile_offsets
+
+    g = Game(debug=True)
+    for stage, attr in [
+        ("limbo", "STATUE_PROJECTILE_OFFSET_X_LIMBO"),
+        ("limbo_2", "STATUE_PROJECTILE_OFFSET_X_LIMBO"),
+        ("limbo_3", "STATUE_PROJECTILE_OFFSET_X_LIMBO"),
+        ("limbo_final", "STATUE_PROJECTILE_OFFSET_X_LIMBO"),
+        ("purgatory", "STATUE_PROJECTILE_OFFSET_X_PURGATORY"),
+        ("hell", "STATUE_PROJECTILE_OFFSET_X_HELL"),
+        ("prologo", None),
+    ]:
+        g.selected_stage = stage
+        x, y = statue_projectile_offsets(g)
+        # limbo_final should subtract 20 from the limbo constant
+        if stage == "limbo_final":
+            expected_x = getattr(game_constants, attr) - 35
+        else:
+            expected_x = getattr(game_constants, attr) if attr else 0
+        expected_y = game_constants.STATUE_PROJECTILE_OFFSET_Y
+        assert (x, y) == (
+            expected_x,
+            expected_y,
+        ), f"helper returned {(x,y)} for {stage}"
+
+
+def test_limbo_lightning_does_not_trigger_game_over():
+    """Player death from the Limbo boss lightning shouldn’t immediately game over.
+
+    The game_over flag is only set when the lightning timer completes and
+    limbo_final_defeat is called.
+    """
+    pygame.init()
+    g = Game(debug=True)
+    g.selected_stage = "limbo_final"
+    em = g.enemy_manager
+
+    # simulate boss regen and full health lightning
+    boss = em.spawn_boss("limbo")
+    boss.health = boss.max_health * 0.5
+    # trigger immortal and then regen until full
+    g.limbo_final_boss_immortal = True
+    for _ in range(1000):
+        boss.health = min(boss.max_health, boss.health + 3.0)
+        if boss.health >= boss.max_health:
+            break
+    assert boss.health >= boss.max_health
+
+    # resetting flags to emulate the moment just before strike
+    em.limbo_final_lightning_strike = False
+    # now do the strike
+    em.limbo_final_lightning_strike = True
+    g.player.health = 0
+
+    # Immediately after strike we should NOT be in game over
+    assert not getattr(g, "showing_game_over", False)
+    # advance timer to completion, which normally fires limbo_final_defeat
+    g.limbo_final_lightning_timer = g.limbo_final_lightning_duration_frames
+    em.update_prologo_events()
+    # defeat screen should now be active (not game over)
+    assert getattr(g, "showing_prologo_end", False)
+    assert not getattr(g, "showing_game_over", False)
 
 
 def test_prologo_enemy_spawns_vary_after_draw():

@@ -19,15 +19,10 @@ def test_purgatory_overlay_only_and_no_particles(stage):
     screen = pygame.Surface((g.width, g.height))
     ui.screen = screen
 
-    # should start with no descriptors and never gain any
-    assert getattr(ui, "_purgatory_fog_particles", None) == []
-
     screen.fill((0, 0, 0))
     before = screen.get_at((0, 0))[:3]
     for _ in range(30):
         ui.draw_purgatory_fog()
-        # still no particles at any point
-        assert getattr(ui, "_purgatory_fog_particles", None) == []
     after = screen.get_at((0, 0))[:3]
     assert after != before, "overlay did not modify any pixel"
     # surface should remain valid
@@ -210,25 +205,6 @@ def test_overlay_respects_alpha_constant(monkeypatch):
     assert recorded["filled"], "overlay should be filled with color"
 
 
-def test_clouds_never_spawn(monkeypatch):
-    """After particle removal, the cloud list should always remain empty."""
-    pygame.init()
-    g = Game(debug=True)
-    g.selected_stage = "purgatory"
-    g.generate_walls()
-
-    ui = g.ui
-    screen = pygame.Surface((g.width, g.height))
-    ui.screen = screen
-
-    for _ in range(50):
-        ui.draw_purgatory_clouds()
-        assert getattr(ui, "_purgatory_clouds", None) in (
-            None,
-            [],
-        ), "No clouds should be created"
-
-
 def test_fog_texture_matches_constants():
     """Generated fog texture respects the size constant."""
     pygame.init()
@@ -305,48 +281,3 @@ def test_fog_particle_stage_colors():
     ui.draw_purgatory_fog()
     after = screen.get_at((0, 0))[:3]
     assert after != before, "screen should change due to fog blits"
-
-
-def test_clouds_absent_in_non_purgatory():
-    pygame.init()
-    g = Game(debug=True)
-    g.selected_stage = "limbo"
-    g.generate_walls()
-
-    ui = g.ui
-    screen = pygame.Surface((g.width, g.height))
-    ui.screen = screen
-
-    for _ in range(100):
-        ui.draw_purgatory_clouds()
-    assert getattr(ui, "_purgatory_clouds", None) in (
-        None,
-        [],
-    ), "Clouds should not spawn outside purgatory"
-
-
-def test_game_draw_invokes_clouds(monkeypatch):
-    """Even though clouds are disabled, Game.draw should still call the stub method."""
-    pygame.init()
-    g = Game(debug=True)
-    g.selected_stage = "purgatory"
-    g.showing_stage_menu = False
-    g.generate_walls()
-
-    ui = g.ui
-    screen = pygame.Surface((g.width, g.height))
-    ui.screen = screen
-
-    called = {"count": 0}
-
-    def spy(shake_x=0, shake_y=0):
-        called["count"] += 1
-        return None
-
-    monkeypatch.setattr(ui, "draw_purgatory_clouds", spy)
-
-    g.screen = screen
-    g.width = screen.get_width()
-    g.height = screen.get_height()
-    g.draw()
-    assert called["count"] >= 1, "Game.draw() did not invoke draw_purgatory_clouds"

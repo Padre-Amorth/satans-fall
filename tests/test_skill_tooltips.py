@@ -55,17 +55,36 @@ def test_tooltip_lines_tier_requirements():
     # Right-column tiers should show the new per-slot effect text
     for tier in (4, 5, 6):
         lines_r = g._skill_tooltip_lines("fire", tier)
-        assert any(line.startswith("+10% dmg, +10% fire rate") for line in lines_r)
+        assert any(line.startswith("+10% dmg, +10% crit chance") for line in lines_r)
 
-    # STORM right-column now shows +20% fire rate per slot (damage still +10%)
+    # STORM right-column now shows +20% fire rate per slot (crit chance instead of dmg)
     for tier in (4, 5, 6):
         lines_s = g._skill_tooltip_lines("storm", tier)
-        assert any(line.startswith("+10% dmg, +20% fire rate") for line in lines_s)
+        assert any(
+            line.startswith("+10% crit chance, +20% fire rate") for line in lines_s
+        )
 
     # ICE right-column now shows +20% damage per slot (fire rate remains +10%)
     for tier in (4, 5, 6):
         lines_i = g._skill_tooltip_lines("ice", tier)
         assert any(line.startswith("+20% dmg, +10% fire rate") for line in lines_i)
+
+    # center tier 7 upgrades should have their creative names
+    fuel7 = g._skill_tooltip_lines("fire", 7)
+    assert any("AR.MAGA.EDDON" in line for line in fuel7)
+    assert any("burning orbs" in line or "4 burning" in line for line in fuel7)
+    # new behaviour: explosions are delayed half a second and words persist
+    assert any("0.5" in line or "half-second" in line for line in fuel7)
+    assert any(
+        "words" in line and ("2 seconds" in line or "linger" in line) for line in fuel7
+    )
+    storm7 = g._skill_tooltip_lines("storm", 7)
+    assert any("Hellectric flux" in line for line in storm7)
+    assert any("Right-click" in line or "controllable" in line for line in storm7)
+    # new speed description should also be present
+    assert any("speed" in line and "px" in line for line in storm7)
+    ice7 = g._skill_tooltip_lines("ice", 7)
+    assert any("Blizzard" in line for line in ice7)
 
 
 def test_draw_tooltip_does_not_crash_when_hovering_over_tree():

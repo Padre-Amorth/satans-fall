@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "Profile 1",
+  "last_played": "2026-02-27T23:49:19",
+  "permanent_stats": {
+    "power": 0,
+    "vigor": 0,
+    "adrenaline": 0,
+    "structure": 0,
+    "blasphemy_1": 0,
+    "blasphemy_2": 0,
+    "fire_1": 0,
+    "fire_2": 0,
+    "fire_3": 0
+  },
+  "global_progress": {
+    "meta_xp": 910,
+    "meta_level": 1,
+    "meta_points": 0,
+    "stages_cleared": {},
+    "display": {},
+    "audio": {
+      "enabled": true
+    },
+    "active_profile_slot": 1
+  }
+}

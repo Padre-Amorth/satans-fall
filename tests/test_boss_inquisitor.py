@@ -66,7 +66,8 @@ def test_inquisitor_projectile_slows_player_on_hit():
     g.handle_collisions()
 
     # Projectile should be removed and player should be slowed (stronger & longer)
-    assert getattr(g.player, "slow_timer", 0) == 180
+    # slow duration should match the new 1.5 second value (90 frames at 60fps)
+    assert getattr(g.player, "slow_timer", 0) == int(1.5 * g.fps)
     # Player speed should be reduced by the slow_factor
     assert g.player.speed == orig_speed * getattr(g.player, "slow_factor", 1.0)
     # Verify slow strength was increased to the expected value
@@ -88,14 +89,25 @@ def test_inquisitor_alternates_fire_pattern():
 
     # First shot -> should be a 3-shot spread
     boss.shoot_at_player(g.player, g)
-    count_first = 0
+    projectiles = []
     for p in g.enemy_projectiles:
         if (
             getattr(p, "appearance", None) == "inquisitor"
             or getattr(p, "effect", None) == "slow"
         ):
-            count_first += 1
-    assert count_first == 3
+            projectiles.append(p)
+    assert len(projectiles) == 3
+    # verify spread angle ≈ 30.6° (previously ~28.6° before widening)
+    import math
+
+    angles = []
+    for proj in projectiles:
+        dx = proj.vel_x
+        dy = proj.vel_y
+        angles.append(math.atan2(dy, dx))
+    angles.sort()
+    total_arc_deg = math.degrees(angles[-1] - angles[0])
+    assert 29 <= total_arc_deg <= 32, f"expected ~30° spread, got {total_arc_deg:.1f}°"
 
     # Clear and shoot again -> should be a single shot
     try:

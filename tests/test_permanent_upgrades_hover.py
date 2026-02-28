@@ -12,7 +12,7 @@ def setup_dummy_sdl():
 
 def test_stat_hover_does_not_highlight_bar_border(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # Hover over POWER name
     g.show_permanent_upgrades()
@@ -59,7 +59,7 @@ def test_stat_hover_does_not_highlight_bar_border(tmp_path: Path) -> None:
 
 def test_skill_tree_box_hover_highlight_and_tooltip(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # Hover over first FIRE left box
     g.show_permanent_upgrades()
@@ -106,7 +106,7 @@ def test_skill_tree_box_hover_highlight_and_tooltip(tmp_path: Path) -> None:
 
 def test_skill_tree_center_box_highlight_and_tooltip(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # Hover over the central (tier 7) box of FIRE
     g.show_permanent_upgrades()

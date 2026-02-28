@@ -25,7 +25,7 @@ def rightmost_non_bg_x(surf, start_x, y, bg):
 
 def test_stat_name_enlarges_on_hover(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     g.show_permanent_upgrades()
     left_x = g.width // 2 - 420

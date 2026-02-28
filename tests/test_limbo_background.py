@@ -38,7 +38,7 @@ def test_limbo_bg_image_is_masked_to_walls(
 
     # Patch the get_image name used by Game.draw() (imported in src.game)
     monkeypatch.setattr("src.game.get_image", fake_get_image)
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # Configure an oblique (slanted) pair of walls so the interior polygon is non-rectangular
     g.select_stage("limbo")

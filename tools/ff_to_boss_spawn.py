@@ -24,7 +24,9 @@ def main() -> int:
         description="Fast-forward to boss spawn and show live window"
     )
     p.add_argument(
-        "--stage", default="limbo", help="Stage to use (limbo/limbo_2/limbo_3)"
+        "--stage",
+        default="limbo",
+        help="Stage to use (limbo/limbo_2/limbo_3/limbo_final)",
     )
     p.add_argument(
         "--wave", type=int, default=3, help="Wave number to jump to (default: 3)"

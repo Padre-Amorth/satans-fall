@@ -9,6 +9,8 @@ from src.game_constants import (
     SELECTION_BOX_HEIGHT,
     SELECTION_BOX_SPACING,
     SELECTION_BOX_WIDTH,
+    STATUE_ASSET_VERTICAL_OFFSET,
+    STATUE_BASE_Y,
     WALL_THICKNESS,
 )
 from src.weapons import WEAPON_DEFS
@@ -140,7 +142,6 @@ class PygameUIManager:
                 surface.blit(self.image, (self.x, self.y))
 
     def __init__(self, game) -> None:
-        # Defer importing pygame to runtime (helps tests without SDL)
         try:
             import pygame
 
@@ -152,8 +153,56 @@ class PygameUIManager:
         self.width: Any | int = getattr(game, "width", 0)
         self.height: Any | int = getattr(game, "height", 0)
 
-        # Dynamic fog blobs introduced from external script
+        from src.assets.text_cache import get_font, get_text
+
+        self.get_font = get_font
+        self.get_text = get_text
+
         self._init_fog_particles()
+
+    def _draw_button(self, rect, bg_normal, bg_hover, border_color, border_width=1):
+        hov = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+        self.pygame.draw.rect(self.screen, bg_hover if hov else bg_normal, rect)
+        self.pygame.draw.rect(self.screen, border_color, rect, border_width)
+        return hov
+
+    def _center_text_in_rect(self, text_surf, rect, shake_x=0, shake_y=0):
+        return (
+            rect.centerx - text_surf.get_width() // 2 + shake_x,
+            rect.centery - text_surf.get_height() // 2 + shake_y,
+        )
+
+    def _apply_shake_to_points(self, points, shake_x=0, shake_y=0):
+        return [(p[0] + shake_x, p[1] + shake_y) for p in points]
+
+    def _apply_shake(self, x, y, shake_x=0, shake_y=0):
+        return int(x + shake_x), int(y + shake_y)
+
+    def _draw_health_drop_particle(self, x, y, radius, alpha=255):
+        if self.pygame:
+            surf = self.pygame.Surface((radius * 2, radius * 2), self.pygame.SRCALPHA)
+            self.pygame.draw.circle(surf, (0, 200, 0, alpha), (radius, radius), radius)
+            self.pygame.draw.line(
+                surf,
+                (255, 255, 255),
+                (radius - radius // 2, radius),
+                (radius + radius // 2, radius),
+                2,
+            )
+            self.pygame.draw.line(
+                surf,
+                (255, 255, 255),
+                (radius, radius - radius // 2),
+                (radius, radius + radius // 2),
+                2,
+            )
+            self.screen.blit(surf, (x - radius, y - radius))
+
+    def _draw_centered_text(self, text_surf, x, y, shake_x=0, shake_y=0):
+        return (
+            int(x - text_surf.get_width() // 2 + shake_x),
+            int(y - text_surf.get_height() // 2 + shake_y),
+        )
 
     def _calculate_meta_xp_fill(self, xp: int, xp_to: int, bar_width: int) -> int:
         """Compute fill width for the meta‑XP bar.
@@ -170,6 +219,26 @@ class PygameUIManager:
         if xp > 0 and fill == 0:
             fill = 1
         return fill
+
+    def _health_drop_alpha(self, drop: dict) -> int:
+        """Return the current alpha value for a health drop.
+
+        The alpha pulses over time using ``game.frame_count``.  The amplitude and
+        base level are chosen so the green circle is more transparent than a
+        normal opaque colour (alpha < 255) and exhibits a gentle breathing
+        effect.  The drop's ``x`` coordinate is folded into the phase so multiple
+        drops do not pulse in perfect unison.
+        """
+        import math
+
+        # base alpha and oscillation range
+        # lower base alpha yields a more transparent average appearance
+        base = 80
+        amplitude = 80
+        phase = self.game.frame_count * 0.1 + drop.get("x", 0)
+        # sine oscillates between -1 and 1; map to 0..1
+        norm = (math.sin(phase) + 1) / 2
+        return int(base + norm * amplitude)
 
     # --- fog particle system helpers ------------------------------------------------
     # ── Fog / cloud optimization notes ───────────────────────────────────────
@@ -247,9 +316,6 @@ class PygameUIManager:
         except Exception:
             pass
 
-    def draw_purgatory_clouds(self, shake_x=0, shake_y=0) -> None:
-        pass
-
     def _draw_floor_polygon(self, shake_x=0, shake_y=0) -> None:
         pygame = self.pygame
         settings = self.game.stage_settings[self.game.selected_stage]
@@ -267,7 +333,7 @@ class PygameUIManager:
             pygame.draw.polygon(
                 self.screen,
                 prologo_floor,
-                [(p[0] + shake_x, p[1] + shake_y) for p in inside_points],
+                self._apply_shake_to_points(inside_points, shake_x, shake_y),
             )
         elif (
             self.game.is_limbo_stage()
@@ -281,7 +347,7 @@ class PygameUIManager:
             pygame.draw.polygon(
                 self.screen,
                 (100, 50, 0),
-                [(p[0] + shake_x, p[1] + shake_y) for p in inside_points],
+                self._apply_shake_to_points(inside_points, shake_x, shake_y),
             )
         elif (
             getattr(self.game, "selected_stage", None)
@@ -411,17 +477,13 @@ class PygameUIManager:
             return
 
         torch_image = get_image("torch.png", (40, 80))
-        if torch_image:
-            torch_positions = [0.2, 0.5, 0.8]
-            for frac in torch_positions:
-                y = int(frac * self.height)
-                left_point = min(
-                    self.game.left_wall_points, key=lambda p: abs(p[1] - y)
-                )
-                right_point = min(
-                    self.game.right_wall_points, key=lambda p: abs(p[1] - y)
-                )
+        torch_positions = [0.2, 0.5, 0.8]
+        for frac in torch_positions:
+            y = int(frac * self.height)
+            left_point = min(self.game.left_wall_points, key=lambda p: abs(p[1] - y))
+            right_point = min(self.game.right_wall_points, key=lambda p: abs(p[1] - y))
 
+            if torch_image:
                 torch_x = left_point[0] - 20
                 torch_y = left_point[1] - 80
                 self.screen.blit(torch_image, (torch_x, torch_y))
@@ -429,24 +491,17 @@ class PygameUIManager:
                 torch_x = right_point[0] - 20
                 torch_y = right_point[1] - 80
                 self.screen.blit(torch_image, (torch_x, torch_y))
-        else:
-            torch_positions = [0.2, 0.5, 0.8]
-            for frac in torch_positions:
-                y = int(frac * self.height)
-                left_point = min(
-                    self.game.left_wall_points, key=lambda p: abs(p[1] - y)
-                )
-                right_point = min(
-                    self.game.right_wall_points, key=lambda p: abs(p[1] - y)
-                )
-
+            else:
                 torch_x = left_point[0] - 20
                 torch_y = left_point[1]
                 pygame.draw.rect(
                     self.screen, (50, 25, 0), (torch_x, torch_y - 20, 16, 40)
                 )
                 pygame.draw.circle(
-                    self.screen, (255, 100, 0), (int(torch_x + 8), int(torch_y - 20)), 16
+                    self.screen,
+                    (255, 100, 0),
+                    (int(torch_x + 8), int(torch_y - 20)),
+                    16,
                 )
                 pygame.draw.circle(
                     self.screen, (255, 200, 0), (int(torch_x + 8), int(torch_y - 20)), 8
@@ -458,7 +513,10 @@ class PygameUIManager:
                     self.screen, (50, 25, 0), (torch_x, torch_y - 20, 16, 40)
                 )
                 pygame.draw.circle(
-                    self.screen, (255, 100, 0), (int(torch_x + 8), int(torch_y - 20)), 16
+                    self.screen,
+                    (255, 100, 0),
+                    (int(torch_x + 8), int(torch_y - 20)),
+                    16,
                 )
                 pygame.draw.circle(
                     self.screen, (255, 200, 0), (int(torch_x + 8), int(torch_y - 20)), 8
@@ -973,6 +1031,424 @@ class PygameUIManager:
         if hasattr(self, "draw_pedestals"):
             self.draw_pedestals(shake_x, shake_y)
 
+    def draw_main_menu(self, shake_x: int = 0, shake_y: int = 0) -> None:
+        """Main menu: big START button + permanent upgrades + gear icon."""
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return
+
+        w, h = self.width, self.height
+
+        # Gothic dark background
+        self.screen.fill((5, 3, 8))
+
+        # Top and bottom darkening strips
+        top_vignette = pygame.Surface((w, 110), pygame.SRCALPHA)
+        top_vignette.fill((0, 0, 0, 150))
+        self.screen.blit(top_vignette, (0, 0))
+        bot_vignette = pygame.Surface((w, 90), pygame.SRCALPHA)
+        bot_vignette.fill((0, 0, 0, 130))
+        self.screen.blit(bot_vignette, (0, h - 90))
+
+        # ── Title ──────────────────────────────────────────────────────────
+        title_font = self.get_font(72)
+        title_surf = self.get_text("SATAN'S FALL", title_font, (185, 28, 28))
+        tx, ty = self._draw_centered_text(
+            title_surf, w // 2, h // 2 - 195, shake_x, shake_y
+        )
+        self.screen.blit(title_surf, (tx, ty))
+
+        # Ornamental line + diamond under title
+        line_y = ty + title_surf.get_height() + 12
+        pygame.draw.line(
+            self.screen,
+            (110, 28, 28),
+            (w // 2 - 190, line_y),
+            (w // 2 + 190, line_y),
+            1,
+        )
+        dcx, dcy = w // 2, line_y
+        pygame.draw.polygon(
+            self.screen,
+            (150, 38, 38),
+            [(dcx, dcy - 5), (dcx + 5, dcy), (dcx, dcy + 5), (dcx - 5, dcy)],
+        )
+
+        # ── START button ───────────────────────────────────────────────────
+        btn_w, btn_h = 250, 68
+        start_rect = pygame.Rect(
+            w // 2 - btn_w // 2 + shake_x, h // 2 - 34 + shake_y, btn_w, btn_h
+        )
+        start_hov = self._draw_button(
+            start_rect, (22, 5, 5), (38, 10, 10), (145, 32, 32), 2
+        )
+        inner = start_rect.inflate(-6, -6)
+        pygame.draw.rect(
+            self.screen, (110, 28, 28) if start_hov else (68, 16, 16), inner, 1
+        )
+        start_font = self.get_font(48)
+        start_text = self.get_text(
+            "START", start_font, (255, 230, 205) if start_hov else (225, 200, 175)
+        )
+        tx, ty = self._draw_centered_text(
+            start_text, w // 2, start_rect.centery, shake_x, 0
+        )
+        self.screen.blit(start_text, (tx, ty))
+
+        # ── PERMANENT UPGRADES button ──────────────────────────────────────
+        up_w, up_h = 220, 36
+        up_rect = pygame.Rect(
+            w // 2 - up_w // 2 + shake_x, h // 2 + 55 + shake_y, up_w, up_h
+        )
+        up_hov = self._draw_button(
+            up_rect, (10, 6, 18), (18, 10, 28), (105, 68, 165), 1
+        )
+        up_font = self.get_font(20)
+        up_text = self.get_text(
+            "PERMANENT UPGRADES",
+            up_font,
+            (185, 145, 235) if up_hov else (138, 102, 192),
+        )
+        tx, ty = self._draw_centered_text(up_text, w // 2, up_rect.centery, shake_x, 0)
+        self.screen.blit(up_text, (tx, ty))
+
+        # ── PROFILES button ────────────────────────────────────────────────
+        pr_w, pr_h = 220, 36
+        pr_rect = pygame.Rect(
+            w // 2 - pr_w // 2 + shake_x, h // 2 + 100 + shake_y, pr_w, pr_h
+        )
+        pr_hov = self._draw_button(pr_rect, (8, 12, 8), (14, 22, 14), (60, 110, 60), 1)
+        pr_font = self.get_font(20)
+        active_slot = getattr(self.game, "active_profile_slot", None)
+        if active_slot is not None:
+            profile_name = self.game.global_progress.get(
+                "profile_name", f"Profile {active_slot}"
+            )
+            pr_label = f"PROFILES  ● {profile_name}"
+        else:
+            pr_label = "PROFILES"
+        pr_text = self.get_text(
+            pr_label, pr_font, (160, 220, 140) if pr_hov else (100, 160, 100)
+        )
+        tx, ty = self._draw_centered_text(pr_text, w // 2, pr_rect.centery, shake_x, 0)
+        self.screen.blit(pr_text, (tx, ty))
+
+        # ── EXIT button (bottom center, above vignette) ─────────────────────
+        ex_w, ex_h = 220, 36
+        ex_rect = pygame.Rect(
+            w // 2 - ex_w // 2 + shake_x, h - 110 + shake_y, ex_w, ex_h
+        )
+        ex_hov = self._draw_button(ex_rect, (12, 8, 8), (22, 14, 14), (110, 60, 60), 1)
+        ex_font = self.get_font(20)
+        ex_text = self.get_text(
+            "EXIT", ex_font, (220, 160, 140) if ex_hov else (160, 100, 80)
+        )
+        tx, ty = self._draw_centered_text(ex_text, w // 2, ex_rect.centery, shake_x, 0)
+        self.screen.blit(ex_text, (tx, ty))
+
+        # Draw EXIT confirmation prompt if pending
+        if getattr(self.game, "exit_confirm_pending", False):
+            # Semi-transparent overlay
+            overlay = pygame.Surface((w, h), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 160))
+            self.screen.blit(overlay, (0, 0))
+
+            # Confirmation dialog background
+            dialog_w, dialog_h = 400, 160
+            dialog_x = w // 2 - dialog_w // 2
+            dialog_y = h // 2 - dialog_h // 2
+            pygame.draw.rect(
+                self.screen, (20, 10, 10), (dialog_x, dialog_y, dialog_w, dialog_h)
+            )
+            pygame.draw.rect(
+                self.screen, (100, 50, 50), (dialog_x, dialog_y, dialog_w, dialog_h), 2
+            )
+
+            # Text: "Exit Game?"
+            confirm_font = self.get_font(32)
+            confirm_text = self.get_text("Exit Game?", confirm_font, (220, 180, 160))
+            tx, ty = self._draw_centered_text(confirm_text, w // 2, dialog_y + 40, 0, 0)
+            self.screen.blit(confirm_text, (tx, ty))
+
+            # YES button (left)
+            yes_w, yes_h = 75, 36
+            yes_x = dialog_x + dialog_w // 2 - yes_w - 12
+            yes_y = dialog_y + dialog_h - 52
+            yes_rect = pygame.Rect(yes_x, yes_y, yes_w, yes_h)
+            yes_hov = self._draw_button(
+                yes_rect, (12, 8, 8), (22, 14, 14), (110, 60, 60), 1
+            )
+            yes_font = self.get_font(18)
+            yes_text = self.get_text(
+                "YES", yes_font, (220, 160, 140) if yes_hov else (160, 100, 80)
+            )
+            tx, ty = self._draw_centered_text(
+                yes_text, yes_x + yes_w // 2, yes_y + yes_h // 2, 0, 0
+            )
+            self.screen.blit(yes_text, (tx, ty))
+
+            # NO button (right)
+            no_w, no_h = 75, 36
+            no_x = dialog_x + dialog_w // 2 + 12
+            no_y = dialog_y + dialog_h - 52
+            no_rect = pygame.Rect(no_x, no_y, no_w, no_h)
+            no_hov = self._draw_button(
+                no_rect, (8, 12, 8), (14, 22, 14), (60, 110, 60), 1
+            )
+            no_font = self.get_font(18)
+            no_text = self.get_text(
+                "NO", no_font, (160, 220, 140) if no_hov else (100, 160, 100)
+            )
+            tx, ty = self._draw_centered_text(
+                no_text, no_x + no_w // 2, no_y + no_h // 2, 0, 0
+            )
+            self.screen.blit(no_text, (tx, ty))
+
+        # ── Gear (options) button bottom-right ────────────────────────────
+        opt_size = 38
+        opt_x = w - opt_size - 14
+        opt_y = h - opt_size - 14
+        options_rect = pygame.Rect(opt_x, opt_y, opt_size, opt_size)
+        opt_hov = self._draw_button(
+            options_rect, (18, 10, 10), (32, 20, 20), (120, 85, 85), 0
+        )
+        gear_col = (175, 130, 130) if opt_hov else (120, 85, 85)
+        pygame.draw.rect(self.screen, gear_col, options_rect, 1)
+        gcx, gcy = opt_x + opt_size // 2, opt_y + opt_size // 2
+        pygame.draw.circle(self.screen, gear_col, (gcx, gcy), 7, 1)
+        for i in range(8):
+            ang = math.radians(i * 45)
+            pygame.draw.line(
+                self.screen,
+                gear_col,
+                (gcx, gcy),
+                (
+                    int(gcx + math.cos(ang) * (opt_size // 2 - 6)),
+                    int(gcy + math.sin(ang) * (opt_size // 2 - 6)),
+                ),
+                1,
+            )
+
+        try:
+            self.game._last_drawn_menu = "main_menu"
+        except Exception:
+            pass
+
+        if getattr(self.game, "showing_options", False):
+            self.draw_options_menu(shake_x, shake_y)
+
+    def draw_profiles_menu(self, shake_x: int = 0, shake_y: int = 0) -> None:
+        """Profile selection screen: 3 slot cards with name, stats, and actions."""
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return
+
+        w, h = self.width, self.height
+        g = self.game
+
+        # Gothic dark background
+        self.screen.fill((5, 3, 8))
+        top_v = pygame.Surface((w, 110), pygame.SRCALPHA)
+        top_v.fill((0, 0, 0, 150))
+        self.screen.blit(top_v, (0, 0))
+        bot_v = pygame.Surface((w, 90), pygame.SRCALPHA)
+        bot_v.fill((0, 0, 0, 130))
+        self.screen.blit(bot_v, (0, h - 90))
+
+        # Title
+        title_font = self.get_font(48)
+        title_surf = self.get_text("PROFILES", title_font, (185, 28, 28))
+        tx, ty = self._draw_centered_text(
+            title_surf, w // 2, h // 2 - 270, shake_x, shake_y
+        )
+        self.screen.blit(title_surf, (tx, ty))
+
+        # Layout constants (must match _handle_profiles_menu_click in input_handler.py)
+        card_w, card_h = 460, 120
+        card_x = w // 2 - card_w // 2 + shake_x
+        start_y = h // 2 - 210
+        spacing = 140
+
+        font_med = self.get_font(20)
+        font_sm = self.get_font(16)
+        font_xs = self.get_font(14)
+
+        mx, my = getattr(g, "mouse_x", 0), getattr(g, "mouse_y", 0)
+        active_slot = getattr(g, "active_profile_slot", None)
+        editing_slot = getattr(g, "editing_profile_slot", None)
+        editing = getattr(g, "editing_profile_name", False)
+        delete_confirms = getattr(g, "profile_delete_confirm", {})
+
+        for slot in range(1, 4):
+            cy = start_y + (slot - 1) * spacing + shake_y
+            card_rect = pygame.Rect(card_x, cy, card_w, card_h)
+
+            # Card background — gold border if active
+            border_col = (200, 170, 60) if slot == active_slot else (60, 40, 40)
+            bg_col = (18, 12, 8) if slot == active_slot else (12, 8, 6)
+            pygame.draw.rect(self.screen, bg_col, card_rect, border_radius=6)
+            pygame.draw.rect(self.screen, border_col, card_rect, 2, border_radius=6)
+
+            info = g.get_profile_info(slot)
+            slot_exists = info["exists"]
+
+            # Slot label
+            slot_label = self.get_text(f"SLOT {slot}", font_xs, (120, 80, 60))
+            self.screen.blit(slot_label, (card_x + 10, cy + 8))
+
+            # ── DELETE confirmation overlay ──────────────────────────────
+            if delete_confirms.get(slot):
+                confirm_surf = self.get_text("DELETE profile?", font_med, (240, 80, 60))
+                self.screen.blit(confirm_surf, (card_x + 10, cy + 42))
+                yes_rect = pygame.Rect(card_x + card_w - 120, cy + card_h - 30, 50, 22)
+                no_rect = pygame.Rect(card_x + card_w - 62, cy + card_h - 30, 50, 22)
+                yes_hov = yes_rect.collidepoint(mx, my)
+                no_hov = no_rect.collidepoint(mx, my)
+                pygame.draw.rect(
+                    self.screen,
+                    (180, 30, 30) if yes_hov else (100, 20, 20),
+                    yes_rect,
+                    border_radius=4,
+                )
+                pygame.draw.rect(
+                    self.screen,
+                    (30, 100, 30) if no_hov else (20, 60, 20),
+                    no_rect,
+                    border_radius=4,
+                )
+                self.screen.blit(
+                    self.get_text("YES", font_xs, (255, 200, 200)),
+                    (yes_rect.x + 8, yes_rect.y + 4),
+                )
+                self.screen.blit(
+                    self.get_text("NO", font_xs, (200, 255, 200)),
+                    (no_rect.x + 10, no_rect.y + 4),
+                )
+                continue
+
+            # ── EDIT button ──────────────────────────────────────────────
+            edit_rect = pygame.Rect(card_x + card_w - 56, cy + 8, 48, 22)
+            edit_hov = edit_rect.collidepoint(mx, my)
+            pygame.draw.rect(
+                self.screen,
+                (40, 30, 60) if not edit_hov else (70, 50, 110),
+                edit_rect,
+                border_radius=3,
+            )
+            pygame.draw.rect(self.screen, (100, 80, 160), edit_rect, 1, border_radius=3)
+            self.screen.blit(
+                self.get_text("EDIT", font_xs, (180, 150, 240)),
+                (edit_rect.x + 6, edit_rect.y + 4),
+            )
+
+            # ── Name area ───────────────────────────────────────────────
+            if editing and editing_slot == slot:
+                # Text input box
+                name_box = pygame.Rect(card_x + 55, cy + 6, card_w - 120, 26)
+                pygame.draw.rect(self.screen, (30, 25, 45), name_box, border_radius=3)
+                pygame.draw.rect(
+                    self.screen, (140, 110, 220), name_box, 1, border_radius=3
+                )
+                input_text = getattr(g, "profile_name_input", "")
+                # Blinking cursor
+                cursor = "|" if (pygame.time.get_ticks() // 500) % 2 == 0 else ""
+                name_surf = self.get_text(
+                    input_text + cursor, font_med, (220, 200, 255)
+                )
+                self.screen.blit(name_surf, (name_box.x + 4, name_box.y + 3))
+                hint = self.get_text(
+                    "ENTER to confirm • ESC to cancel", font_xs, (120, 100, 160)
+                )
+                self.screen.blit(hint, (card_x + 10, cy + card_h - 22))
+            else:
+                if slot_exists:
+                    name_surf = self.get_text(info["name"], font_med, (230, 200, 150))
+                else:
+                    name_surf = self.get_text("— Empty —", font_med, (70, 55, 45))
+                self.screen.blit(name_surf, (card_x + 55, cy + 8))
+
+            # ── Stats (only for existing slots) ─────────────────────────
+            if slot_exists:
+                stats_line1 = f"Satan Lv. {info['meta_level']}   XP: {info['meta_xp']}"
+                stats_line2 = f"Points: {info['meta_points']}"
+                last = info["last_played"]
+                if last:
+                    # Show only date part (yyyy-mm-dd)
+                    date_part = last[:10]
+                    stats_line2 += f"   Last: {date_part}"
+                self.screen.blit(
+                    self.get_text(stats_line1, font_sm, (180, 160, 110)),
+                    (card_x + 10, cy + 42),
+                )
+                self.screen.blit(
+                    self.get_text(stats_line2, font_sm, (140, 130, 90)),
+                    (card_x + 10, cy + 62),
+                )
+
+                # DELETE button
+                del_rect = pygame.Rect(card_x + card_w - 56, cy + 36, 48, 22)
+                del_hov = del_rect.collidepoint(mx, my)
+                pygame.draw.rect(
+                    self.screen,
+                    (60, 18, 18) if not del_hov else (100, 30, 30),
+                    del_rect,
+                    border_radius=3,
+                )
+                pygame.draw.rect(
+                    self.screen, (160, 60, 60), del_rect, 1, border_radius=3
+                )
+                self.screen.blit(
+                    self.get_text("DEL", font_xs, (255, 160, 160)),
+                    (del_rect.x + 7, del_rect.y + 4),
+                )
+
+                # SELECT button
+                select_rect = pygame.Rect(
+                    card_x + card_w - 80, cy + card_h - 30, 72, 22
+                )
+                sel_hov = select_rect.collidepoint(mx, my)
+                sel_bg = (30, 80, 30) if not sel_hov else (50, 130, 50)
+                pygame.draw.rect(self.screen, sel_bg, select_rect, border_radius=4)
+                pygame.draw.rect(
+                    self.screen, (80, 180, 80), select_rect, 1, border_radius=4
+                )
+                sel_label = "SELECTED" if slot == active_slot else "SELECT"
+                sel_col = (200, 255, 200) if slot == active_slot else (160, 230, 160)
+                self.screen.blit(
+                    self.get_text(sel_label, font_xs, sel_col),
+                    (select_rect.x + 4, select_rect.y + 4),
+                )
+            else:
+                # CREATE button
+                create_rect = pygame.Rect(
+                    card_x + card_w - 80, cy + card_h - 30, 72, 22
+                )
+                cr_hov = create_rect.collidepoint(mx, my)
+                cr_bg = (20, 50, 70) if not cr_hov else (30, 80, 110)
+                pygame.draw.rect(self.screen, cr_bg, create_rect, border_radius=4)
+                pygame.draw.rect(
+                    self.screen, (60, 140, 200), create_rect, 1, border_radius=4
+                )
+                self.screen.blit(
+                    self.get_text("CREATE", font_xs, (160, 210, 255)),
+                    (create_rect.x + 4, create_rect.y + 4),
+                )
+
+        # BACK button
+        back_y = start_y + 3 * spacing + 10 + shake_y
+        back_rect = pygame.Rect(w // 2 - 55 + shake_x, back_y, 110, 32)
+        back_hov = back_rect.collidepoint(mx, my)
+        back_bg = (30, 12, 12) if not back_hov else (55, 20, 20)
+        pygame.draw.rect(self.screen, back_bg, back_rect, border_radius=4)
+        pygame.draw.rect(self.screen, (130, 60, 60), back_rect, 1, border_radius=4)
+        back_surf = self.get_text(
+            "BACK", font_med, (200, 140, 140) if back_hov else (155, 100, 100)
+        )
+        btx, bty = self._draw_centered_text(
+            back_surf, w // 2, back_rect.centery, shake_x, 0
+        )
+        self.screen.blit(back_surf, (btx, bty))
+
     def _draw_stage_submenu(
         self,
         title: str,
@@ -984,64 +1460,65 @@ class PygameUIManager:
         shake_y: int = 0,
     ) -> None:
         pygame = self.pygame
-        from src.assets.text_cache import get_font, get_text
 
-        font_large = get_font(48)
-        font_medium = get_font(32)
-        font_small = get_font(20)
+        w, h = self.width, self.height
 
-        title_surf = get_text(title, font_large, (255, 215, 0))
-        self.screen.blit(
-            title_surf,
-            (
-                self.width // 2 - title_surf.get_width() // 2 + shake_x,
-                self.height // 2 - 120 + shake_y,
-            ),
+        # Gothic dark background
+        self.screen.fill((5, 3, 8))
+
+        font_large = self.get_font(48)
+        font_medium = self.get_font(28)
+        font_small = self.get_font(18)
+
+        # Title
+        title_surf = self.get_text(title, font_large, (215, 195, 155))
+        tx, ty = self._draw_centered_text(
+            title_surf, w // 2, h // 2 - 130, shake_x, shake_y
+        )
+        self.screen.blit(title_surf, (tx, ty))
+        line_y = h // 2 - 130 + title_surf.get_height() + 8
+        pygame.draw.line(
+            self.screen,
+            (110, 85, 45),
+            (w // 2 - 160, line_y),
+            (w // 2 + 160, line_y),
+            1,
         )
 
-        option_w = 320
+        # Stage option buttons — keep geometry matching input_handler expectations
+        option_w = 280
         option_h = 48
-        start_x: int = self.width // 2 - option_w // 2
-        start_y: int = self.height // 2 - 40
+        start_x: int = w // 2 - option_w // 2
+        start_y: int = h // 2 - 40
         spacing = 60
 
         for i, label in enumerate(labels):
             rect = pygame.Rect(start_x, start_y + i * spacing, option_w, option_h)
-            hovered = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-            bg = hover_color if hovered else normal_color
-            pygame.draw.rect(self.screen, bg, rect)
-            pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
-            text = font_medium.render(label, True, (255, 255, 255))
-            self.screen.blit(
-                text,
-                (
-                    self.width // 2 - text.get_width() // 2 + shake_x,
-                    start_y
-                    + i * spacing
-                    + (option_h - text.get_height()) // 2
-                    + shake_y,
-                ),
+            hovered = self._draw_button(
+                rect, normal_color, hover_color, (145, 118, 75), 1
             )
+            text = font_medium.render(
+                label, True, (240, 220, 190) if hovered else (205, 185, 158)
+            )
+            tx, ty = self._draw_centered_text(
+                text, w // 2, rect.centery, shake_x, shake_y
+            )
+            self.screen.blit(text, (tx, ty))
 
+        # Back button — geometry and style match stage selection BACK button
         back_rect = pygame.Rect(
-            self.width // 2 - 60, start_y + len(labels) * spacing + 10, 120, 36
+            w // 2 - 55, start_y + len(labels) * spacing + 10, 110, 32
         )
-        back_hover: bool = back_rect.collidepoint(
-            self.game.mouse_x, self.game.mouse_y
+        back_hov = self._draw_button(
+            back_rect, (14, 7, 7), (28, 15, 15), (72, 48, 48), 1
         )
-        back_color: tuple[int, int, int] = (
-            (80, 80, 80) if back_hover else (60, 60, 60)
+        back_text = font_small.render(
+            "BACK", True, (180, 148, 140) if back_hov else (138, 112, 106)
         )
-        pygame.draw.rect(self.screen, back_color, back_rect)
-        pygame.draw.rect(self.screen, (255, 255, 255), back_rect, 2)
-        back_text = font_small.render("BACK", True, (255, 255, 255))
-        self.screen.blit(
-            back_text,
-            (
-                self.width // 2 - back_text.get_width() // 2 + shake_x,
-                start_y + len(labels) * spacing + 14 + shake_y,
-            ),
+        tx, ty = self._draw_centered_text(
+            back_text, w // 2, back_rect.centery, shake_x, shake_y
         )
+        self.screen.blit(back_text, (tx, ty))
 
         try:
             self.game._last_drawn_menu = menu_key
@@ -1049,28 +1526,17 @@ class PygameUIManager:
             pass
 
     def draw_stage_menu(self, shake_x=0, shake_y=0) -> None:
-        """Draw the stage selection menu and submenus.
-
-        Delegates drawing of the main stage menu and the Limbo/Purgatory submenus that
-        were previously located in `Game`. Uses `self.game` for state and writes a
-        diagnostic `self.game._last_drawn_menu` for tests.
-        """
+        """Draw the stage selection screen (gothic dark style) and submenus."""
         pygame = self.pygame
         if not self.screen or not pygame:
             return
 
-        from src.assets.text_cache import get_font
-
-        font_large = get_font(48)
-        font_medium = get_font(32)
-        font_small = get_font(20)
-
         if getattr(self.game, "showing_limbo_menu", False):
             self._draw_stage_submenu(
                 "LIMBO",
-                ["LIMBO 1", "LIMBO 2", "LIMBO 3"],
-                (107, 58, 26),
-                (137, 78, 36),
+                ["LIMBO 1", "LIMBO 2", "LIMBO 3", "LIMBO FINAL"],
+                (55, 28, 10),
+                (82, 45, 18),
                 "limbo",
                 shake_x,
                 shake_y,
@@ -1081,8 +1547,8 @@ class PygameUIManager:
             self._draw_stage_submenu(
                 "PURGATORY",
                 ["PURGATORY 1", "PURGATORY 2", "PURGATORY 3"],
-                (107, 58, 106),
-                (137, 78, 136),
+                (48, 24, 60),
+                (72, 38, 90),
                 "purgatory",
                 shake_x,
                 shake_y,
@@ -1093,298 +1559,211 @@ class PygameUIManager:
             self._draw_stage_submenu(
                 "HELL",
                 ["GEHENNA", "LAKE OF FIRE", "HADES"],
-                (139, 69, 69),
-                (189, 89, 89),
+                (80, 16, 16),
+                (118, 30, 30),
                 "hell",
                 shake_x,
                 shake_y,
             )
             return
 
-        # Main title and stage buttons
-        title = font_large.render("SATANS FALL", True, (255, 100, 100))
-        self.screen.blit(
-            title,
-            (
-                self.width // 2 - title.get_width() // 2 + shake_x,
-                self.height // 2 - 150 + shake_y,
-            ),
+        w, h = self.width, self.height
+
+        # Gothic dark background
+        self.screen.fill((5, 3, 8))
+
+        font_large = self.get_font(48)
+        font_medium = self.get_font(28)
+        font_small = self.get_font(18)
+
+        # Title
+        title_surf = self.get_text("SELECT STAGE", font_large, (175, 150, 115))
+        tx, ty = self._draw_centered_text(
+            title_surf, w // 2, h // 2 - 195, shake_x, shake_y
+        )
+        self.screen.blit(title_surf, (tx, ty))
+        line_y = h // 2 - 195 + title_surf.get_height() + 10
+        pygame.draw.line(
+            self.screen,
+            (105, 82, 50),
+            (w // 2 - 185, line_y),
+            (w // 2 + 185, line_y),
+            1,
         )
 
-        # Prologo button
-        prologo_rect = pygame.Rect(
-            self.width // 2 - 100, self.height // 2 - 50, 200, 40
-        )
-        prologo_hovered: bool = prologo_rect.collidepoint(
-            self.game.mouse_x, self.game.mouse_y
-        )
-        prologo_color: (
-            tuple[Literal[189], Literal[89], Literal[89]]
-            | tuple[Literal[139], Literal[69], Literal[69]]
-        ) = (
-            (189, 89, 89) if prologo_hovered else (139, 69, 69)
-        )  # Lighter red when hovered
-        pygame.draw.rect(self.screen, prologo_color, prologo_rect)
-        pygame.draw.rect(self.screen, (255, 255, 255), prologo_rect, 2)  # White border
-        prologo_text = font_medium.render("PROLOGUE", True, (255, 255, 255))
-        self.screen.blit(
-            prologo_text,
-            (
-                self.width // 2 - prologo_text.get_width() // 2 + shake_x,
-                self.height // 2 - 40 + shake_y,
-            ),
-        )
+        # Stage buttons — geometry must match input_handler rects below
+        #   prologo_rect = Rect(w//2 - 140, h//2 - 100, 280, 46)
+        #   limbo_rect   = Rect(w//2 - 140, h//2 - 42,  280, 46)
+        #   purgatory    = Rect(w//2 - 140, h//2 + 16,  280, 46)
+        #   hell         = Rect(w//2 - 140, h//2 + 74,  280, 46)
+        btn_w, btn_h = 280, 46
+        btn_x = w // 2 - btn_w // 2
+        base_y = h // 2 - 100
+        spacing = 58
 
-        # Limbo main button (opens second menu)
-        limbo_rect = pygame.Rect(self.width // 2 - 100, self.height // 2 + 10, 200, 40)
-        limbo_hovered: bool = limbo_rect.collidepoint(
-            self.game.mouse_x, self.game.mouse_y
-        )
-        limbo_color: (
-            tuple[Literal[137], Literal[78], Literal[36]]
-            | tuple[Literal[107], Literal[58], Literal[26]]
-        ) = ((137, 78, 36) if limbo_hovered else (107, 58, 26))
-        pygame.draw.rect(self.screen, limbo_color, limbo_rect)
-        pygame.draw.rect(self.screen, (255, 255, 255), limbo_rect, 2)
-        limbo_text = font_medium.render("LIMBO", True, (255, 255, 255))
-        self.screen.blit(
-            limbo_text,
-            (
-                self.width // 2 - limbo_text.get_width() // 2 + shake_x,
-                self.height // 2 + 20 + shake_y,
-            ),
-        )
+        _stages = [
+            ("PROLOGUE", (45, 40, 36), (68, 60, 52), (158, 138, 108)),
+            ("LIMBO", (55, 28, 10), (82, 45, 18), (175, 122, 58)),
+            ("PURGATORY", (45, 22, 58), (68, 36, 88), (162, 112, 205)),
+            ("HELL", (75, 14, 14), (112, 26, 26), (215, 68, 68)),
+        ]
 
-        # Purgatory main button (opens second menu)
-        purgatory_rect = pygame.Rect(
-            self.width // 2 - 100, self.height // 2 + 70, 200, 40
-        )
-        purgatory_hovered: bool = purgatory_rect.collidepoint(
-            self.game.mouse_x, self.game.mouse_y
-        )
-        purgatory_color: (
-            tuple[Literal[137], Literal[78], Literal[136]]
-            | tuple[Literal[107], Literal[58], Literal[106]]
-        ) = ((137, 78, 136) if purgatory_hovered else (107, 58, 106))
-        pygame.draw.rect(self.screen, purgatory_color, purgatory_rect)
-        pygame.draw.rect(self.screen, (255, 255, 255), purgatory_rect, 2)
-        purgatory_text = font_medium.render("PURGATORY", True, (255, 255, 255))
-        self.screen.blit(
-            purgatory_text,
-            (
-                self.width // 2 - purgatory_text.get_width() // 2 + shake_x,
-                self.height // 2 + 80 + shake_y,
-            ),
-        )
+        for i, (label, bg_n, bg_h, border_col) in enumerate(_stages):
+            rect = pygame.Rect(btn_x, base_y + i * spacing, btn_w, btn_h)
+            hov = self._draw_button(rect, bg_n, bg_h, border_col, 1)
+            text = font_medium.render(
+                label, True, (238, 220, 192) if hov else (205, 188, 162)
+            )
+            tx, ty = self._draw_centered_text(
+                text, w // 2, rect.centery, shake_x, shake_y
+            )
+            self.screen.blit(text, (tx, ty))
 
-        # HELL main button (opens second menu) - red dedicated button under PURGATORY
-        hell_rect = pygame.Rect(self.width // 2 - 100, self.height // 2 + 130, 200, 40)
-        hell_hovered: bool = hell_rect.collidepoint(
-            self.game.mouse_x, self.game.mouse_y
+        # Back button (returns to main menu)
+        back_rect = pygame.Rect(
+            w // 2 - 55, base_y + len(_stages) * spacing + 10, 110, 32
         )
-        hell_color: (
-            tuple[Literal[189], Literal[89], Literal[89]]
-            | tuple[Literal[139], Literal[69], Literal[69]]
-        ) = (
-            (189, 89, 89) if hell_hovered else (139, 69, 69)
-        )  # Lighter red when hovered
-        pygame.draw.rect(self.screen, hell_color, hell_rect)
-        pygame.draw.rect(self.screen, (255, 255, 255), hell_rect, 2)
-        hell_text = font_medium.render("HELL", True, (255, 255, 255))
-        self.screen.blit(
-            hell_text,
-            (
-                self.width // 2 - hell_text.get_width() // 2 + shake_x,
-                self.height // 2 + 140 + shake_y,
-            ),
+        back_hov = self._draw_button(
+            back_rect, (14, 7, 7), (28, 15, 15), (72, 48, 48), 1
         )
-
-        # Upgrades button moved to bottom of screen to avoid overlap and be more accessible
-        upgrades_rect = pygame.Rect(
-            self.width // 2 - 125, max(20, self.height - 80), 250, 35
+        back_text = font_small.render(
+            "BACK", True, (180, 148, 140) if back_hov else (138, 112, 106)
         )
-        upgrades_hovered: bool = upgrades_rect.collidepoint(
-            self.game.mouse_x, self.game.mouse_y
+        tx, ty = self._draw_centered_text(
+            back_text, w // 2, back_rect.centery, shake_x, shake_y
         )
-        upgrades_bg_color: (
-            tuple[Literal[94], Literal[36], Literal[94]]
-            | tuple[Literal[74], Literal[26], Literal[74]]
-        ) = (
-            (94, 36, 94) if upgrades_hovered else (74, 26, 74)
-        )  # Lighter purple when hovered
-        upgrades_border_color: (
-            tuple[Literal[255], Literal[224], Literal[20]]
-            | tuple[Literal[255], Literal[204], Literal[0]]
-        ) = (
-            (255, 224, 20) if upgrades_hovered else (255, 204, 0)
-        )  # Brighter gold when hovered
-        pygame.draw.rect(self.screen, upgrades_bg_color, upgrades_rect)
-        pygame.draw.rect(self.screen, upgrades_border_color, upgrades_rect, 2)
-        upgrades_text = font_small.render(
-            "PERMANENT UPGRADES", True, upgrades_border_color
-        )
-        self.screen.blit(
-            upgrades_text,
-            (
-                self.width // 2 - upgrades_text.get_width() // 2 + shake_x,
-                upgrades_rect.y
-                + (upgrades_rect.height - upgrades_text.get_height()) // 2
-                + shake_y,
-            ),
-        )
-
-        # Draw small options (gear) button in bottom-right corner
-        opt_size = 40
-        opt_x = self.width - (opt_size + 14)
-        opt_y = max(20, self.height - (opt_size + 14))
-        options_rect = pygame.Rect(opt_x, opt_y, opt_size, opt_size)
-        options_hovered: bool = options_rect.collidepoint(
-            self.game.mouse_x, self.game.mouse_y
-        )
-        bg = (60, 60, 60) if not options_hovered else (90, 90, 90)
-        border = (200, 200, 200) if options_hovered else (160, 160, 160)
-        pygame.draw.rect(self.screen, bg, options_rect)
-        pygame.draw.rect(self.screen, border, options_rect, 2)
-        # Draw a gear-like icon: center circle and 8 spokes
-        cx = opt_x + opt_size // 2
-        cy = opt_y + opt_size // 2
-        pygame.draw.circle(self.screen, border, (cx, cy), 8, 1)
-        for i in range(8):
-            ang = math.radians(i * 45)
-            x2 = int(cx + math.cos(ang) * (opt_size // 2 - 6))
-            y2 = int(cy + math.sin(ang) * (opt_size // 2 - 6))
-            pygame.draw.line(self.screen, border, (cx, cy), (x2, y2), 2)
+        self.screen.blit(back_text, (tx, ty))
 
         try:
             self.game._last_drawn_menu = "stage_main"
         except Exception:
             pass
 
-        try:
-            self.game._last_drawn_menu = "stage_main"
-        except Exception:
-            pass
-
-        # If options overlay requested, draw it on top
         if getattr(self.game, "showing_options", False):
             self.draw_options_menu(shake_x, shake_y)
 
     def draw_options_menu(self, shake_x=0, shake_y=0) -> None:
-        """Simple options overlay with a CLOSE button."""
+        """Options overlay with gothic styling matching main menu."""
         pygame = self.pygame
         if not self.screen or not pygame:
             return
+
         # Semi-transparent overlay
         overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 160))
+        overlay.fill((0, 0, 0, 180))
         self.screen.blit(overlay, (0, 0))
 
-        # Dialog box (wider/taller for readability)
+        # Dialog box with gothic dark background
         dialog_w, dialog_h = 520, 320
         dx = self.width // 2 - dialog_w // 2
         dy = self.height // 2 - dialog_h // 2
-        pygame.draw.rect(self.screen, (40, 40, 40), (dx, dy, dialog_w, dialog_h))
-        pygame.draw.rect(self.screen, (220, 220, 220), (dx, dy, dialog_w, dialog_h), 2)
 
-        # Title
+        # Main dialog background (gothic dark)
+        pygame.draw.rect(self.screen, (22, 12, 22), (dx, dy, dialog_w, dialog_h))
+        # Outer border (reddish)
+        pygame.draw.rect(self.screen, (145, 32, 32), (dx, dy, dialog_w, dialog_h), 2)
+        # Inner border (darker)
+        inner = pygame.Rect(dx + 2, dy + 2, dialog_w - 4, dialog_h - 4)
+        pygame.draw.rect(self.screen, (68, 16, 16), inner, 1)
+
+        # Title with gothic styling
         try:
-            from src.assets.text_cache import get_font, get_text
-
-            font = get_font(28)
-            title = get_text("OPTIONS", font, (255, 255, 255))
-            self.screen.blit(
-                title,
-                (self.width // 2 - title.get_width() // 2 + shake_x, dy + 12 + shake_y),
-            )
+            font = self.get_font(32)
+            title = self.get_text("OPTIONS", font, (210, 65, 65))
         except Exception:
-            font_large = pygame.font.Font(None, 28)
-            title = font_large.render("OPTIONS", True, (255, 255, 255))
-            self.screen.blit(
-                title,
-                (self.width // 2 - title.get_width() // 2 + shake_x, dy + 12 + shake_y),
-            )
+            font = pygame.font.Font(None, 32)
+            title = font.render("OPTIONS", True, (210, 65, 65))
 
-        # Placeholder options (toggles like mute/music/volume go here)
-        font_med = pygame.font.Font(None, 20)
-
-        # Damage numbers toggle (compact, right-aligned)
-        dmg_label = font_med.render("Show Damage Numbers:", True, (220, 220, 220))
-        self.screen.blit(dmg_label, (dx + 24 + shake_x, dy + 64 + shake_y))
-
-        # Compact toggle box on the right side of the dialog so the label remains readable
-        toggle_w, toggle_h = 48, 24
-        toggle_x = dx + dialog_w - 24 - toggle_w
-        toggle_y = dy + 64
-        toggle_rect = pygame.Rect(toggle_x, toggle_y, toggle_w, toggle_h)
-        hovered_toggle = toggle_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-        toggle_bg = (
-            (80, 160, 80)
-            if getattr(self.game, "show_damage_numbers", True)
-            else (160, 80, 80)
-        )
-        if hovered_toggle:
-            toggle_bg = tuple(min(255, c + 20) for c in toggle_bg)
-        pygame.draw.rect(self.screen, toggle_bg, toggle_rect)
-        pygame.draw.rect(self.screen, (160, 160, 160), toggle_rect, 1)
-        status_text = "On" if getattr(self.game, "show_damage_numbers", True) else "Off"
-        status_surf = font_med.render(status_text, True, (255, 255, 255))
         self.screen.blit(
-            status_surf,
-            (
-                toggle_x + (toggle_w - status_surf.get_width()) // 2 + shake_x,
-                toggle_y + (toggle_h - status_surf.get_height()) // 2 + shake_y,
-            ),
+            title,
+            (self.width // 2 - title.get_width() // 2 + shake_x, dy + 16 + shake_y),
+        )
+
+        # Decorative line under title
+        line_y = dy + 16 + title.get_height() + 8
+        pygame.draw.line(
+            self.screen,
+            (110, 28, 28),
+            (dx + 30, line_y),
+            (dx + dialog_w - 30, line_y),
+            1,
+        )
+
+        # Label and toggle helper function
+        try:
+            font_med = self.get_font(18)
+        except Exception:
+            font_med = pygame.font.Font(None, 18)
+
+        def draw_toggle_option(label_text, is_enabled, y_offset):
+            """Draw a label with a toggle switch."""
+            # Label
+            label = (
+                self.get_text(label_text, font_med, (210, 185, 165))
+                if hasattr(self.get_text, "__call__")
+                else font_med.render(label_text, True, (210, 185, 165))
+            )
+            self.screen.blit(label, (dx + 24 + shake_x, dy + y_offset + shake_y))
+
+            # Toggle switch
+            toggle_w, toggle_h = 48, 24
+            toggle_x = dx + dialog_w - 24 - toggle_w
+            toggle_y = dy + y_offset
+            toggle_rect = pygame.Rect(toggle_x, toggle_y, toggle_w, toggle_h)
+
+            # Background based on state
+            if is_enabled:
+                toggle_bg = (
+                    (80, 32, 32)
+                    if toggle_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+                    else (60, 20, 20)
+                )
+                text_color = (100, 200, 100)
+            else:
+                toggle_bg = (
+                    (32, 32, 32)
+                    if toggle_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
+                    else (20, 20, 20)
+                )
+                text_color = (180, 100, 100)
+
+            pygame.draw.rect(self.screen, toggle_bg, toggle_rect)
+            pygame.draw.rect(self.screen, (110, 28, 28), toggle_rect, 1)
+
+            # Status text
+            status_text = "ON" if is_enabled else "OFF"
+            status_surf = font_med.render(status_text, True, text_color)
+            self.screen.blit(
+                status_surf,
+                (
+                    toggle_x + (toggle_w - status_surf.get_width()) // 2 + shake_x,
+                    toggle_y + (toggle_h - status_surf.get_height()) // 2 + shake_y,
+                ),
+            )
+            return toggle_rect
+
+        # Damage numbers toggle
+        draw_toggle_option(
+            "Show Damage Numbers:", getattr(self.game, "show_damage_numbers", True), 64
         )
 
         # Sounds toggle
-        snd_label = font_med.render("Enable Sounds:", True, (220, 220, 220))
-        self.screen.blit(snd_label, (dx + 24 + shake_x, dy + 104 + shake_y))
-        snd_toggle_x = dx + dialog_w - 24 - toggle_w
-        snd_toggle_y = dy + 104
-        snd_rect = pygame.Rect(snd_toggle_x, snd_toggle_y, toggle_w, toggle_h)
-        hovered_snd = snd_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-        snd_bg = (
-            (80, 160, 80) if getattr(self.game, "sounds_enabled", True) else (160, 80, 80)
-        )
-        if hovered_snd:
-            snd_bg = tuple(min(255, c + 20) for c in snd_bg)
-        pygame.draw.rect(self.screen, snd_bg, snd_rect)
-        pygame.draw.rect(self.screen, (160, 160, 160), snd_rect, 1)
-        snd_text = "On" if getattr(self.game, "sounds_enabled", True) else "Off"
-        self.screen.blit(
-            font_med.render(snd_text, True, (255, 255, 255)),
-            (
-                snd_toggle_x + (toggle_w - status_surf.get_width()) // 2 + shake_x,
-                snd_toggle_y + (toggle_h - status_surf.get_height()) // 2 + shake_y,
-            ),
+        draw_toggle_option(
+            "Enable Sounds:", getattr(self.game, "sounds_enabled", True), 104
         )
 
-        # Smooth-scaling toggle (applies higher-quality scaling when window > virtual)
+        # Smooth-scaling toggle
         smooth_on = bool(
             self.game.global_progress.get("display", {}).get("smooth_scale", True)
         )
-        smooth_label = font_med.render("Smooth scaling:", True, (220, 220, 220))
-        self.screen.blit(smooth_label, (dx + 24 + shake_x, dy + 144 + shake_y))
-        smooth_toggle_x = dx + dialog_w - 24 - toggle_w
-        smooth_toggle_y = dy + 144
-        smooth_rect = pygame.Rect(smooth_toggle_x, smooth_toggle_y, toggle_w, toggle_h)
-        hovered_s = smooth_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-        smooth_bg = (80, 160, 80) if smooth_on else (160, 80, 80)
-        if hovered_s:
-            smooth_bg = tuple(min(255, c + 20) for c in smooth_bg)
-        pygame.draw.rect(self.screen, smooth_bg, smooth_rect)
-        pygame.draw.rect(self.screen, (160, 160, 160), smooth_rect, 1)
-        smooth_text = "On" if smooth_on else "Off"
-        self.screen.blit(
-            font_med.render(smooth_text, True, (255, 255, 255)),
-            (
-                smooth_toggle_x + (toggle_w - status_surf.get_width()) // 2 + shake_x,
-                smooth_toggle_y + (toggle_h - status_surf.get_height()) // 2 + shake_y,
-            ),
-        )
+        draw_toggle_option("Smooth Scaling:", smooth_on, 144)
 
         # Resolution presets
-        preset_label = font_med.render("Resolution:", True, (220, 220, 220))
+        preset_label = (
+            self.get_text("Resolution:", font_med, (210, 185, 165))
+            if hasattr(self.get_text, "__call__")
+            else font_med.render("Resolution:", True, (210, 185, 165))
+        )
         self.screen.blit(preset_label, (dx + 24 + shake_x, dy + 216 + shake_y))
 
         # Buttons for presets (taken from game constants)
@@ -1402,18 +1781,23 @@ class PygameUIManager:
         dropdown_x, dropdown_y = start_x, btn_y
         dropdown_rect = pygame.Rect(dropdown_x, dropdown_y, dropdown_w, dropdown_h)
 
-        # Current selection label
         current_label = f"{self.game.window_width}x{self.game.window_height}"
         hovered = dropdown_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-        bg = (
-            (60, 120, 200)
-            if (self.game.window_width, self.game.window_height)
-            in DEFAULT_DISPLAY_PRESETS
-            else ((120, 120, 120) if not hovered else (160, 160, 160))
-        )
-        pygame.draw.rect(self.screen, bg, dropdown_rect)
-        pygame.draw.rect(self.screen, (200, 200, 200), dropdown_rect, 1)
-        txt = font_med.render(current_label, True, (255, 255, 255))
+
+        is_preset = (
+            self.game.window_width,
+            self.game.window_height,
+        ) in DEFAULT_DISPLAY_PRESETS
+        if is_preset:
+            bg = (38, 16, 38)
+            pygame.draw.rect(self.screen, bg, dropdown_rect)
+            pygame.draw.rect(self.screen, (110, 28, 28), dropdown_rect, 1)
+        else:
+            self._draw_button(
+                dropdown_rect, (22, 12, 22), (32, 20, 28), (110, 28, 28), 1
+            )
+
+        txt = font_med.render(current_label, True, (210, 185, 165))
         self.screen.blit(
             txt,
             (
@@ -1422,7 +1806,7 @@ class PygameUIManager:
             ),
         )
         # small caret indicator
-        caret = font_med.render("▾", True, (220, 220, 220))
+        caret = font_med.render("▾", True, (145, 100, 100))
         self.screen.blit(
             caret,
             (
@@ -1445,15 +1829,17 @@ class PygameUIManager:
                 hovered_item = item_rect.collidepoint(
                     self.game.mouse_x, self.game.mouse_y
                 )
-                item_bg = (
-                    (80, 140, 220)
-                    if is_current
-                    else ((120, 120, 120) if not hovered_item else (160, 160, 160))
-                )
+
+                # Gothic colors
+                if is_current:
+                    item_bg = (50, 20, 50)
+                else:
+                    item_bg = (32, 20, 28) if hovered_item else (22, 12, 22)
+
                 pygame.draw.rect(self.screen, item_bg, item_rect)
-                pygame.draw.rect(self.screen, (200, 200, 200), item_rect, 1)
+                pygame.draw.rect(self.screen, (110, 28, 28), item_rect, 1)
                 label = f"{pw}x{ph}"
-                txt = font_med.render(label, True, (255, 255, 255))
+                txt = font_med.render(label, True, (210, 185, 165))
                 self.screen.blit(
                     txt,
                     (
@@ -1462,17 +1848,30 @@ class PygameUIManager:
                     ),
                 )
 
-        # Close button
+        # Close button with gothic styling
         btn_w, btn_h = 120, 36
         btn_x = dx + (dialog_w - btn_w) // 2
         btn_y = dy + dialog_h - 50
         close_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
-        hovered = close_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-        bg = (100, 100, 100) if not hovered else (140, 140, 140)
-        border = (255, 255, 255) if hovered else (200, 200, 200)
-        pygame.draw.rect(self.screen, bg, close_rect)
-        pygame.draw.rect(self.screen, border, close_rect, 2)
-        btn_text = font_med.render("CLOSE", True, (255, 255, 255))
+        hovered = self._draw_button(
+            close_rect, (22, 5, 5), (38, 10, 10), (145, 32, 32), 2
+        )
+        inner = close_rect.inflate(-6, -6)
+        pygame.draw.rect(
+            self.screen, (110, 28, 28) if hovered else (68, 16, 16), inner, 1
+        )
+
+        btn_text = (
+            self.get_text(
+                "CLOSE",
+                self.get_font(20),
+                (255, 230, 205) if hovered else (225, 200, 175),
+            )
+            if hasattr(self.get_text, "__call__")
+            else pygame.font.Font(None, 20).render(
+                "CLOSE", True, (255, 230, 205) if hovered else (225, 200, 175)
+            )
+        )
         self.screen.blit(
             btn_text,
             (
@@ -1513,7 +1912,9 @@ class PygameUIManager:
         xp_to = self.game.get_meta_xp_to_next_level()
         # we will later want to align the XP bar with the permanent-stat
         # bars; those use ``bar_x_base`` which depends on the widest stat name.
-        rendered_names = [font_medium.render(s["name"], True, s["color"]) for s in _STAT_CONFIGS]
+        rendered_names = [
+            font_medium.render(s["name"], True, s["color"]) for s in _STAT_CONFIGS
+        ]
         max_name_w = max(s.get_width() for s in rendered_names)
         bar_x_base = left_x + max(120, max_name_w + 24)
         bar_width = 180
@@ -1960,17 +2361,16 @@ class PygameUIManager:
         pygame = self.pygame
         if not self.screen or not pygame:
             return
-        from src.assets.text_cache import get_font, get_text
 
-        font_large = get_font(36)
-        font_medium = get_font(28)
+        font_large = self.get_font(36)
+        font_medium = self.get_font(28)
 
         overlay = pygame.Surface((self.width, self.height))
         overlay.set_alpha(128)
         overlay.fill((0, 0, 0))
         self.screen.blit(overlay, (0, 0))
 
-        title = get_text("PAUSED", font_large, (255, 255, 255))
+        title = self.get_text("PAUSED", font_large, (255, 255, 255))
         self.screen.blit(
             title,
             (
@@ -1988,7 +2388,7 @@ class PygameUIManager:
                 self.width // 2 - text_width // 2, y_pos, text_width, option_height
             )
             is_hovered = option_rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
-            if is_hovered:
+            if is_hovered and option_rect.width > 0 and option_rect.height > 0:
                 self.game.pause_menu_option = i
             is_selected = i == self.game.pause_menu_option
             color = (
@@ -2024,11 +2424,9 @@ class PygameUIManager:
                 )
                 self.screen.blit(dlg_surf, (dx, dy))
 
-                from src.assets.text_cache import get_font, get_text
-
-                font = get_font(18)
+                font = self.get_font(18)
                 msg = "Quit to menu?"
-                msg_surf = get_text(msg, font, (255, 255, 255))
+                msg_surf = self.get_text(msg, font, (255, 255, 255))
                 self.screen.blit(
                     msg_surf, (dx + (dialog_w - msg_surf.get_width()) // 2, dy + 6)
                 )
@@ -2055,7 +2453,7 @@ class PygameUIManager:
                 yes_border = (200, 160, 20) if sel == 0 else (120, 120, 120)
                 pygame.draw.rect(self.screen, yes_bg, yes_rect)
                 pygame.draw.rect(self.screen, yes_border, yes_rect, 2)
-                yes_s = get_text(
+                yes_s = self.get_text(
                     "Yes", font, (0, 0, 0) if sel == 0 else (200, 200, 200)
                 )
                 self.screen.blit(
@@ -2071,7 +2469,9 @@ class PygameUIManager:
                 no_border = (200, 160, 20) if sel == 1 else (120, 120, 120)
                 pygame.draw.rect(self.screen, no_bg, no_rect)
                 pygame.draw.rect(self.screen, no_border, no_rect, 2)
-                no_s = get_text("No", font, (0, 0, 0) if sel == 1 else (200, 200, 200))
+                no_s = self.get_text(
+                    "No", font, (0, 0, 0) if sel == 1 else (200, 200, 200)
+                )
                 self.screen.blit(
                     no_s,
                     (
@@ -2087,12 +2487,11 @@ class PygameUIManager:
         pygame = self.pygame
         if not self.screen or not pygame:
             return
-        from src.assets.text_cache import get_font, get_text
 
-        font_title = get_font(40)
-        font_header = get_font(20)
-        font_body = get_font(18)
-        font_small = get_font(15)
+        font_title = self.get_font(40)
+        font_header = self.get_font(20)
+        font_body = self.get_font(18)
+        font_small = self.get_font(15)
 
         COLOR_TITLE = (220, 180, 40)
         COLOR_HEADER = (180, 80, 40)
@@ -2111,7 +2510,7 @@ class PygameUIManager:
             return f"{sign}{v:.0f}%"
 
         def _draw_section_header(label: str, x: int, y: int, width: int = 260) -> int:
-            surf = get_text(label.upper(), font_header, COLOR_HEADER)
+            surf = self.get_text(label.upper(), font_header, COLOR_HEADER)
             self.screen.blit(surf, (x + shake_x, y + shake_y))
             line_y = y + surf.get_height() + 4
             pygame.draw.line(
@@ -2134,8 +2533,8 @@ class PygameUIManager:
         ) -> None:
             lc = label_col or COLOR_LABEL
             vc = val_col or COLOR_VALUE
-            lab = get_text(label, font_body, lc)
-            val = get_text(value, font_body, vc)
+            lab = self.get_text(label, font_body, lc)
+            val = self.get_text(value, font_body, vc)
             self.screen.blit(lab, (x + shake_x, y + shake_y))
             vx = val_x if val_x else x + 180
             self.screen.blit(val, (vx + shake_x, y + shake_y))
@@ -2147,7 +2546,7 @@ class PygameUIManager:
         self.screen.blit(overlay, (0, 0))
 
         # ── Title ────────────────────────────────────────────────────────────────
-        title = get_text("PLAYER STATS", font_title, COLOR_TITLE)
+        title = self.get_text("PLAYER STATS", font_title, COLOR_TITLE)
         tx = self.width // 2 - title.get_width() // 2 + shake_x
         ty = 28 + shake_y
         self.screen.blit(title, (tx, ty))
@@ -2195,7 +2594,9 @@ class PygameUIManager:
             self.screen, (255, 100, 100), (bar_x, bar_y, fill_w, bar_height)
         )
 
-        xp_text = get_text(f"{meta_xp} / {meta_xp_to} XP", font_small, (255, 215, 0))
+        xp_text = self.get_text(
+            f"{meta_xp} / {meta_xp_to} XP", font_small, (255, 215, 0)
+        )
         self.screen.blit(xp_text, (left_x + shake_x, bar_y + bar_height + 4 + shake_y))
 
         y += line_h + 35
@@ -2322,8 +2723,8 @@ class PygameUIManager:
             for wid in weapons:
                 lvl = self.game.weapon_levels.get(wid, 0)
                 name = WEAPON_DEFS.get(wid, {}).get("name", _clean(wid))
-                name_surf = get_text(name, font_body, COLOR_VALUE)
-                lv_surf = get_text(f"Lv {lvl}", font_small, COLOR_GREEN)
+                name_surf = self.get_text(name, font_body, COLOR_VALUE)
+                lv_surf = self.get_text(f"Lv {lvl}", font_small, COLOR_GREEN)
                 self.screen.blit(name_surf, (right_x + shake_x, y + shake_y))
                 self.screen.blit(
                     lv_surf,
@@ -2332,7 +2733,7 @@ class PygameUIManager:
                 y += line_h
         else:
             self.screen.blit(
-                get_text("None", font_body, COLOR_HINT),
+                self.get_text("None", font_body, COLOR_HINT),
                 (right_x + shake_x, y + shake_y),
             )
             y += line_h
@@ -2353,11 +2754,13 @@ class PygameUIManager:
             for k, v in perm_items:
                 label = PERM_LABEL[k]
                 col = COLOR_TITLE if v > 0 else COLOR_HINT
-                val_surf = get_text(str(v), font_body, col)
-                lab_surf = get_text(label, font_body, COLOR_LABEL)
+                val_surf = self.get_text(str(v), font_body, col)
+                lab_surf = self.get_text(label, font_body, COLOR_LABEL)
                 # max indicator
                 max_surf = (
-                    get_text("MAX", font_small, (180, 140, 20)) if v >= 10 else None
+                    self.get_text("MAX", font_small, (180, 140, 20))
+                    if v >= 10
+                    else None
                 )
                 self.screen.blit(lab_surf, (right_x + shake_x, y + shake_y))
                 self.screen.blit(val_surf, (right_x + 160 + shake_x, y + shake_y))
@@ -2387,7 +2790,7 @@ class PygameUIManager:
                 y += lab_surf.get_height() + pip_h + 7 + 4
 
         # ── Close hint ───────────────────────────────────────────────────────────
-        inst = get_text("Tab / ESC  to close", font_small, COLOR_HINT)
+        inst = self.get_text("Tab / ESC  to close", font_small, COLOR_HINT)
         self.screen.blit(
             inst,
             (
@@ -2421,71 +2824,141 @@ class PygameUIManager:
         except Exception:
             pass
         pygame = self.pygame
+
+        # Hellish palette — charred, bone-dry wood
+        TRUNK_FILL = (72, 50, 38)
+        TRUNK_EDGE = (32, 18, 12)
+        TRUNK_HIGHLIGHT = (108, 78, 58)
+        CRACK_COLOR = (42, 25, 16)
+        BRANCH_COLOR = (65, 44, 32)
+        BRANCH_SHADOW = (22, 11, 7)
+        SUB_COLOR = (56, 36, 25)
+        TWIG_COLOR = (46, 28, 18)
+
         for tree in self.game.dead_trees:
-            x = tree["x"] + shake_x
-            y = tree["y"] + shake_y
+            x = int(tree["x"] + shake_x)
+            y = int(tree["y"] + shake_y)
             height = tree["height"]
-            trunk_width = tree["trunk_width"]
+            tw = tree["trunk_width"]
 
-            # Draw trunk (brighter for contrast)
-            pygame.draw.rect(
-                self.screen,
-                (140, 140, 140),
-                (x - trunk_width // 2, y, trunk_width, height),
-            )
-            pygame.draw.rect(
-                self.screen,
-                (100, 100, 100),
-                (x - trunk_width // 2, y, trunk_width, height),
-                1,
-            )
+            # Draw trunk — single tapered polygon, or Y-fork if split
+            split = tree.get("split")
+            if split:
+                fork_y = int(y + height * split["frac"])
+                fork_tw = max(1, tw - 1)
+                tine_top = max(1, fork_tw // 2)
 
-            # Draw branches using pre-generated data (brighter)
-            branch_color = (180, 180, 180)
-            for branch in tree.get("branches", []):
-                # Main branch
+                # Lower trunk segment: base → fork point
+                lower_poly = [
+                    (x - tw, y + height),
+                    (x + tw, y + height),
+                    (x + fork_tw, fork_y),
+                    (x - fork_tw, fork_y),
+                ]
+                pygame.draw.polygon(self.screen, TRUNK_FILL, lower_poly)
+                pygame.draw.polygon(self.screen, TRUNK_EDGE, lower_poly, 1)
                 pygame.draw.line(
                     self.screen,
-                    branch_color,
-                    (x, branch["start_y"] + shake_y),
-                    (branch["end_x"] + shake_x, branch["end_y"] + shake_y),
-                    2,
+                    TRUNK_HIGHLIGHT,
+                    (x, y + height - 3),
+                    (x, fork_y + 2),
+                    1,
                 )
 
-                # Sub-branches
-                for sub_branch in branch.get("sub_branches", []):
-                    pygame.draw.line(
-                        self.screen,
-                        branch_color,
-                        (
-                            sub_branch["start_x"] + shake_x,
-                            sub_branch["start_y"] + shake_y,
-                        ),
-                        (sub_branch["end_x"] + shake_x, sub_branch["end_y"] + shake_y),
-                        1,
-                    )
+                # Left tine: diverges upper-left from fork point
+                lx = x - split["left_dx"]
+                ly = fork_y - split["left_dy"]
+                left_poly = [
+                    (x - fork_tw, fork_y),
+                    (x + 1, fork_y),
+                    (lx + tine_top, ly),
+                    (lx - tine_top, ly),
+                ]
+                pygame.draw.polygon(self.screen, TRUNK_FILL, left_poly)
+                pygame.draw.polygon(self.screen, TRUNK_EDGE, left_poly, 1)
 
-    def _draw_pedestal(self, x: int, statue_base_y: int) -> None:
-        """Draw a pedestal/platform beneath a statue centered at X. Accepts statue_base_y
-        (which is the same coordinate used by _draw_statue_model).
-        """
-        pygame = self.pygame
-        # Convert statue_base_y back to pedestal 'y' (top of pedestal platform is statue_base_y + 10)
-        y = statue_base_y + 10
+                # Right tine: diverges upper-right from fork point
+                rx = x + split["right_dx"]
+                ry = fork_y - split["right_dy"]
+                right_poly = [
+                    (x - 1, fork_y),
+                    (x + fork_tw, fork_y),
+                    (rx + tine_top, ry),
+                    (rx - tine_top, ry),
+                ]
+                pygame.draw.polygon(self.screen, TRUNK_FILL, right_poly)
+                pygame.draw.polygon(self.screen, TRUNK_EDGE, right_poly, 1)
+            else:
+                # Tapered trunk polygon: wider at base (y+height), narrow at crown (y)
+                top_w = max(1, tw // 2)
+                trunk_poly = [
+                    (x - tw, y + height),
+                    (x + tw, y + height),
+                    (x + top_w, y),
+                    (x - top_w, y),
+                ]
+                pygame.draw.polygon(self.screen, TRUNK_FILL, trunk_poly)
+                pygame.draw.polygon(self.screen, TRUNK_EDGE, trunk_poly, 1)
 
-        # Pedestal base (wide)
-        pygame.draw.rect(self.screen, (58, 32, 16), (x - 25, y + 50, 50, 10))
-        pygame.draw.rect(self.screen, (42, 16, 8), (x - 25, y + 50, 50, 10), 2)
+                # Centre highlight stripe for depth
+                pygame.draw.line(
+                    self.screen, TRUNK_HIGHLIGHT, (x, y + 3), (x, y + height - 3), 1
+                )
 
-        # Pedestal column (shorter - half height)
-        pygame.draw.rect(self.screen, (74, 48, 32), (x - 15, y, 30, 50))
-        pygame.draw.rect(self.screen, (58, 32, 16), (x - 15, y, 30, 50), 2)
+            # Trunk cracks / texture marks
+            for crack in tree.get("cracks", []):
+                cx = x + crack["x_off"]
+                cy = y + int(height * crack["y_frac"])
+                half = crack["length"] // 2
+                pygame.draw.line(
+                    self.screen,
+                    CRACK_COLOR,
+                    (cx, cy),
+                    (cx + crack["dir"] * half, cy + half),
+                    1,
+                )
 
-        # Column details (horizontal lines)
-        for detail_y in [y + 15, y + 35]:
-            pygame.draw.line(
-                self.screen, (42, 16, 8), (x - 15, detail_y), (x + 15, detail_y), 2
-            )
+            # Branches — 3 levels deep (main → sub → twig)
+            for branch in tree.get("branches", []):
+                bsx = x
+                bsy = int(branch["start_y"] + shake_y)
+                bex = int(branch["end_x"] + shake_x)
+                bey = int(branch["end_y"] + shake_y)
+                bthick = branch.get("thickness", 2)
+
+                # Shadow offset for depth
+                pygame.draw.line(
+                    self.screen,
+                    BRANCH_SHADOW,
+                    (bsx + 1, bsy + 1),
+                    (bex + 1, bey + 1),
+                    bthick,
+                )
+                pygame.draw.line(
+                    self.screen, BRANCH_COLOR, (bsx, bsy), (bex, bey), bthick
+                )
+
+                for sub in branch.get("sub_branches", []):
+                    ssx = int(sub["start_x"] + shake_x)
+                    ssy = int(sub["start_y"] + shake_y)
+                    sex = int(sub["end_x"] + shake_x)
+                    sey = int(sub["end_y"] + shake_y)
+                    pygame.draw.line(self.screen, SUB_COLOR, (ssx, ssy), (sex, sey), 1)
+
+                    for twig in sub.get("sub_branches", []):
+                        pygame.draw.line(
+                            self.screen,
+                            TWIG_COLOR,
+                            (
+                                int(twig["start_x"] + shake_x),
+                                int(twig["start_y"] + shake_y),
+                            ),
+                            (
+                                int(twig["end_x"] + shake_x),
+                                int(twig["end_y"] + shake_y),
+                            ),
+                            1,
+                        )
 
     def _draw_tower_energy_bar(self, shake_x: int = 0, shake_y: int = 0) -> None:
         """Draw the shared tower energy bar in the bottom‑right corner.
@@ -2528,11 +3001,61 @@ class PygameUIManager:
 
         This helper is reused by both pedestals (Limbo) and dynamic towers (Purgatory).
         The `tower_type` controls coloring similarly to the old logic (fire/storm/ice).
+
+        New behaviour: before resorting to procedural vector art we attempt to
+        load an external image asset.  The asset files are expected to live in
+        ``assets/`` and follow the naming convention ``statue_<type>.png`` where
+        <type> is one of ``fire``, ``storm`` or ``ice`` (the same categories used
+        for colouring).  If the asset manager returns a Surface we blit it so
+        that its bottom centre aligns with ``(x, statue_base_y)`` and return
+        early.  This allows designers to drop custom tower/statue graphics into
+        the assets folder and have them picked up automatically.
         """
         pygame = self.pygame
 
-        # Choose statue colors based on provided tower_type (or current stage)
+        # apply the global vertical offset to *all* statues, including those
+        # drawn procedurally.  previously only imported assets were shifted;
+        # the constant now acts as a universal adjustment so designers can tweak
+        # one value and affect Limbo pedestals, Purgatory towers and Hell
+        # statues alike.
+        adjusted_base_y = statue_base_y + STATUE_ASSET_VERTICAL_OFFSET
+
+        # first figure out which of the three categories we want.  mirror the
+        # colour logic below so limbo stages still map sensibly.
         tt = tower_type or getattr(self.game, "selected_stage", None)
+        if tt == "storm" or tt == "limbo_2":
+            asset_type = "storm"
+        elif tt == "ice" or tt in ("limbo_3", "limbo_final"):
+            asset_type = "ice"
+        else:
+            asset_type = "fire"
+
+        # attempt to load an external image; do not scale so artist can choose
+        # whatever dimensions they like.  if we got something, draw and exit.
+        try:
+            from src.assets.manager import get_image
+
+            asset_name = f"statue_{asset_type}.png"
+            asset_img = get_image(asset_name)
+        except Exception:
+            asset_img = None
+        if asset_img:
+            w, h = asset_img.get_size()
+            # optionally flip horizontally when drawing on the right side of the
+            # screen.  this mirrors imported assets for the right-hand statue
+            # while leaving the left-hand one untouched.
+            if x > (getattr(self, "width", 0) / 2):
+                try:
+                    asset_img = pygame.transform.flip(asset_img, True, False)
+                except Exception:
+                    pass
+            # bottom-center anchor, with optional vertical offset
+            y_pos = adjusted_base_y - h
+            self.screen.blit(asset_img, (x - w // 2, y_pos))
+            return
+
+        # Choose statue colors based on provided tower_type (or current stage)
+        tt = tt  # reuse value computed above for colouring
         if tt == "storm" or tt == "limbo_2":
             # Storm - blueish statue
             body_color = (18, 36, 120)
@@ -2540,7 +3063,7 @@ class PygameUIManager:
             horn_color = (60, 100, 200)
             eye_color = (100, 150, 255)
             glow_color = (40, 70, 180)
-        elif tt == "ice" or tt == "limbo_3":
+        elif tt == "ice" or tt in ("limbo_3", "limbo_final"):
             # Ice - icy pale statue
             body_color = (120, 140, 180)
             outline_color = (80, 100, 140)
@@ -2555,19 +3078,20 @@ class PygameUIManager:
             eye_color = (255, 48, 48)
             glow_color = (200, 150, 60)
 
-        # Statue body (slimmer triangular/demonic shape)
+        # Statue body (slimmer triangular/demonic shape) using the adjusted
+        # base Y so vector art lines up with any asset-based artworks.
         body_points: list[tuple[int, int]] = [
-            (x, statue_base_y - 60),  # Neck point (head connects here)
-            (x - 12, statue_base_y - 40),  # Left shoulder
-            (x - 15, statue_base_y),  # Left base
-            (x + 15, statue_base_y),  # Right base
-            (x + 12, statue_base_y - 40),  # Right shoulder
+            (x, adjusted_base_y - 60),  # Neck point (head connects here)
+            (x - 12, adjusted_base_y - 40),  # Left shoulder
+            (x - 15, adjusted_base_y),  # Left base
+            (x + 15, adjusted_base_y),  # Right base
+            (x + 12, adjusted_base_y - 40),  # Right shoulder
         ]
         pygame.draw.polygon(self.screen, body_color, body_points)
         pygame.draw.polygon(self.screen, outline_color, body_points, 2)
 
         # Head (larger and round)
-        head_y: int = statue_base_y - 70
+        head_y: int = adjusted_base_y - 70
         head_radius = 15
         pygame.draw.circle(self.screen, body_color, (x, head_y), head_radius)
         pygame.draw.circle(self.screen, outline_color, (x, head_y), head_radius, 2)
@@ -2664,27 +3188,43 @@ class PygameUIManager:
         return
 
     def draw_pedestals(self, shake_x=0, shake_y=0) -> None:
-        """Draw tall pedestals with demonic statues for Limbo stage"""
+        """Draw (static) statues in Limbo stage.
+
+        The original implementation drew full pedestals with statues.  Pedestals
+        were removed, but the statues themselves are still desired for Limbo for
+        visual continuity.  This method now simply places two statue models at
+        the side positions; the same `_draw_statue_model` helper is used so any
+        external assets are respected.
+
+        Calls from Game.draw_game_world remain unchanged.
+        """
+        # If we're not in any limbo variant, bail early.
         if not self.game.is_limbo_stage():
             if getattr(self.game, "debug", False):
                 print("[DEBUG] draw_pedestals: not in limbo")
             return
+        # **Limbo Final** should not draw the static statues at all.  The
+        # dynamic tower models that appear after the player chooses a tower
+        # replace them, and drawing the ice statues early led to visual
+        # overlap (the 'ice statue' complaint).  We also prevent firing while
+        # the player is selecting a tower (handled in WeaponSystem).
+        if getattr(self.game, "selected_stage", None) == "limbo_final":
+            if getattr(self.game, "debug", False):
+                print("[DEBUG] draw_pedestals: skipped (limbo_final)")
+            return
         if getattr(self.game, "debug", False):
-            print("[DEBUG] draw_pedestals: drawing pedestals")
-        # Two pedestals at the sides of the play area
-        pedestals: list[dict[str, int]] = [
-            {"x": 320, "y": 620},  # Left pedestal
-            {"x": 960, "y": 620},  # Right pedestal
-        ]
+            print("[DEBUG] draw_pedestals: drawing limbo statues")
 
-        for pedestal in pedestals:
-            x: int = pedestal["x"] + shake_x
-            y: int = pedestal["y"] + shake_y
+        # Two statues at the sides of the play area (no pedestals).  X coords
+        # are moved inward by 50 pixels vs the original pedestal positions.
+        # Y is the universal STATUE_BASE_Y constant shared with all other stages.
+        statue_xs: list[int] = [370, 910]
 
-            statue_base_y: int = y - 10
-            self._draw_pedestal(x, statue_base_y)
+        for sx in statue_xs:
             self._draw_statue_model(
-                x, statue_base_y, getattr(self.game, "selected_stage", None)
+                sx + shake_x,
+                STATUE_BASE_Y + shake_y,
+                getattr(self.game, "selected_stage", None),
             )
 
     def _build_fog_cache(self) -> None:
@@ -2726,7 +3266,8 @@ class PygameUIManager:
         # - limbo_2: slightly yellower (increase R+G)
         # - limbo_3: slightly redder (increase R)
         stage = getattr(self.game, "selected_stage", None)
-        if stage == "limbo_3":
+        # limbo_final uses same redder tint as limbo_3
+        if stage in ("limbo_3", "limbo_final"):
             base_r, base_g, base_b = 90, 60, 60
         elif stage == "limbo_2":
             base_r, base_g, base_b = 80, 80, 60
@@ -2817,10 +3358,7 @@ class PygameUIManager:
             pass
 
         # draw the screen‑wide fog overlay last so it mutes everything beneath
-        from src.game_constants import (
-            PURGATORY_OVERLAY_ALPHA,
-            PURGATORY_OVERLAY_COLOR,
-        )
+        from src.game_constants import PURGATORY_OVERLAY_ALPHA, PURGATORY_OVERLAY_COLOR
 
         self._draw_stage_overlay(
             "_purgatory_overlay",
@@ -2874,7 +3412,6 @@ class PygameUIManager:
         if not stage or not self.screen:
             return
 
-        # Purgatory: overlay + fog particles (handled by dedicated method)
         if str(stage).startswith("purgatory"):
             try:
                 self.draw_purgatory_fog(shake_x, shake_y)
@@ -2882,7 +3419,6 @@ class PygameUIManager:
                 pass
             return
 
-        # Hell: dark red ember overlay
         if str(stage).startswith("hell"):
             from src.game_constants import HELL_OVERLAY_ALPHA, HELL_OVERLAY_COLOR
 
@@ -2895,7 +3431,6 @@ class PygameUIManager:
             )
             return
 
-        # Prologo: subtle warm smoke overlay
         if stage == "prologo":
             from src.game_constants import PROLOGO_OVERLAY_ALPHA, PROLOGO_OVERLAY_COLOR
 
@@ -2908,7 +3443,6 @@ class PygameUIManager:
             )
             return
 
-        # Limbo: haze overlay + lateral fog polygons
         if not self.game.is_limbo_stage():
             return
         if not self.game.left_wall_points or not self.game.right_wall_points:
@@ -3033,7 +3567,87 @@ class PygameUIManager:
         for projectile in self.game.enemy_projectiles:
             projectile.draw(self.screen, shake_x, shake_y)
 
+        for drop in getattr(self.game, "health_drops", []):
+            try:
+                x = int(drop.get("x", 0) + shake_x)
+                y = int(drop.get("y", 0) + shake_y)
+                r = drop.get("radius", 8)
+                alpha = self._health_drop_alpha(drop)
+                if pygame:
+                    self._draw_health_drop_particle(x, y, r, alpha)
+                else:
+                    pygame_mod = self.pygame
+                    if pygame_mod:
+                        pygame_mod.draw.circle(self.screen, (0, 200, 0), (x, y), r)
+                        pygame_mod.draw.line(
+                            self.screen,
+                            (255, 255, 255),
+                            (x - r // 2, y),
+                            (x + r // 2, y),
+                            2,
+                        )
+                        pygame_mod.draw.line(
+                            self.screen,
+                            (255, 255, 255),
+                            (x, y - r // 2),
+                            (x, y + r // 2),
+                            2,
+                        )
+            except Exception:
+                pass
+
+        # (statues/towers will be drawn later, after special effects, to ensure
+        # they stay above everything including hellectric beams)
+
         # NOTE: statue projectile visual indicators removed (kept internal data for logic/tests)
+
+        # Draw aura around player once satan growth has started; it remains
+        # until the level ends.  we base the pulse on the global frame count so
+        # it continues even after the animation period finishes.
+        if (
+            getattr(self.game, "satan_growth_persistent", False)
+            and self.screen is not None
+        ):
+            try:
+                import math
+
+                # pulse formula using frame_count for continuous pulsing
+                pulse = int((math.sin(self.game.frame_count * 0.06) + 1) / 2 * 150) + 20
+                w = getattr(self.game.player, "width", 0)
+                h = getattr(self.game.player, "height", 0)
+                base_radius = int(math.hypot(w, h) / 2)
+                padding = 1
+                glow_radius = base_radius + padding
+                outer_padding = 20
+                aura_radius = glow_radius + outer_padding
+                aura_size = aura_radius * 2
+                aura = pygame.Surface((aura_size, aura_size), pygame.SRCALPHA)
+                center = (aura_radius, aura_radius)
+                fade_alpha = max(0, int(pulse * 0.25))
+                if fade_alpha > 0:
+                    pygame.draw.circle(
+                        aura, (255, 0, 0, fade_alpha), center, aura_radius
+                    )
+                inner_alpha = int(pulse * 0.8)
+                pygame.draw.circle(aura, (255, 0, 0, inner_alpha), center, glow_radius)
+                # compute draw position matching player draw logic (including bobbing)
+                draw_x = self.game.player.rect.x + shake_x
+                draw_y = self.game.player.rect.y + shake_y
+                bob_offset = 0
+                if getattr(self.game, "player_is_moving", False) and getattr(
+                    self.game.player, "walk_frames", False
+                ):
+                    bob_cycle = self.game.player_anim_frame % 4
+                    if bob_cycle == 1:
+                        bob_offset = -1
+                    elif bob_cycle == 3:
+                        bob_offset = 1
+                draw_y += bob_offset
+                aura_x = draw_x - (aura_radius - w // 2)
+                aura_y = draw_y - (aura_radius - h // 2)
+                self.screen.blit(aura, (aura_x, aura_y))
+            except Exception:
+                pass
 
         # Draw player
         self.game.player.draw(
@@ -3070,15 +3684,12 @@ class PygameUIManager:
         for orb in self.game.orbitals:
             ox = orb.get("x", self.game.player.x)
             oy = orb.get("y", self.game.player.y)
-            # glowing core
-            pygame.draw.circle(
-                self.screen, (176, 240, 255), (int(ox + shake_x), int(oy + shake_y)), 6
-            )
-            # small trail ring
+            ox_s, oy_s = self._apply_shake(ox, oy, shake_x, shake_y)
+            pygame.draw.circle(self.screen, (176, 240, 255), (ox_s, oy_s), 6)
             pygame.draw.circle(
                 self.screen,
                 (224, 248, 255),
-                (int(ox + shake_x), int(oy + shake_y)),
+                (ox_s, oy_s),
                 10,
                 1,
             )
@@ -3093,28 +3704,29 @@ class PygameUIManager:
         except Exception:
             pass
 
-        # Draw dynamic towers/statues for Purgatory when they exist and are marked visible
+        # Always render statues/towers last so they layer above projectiles and
+        # even hellectric flux rays.  ``draw_pedestals`` is a no-op except in
+        # Limbo, while the dynamic tower code handles Purgatory/Hell.
         try:
-            if getattr(self.game, "selected_stage", None) and str(
-                self.game.selected_stage
-            ).startswith(("purgatory", "hell")):
+            if hasattr(self, "draw_pedestals"):
+                self.draw_pedestals(shake_x, shake_y)
+
+            if getattr(self.game, "selected_stage", None) and (
+                str(self.game.selected_stage).startswith(("purgatory", "hell"))
+                or self.game.selected_stage == "limbo_final"
+            ):
                 lt = getattr(self.game, "left_tower", None)
                 rt = getattr(self.game, "right_tower", None)
                 if lt and getattr(lt, "visible", False):
-                    # Draw pedestal first, then statue model above it
-                    statue_base_y = int(lt.y - 20 + shake_y)
-                    self._draw_pedestal(int(lt.x + shake_x), statue_base_y)
                     self._draw_statue_model(
                         int(lt.x + shake_x),
-                        statue_base_y,
+                        STATUE_BASE_Y + shake_y,
                         getattr(lt, "tower_type", None),
                     )
                 if rt and getattr(rt, "visible", False):
-                    statue_base_y = int(rt.y - 20 + shake_y)
-                    self._draw_pedestal(int(rt.x + shake_x), statue_base_y)
                     self._draw_statue_model(
                         int(rt.x + shake_x),
-                        statue_base_y,
+                        STATUE_BASE_Y + shake_y,
                         getattr(rt, "tower_type", None),
                     )
         except Exception:
@@ -3128,7 +3740,12 @@ class PygameUIManager:
         except Exception:
             pygame = None
 
-        if self.game.selected_stage == "prologo" and self.game.prologo_lightning_strike:
+        if (
+            self.game.selected_stage == "prologo" and self.game.prologo_lightning_strike
+        ) or (
+            self.game.selected_stage == "limbo_final"
+            and getattr(self.game, "limbo_final_lightning_strike", False)
+        ):
             self.draw_lightning_effect(shake_x, shake_y)
         # Hellectric flux cursor ring (pulsing) for storm-tier7 special
         if pygame is not None:
@@ -3146,42 +3763,57 @@ class PygameUIManager:
                         alpha = int(200 * (timer / max_timer))
                         if current <= 0:
                             continue
-                        surf = pygame.Surface((current * 2 + 4, current * 2 + 4), pygame.SRCALPHA)
+                        surf = pygame.Surface(
+                            (current * 2 + 4, current * 2 + 4), pygame.SRCALPHA
+                        )
                         cx = cy = current + 2
                         # dark red core
                         inner = int(current * 0.3)
                         if inner > 0:
-                            pygame.draw.circle(surf, (200, 0, 0, alpha), (cx, cy), inner)
+                            pygame.draw.circle(
+                                surf, (200, 0, 0, alpha), (cx, cy), inner
+                            )
                         # yellow mid circle
                         mid = int(current * 0.6)
                         if mid > inner:
-                            pygame.draw.circle(surf, (255, 200, 0, alpha), (cx, cy), mid)
+                            pygame.draw.circle(
+                                surf, (255, 200, 0, alpha), (cx, cy), mid
+                            )
                         # outer orange ring
-                        pygame.draw.circle(surf, (255, 100, 0, alpha), (cx, cy), current)
+                        pygame.draw.circle(
+                            surf, (255, 100, 0, alpha), (cx, cy), current
+                        )
                         # blit the filled multi-color surf first
                         self.screen.blit(
                             surf,
-                            (int(eff["x"] - current) + shake_x, int(eff["y"] - current) + shake_y),
+                            (
+                                int(eff["x"] - current) + shake_x,
+                                int(eff["y"] - current) + shake_y,
+                            ),
                         )
                         # jagged yellow outline resembling skullboom's glow
                         try:
                             num_segments = 10
                             for i in range(num_segments):
-                                angle1 = (2 * math.pi * i) / num_segments + random.uniform(-0.2, 0.2)
-                                angle2 = (2 * math.pi * (i+1)) / num_segments + random.uniform(-0.2, 0.2)
+                                angle1 = (
+                                    2 * math.pi * i
+                                ) / num_segments + random.uniform(-0.2, 0.2)
+                                angle2 = (
+                                    2 * math.pi * (i + 1)
+                                ) / num_segments + random.uniform(-0.2, 0.2)
                                 rvar = current + 3 + random.uniform(-2, 2)
                                 pygame.draw.arc(
                                     self.screen,
                                     (255, 200, 0, alpha),
                                     (
-                                        int(eff.get("x",0) - rvar) + shake_x,
-                                        int(eff.get("y",0) - rvar) + shake_y,
+                                        int(eff.get("x", 0) - rvar) + shake_x,
+                                        int(eff.get("y", 0) - rvar) + shake_y,
                                         int(rvar * 2),
                                         int(rvar * 2),
                                     ),
                                     angle1,
                                     angle2,
-                                    max(1, int(2 * (timer / max_timer)))
+                                    max(1, int(2 * (timer / max_timer))),
                                 )
                         except Exception:
                             pass
@@ -3192,22 +3824,38 @@ class PygameUIManager:
                     try:
                         size = int(s.get("size", 5))
                         alpha = max(0, min(255, int(255 * (s.get("life", 0) / 40))))
-                        surf = pygame.Surface((size * 2 + 2, size * 2 + 2), pygame.SRCALPHA)
-                        pygame.draw.circle(surf, (100, 100, 100, alpha), (size + 1, size + 1), size)
-                        self.screen.blit(surf, (int(s.get("x",0) - size) + shake_x, int(s.get("y",0) - size) + shake_y))
+                        surf = pygame.Surface(
+                            (size * 2 + 2, size * 2 + 2), pygame.SRCALPHA
+                        )
+                        pygame.draw.circle(
+                            surf, (100, 100, 100, alpha), (size + 1, size + 1), size
+                        )
+                        self.screen.blit(
+                            surf,
+                            (
+                                int(s.get("x", 0) - size) + shake_x,
+                                int(s.get("y", 0) - size) + shake_y,
+                            ),
+                        )
                     except Exception:
                         pass
                 if getattr(self.game, "hellectric_active", False):
                     # draw a semitransparent pulsing circle at the beam endpoint (which
                     # now moves toward the cursor at a fixed speed rather than
                     # instantly following it).
-                    mx = getattr(self.game, "hellectric_x", getattr(self.game, "mouse_x", 0))
-                    my = getattr(self.game, "hellectric_y", getattr(self.game, "mouse_y", 0))
+                    mx = getattr(
+                        self.game, "hellectric_x", getattr(self.game, "mouse_x", 0)
+                    )
+                    my = getattr(
+                        self.game, "hellectric_y", getattr(self.game, "mouse_y", 0)
+                    )
                     radius = getattr(self.game, "HELLECTRIC_IMPACT_RADIUS", 50)
                     # constant alpha to avoid flashing/intermittence
                     alpha = 150
                     color = (180, 220, 255, alpha)
-                    surf = pygame.Surface((radius * 2 + 8, radius * 2 + 8), pygame.SRCALPHA)
+                    surf = pygame.Surface(
+                        (radius * 2 + 8, radius * 2 + 8), pygame.SRCALPHA
+                    )
                     try:
                         # simple filled circle with a gentle radial fade.
                         base_alpha = color[3]
@@ -3217,9 +3865,7 @@ class PygameUIManager:
                             a = int(base_alpha * frac)
                             if a <= 0:
                                 continue
-                            grad_color = (
-                                color[0], color[1], color[2], min(a, 255)
-                            )
+                            grad_color = (color[0], color[1], color[2], min(a, 255))
                             pygame.draw.circle(
                                 surf,
                                 grad_color,
@@ -3255,7 +3901,7 @@ class PygameUIManager:
                                 py = my + math.sin(angle) * length * frac
                                 # random offset perpendicular
                                 perp = (-math.sin(angle), math.cos(angle))
-                                offset = random.uniform(-5,5)
+                                offset = random.uniform(-5, 5)
                                 px += perp[0] * offset
                                 py += perp[1] * offset
                                 points.append((px, py))
@@ -3264,7 +3910,7 @@ class PygameUIManager:
                                 self.screen,
                                 (200, 255, 255),
                                 False,
-                                [(int(x), int(y)) for x,y in points],
+                                [(int(x), int(y)) for x, y in points],
                                 1,
                             )
                     except Exception:
@@ -3272,7 +3918,6 @@ class PygameUIManager:
             except Exception:
                 pass
         self.draw_chain_lightning_effects(shake_x, shake_y)
-        self.draw_spine_effect(shake_x, shake_y)
 
     def draw_lightning_effect(self, shake_x=0, shake_y=0):
         pygame = self.pygame
@@ -3294,7 +3939,19 @@ class PygameUIManager:
             else:
                 end_x = int(getattr(self.game.player, "x", self.width // 2))
                 end_y = int(getattr(self.game.player, "y", self.height - 80))
-            t: Any | int = getattr(self.game, "prologo_lightning_timer", 0)
+
+            # select timer and duration based on current stage
+            if self.game.selected_stage == "limbo_final":
+                t = getattr(self.game, "limbo_final_lightning_timer", 0)
+                total = int(
+                    getattr(self.game, "limbo_final_lightning_duration_frames", 180)
+                )
+            else:
+                t = getattr(self.game, "prologo_lightning_timer", 0)
+                total = int(
+                    getattr(self.game, "prologo_lightning_duration_frames", 180)
+                )
+
             # Beam fall progress (fast initial fall)
             fall_frames = 30
             progress: float = min(1.0, t / float(fall_frames))
@@ -3362,19 +4019,19 @@ class PygameUIManager:
 
             # Try to capture screenshots at two key moments (non-fatal)
             try:
-                total = int(
-                    getattr(self.game, "prologo_lightning_duration_frames", 180)
-                )
                 start_frame: int = max(1, int(total * 0.1))
                 peak_frame: int = max(1, int(total * 0.75))
                 os.makedirs("screenshots", exist_ok=True)
+                suffix = (
+                    "limbo" if self.game.selected_stage == "limbo_final" else "prologo"
+                )
                 if (
                     not getattr(self.game, "_screenshot_taken_start", False)
                     and t == start_frame
                 ):
                     pygame.image.save(
                         self.screen,
-                        os.path.join("screenshots", "prologo_beam_start.png"),
+                        os.path.join("screenshots", f"{suffix}_beam_start.png"),
                     )
                     self.game._screenshot_taken_start = True
                 if (
@@ -3383,7 +4040,7 @@ class PygameUIManager:
                 ):
                     pygame.image.save(
                         self.screen,
-                        os.path.join("screenshots", "prologo_beam_peak.png"),
+                        os.path.join("screenshots", f"{suffix}_beam_peak.png"),
                     )
                     self.game._screenshot_taken_peak = True
             except Exception:
@@ -3392,35 +4049,32 @@ class PygameUIManager:
             # Explosion / impact at the end point
             # Make a pulsing explosion that grows over the configured timer
             max_radius = 160
-            duration = float(
-                getattr(self.game, "prologo_lightning_duration_frames", 180)
-            )
-            radius = int(min(max_radius, (t / duration) * max_radius + 8))
+            radius = int(min(max_radius, (t / float(total)) * max_radius + 8))
             pulse: float = (math.sin(self.game.frame_count * 0.25) + 1) * 0.5
             # Outer glow circle
             pygame.draw.circle(
                 self.screen,
                 (255, 240, 200),
-                (int(end_x + shake_x), int(end_y + shake_y)),
+                self._apply_shake(end_x, end_y, shake_x, shake_y),
                 int(radius * 1.1),
             )
-            # Inner bright core
+            end_xs, end_ys = self._apply_shake(end_x, end_y, shake_x, shake_y)
             pygame.draw.circle(
                 self.screen,
                 (255, 255, 200),
-                (int(end_x + shake_x), int(end_y + shake_y)),
+                (end_xs, end_ys),
                 int(radius * 0.6 + pulse * 8),
             )
-            # Flash star lines
             for ang in range(0, 360, 45):
                 rad: float = math.radians(ang)
                 lx: Any | float = end_x + math.cos(rad) * (radius * 0.9)
                 ly: Any | float = end_y + math.sin(rad) * (radius * 0.9)
+                lxs, lys = self._apply_shake(lx, ly, shake_x, shake_y)
                 pygame.draw.line(
                     self.screen,
                     (255, 255, 230),
-                    (int(end_x + shake_x), int(end_y + shake_y)),
-                    (int(lx + shake_x), int(ly + shake_y)),
+                    (end_xs, end_ys),
+                    (lxs, lys),
                     3,
                 )
             else:
@@ -3495,10 +4149,11 @@ class PygameUIManager:
                         # Inner bright core
                         try:
                             inner_alpha = min(255, alpha + 40)
+                            cxs, cys = self._apply_shake(cx, cy, shake_x, shake_y)
                             pygame.draw.circle(
                                 self.screen,
                                 (255, 255, 230, inner_alpha),
-                                (int(cx + shake_x), int(cy + shake_y)),
+                                (cxs, cys),
                                 max(3, int(radius * 0.15)),
                             )
                         except Exception:
@@ -3537,10 +4192,11 @@ class PygameUIManager:
                         # Sparks at destination points (short-lived bright dots)
                         try:
                             for px, py in points[1:]:
+                                pxs, pys = self._apply_shake(px, py, shake_x, shake_y)
                                 pygame.draw.circle(
                                     self.screen,
                                     (200, 255, 255, alpha),
-                                    (int(px + shake_x), int(py + shake_y)),
+                                    (pxs, pys),
                                     4,
                                 )
                         except Exception:
@@ -3646,66 +4302,6 @@ class PygameUIManager:
         points.append((end_x, end_y))
         return points
 
-    def draw_spine_effect(self, shake_x=0, shake_y=0):
-        pygame = self.pygame
-        for enemy in self.game.enemies:
-            if (
-                hasattr(enemy, "spine_timer")
-                and enemy.spine_timer > 0
-                and hasattr(enemy, "spine_from")
-                and enemy.spine_from is not None
-            ):
-                try:
-                    ex, ey = enemy.x, enemy.y
-                    spine_from = enemy.spine_from
-                    if (
-                        isinstance(spine_from, (list, tuple))
-                        and len(spine_from) == 2
-                        and all(isinstance(v, (int, float)) for v in spine_from)
-                    ):
-                        px, py = spine_from
-                        for t in [0.25, 0.5, 0.75]:
-                            lx = px + (ex - px) * t
-                            ly = py + (ey - py) * t
-                            r: float = 18 + 6 * random.random()
-                            color: (
-                                tuple[Literal[255], Literal[255], Literal[204]]
-                                | tuple[Literal[255], Literal[254], Literal[224]]
-                            ) = (
-                                (255, 255, 204)
-                                if self.game.frame_count % 2 == 0
-                                else (255, 254, 224)
-                            )
-                            pygame.draw.circle(
-                                self.screen,
-                                color,
-                                (int(lx + shake_x), int(ly + shake_y)),
-                                int(r),
-                            )
-                            pygame.draw.circle(
-                                self.screen,
-                                (255, 255, 0),
-                                (int(lx + shake_x), int(ly + shake_y)),
-                                int(r),
-                                2,
-                            )
-                        pygame.draw.circle(
-                            self.screen,
-                            (255, 254, 224),
-                            (int(ex + shake_x), int(ey + shake_y)),
-                            12,
-                        )
-                        pygame.draw.circle(
-                            self.screen,
-                            (255, 255, 0),
-                            (int(ex + shake_x), int(ey + shake_y)),
-                            12,
-                            3,
-                        )
-                except (TypeError, ValueError, AttributeError):
-                    # Skip if spine_from data is invalid
-                    pass
-
     def draw_hud(self, shake_x=0, shake_y=0):
         """Draw the HUD elements (migrated from Game.draw_hud).
 
@@ -3713,23 +4309,26 @@ class PygameUIManager:
         pygame = self.pygame
         if not self.screen or not pygame:
             return
-        from src.assets.text_cache import get_font, get_text
 
-        font = get_font(24)
-        small_font = get_font(18)
+        font = self.get_font(24)
+        small_font = self.get_font(18)
 
         # Score
-        score_text = get_text(f"Score: {int(self.game.score)}", font, (255, 255, 0))
+        score_text = self.get_text(
+            f"Score: {int(self.game.score)}", font, (255, 255, 0)
+        )
         self.screen.blit(score_text, (10 + shake_x, 10 + shake_y))
 
         # Wave
-        wave_text = get_text(f"Wave: {self.game.wave}", font, (255, 100, 100))
+        wave_text = self.get_text(f"Wave: {self.game.wave}", font, (255, 100, 100))
         self.screen.blit(wave_text, (10 + shake_x, 40 + shake_y))
 
         # Time
         minutes = int(self.game.time_elapsed // 60)
         seconds = int(self.game.time_elapsed % 60)
-        time_text = get_text(f"Time: {minutes}:{seconds:02d}", font, (100, 200, 255))
+        time_text = self.get_text(
+            f"Time: {minutes}:{seconds:02d}", font, (100, 200, 255)
+        )
         self.screen.blit(time_text, (10 + shake_x, 70 + shake_y))
 
         # Health bar
@@ -3769,7 +4368,7 @@ class PygameUIManager:
         )
 
         # Health text
-        health_text = get_text(
+        health_text = self.get_text(
             f"{int(self.game.player.health)}/{int(self.game.player.max_health)}",
             small_font,
             (255, 255, 255),
@@ -3804,7 +4403,7 @@ class PygameUIManager:
         )
 
         # XP text
-        xp_text = get_text(
+        xp_text = self.get_text(
             f"{int(self.game.player_xp)}/{int(self.game.xp_to_next_level)}",
             small_font,
             (255, 255, 255),
@@ -3818,7 +4417,9 @@ class PygameUIManager:
         )
 
         # Level
-        level_text = get_text(f"Level {self.game.player_level}", font, (255, 215, 0))
+        level_text = self.get_text(
+            f"Level {self.game.player_level}", font, (255, 215, 0)
+        )
         self.screen.blit(
             level_text,
             (
@@ -3886,13 +4487,12 @@ class PygameUIManager:
         pygame = self.pygame
         if not self.screen or not pygame:
             return
-        from src.assets.text_cache import get_font, get_text
 
         for msg in list(self.game.center_messages):
             try:
-                font = get_font(msg.get("font_size", 36))
+                font = self.get_font(msg.get("font_size", 36))
                 # Shadow for readability
-                shadow_text = get_text(msg["text"], font, (0, 0, 0))
+                shadow_text = self.get_text(msg["text"], font, (0, 0, 0))
                 self.screen.blit(
                     shadow_text,
                     (
@@ -3901,7 +4501,7 @@ class PygameUIManager:
                     ),
                 )
                 # Main text
-                main_text = get_text(msg["text"], font, msg["color"])
+                main_text = self.get_text(msg["text"], font, msg["color"])
                 self.screen.blit(
                     main_text,
                     (
@@ -3923,11 +4523,9 @@ class PygameUIManager:
         if not self.screen or not pygame:
             return
         try:
-            from src.assets.text_cache import get_font, get_text
-
             fps_val = int(self.game.clock.get_fps())
-            font = get_font(18)
-            fps_text = get_text(f"FPS: {fps_val}", font, (200, 200, 200))
+            font = self.get_font(18)
+            fps_text = self.get_text(f"FPS: {fps_val}", font, (200, 200, 200))
             x = self.width - fps_text.get_width() - 6
             y = 6
             # Dark background for readability
@@ -3944,19 +4542,17 @@ class PygameUIManager:
         try:
             import pygame
 
-            from src.assets.text_cache import get_font, get_text
-
             # Create semi-transparent purple overlay
             overlay = pygame.Surface((self.width, self.height))
             overlay.fill((40, 20, 45))  # Purple background
             overlay.set_alpha(180)  # Semi-transparent (0-255, 180 = ~70% opacity)
             self.game.screen.blit(overlay, (0, 0))
 
-            font_large = get_font(48)
-            font_medium = get_font(32)
+            font_large = self.get_font(48)
+            font_medium = self.get_font(32)
 
             # Title
-            title = get_text("SATAN'S FALL COMPLETE", font_large, (255, 215, 0))
+            title = self.get_text("SATAN'S FALL COMPLETE", font_large, (255, 215, 0))
             self.game.screen.blit(
                 title,
                 (
@@ -3966,12 +4562,12 @@ class PygameUIManager:
             )
 
             # Message
-            message1 = get_text(
+            message1 = self.get_text(
                 "You have witnessed Satan's fall from grace.",
                 font_medium,
                 (255, 255, 255),
             )
-            message2 = get_text(
+            message2 = self.get_text(
                 "Now face the endless torment of Limbo.", font_medium, (255, 255, 255)
             )
 
@@ -3997,13 +4593,11 @@ class PygameUIManager:
         try:
             import pygame
 
-            from src.assets.text_cache import get_font, get_text
-
-            font_title = get_font(38)
-            font_name = get_font(26)
-            font_desc = get_font(17)
-            font_small = get_font(15)
-            font_key = get_font(17)
+            font_title = self.get_font(38)
+            font_name = self.get_font(26)
+            font_desc = self.get_font(17)
+            font_small = self.get_font(15)
+            font_key = self.get_font(17)
 
             # ── palette ──────────────────────────────────────────────────────────────
             # new weapon boxes  →  dark crimson / burgundy
@@ -4039,8 +4633,8 @@ class PygameUIManager:
                 if is_initial
                 else "a new weapon joins your arsenal"
             )
-            title_surf = get_text(title_text, font_title, C_TITLE)
-            sub_surf = get_text(sub_text, font_small, (90, 100, 130))
+            title_surf = self.get_text(title_text, font_title, C_TITLE)
+            sub_surf = self.get_text(sub_text, font_small, (90, 100, 130))
             ty = 60 + shake_y
             self.game.screen.blit(
                 title_surf,
@@ -4113,14 +4707,14 @@ class PygameUIManager:
                         self.game.screen, stripe_col, (bx, by, 3, box_height)
                     )
 
-                key_surf = get_text(f"[{i + 1}]", font_key, C_KEY)
+                key_surf = self.get_text(f"[{i + 1}]", font_key, C_KEY)
                 self.game.screen.blit(
                     key_surf,
                     (bx + 16, by + box_height // 2 - key_surf.get_height() // 2),
                 )
 
-                name_surf = get_text(weapon["name"], font_name, name_col)
-                desc_surf = get_text(weapon["description"], font_desc, C_DESC)
+                name_surf = self.get_text(weapon["name"], font_name, name_col)
+                desc_surf = self.get_text(weapon["description"], font_desc, C_DESC)
                 block_h = name_surf.get_height() + 4 + desc_surf.get_height()
                 name_x = bx + 52
                 name_y = by + (box_height - block_h) // 2
@@ -4136,13 +4730,11 @@ class PygameUIManager:
         try:
             import pygame
 
-            from src.assets.text_cache import get_font, get_text
-
-            font_title = get_font(38)
-            font_name = get_font(26)
-            font_desc = get_font(17)
-            font_small = get_font(15)
-            font_key = get_font(17)
+            font_title = self.get_font(38)
+            font_name = self.get_font(26)
+            font_desc = self.get_font(17)
+            font_small = self.get_font(15)
+            font_key = self.get_font(17)
 
             # ── palette  (dark iron / charcoal) ──────────────────────────────────────
             C_TITLE = (148, 148, 145)
@@ -4162,8 +4754,8 @@ class PygameUIManager:
             self.game.screen.blit(overlay, (0, 0))
 
             # ── title ────────────────────────────────────────────────────────────────
-            title_surf = get_text("CHOOSE YOUR TOWER", font_title, C_TITLE)
-            sub_surf = get_text("place your guardian", font_small, (75, 75, 80))
+            title_surf = self.get_text("CHOOSE YOUR TOWER", font_title, C_TITLE)
+            sub_surf = self.get_text("place your guardian", font_small, (75, 75, 80))
             ty = 60 + shake_y
             self.game.screen.blit(
                 title_surf,
@@ -4225,14 +4817,14 @@ class PygameUIManager:
                         self.game.screen, C_BORDER_H, (bx, by, 3, box_height)
                     )
 
-                key_surf = get_text(f"[{i + 1}]", font_key, C_KEY)
+                key_surf = self.get_text(f"[{i + 1}]", font_key, C_KEY)
                 self.game.screen.blit(
                     key_surf,
                     (bx + 16, by + box_height // 2 - key_surf.get_height() // 2),
                 )
 
-                name_surf = get_text(tower["name"], font_name, C_NAME)
-                desc_surf = get_text(tower["description"], font_desc, C_DESC)
+                name_surf = self.get_text(tower["name"], font_name, C_NAME)
+                desc_surf = self.get_text(tower["description"], font_desc, C_DESC)
                 block_h = name_surf.get_height() + 4 + desc_surf.get_height()
                 name_x = bx + 52
                 name_y = by + (box_height - block_h) // 2
@@ -4248,13 +4840,11 @@ class PygameUIManager:
         try:
             import pygame
 
-            from src.assets.text_cache import get_font, get_text
-
-            font_title = get_font(38)
-            font_name = get_font(26)
-            font_desc = get_font(17)
-            font_small = get_font(15)
-            font_key = get_font(17)
+            font_title = self.get_font(38)
+            font_name = self.get_font(26)
+            font_desc = self.get_font(17)
+            font_small = self.get_font(15)
+            font_key = self.get_font(17)
 
             # ── palette ──────────────────────────────────────────────────────────────
             C_TITLE = (145, 45, 45)
@@ -4294,8 +4884,8 @@ class PygameUIManager:
             self.game.screen.blit(overlay, (0, 0))
 
             # ── title ────────────────────────────────────────────────────────────────
-            title_surf = get_text("LEVEL UP", font_title, C_TITLE)
-            sub_surf = get_text("choose your upgrade", font_small, (110, 110, 110))
+            title_surf = self.get_text("LEVEL UP", font_title, C_TITLE)
+            sub_surf = self.get_text("choose your upgrade", font_small, (110, 110, 110))
             tx = self.game.width // 2 - title_surf.get_width() // 2 + shake_x
             ty = 60 + shake_y
             self.game.screen.blit(title_surf, (tx, ty))
@@ -4331,7 +4921,7 @@ class PygameUIManager:
             if getattr(self.game, "upgrade_rerolls_remaining", 0) > 0:
                 pad = 8
                 reroll_label = f"Reroll  ({self.game.upgrade_rerolls_remaining} left)"
-                reroll_surf = get_text(reroll_label, font_small, (190, 150, 150))
+                reroll_surf = self.get_text(reroll_label, font_small, (190, 150, 150))
                 reroll_w = reroll_surf.get_width() + 24
                 reroll_h = reroll_surf.get_height() + 10
                 reroll_x = self.game.width // 2 - reroll_w // 2
@@ -4393,14 +4983,14 @@ class PygameUIManager:
                     pygame.draw.rect(self.game.screen, stripe, (bx, by, 3, box_height))
 
                 # [1] [2] [3] key hint — left side
-                key_surf = get_text(f"[{i + 1}]", font_key, C_KEY)
+                key_surf = self.get_text(f"[{i + 1}]", font_key, C_KEY)
                 key_x = bx + 16
                 key_y = by + box_height // 2 - key_surf.get_height() // 2
                 self.game.screen.blit(key_surf, (key_x, key_y))
 
                 # name + description — centred vertically in the box
-                name_surf = get_text(upgrade["name"], font_name, name_col)
-                desc_surf = get_text(upgrade["description"], font_desc, C_DESC)
+                name_surf = self.get_text(upgrade["name"], font_name, name_col)
+                desc_surf = self.get_text(upgrade["description"], font_desc, C_DESC)
                 block_h = name_surf.get_height() + 4 + desc_surf.get_height()
                 name_x = bx + 52
                 name_y = by + (box_height - block_h) // 2
@@ -4416,8 +5006,6 @@ class PygameUIManager:
         try:
             import pygame
 
-            from src.assets.text_cache import get_font, get_text
-
             # Overlay surface with per-pixel alpha to allow fade-in effect
             overlay = pygame.Surface(
                 (self.game.width, self.game.height), pygame.SRCALPHA
@@ -4428,7 +5016,7 @@ class PygameUIManager:
             # Title (fade text by setting per-surface alpha)
 
             # Dark red for the FALL title for stronger contrast
-            title_surf = get_text("FALL", get_font(64), (139, 0, 0)).copy()
+            title_surf = self.get_text("FALL", self.get_font(64), (139, 0, 0)).copy()
             title_surf.set_alpha(int(self.game.game_over_alpha))
             self.game.screen.blit(
                 title_surf,
@@ -4439,7 +5027,7 @@ class PygameUIManager:
             )
 
             # Stats
-            font_medium = get_font(24)
+            font_medium = self.get_font(24)
             stats = [
                 f"Final Score: {int(self.game.score)}",
                 f"Enemies killed: {getattr(self.game, 'enemies_killed_this_run', 0)}",
@@ -4448,7 +5036,7 @@ class PygameUIManager:
             ]
 
             for i, stat in enumerate(stats):
-                text_surf = get_text(stat, font_medium, (255, 255, 255)).copy()
+                text_surf = self.get_text(stat, font_medium, (255, 255, 255)).copy()
                 text_surf.set_alpha(int(self.game.game_over_alpha))
                 self.game.screen.blit(
                     text_surf,
@@ -4461,7 +5049,7 @@ class PygameUIManager:
             # Prompt
             # Main prompt: ESC to return to menu (restart disabled)
             # Moved down for more spacing and changed to light yellow
-            prompt = get_text(
+            prompt = self.get_text(
                 "Press ESC to return to menu", font_medium, (255, 255, 153)
             ).copy()
             prompt.set_alpha(int(self.game.game_over_alpha))
@@ -4475,3 +5063,28 @@ class PygameUIManager:
 
         except Exception as e:
             logger.exception("Error drawing game over screen: %s", e)
+
+    def draw_victory(self, shake_x=0, shake_y=0) -> None:
+        """Draw the limbo victory overlay before returning to menu."""
+        try:
+            import pygame
+
+            overlay = pygame.Surface(
+                (self.game.width, self.game.height), pygame.SRCALPHA
+            )
+            overlay.fill((40, 20, 45, int(self.game.victory_alpha)))
+            self.game.screen.blit(overlay, (0, 0))
+
+            title_surf = self.get_text(
+                "SATANIC VICTORY!", self.get_font(64), (255, 215, 0)
+            ).copy()
+            title_surf.set_alpha(int(self.game.victory_alpha))
+            self.game.screen.blit(
+                title_surf,
+                (
+                    self.game.width // 2 - title_surf.get_width() // 2 + shake_x,
+                    200 + shake_y,
+                ),
+            )
+        except Exception as e:
+            logger.exception("Error drawing victory screen: %s", e)

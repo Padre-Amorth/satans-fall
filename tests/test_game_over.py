@@ -33,9 +33,9 @@ def test_game_over_persists_until_keypress():
     game.handle_keydown(pygame.K_RETURN)
     assert game.showing_game_over is True
 
-    # Pressing ESC should return to menu
+    # Pressing ESC should return to main menu
     game.handle_keydown(pygame.K_ESCAPE)
-    assert game.showing_stage_menu is True
+    assert game.showing_main_menu is True
     assert game.selected_stage is None
 
 

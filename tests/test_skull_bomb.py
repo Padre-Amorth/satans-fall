@@ -10,11 +10,7 @@ import pytest
 
 from src.entities.enemy import BurnParticle, Enemy
 from src.game import Game
-from src.weapons import (
-    skullboom_cooldown,
-    skullboom_damage,
-    skullboom_explosion_radius,
-)
+from src.weapons import skullboom_cooldown, skullboom_damage, skullboom_explosion_radius
 
 
 def test_skullboom_weapon_definition():

@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
-from game import Game
+from game import Game  # type: ignore
 
 
 def test_clicking_power_updates_damage_multiplier():
@@ -51,7 +51,7 @@ def test_clicking_power_updates_damage_multiplier():
     assert g.global_progress.get("meta_points", 0) == 0
 
 
-def test_clicking_blasphemy1_updates_damage_multiplier():
+def test_clicking_blasphemy1_increases_max_health():
     g = Game()
     g.showing_stage_menu = False
     g.showing_permanent_upgrades = True
@@ -65,25 +65,24 @@ def test_clicking_blasphemy1_updates_damage_multiplier():
     pos = (box_x - 30 + 5, box_y1 + 5)  # small offset inside the box
 
     # ensure baseline (isolate blasphemy effect by zeroing POWER)
-    # Note: reset global_progress to ensure consistent test state (not loaded from persistent file)
+    # global_progress always starts fresh since persistence is disabled
     g.global_progress["meta_points"] = 0
     g.permanent_stats["power"] = 0
     g.permanent_stats["blasphemy_1"] = 0
-    g.save_permanent_stats()
     g.apply_permanent_stats()
 
     # click three times to reach max level (3)
+    base_max = g.player.max_health
     for expected in (1, 2, 3):
         g.handle_mouse_click(pos, button=1)
         assert g.permanent_stats["blasphemy_1"] == expected
-        assert g.damage_multiplier == pytest.approx(1.0 + expected * 0.10)
-        assert g.player.damage_multiplier == pytest.approx(g.damage_multiplier)
+        # each level should add 15 HP to the player's max health
+        assert g.player.max_health == pytest.approx(base_max + expected * 15)
 
-    # right click to downgrade
+    # right click to downgrade one level and ensure max health drops accordingly
     g.handle_mouse_click(pos, button=3)
     assert g.permanent_stats["blasphemy_1"] == 2
-    assert g.damage_multiplier == pytest.approx(1.0 + 2 * 0.10)
-    assert g.player.damage_multiplier == pytest.approx(g.damage_multiplier)
+    assert g.player.max_health == pytest.approx(base_max + 2 * 15)
 
 
 def test_clicking_blasphemy2_increases_regeneration():
@@ -114,7 +113,8 @@ def test_clicking_blasphemy2_increases_regeneration():
         # reset baseline health and frame counter so each level is tested independently
         g.player.health = g.player.max_health * 0.5
         g.frame_count = 0
-        frames = 5 * g.fps
+        # simulate enough frames for a single 2‑second tick
+        frames = 2 * g.fps
         # clear any enemies/projectiles to avoid incidental damage
         try:
             g.enemies = []
@@ -133,7 +133,7 @@ def test_clicking_blasphemy2_increases_regeneration():
 
         for _ in range(frames):
             g.update_game()
-        expected_heal = expected * 1.0  # 1 HP per level every 5s
+        expected_heal = expected * 0.5  # 0.5 HP per level every 2s
         assert g.player.health == pytest.approx(
             min(g.player.max_health, g.player.max_health * 0.5 + expected_heal)
         )
@@ -255,7 +255,6 @@ def test_clicking_adrenaline_updates_fire_rate_multiplier():
     g.permanent_stats["adrenaline"] = 2
     # isolate from Blasphemy bonuses (none of them affect fire rate now)
     g.permanent_stats["blasphemy_3"] = 0
-    g.save_permanent_stats()
     g.apply_permanent_stats()
     before = g.permanent_stats["adrenaline"]
 

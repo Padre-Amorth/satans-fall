@@ -9,7 +9,7 @@ def setup_dummy_sdl():
 
 def test_no_towers_drawn_in_prologo(tmp_path):
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # Towers may not be created until a tower choice is applied; that's
     # fine as long as Prologo never draws them.  (previous versions created

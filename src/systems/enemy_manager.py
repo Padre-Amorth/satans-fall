@@ -14,6 +14,8 @@ import logging
 import random
 from typing import List
 
+import pygame
+
 from src.balance import ENEMY_BASE_SPEEDS
 from src.entities.enemy import Enemy
 
@@ -50,6 +52,24 @@ class EnemyManager:
         )
         self.prologo_final_boss_immortal: bool = getattr(
             game, "prologo_final_boss_immortal", False
+        )
+        # Limbo Final boss state proxy
+        self.limbo_final_boss_spawned: bool = getattr(
+            game, "limbo_final_boss_spawned", False
+        )
+        self.limbo_final_boss_immortal: bool = getattr(
+            game, "limbo_final_boss_immortal", False
+        )
+        self.limbo_final_lightning_strike: bool = getattr(
+            game, "limbo_final_lightning_strike", False
+        )
+        self.limbo_final_lightning_timer: int = getattr(
+            game, "limbo_final_lightning_timer", 0
+        )
+        self.limbo_final_lightning_duration_frames: int = getattr(
+            game,
+            "limbo_final_lightning_duration_frames",
+            180 + 2 * getattr(game, "fps", 60),
         )
 
         # Lightning strike handling
@@ -88,6 +108,14 @@ class EnemyManager:
         speed: float = 100.0,
     ) -> Enemy:
         """Spawn or reuse an enemy and add to game's enemy container."""
+        # apply slow modifier to every spawn in prologue/limbo
+        if getattr(self.game, "selected_stage", None) in (
+            "prologo",
+            "limbo",
+            "limbo_2",
+            "limbo_3",
+        ):
+            speed *= 0.8
         if self.pool:
             e = self.pool.pop()
             try:
@@ -192,10 +220,44 @@ class EnemyManager:
         e = self.spawn(x, y, etype, health, speed)
         return e
 
+    def spawn_crusader_enemy(self, side: str | None = None) -> Enemy:
+        """Spawn a crusader enemy.
+
+        Mirrors :meth:`spawn_giant_enemy` but always produces a crusader regardless
+        of stage.  The health is set very high and speed comes from the new
+        "crusader" base speed entry.
+        """
+        if side is None:
+            side = "top"
+
+        if side == "left":
+            x = -30
+            y = random.randint(0, max(0, self.game.height))
+        elif side == "right":
+            x = self.game.width + 30
+            y = random.randint(0, max(0, self.game.height))
+        else:  # top
+            x = self.game.random_x_between_walls()
+            y = -30
+
+        health = 200 * getattr(self.game, "difficulty_multiplier", 1.0)
+        speed = ENEMY_BASE_SPEEDS.get("crusader", 30)
+        c = self.spawn(x, y, "crusader", health, speed)
+        return c
+
     def update_big_enemy_timer(self) -> None:
         """Decrement big enemy timer and spawn a giant when it hits zero (once per wave)."""
         self.big_enemy_timer -= 1
         if self.big_enemy_timer <= 0 and not self.big_spawned_this_wave:
+            # Block giant spawns in Limbo stages for the first 30 seconds
+            stage = str(getattr(self.game, "selected_stage", "") or "")
+            if (
+                stage in ("limbo", "limbo_2", "limbo_3")
+                and getattr(self.game, "time_elapsed", 0.0) < 30.0
+            ):
+                # Reset timer so it doesn't fire immediately when 30s is reached
+                self.big_enemy_timer = 12 * getattr(self.game, "fps", 60)
+                return
             try:
                 self.spawn_giant_enemy()
                 self.big_spawned_this_wave = True
@@ -340,6 +402,14 @@ class EnemyManager:
             and self.prologo_final_boss_spawned
         ):
             return
+        # Likewise, once the Limbo Final boss has appeared we should no longer
+        # create inquisitors or any other end-of-wave boss; the stage is about
+        # to end and further waves are meaningless.
+        if (
+            getattr(self.game, "selected_stage", None) == "limbo_final"
+            and self.limbo_final_boss_spawned
+        ):
+            return
 
         if not self.wave_boss_spawned and wave_time >= 38:
             # If we're in a Limbo stage: normally spawn Inquisitor, but
@@ -381,6 +451,15 @@ class EnemyManager:
                 self.spawn_boss("final")
                 self.prologo_final_boss_spawned = True
 
+            # Limbo Final boss at 3:00 (180 seconds)
+            if (
+                getattr(self.game, "selected_stage", None) == "limbo_final"
+                and not self.limbo_final_boss_spawned
+                and getattr(self.game, "time_elapsed", 0) >= 180
+            ):
+                self.spawn_boss("limbo")
+                self.limbo_final_boss_spawned = True
+
             # Lightning strike countdown
             if (
                 getattr(self.game, "selected_stage", None) == "prologo"
@@ -396,9 +475,23 @@ class EnemyManager:
                         self.game.prologo_defeat()
                     except Exception:
                         pass
+            if (
+                getattr(self.game, "selected_stage", None) == "limbo_final"
+                and self.limbo_final_lightning_strike
+            ):
+                self.limbo_final_lightning_timer += 1
+                if (
+                    self.limbo_final_lightning_timer
+                    >= self.limbo_final_lightning_duration_frames
+                ):
+                    try:
+                        self.game.limbo_final_defeat()
+                    except Exception:
+                        pass
 
             # Boss regeneration when immortal
             for boss in list(getattr(self.game, "bosses", [])):
+                # prologue final boss behavior
                 if (
                     getattr(boss, "enemy_type", "") == "boss_final"
                     and self.prologo_final_boss_immortal
@@ -412,11 +505,9 @@ class EnemyManager:
                         # Trigger lightning and knock out player
                         self.prologo_lightning_strike = True
                         try:
-                            # Use game's generator if available
                             if hasattr(self.game, "generate_lightning"):
                                 self.game.generate_lightning()
                             else:
-                                # Fallback: create a minimal lightning_points list
                                 self.game.lightning_points = [
                                     (
                                         int(
@@ -439,7 +530,50 @@ class EnemyManager:
                                         self.game.height,
                                     ),
                                 ]
-                            # Knock out player
+                            try:
+                                self.game.player.health = 0
+                            except Exception:
+                                pass
+                        except Exception:
+                            pass
+                # limbo final boss behavior (same as prologue but separate flags)
+                if (
+                    getattr(boss, "enemy_type", "") == "boss_limbo"
+                    and self.limbo_final_boss_immortal
+                    and getattr(boss, "health", 0) < getattr(boss, "max_health", 0)
+                ):
+                    boss.health = min(getattr(boss, "max_health", 0), boss.health + 3.0)
+                    if (
+                        boss.health >= boss.max_health
+                        and not self.limbo_final_lightning_strike
+                    ):
+                        self.limbo_final_lightning_strike = True
+                        try:
+                            if hasattr(self.game, "generate_lightning"):
+                                self.game.generate_lightning()
+                            else:
+                                self.game.lightning_points = [
+                                    (
+                                        int(
+                                            getattr(
+                                                self.game.player,
+                                                "x",
+                                                self.game.width // 2,
+                                            )
+                                        ),
+                                        0,
+                                    ),
+                                    (
+                                        int(
+                                            getattr(
+                                                self.game.player,
+                                                "x",
+                                                self.game.width // 2,
+                                            )
+                                        ),
+                                        self.game.height,
+                                    ),
+                                ]
                             try:
                                 self.game.player.health = 0
                             except Exception:
@@ -476,6 +610,12 @@ class EnemyManager:
                 self.game, "difficulty_multiplier", 1.0
             )  # Doubled from 600
             speed = ENEMY_BASE_SPEEDS.get("boss_big", 40)
+        elif boss_type == "mid":
+            # regular wave boss
+            enemy_type = "boss_medium"
+            # match spawn_system's health so tests remain consistent
+            health = 300 * getattr(self.game, "difficulty_multiplier", 1.0)
+            speed = ENEMY_BASE_SPEEDS.get("boss_medium", 45)
         elif boss_type == "inquisitor":
             # Special Limbo boss (HP increased by 50%, now reduced by 10%)
             enemy_type = "boss_inquisitor"
@@ -486,14 +626,59 @@ class EnemyManager:
             speed = ENEMY_BASE_SPEEDS.get(
                 "boss_inquisitor", 50
             )  # inquisitor speed from balance
-        else:
-            enemy_type = "boss_medium"
-            health = 600 * getattr(
-                self.game, "difficulty_multiplier", 1.0
-            )  # Doubled from 300
-            speed = ENEMY_BASE_SPEEDS.get("boss_medium", 45)
+        elif boss_type == "limbo":
+            # Final Limbo boss (timed event)
+            enemy_type = "boss_limbo"
+            health = 1500 * getattr(self.game, "difficulty_multiplier", 1.0)
+            speed = ENEMY_BASE_SPEEDS.get("boss_limbo", 40)
+        elif boss_type == "limbo_horde":
+            # Boss spawned at end of the Limbo horde; distinct type so its
+            # sprite can differ from the final boss and tests can distinguish.
+            enemy_type = "boss_limbo_horde"
+            health = 1000 * getattr(self.game, "difficulty_multiplier", 1.0)
+            speed = ENEMY_BASE_SPEEDS.get("boss_limbo_horde", 40)
 
         boss = Enemy(x, y, enemy_type, health, speed)
+        # tune limbo bosses specially
+        if enemy_type in ("boss_limbo", "boss_limbo_horde"):
+            boss.width *= 3
+            boss.height *= 3
+            boss.radius = (boss.width + boss.height) // 4
+            # hitbox is 50% of sprite dimensions so only the body core is
+            # collidable; the aura glow around the sprite is purely visual.
+            boss._shrink_hitbox = True  # flag handled below
+            boss._hitbox_scale = 0.5
+        # rebuild sprite image/rect to match new dimensions
+        boss.image = pygame.Surface((boss.width, boss.height), pygame.SRCALPHA)
+        # always let the enemy handle its own asset/fallback drawing; previously
+        # we drew a purple ellipse here for limbo boss which prevented any
+        # external sprite from ever being shown.  draw_enemy already knows how
+        # to fall back to a vector ellipse when the file is missing, so this
+        # simple call is sufficient in all cases.
+        try:
+            boss.draw_enemy()
+        except Exception:
+            # defensive: never crash the spawn process
+            pass
+        try:
+            boss.rect = boss.image.get_rect(center=(boss.x, boss.y))
+        except Exception:
+            pass
+        # shrink boss_limbo collision rect if requested (after rect created)
+        if getattr(boss, "_shrink_hitbox", False):
+            try:
+                scale = getattr(boss, "_hitbox_scale", 0.5)
+                w = int(boss.width * scale)
+                h = int(boss.height * scale)
+                boss.rect = pygame.Rect(0, 0, w, h)
+                boss.rect.center = (int(boss.x), int(boss.y))
+            except Exception:
+                pass
+        try:
+            boss.base_image = boss.image.copy()
+        except Exception:
+            boss.base_image = None
+
         # Track active
         if boss not in self.active:
             self.active.append(boss)

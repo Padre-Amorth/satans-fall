@@ -11,7 +11,7 @@ def setup_dummy_sdl():
 
 def test_limbo_walls_thicker_and_warmer(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # Use a simple vertical wall so sampling is deterministic
     left_x = 320

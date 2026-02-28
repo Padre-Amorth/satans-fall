@@ -12,11 +12,13 @@ def setup_dummy_sdl():
 
 def test_upgrades_button_is_at_bottom_and_clickable(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
-    g.show_stage_menu()
+    # Game starts on main menu — permanent upgrades button is on the main menu
+    assert g.showing_main_menu is True
 
-    upgrades_rect = pygame.Rect(g.width // 2 - 125, max(20, g.height - 80), 250, 35)
+    # Upgrades button geometry matches draw_main_menu (up_w=250, up_h=36, y=h//2+55)
+    upgrades_rect = pygame.Rect(g.width // 2 - 125, g.height // 2 + 55, 250, 36)
     # Click center of upgrades rect
     g.handle_mouse_click(upgrades_rect.center, button=1)
 

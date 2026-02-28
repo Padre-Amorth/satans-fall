@@ -76,6 +76,7 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
   - Angelo volante (tipo speciale)
 
 - **File:** `assets/enemy_giant.png`
+- **File:** `assets/enemy_crusader.png`  (optional external sprite for the new crusader enemy)
   - Dimensione: 60x60 pixel
   - Nemico gigante (spawn ogni 12 secondi)
 
@@ -134,8 +135,19 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
 ### Campo di battaglia (Limbo)
 - **File:** `assets/limbo_battlefield.png`
   - Dimensione consigliata: 1280x720 (verrà ridimensionata automaticamente)
-  - Immagine di sfondo per la parte interna delle mura nei livelli `limbo`, `limbo_2`, `limbo_3`.
+  - Immagine di sfondo per la parte interna delle mura nei livelli `limbo`, `limbo_2`, `limbo_3` e `limbo_final`.
+  - La variante `limbo_final` utilizza lo stesso sfondo ma introduce un boss dopo 3 minuti.
   - Se mancante, il gioco userà il riempimento arancione di default.
+
+### Campo di battaglia (Purgatory)
+
+### Limbo Final boss
+- **File:** `assets/boss_limbo.png`
+  - Sprite opzionale per il boss che appare in `limbo_final` al minuto 3.
+  - Se non presente, il boss verrà disegnato con arte vettoriale generica.
+  - Puoi generare un'immagine di test con lo script
+    `tools/generate_limbo_boss_asset.py` oppure fornire la tua grafica
+    mantenendo lo stesso nome e dimensione base (120×120).
 
 ### Campo di battaglia (Purgatory)
 - **File:** `assets/purgatory_battlefield.png`
@@ -150,6 +162,52 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
     anche se non è presente nessuna immagine di campo, l'esterno rimane visibile;
     l'interno delle mura verrà comunque riempito con il `floor_color`.
   - In assenza dell'immagine esterna si usa il colore nero configurato in `STAGE_SETTINGS`.
+
+### Statue / Torri
+- **File:** `assets/statue_fire.png`
+  - Dimensione consigliata: circa 120‑140 pixel in altezza, 40‑60 pixel in larghezza
+    (il gioco non esegue ridimensionamenti automatici). L'immagine viene ancorata in
+    basso al centro della statua/torre; assicurati quindi che la parte inferiore del
+    disegno corrisponda al "piede" della statua.  Qualunque proporzione verticale è
+    accettata, ma usare un'altezza simile a quella del disegno vettoriale (circa
+    130px) aiuta a mantenere il posizionamento corretto.
+    Se il tuo asset sembra posizionarsi troppo in alto, puoi modificare il valore
+    `STATUE_ASSET_VERTICAL_OFFSET` in `src/game_constants.py`.  Viene inizialmente
+    impostato a 100 per compensare la prima statua importata; riducilo o aumentalo
+    in base alle tue immagini.
+
+    Questo offset non si applica solamente alle immagini importate: la stessa
+    costante sposta anche l'arte vettoriale utilizzata quando un asset non è
+    presente.  In questo modo tutte le statue (Limbo, Purgatory, Hell) si allineano
+    verticalmente senza dover cambiare più valori separati.
+
+    > **Nota sulla posizione dei proiettili:**
+    > I proiettili sparati dalle statue non partono esattamente dall'asse delle
+    > loro basi, bensì vengono spostati leggermente verso il centro dello schermo
+    > e un poco verso il basso per migliorare l'allineamento visivo con le
+    > statue. Questo scostamento dipende dalla fase affrontata:
+    >
+    > * **Limbo** – 30 px verso il centro, 10 px verso il basso.
+    > * **Purgatory** e **Hell** – 10 px verso il centro, 10 px verso il basso.
+    >
+    > Tutti i valori sono configurabili in `src/game_constants.py` tramite le
+    > costanti `STATUE_PROJECTILE_OFFSET_X_LIMBO`,
+    > `STATUE_PROJECTILE_OFFSET_X_PURGATORY`,
+    > `STATUE_PROJECTILE_OFFSET_X_HELL` e
+    > `STATUE_PROJECTILE_OFFSET_Y`.
+    >
+    > Per garantire che i proiettili appaiano come se venissero sparati da dietro
+    > le statue, il motore disegna sempre le statue di Limbo su un livello
+    > superiore rispetto ai proiettili.  Questa modifica impedisce ai colpi di
+    > apparire improvvisamente "davanti" alla statua mentre vengono generati.
+  - Sostituisce il disegno vettoriale delle statue di fuoco sia nelle pedane di
+    Limbo che sulle torri di Purgatorio/Hell.
+- **File:** `assets/statue_storm.png`
+  - Simile a `statue_fire.png`, ma utilizzata per le statue/torri di tipo "storm".
+- **File:** `assets/statue_ice.png`
+  - Immagine alternativa per le statue/torri di tipo "ice".
+  - Se le immagini non sono presenti, il gioco ricade automaticamente sulle forme
+    geometriche colorate.
 
 ## Consigli per le Immagini
 

@@ -50,11 +50,11 @@ WEAPON_DEFS: Dict[str, Dict] = {
         "available_from": "limbo",  # Not available in Prologo; available from Limbo onwards
         "upgrade_descriptions": {
             1: "Lv1: Fires 2 homing fly projectiles that heal the player",
-            2: "Lv2: +1 projectile",
-            3: "Lv3: +10% damage & heal",
-            4: "Lv4: +1 projectile",
-            5: "Lv5: +10% damage & heal",
-            6: "Lv6: Can bounce",
+            2: "Lv2: +10% damage & heal",
+            3: "Lv3: +1 projectile",
+            4: "Lv4: +10% damage & heal",
+            5: "Lv5: +1 projectile",
+            6: "Lv6: +20% damage & heal",
         },
     },
     "beast": {
@@ -105,7 +105,8 @@ WEAPON_DEFS["shotgun"].update(
         "base_pellets": 4,
         "pellet_level_step": 2,
         "pellet_increase": 1,
-        "spread_deg": 12,
+        # a slightly wider spread ensures pellets start a bit farther apart
+        "spread_deg": 15,
         "damage_mult": 0.55,  # legacy multiplier (kept for compatibility)
         "base_cd": 1.5,
         "cd_reduction_per_pair": 0.15,
@@ -204,25 +205,18 @@ WEAPON_DEFS["Flies"].update(
         "base_damage": 10,  # doubled from 5
         # Halved healing per your request
         "base_heal": 1,
+        # damage/heal increments now occur at levels 2,4,6 (20% total at max)
         "damage_heal_increments": {
-            3: 0.1,
-            5: 0.1,
-        },  # Base projectiles increased to 2 (Lv1 fires 2 projectiles).
-        # Additional projectiles at level thresholds add 1 projectile each.
+            2: 0.1,
+            4: 0.1,
+            6: 0.2,
+        },
+        # Base projectiles still 2; extra ones at lv3 and lv5
         "base_projectiles": 2,
         "projectiles_at_level": {
-            2: 1,
-            4: 1,
-        },  # level -> extra projectiles (increments at thresholds)
-    }
-)
-
-WEAPON_DEFS["beast"].update(
-    {
-        "burst_rate_multiplier_per_level": 0.05,
-        # Absolute damage targets for Beast weapon (used to remap multiplier)
-        "min_damage": 22,  # Lv1 target damage per basic projectile
-        "max_damage": 45,  # Lv6 target damage per basic projectile
+            3: 1,
+            5: 1,
+        },
     }
 )
 
@@ -353,16 +347,29 @@ def get_orbital_count(level: int) -> int:
 
 
 def orbital_cooldown_range(level: int) -> tuple[int, int]:
+    """Return min/max cooldown for an orbital at the given level.
+
+    The configuration in ``WEAPON_DEFS`` still describes base timings
+    (40–100 ticks at level 1) and reductions per level pair, but the final
+    values are **increased by one third** so that orbitals fire less often
+    overall.  This mirrors the previous change request, just inverted.
+    """
     d = WEAPON_DEFS.get("orbital", {})
     reductions = level // 2
     base_min = d.get("cooldown_base_min", 40)
     base_max = d.get("cooldown_base_max", 100)
+    # compute raw range as before
     min_cd = max(10, base_min - reductions * d.get("cooldown_reduction_per_pair", 6))
     max_cd = max(
         min_cd + 5,
         base_max - reductions * (d.get("cooldown_reduction_per_pair", 6) * 2),
     )
-    return int(min_cd), int(max_cd)
+
+    # apply 1/3 slowdown (multiply by 4/3)
+    factor = 4.0 / 3.0
+    min_cd = int(min_cd * factor)
+    max_cd = int(max_cd * factor)
+    return min_cd, max_cd
 
 
 def shotgun_pellets(level: int) -> int:

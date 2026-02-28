@@ -22,7 +22,7 @@ def _make_colored_surface(
 
 def test_purgatory_colors_fill_inside_and_outside(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # Set stage to purgatory and create simple wall points rectangle
     g.select_stage("purgatory")
@@ -68,7 +68,7 @@ def test_purgatory_bg_image_is_masked_to_walls(monkeypatch, tmp_path: Path) -> N
         return None
 
     monkeypatch.setattr("src.game.get_image", fake_get_image)
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     g.select_stage("purgatory")
     g.left_wall_points = [(300, 0), (360, 720)]
@@ -133,7 +133,7 @@ def test_purgatory_bg_image_drawn_when_available(monkeypatch, tmp_path: Path) ->
 
     monkeypatch.setattr("src.game.get_image", fake_get_image)
 
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
     g.select_stage("purgatory")
     g.left_wall_points = [(100, 0), (100, 200)]
     g.right_wall_points = [(500, 0), (500, 200)]
@@ -156,11 +156,15 @@ def test_load_assets_includes_purgatory_files(tmp_path: Path) -> None:
     """Game.load_assets should at least create entries for the two new
     purgatory filenames.
     """
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
     g.load_assets()
     # the asset dictionary may contain None if loading failed, but keys should exist
     assert "purgatory_battlefield.png" in g.assets
     assert "purgatory_background.png" in g.assets
+    # the new statue assets should also at least have dictionary entries
+    assert "statue_fire.png" in g.assets
+    assert "statue_storm.png" in g.assets
+    assert "statue_ice.png" in g.assets
 
 
 def test_purgatory_external_and_inner_images(monkeypatch, tmp_path: Path) -> None:
@@ -191,7 +195,7 @@ def test_purgatory_external_and_inner_images(monkeypatch, tmp_path: Path) -> Non
 
     monkeypatch.setattr("src.game.get_image", fake_get_image)
 
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
     g.select_stage("purgatory")
     g.left_wall_points = [(100, 0), (100, 200)]
     g.right_wall_points = [(500, 0), (500, 200)]
@@ -243,7 +247,7 @@ def test_external_image_shown_even_if_battlefield_missing(
 
     monkeypatch.setattr("src.game.get_image", fake_get_image)
 
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
     g.select_stage("purgatory")
     g.left_wall_points = [(100, 0), (100, 200)]
     g.right_wall_points = [(500, 0), (500, 200)]

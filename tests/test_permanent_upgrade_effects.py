@@ -43,7 +43,7 @@ def test_permanent_stat_effect_texts():
     assert g.permanent_stat_effect_text("power", 5) == "+5% dmg/level (25% total)"
     assert (
         g.permanent_stat_effect_text("vigor", 3)
-        == "+10 HP/level (30 HP total); +0.5 HP every 5s/level (1.5 HP every 5s)"
+        == "+10 HP/level (30 HP total)\nHeal 0.5 HP every 5s/level (0.5 HP/5s)"
     )
     assert (
         g.permanent_stat_effect_text("adrenaline", 2)
@@ -60,7 +60,7 @@ def test_permanent_stat_effect_texts():
     # Blasphemy 2 provides flat regeneration, blasphemy 3 reduces damage taken
     assert (
         g.permanent_stat_effect_text("blasphemy_2", 2)
-        == "+1 HP every 5s/level (2 HP every 5s)"
+        == "Heal 0.5 HP every 2s/level (1 HP every 2s)"
     )
     assert (
         g.permanent_stat_effect_text("blasphemy_3", 2)

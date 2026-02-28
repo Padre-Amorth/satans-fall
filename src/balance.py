@@ -8,8 +8,12 @@ XP_GROWTH: float = 1.2
 # Used for permanent upgrade currency. Goals grow more steeply; players no
 # longer earn meta XP directly from score.  Instead XP must be granted
 # explicitly via game events or debug commands.
-META_XP_BASE: int = 100_000  # XP required for the first meta level (previously 1_000)
-META_XP_GROWTH: float = 1.3  # per-level multiplier for subsequent levels
+META_XP_BASE: int = (
+    10_000  # XP required for the first meta level (previously 1_000, was 100_000 before tuning)
+)
+META_XP_GROWTH: float = (
+    1.2  # per-level multiplier for subsequent levels (lowered from 1.3 for gentler curve)
+)
 
 # Player defaults
 PLAYER_BASE_DAMAGE: int = 30  # doubled from 15 to increase base weapon damage
@@ -32,6 +36,18 @@ SPAWN_RAMP_SLOPE_POST: float = (
     4.2  # more gradual ramp so spawn_min_rate is reached ~wave 10
 )
 
+# Limbo-specific spawn slowdown: adds frames between spawns so each 10s
+# period contains roughly two fewer enemies than normal.
+LIMBO_SPAWN_RATE_PENALTY: int = 8
+
+# Difficulty scaling
+DIFFICULTY_MULTIPLIER_PER_WAVE: float = (
+    0.12  # added per‑wave increment for difficulty multiplier
+)
+# Limbo stages are slightly easier per wave to compensate for the huge horde
+# event and slower pacing; this slope only applies to limbo/limbo_2/limbo_3.
+LIMBO_DIFFICULTY_MULTIPLIER_PER_WAVE: float = 0.11
+
 # Enemy base movement speeds (px/sec) - single source of truth for spawn code
 ENEMY_BASE_SPEEDS: dict[str, float] = {
     "weak": 35.0,
@@ -44,6 +60,12 @@ ENEMY_BASE_SPEEDS: dict[str, float] = {
     "boss_inquisitor": 50.0,
     "boss_big": 40.0,
     "boss_final": 40.0,
+    # special limbo horde boss moves a bit faster than the regular final boss
+    "boss_limbo_horde": 45.0,
+    # new fast zig-zagging flying enemy
+    "winged": 120.0,
+    # Crusader is extremely slow, slower than a giant
+    "crusader": 30.0,
 }
 
 
@@ -59,3 +81,9 @@ DEFAULT_DAMAGE_REDUCTION_MULTIPLIER: float = 1.0
 # Misc
 MAX_EXTRA_WEAPONS: int = 3
 GAME_OVER_FADE_DURATION_MS: int = 900
+
+# Scoring
+# points awarded per unit of enemy health (before difficulty multiplier)
+ENEMY_SCORE_PER_HEALTH: float = (
+    0.35  # reduced from 18.0 to lower all enemy kill rewards dramatically
+)

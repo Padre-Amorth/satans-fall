@@ -19,12 +19,13 @@ def test_stage_settings_contains_purgatory():
 
 def test_purgatory_menu_open_and_selects(tmp_path: Path):
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
-    # Show stage menu and simulate click on Purgatory main button
-    g.show_stage_menu()
-    # Compute purgatory_rect center used by UI (must match drawing code)
-    purg_rect = pygame.Rect(g.width // 2 - 100, g.height // 2 + 70, 200, 40)
+    # Navigate to stage selection screen
+    g.showing_main_menu = False
+    g.showing_stage_menu = True
+    # Purgatory button geometry matches draw_stage_menu (btn_w=280, btn_h=46, spacing=58, base_y=h//2-100, i=2)
+    purg_rect = pygame.Rect(g.width // 2 - 140, g.height // 2 + 16, 280, 46)
     center = purg_rect.center
 
     # Click to open submenu
@@ -44,8 +45,9 @@ def test_purgatory_menu_open_and_selects(tmp_path: Path):
 
 def test_escape_closes_purgatory_menu(tmp_path: Path):
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
-    g.show_stage_menu()
+    g = Game()
+    g.showing_main_menu = False
+    g.showing_stage_menu = True
     g.showing_purgatory_menu = True
 
     # send ESC key

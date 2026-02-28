@@ -5,7 +5,7 @@ from src.entities.enemy import Enemy  # noqa: E402
 from src.game import Game  # noqa: E402
 
 
-def test_sprite_enemy_contact_emits_particles():
+def test_sprite_enemy_contact_no_particles():
     g = Game()
     g.select_stage("limbo")
     # Place enemy directly on player to force contact
@@ -15,13 +15,16 @@ def test_sprite_enemy_contact_emits_particles():
     # Run collision handling
     g.handle_collisions()
 
-    assert len(e.burn_particles) > 0, "Expected enemy to emit burn particles on contact"
-    assert (
-        hasattr(g.player, "burn_particles") and len(g.player.burn_particles) > 0
-    ), "Expected player to emit burn particles on contact"
+    # No burn particles should be created on simple contact
+    assert not getattr(
+        e, "burn_particles", []
+    ), "Enemy should not emit burn particles on contact"
+    assert not getattr(
+        g.player, "burn_particles", []
+    ), "Player should not emit burn particles on contact"
 
 
-def test_dict_enemy_contact_emits_particles():
+def test_dict_enemy_contact_no_particles():
     g = Game()
     g.select_stage("limbo")
     from src.entities.enemy import Enemy
@@ -36,9 +39,9 @@ def test_dict_enemy_contact_emits_particles():
 
     g.handle_collisions()
 
-    assert (
-        getattr(enemy_obj, "burn_particles", []) and len(enemy_obj.burn_particles) > 0
-    ), "Expected enemy to include burn_particles on contact"
-    assert (
-        hasattr(g.player, "burn_particles") and len(g.player.burn_particles) > 0
-    ), "Expected player to emit burn particles on contact"
+    assert not getattr(
+        enemy_obj, "burn_particles", []
+    ), "Dictionary-style enemy should not gain burn_particles on contact"
+    assert not getattr(
+        g.player, "burn_particles", []
+    ), "Player should not emit burn particles on contact"

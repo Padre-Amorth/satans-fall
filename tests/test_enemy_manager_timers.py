@@ -36,3 +36,25 @@ def test_wave_reset_clears_manager_flag():
     g.update_wave_progression()
 
     assert em.big_spawned_this_wave is False
+    # multiplier should follow the stage-aware slope (default stage None uses global)
+    expected = 1.0 + g.wave * g.get_difficulty_multiplier_per_wave()
+    assert g.difficulty_multiplier == expected
+
+
+def test_wave_progression_uses_wave_duration():
+    """Ensure the wave increments only after the current wave_duration seconds.
+
+    This guards future tunings that might adjust DEFAULT_WAVE_DURATION.
+    """
+    pygame.init()
+    g = Game(debug=True)
+    # no progression if time slightly less
+    g.wave = 5
+    g.wave_time = g.wave_duration - 0.1
+    g.update_wave_progression()
+    assert g.wave == 5
+
+    # progression once we hit or exceed the duration
+    g.wave_time = g.wave_duration
+    g.update_wave_progression()
+    assert g.wave == 6

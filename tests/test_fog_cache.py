@@ -79,30 +79,31 @@ def test_limbo3_lateral_fog_is_redder_than_limbo():
     if cache_gray and cache_gray[1]:
         right_gray = cache_gray[1].get_at((g.width - 2, y_mid))
 
-    # --- limbo_3: expect redder lateral fog ---
-    g.selected_stage = "limbo_3"
-    ui._build_fog_cache()
-    cache_red = ui._fog_cache
+    # --- limbo_3 & limbo_final: expect redder lateral fog ---
+    for special in ("limbo_3", "limbo_final"):
+        g.selected_stage = special
+        ui._build_fog_cache()
+        cache_red = ui._fog_cache
 
-    left_red = None
-    right_red = None
-    if cache_red and cache_red[0]:
-        left_red = cache_red[0].get_at((2, y_mid))
-    if cache_red and cache_red[1]:
-        right_red = cache_red[1].get_at((g.width - 2, y_mid))
+        left_red = None
+        right_red = None
+        if cache_red and cache_red[0]:
+            left_red = cache_red[0].get_at((2, y_mid))
+        if cache_red and cache_red[1]:
+            right_red = cache_red[1].get_at((g.width - 2, y_mid))
 
-    # At least one side should show the red increase
-    assert (
-        left_gray
-        and left_red
-        and left_red.r >= max(left_red.g, left_red.b)
-        and left_red.r > left_gray.r
-    ) or (
-        right_gray
-        and right_red
-        and right_red.r >= max(right_red.g, right_red.b)
-        and right_red.r > right_gray.r
-    )
+        # At least one side should show the red increase
+        assert (
+            left_gray
+            and left_red
+            and left_red.r >= max(left_red.g, left_red.b)
+            and left_red.r > left_gray.r
+        ) or (
+            right_gray
+            and right_red
+            and right_red.r >= max(right_red.g, right_red.b)
+            and right_red.r > right_gray.r
+        )
 
 
 def test_limbo2_lateral_fog_is_yellower_than_limbo():

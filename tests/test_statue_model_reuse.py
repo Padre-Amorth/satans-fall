@@ -4,12 +4,31 @@ from src.game import Game
 def test_statue_model_reuse_for_towers_and_pedestals():
     g = Game()
 
-    # Ensure pedestal drawing in limbo works (no exceptions)
-    g.select_stage("limbo")
-    try:
-        g.ui.draw_pedestals()
-    except Exception as e:
-        assert False, f"draw_pedestals raised: {e}"
+    # Ensure pedestal drawing in limbo renders a statue while limbo_final
+    # remains empty (no static statues).
+    for stage in ("limbo", "limbo_final"):
+        g.select_stage(stage)
+        # clear screen so previous stage artwork doesn't bleed in
+        g.screen.fill((0, 0, 0))
+        try:
+            g.ui.draw_pedestals()
+        except Exception as e:
+            assert False, f"draw_pedestals raised in {stage}: {e}"
+        # sample the head pixel; limbo_final should stay black
+        from src import game_constants
+
+        head_y = 620 - 10 - 70 + game_constants.STATUE_ASSET_VERTICAL_OFFSET
+        pix = tuple(g.screen.get_at((370, head_y))[:3])
+        if stage == "limbo":
+            # assets may not load in test harness; at least something should be
+            # drawn rather than pure black.
+            assert pix != (
+                0,
+                0,
+                0,
+            ), f"Expected nonblack statue colour in {stage}, got {pix}"
+        else:
+            assert pix == (0, 0, 0), f"Expected no statue in {stage}, got {pix}"
 
     # Now select purgatory and pick each tower type and draw
     g.select_stage("purgatory")

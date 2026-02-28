@@ -4,6 +4,8 @@
 
 A fun roguelite game where you play as Satan, fighting off waves of demons from the bottom of the screen!
 
+> ⚠️ **Note:** Progress is **not persisted** between runs or when exiting the game. Each time you launch, the player starts from scratch.
+
 ## Installation
 
 1. Make sure you have Python 3.7+ installed
@@ -31,6 +33,19 @@ python main_pygame.py
 Debug CLI flags (developer shortcuts):
 
 - `--fast-forward-prologo`, `--ff-prologo` — Auto-select **Prologo** and advance time so the final boss spawns immediately (useful for testing boss behavior).
+
+
+Additionally, a standalone utility script has been added for finer control:
+
+    tools/ff_to_time.py
+
+This can fast‑forward any stage to an arbitrary elapsed time (seconds or `MM:SS`).
+Example: `python tools/ff_to_time.py --stage limbo --time 7:30` will jump into the
+first Limbo level at 7 minutes 30 seconds.
+
+This tool can of course be used alongside the normal game logic; no special
+flags are required.  (The previous developer toggle for disabling the
+horde explosion has been removed because the feature was obsoleted.)
 - `--ff-prologo-force-lightning`, `--ff-prologo-lightning` — In addition to the above, force the final boss into the immortal regen state and trigger the holy light strike so you can reproduce prologo-specific holy light effects/crashes.
 
 ## Development

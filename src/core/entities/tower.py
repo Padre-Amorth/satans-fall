@@ -48,43 +48,72 @@ class Tower:
         self._base_fire_rate: int = fire_rate
         self.visible: bool = True
 
-    def fire_at_closest(self, enemies: Iterable[Any]) -> Optional[object]:
-        """Return a projectile dict, or a list of projectile dicts, or None if no enemies."""
+    def fire_at_closest(
+        self,
+        enemies: Iterable[Any],
+        origin_x: float | None = None,
+        origin_y: float | None = None,
+    ) -> Optional[object]:
+        """Return a projectile (or list/dict) aimed at the nearest enemy.
+
+        ``enemies`` may be any iterable of objects with ``x``/``y`` attributes or
+        dicts containing those keys.  ``origin_x``/``origin_y`` allow the caller
+        to override the firing point used for both projectile position and
+        directional calculations; by default the tower's own ``x``/``y`` are used.
+        This is primarily useful for the limbo statues where visual art places
+        the firing nozzle away from the tower centre.  When offsets are supplied
+        the created projectile's velocity vector is recalculated so it still
+        travels toward the chosen target.
+        """
         enemies_list = list(enemies) if enemies is not None else []
         if not enemies_list:
             return None
 
+        # choose base coordinates for aim and spawn
+        ox = self.x if origin_x is None else origin_x
+        oy = self.y if origin_y is None else origin_y
+
         # Dispatch based on tower type
         if self.tower_type == "fire":
-            return self._fire_single(enemies_list)
+            return self._fire_single(enemies_list, ox, oy)
         elif self.tower_type == "storm":
-            return self._fire_storm(enemies_list)
+            return self._fire_storm(enemies_list, ox, oy)
         elif self.tower_type == "ice":
-            return self._fire_ice(enemies_list)
+            return self._fire_ice(enemies_list, ox, oy)
         else:
-            return self._fire_single(enemies_list)
+            return self._fire_single(enemies_list, ox, oy)
 
-    def _fire_single(self, enemies_list: List[Any]) -> Optional[Projectile]:
+    def _fire_single(
+        self, enemies_list: List[Any], ox: float, oy: float
+    ) -> Optional[Projectile]:
         closest = min(
             enemies_list,
-            key=lambda e: math.hypot(_pos(e)[0] - self.x, _pos(e)[1] - self.y),
+            key=lambda e: math.hypot(_pos(e)[0] - ox, _pos(e)[1] - oy),
         )
         cx, cy = _pos(closest)
-        dx = cx - self.x
-        dy = cy - self.y
+        dx = cx - ox
+        dy = cy - oy
         dist = math.hypot(dx, dy)
         if dist <= 0:
             return None
 
-        angle = math.atan2(dy, dx) + random.uniform(-self.inaccuracy, self.inaccuracy)
+        # calculate angle; remove random spread when target is a boss
+        inacc = self.inaccuracy
+        try:
+            et = getattr(closest, "enemy_type", "")
+            if isinstance(et, str) and "boss" in et:
+                inacc = 0.0
+        except Exception:
+            pass
+        angle = math.atan2(dy, dx) + random.uniform(-inacc, inacc)
         vel_x = math.cos(angle) * self.projectile_speed
         vel_y = math.sin(angle) * self.projectile_speed
         # Make Fire tower projectiles visually distinctive
         # Reduce fire projectile size but keep distinctive visuals
         new_radius = max(self.radius, 6)
         proj = Projectile(
-            self.x,
-            self.y,
+            ox,
+            oy,
             vel_x,
             vel_y,
             damage=self.damage,
@@ -94,6 +123,8 @@ class Tower:
         )
         # Tag as statue projectile
         proj.source = "statue"
+        # record originating tower type for later special move logic
+        proj.tower_type = self.tower_type
 
         # Fire towers apply burn (damage over time)
         proj.effect = "burn"
@@ -109,25 +140,35 @@ class Tower:
         proj.burn_damage_per_second = base_burn * scale
         return proj
 
-    def _fire_storm(self, enemies_list: List[Any]) -> Optional[Projectile]:
+    def _fire_storm(
+        self, enemies_list: List[Any], ox: float, oy: float
+    ) -> Optional[Projectile]:
         # Storm now fires a single aimed projectile (dark-blue appearance)
         closest = min(
             enemies_list,
-            key=lambda e: math.hypot(_pos(e)[0] - self.x, _pos(e)[1] - self.y),
+            key=lambda e: math.hypot(_pos(e)[0] - ox, _pos(e)[1] - oy),
         )
         cx, cy = _pos(closest)
-        dx = cx - self.x
-        dy = cy - self.y
+        dx = cx - ox
+        dy = cy - oy
         dist = math.hypot(dx, dy)
         if dist <= 0:
             return None
 
-        angle = math.atan2(dy, dx) + random.uniform(-self.inaccuracy, self.inaccuracy)
+        # remove spread for bosses
+        inacc = self.inaccuracy
+        try:
+            et = getattr(closest, "enemy_type", "")
+            if isinstance(et, str) and "boss" in et:
+                inacc = 0.0
+        except Exception:
+            pass
+        angle = math.atan2(dy, dx) + random.uniform(-inacc, inacc)
         vel_x = math.cos(angle) * self.projectile_speed
         vel_y = math.sin(angle) * self.projectile_speed
         p = Projectile(
-            self.x,
-            self.y,
+            ox,
+            oy,
             vel_x,
             vel_y,
             damage=max(1, int(self.damage * 0.9)),
@@ -136,29 +177,41 @@ class Tower:
             appearance="storm_statue",
         )
         p.source = "statue"
+        # record type
+        p.tower_type = self.tower_type
         # Storm statue projectiles chain-hit up to 3 different enemies
         p.chain_targets = getattr(self, "chain_targets", 3)
         return p
 
-    def _fire_ice(self, enemies_list: List[Any]) -> Optional[Projectile]:
+    def _fire_ice(
+        self, enemies_list: List[Any], ox: float, oy: float
+    ) -> Optional[Projectile]:
         # Fire a single projectile that applies a slow effect on hit
         closest = min(
             enemies_list,
-            key=lambda e: math.hypot(_pos(e)[0] - self.x, _pos(e)[1] - self.y),
+            key=lambda e: math.hypot(_pos(e)[0] - ox, _pos(e)[1] - oy),
         )
         cx, cy = _pos(closest)
-        dx = cx - self.x
-        dy = cy - self.y
+        dx = cx - ox
+        dy = cy - oy
         dist = math.hypot(dx, dy)
         if dist <= 0:
             return None
 
-        angle = math.atan2(dy, dx) + random.uniform(-self.inaccuracy, self.inaccuracy)
+        # no spread if aiming at boss
+        inacc = self.inaccuracy
+        try:
+            et = getattr(closest, "enemy_type", "")
+            if isinstance(et, str) and "boss" in et:
+                inacc = 0.0
+        except Exception:
+            pass
+        angle = math.atan2(dy, dx) + random.uniform(-inacc, inacc)
         vel_x = math.cos(angle) * self.projectile_speed
         vel_y = math.sin(angle) * self.projectile_speed
         p = Projectile(
-            self.x,
-            self.y,
+            ox,
+            oy,
             vel_x,
             vel_y,
             damage=self.damage,
@@ -167,6 +220,8 @@ class Tower:
         )
         p.source = "statue"
         p.appearance = "ice_statue"
+        # record originating tower type, useful for future specials
+        p.tower_type = self.tower_type
         # Add slow effect metadata used by collision handling
         p.effect = "slow"
         p.slow_duration = 120

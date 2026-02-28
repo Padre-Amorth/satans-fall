@@ -18,8 +18,8 @@ def test_quit_confirmation_yes():
     # Confirm quit
     g.handle_keydown(pygame.K_RETURN)
     assert g.pause_confirmation is None
-    # After quitting, we should be back in the stage menu
-    assert g.showing_stage_menu is True
+    # After quitting, we should be back at the main menu
+    assert g.showing_main_menu is True
     assert g.selected_stage is None
 
 

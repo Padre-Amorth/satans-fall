@@ -10,7 +10,7 @@ def setup_dummy_sdl():
 
 def test_ui_draw_stage_menu_main_and_submenus(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # Draw main stage menu
     g.show_stage_menu()
@@ -33,7 +33,7 @@ def test_ui_draw_stage_menu_main_and_submenus(tmp_path: Path) -> None:
 
 def test_game_draw_stage_menu_delegates(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     called = {"v": False}
 

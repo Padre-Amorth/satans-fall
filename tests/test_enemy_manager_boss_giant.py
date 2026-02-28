@@ -34,6 +34,21 @@ def test_spawn_giant_and_boss_via_manager():
     assert tracked
 
 
+def test_spawn_crusader_via_manager():
+    pygame.init()
+    g = Game(debug=True)
+    em = g.enemy_manager
+    # The new helper should delegate properly
+    g.spawn_crusader_enemy()
+    crusaders = [e for e in g.enemies if getattr(e, "enemy_type", "") == "crusader"]
+    assert crusaders, "spawn_crusader_enemy should create a crusader"
+
+    # direct manager spawn with side parameter
+    c = em.spawn_crusader_enemy(side="left")
+    assert getattr(c, "enemy_type", "") == "crusader"
+    assert c.x < 0
+
+
 def test_spawn_giant_spawns_from_left_and_right():
     g = Game(debug=True)
     em = g.enemy_manager

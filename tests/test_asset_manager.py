@@ -40,3 +40,21 @@ def test_get_image_missing(monkeypatch):
     assert img is None
 
     am.clear_cache()
+
+
+def test_game_loads_crusader_asset(monkeypatch):
+    """Ensure Game.load_assets includes the crusader filename and handles it gracefully."""
+    import pygame
+
+    from src.game import Game
+
+    def fake_load(path):
+        # return a dummy surface regardless of path
+        return pygame.Surface((1, 1))
+
+    monkeypatch.setattr(pygame.image, "load", fake_load)
+    g = Game()
+    g.load_assets()
+    # asset dictionary should contain the new entry even if file doesn't exist
+    assert "enemy_crusader.png" in g.assets
+    am.clear_cache()

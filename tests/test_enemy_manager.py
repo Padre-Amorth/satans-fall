@@ -1,3 +1,5 @@
+import random
+
 import pygame
 
 from src.game import Game
@@ -47,10 +49,79 @@ def test_spawn_via_game_spawn_enemy():
 
 def test_non_boss_spawn_speed_matches_spawn_value():
     """Non-boss spawns (weak, normal, strong, angel, giant) should use the spawn `speed` directly (no global modifier)."""
-    from unittest.mock import patch
 
+
+def test_weak_enemy_base_health():
+    """Verify that a spawned weak enemy has the updated base HP (45)."""
     pygame.init()
     g = Game(debug=True)
+    # force the random branch to choose weak (rand >= 0.5)
+    from unittest.mock import patch
+
+    with patch("random.random", return_value=0.9):
+        g.spawn_enemy()
+    w = next((e for e in g.enemies if getattr(e, "enemy_type", "") == "weak"), None)
+    assert w is not None, "weak enemy should have spawned"
+    # constructor applies 1.2× scaling to max_health, so final health should
+    # reflect that buff. round to int the same way the enemy does.
+    expected = int(45 * g.difficulty_multiplier * 1.2)
+    assert w.max_health == expected
+    assert w.health == w.max_health
+
+    # verify winged cannot spawn before wave 3, even if rand falls in its band
+    pygame.init()
+    g = Game(debug=True)
+    g.wave = 1
+    with patch("random.random", return_value=0.55):
+        g.spawn_enemy()
+    assert all(
+        getattr(e, "enemy_type", "") != "winged" for e in g.enemies
+    ), "Winged should not appear before wave 3"
+    # early reinforcements also shouldn't produce winged
+    try:
+        for _e in list(g.enemies):
+            try:
+                g.enemies.remove(_e)
+            except Exception:
+                pass
+    except Exception:
+        g.enemies = []
+    g.spawn_reinforcements(x=0, y=0, count=10)
+    assert all(
+        getattr(e, "enemy_type", "") != "winged" for e in g.enemies
+    ), "Reinforcements before wave 3 must not contain winged"
+
+    # now ensure winged spawns when wave >= 3 and rand indicates it
+    pygame.init()
+    g = Game(debug=True)
+    g.wave = 3
+    with patch("random.random", return_value=0.55):
+        g.spawn_enemy()
+    wing = next(
+        (en for en in g.enemies if getattr(en, "enemy_type", "") == "winged"),
+        None,
+    )
+    assert (
+        wing is not None
+    ), "winged enemy should have spawned at rand 0.55 when wave>=3"
+    from src.balance import ENEMY_BASE_SPEEDS
+
+    assert (
+        abs(wing.speed - ENEMY_BASE_SPEEDS["winged"]) < 0.001
+    )  # ensure winged got the health boost and a shield
+    expected_base = 30 * g.difficulty_multiplier
+    expected = int(expected_base * 1.2) * 2
+    assert (
+        wing.max_health == expected
+    ), f"winged health {wing.max_health} should equal {expected}"
+    assert wing.health == wing.max_health
+    assert (
+        hasattr(wing, "shield_hp") and wing.shield_hp == wing.max_health
+    )  # health/shield checks again
+    exp_base = 30 * g.difficulty_multiplier
+    exp = int(exp_base * 1.2) * 2
+    assert wing.max_health == exp
+    assert hasattr(wing, "shield_hp") and wing.shield_hp == wing.max_health
 
     # 1) Force the 'normal' branch
     with patch("random.random", return_value=0.1):
@@ -64,7 +135,7 @@ def test_non_boss_spawn_speed_matches_spawn_value():
 
     assert abs(spawned.speed - ENEMY_BASE_SPEEDS["normal"]) < 0.001
 
-    # 2) Spawn reinforcements covering weak/strong/angel
+    # 2) Spawn reinforcements covering weak/strong/angel/winged
     # Clear game's enemy container in a safe, container‑agnostic way
     try:
         for _e in list(g.enemies):
@@ -84,13 +155,14 @@ def test_non_boss_spawn_speed_matches_spawn_value():
         en
         for en in g.enemies
         if getattr(en, "enemy_type", "").startswith(
-            ("weak", "normal", "strong", "angel", "giant")
+            ("weak", "normal", "strong", "angel", "giant", "winged")
         )
     ]
     assert len(non_bosses) >= 1
     # Verify per-type spawn speeds using ENEMY_BASE_SPEEDS
     expected = {
-        k: ENEMY_BASE_SPEEDS[k] for k in ("weak", "normal", "strong", "angel", "giant")
+        k: ENEMY_BASE_SPEEDS[k]
+        for k in ("weak", "normal", "strong", "angel", "giant", "winged")
     }
     for en in non_bosses:
         et = getattr(en, "enemy_type", "")
@@ -147,7 +219,7 @@ def test_reinforcements_triggered_when_boss_dies_in_update():
         en
         for en in g.enemies
         if getattr(en, "enemy_type", "").startswith(
-            ("weak", "normal", "strong", "angel", "giant")
+            ("weak", "normal", "strong", "angel", "giant", "winged")
         )
     ]
     assert len(non_bosses) >= 1, "Reinforcements were not spawned after USEREVENT+1"
@@ -179,12 +251,136 @@ def test_reinforcements_scheduled_when_boss_take_damage_kills():
         en
         for en in g.enemies
         if getattr(en, "enemy_type", "").startswith(
-            ("weak", "normal", "strong", "angel", "giant")
+            ("weak", "normal", "strong", "angel", "giant", "winged")
         )
     ]
     assert (
         len(non_bosses) >= 1
     ), "Reinforcements were not spawned after USEREVENT+1 when boss was killed via take_damage"
+
+
+def test_wave_boss_health_drop(monkeypatch):
+    """Wave bosses drop a slow health bonus that heals the player on contact."""
+    pygame.init()
+    g = Game(debug=True)
+    g.select_stage("purgatory")
+    # ignore any selection menus so update_game will process boss logic
+    g.awaiting_weapon_choice = False
+    g.awaiting_upgrade = False
+    setattr(g, "awaiting_tower_choice", False)
+    # clear corresponding state manager flags too
+    g.game_state.awaiting_weapon_choice = False
+    g.game_state.awaiting_upgrade = False
+    g.game_state.awaiting_tower_choice = False
+    em = g.enemy_manager
+    # force a known heal amount
+    monkeypatch.setattr(random, "randint", lambda a, b: 20)
+    boss = em.spawn_boss("mid")
+    assert boss is not None and boss.enemy_type == "boss_medium"
+    g.player.health = 1
+    boss.take_damage(boss.max_health)
+    # run a frame of actual game logic to process boss death and spawn drop
+    g.update_game()
+    drops = getattr(g, "health_drops", [])
+    assert len(drops) == 1
+    assert drops[0].get("heal") == 20
+    # drop size matches new radius (now 8)
+    assert drops[0].get("radius") == 8
+    # new fall speed
+    assert drops[0].get("vy") == 1.5
+    # ensure drop is within visible range
+    assert drops[0].get("y", 0) >= 0
+    drops[0]["x"] = g.player.x
+    drops[0]["y"] = g.player.y
+    g._update_health_drops()
+    assert g.player.health == min(g.player.max_health, 1 + 20)
+    assert getattr(g, "health_drops", []) == []
+
+
+def test_inquisitor_health_drop(monkeypatch):
+    """The Limbo inquisitor end-of-wave boss also drops health."""
+    pygame.init()
+    g = Game(debug=True)
+    g.select_stage("purgatory")
+    # clear all selection flags so update_game executes boss logic
+    g.awaiting_weapon_choice = False
+    g.awaiting_upgrade = False
+    setattr(g, "awaiting_tower_choice", False)
+    g.game_state.awaiting_weapon_choice = False
+    g.game_state.awaiting_upgrade = False
+    g.game_state.awaiting_tower_choice = False
+    em = g.enemy_manager
+    monkeypatch.setattr(random, "randint", lambda a, b: 25)
+    boss = em.spawn_boss("inquisitor")
+    assert boss is not None and boss.enemy_type == "boss_inquisitor"
+    g.player.health = 2
+    boss.take_damage(boss.max_health)
+    g.update_game()
+    drops = getattr(g, "health_drops", [])
+    assert len(drops) == 1
+    assert drops[0].get("heal") == 25
+    assert drops[0].get("radius") == 8
+    assert drops[0].get("y", 0) >= 0
+    drops[0]["x"] = g.player.x
+    drops[0]["y"] = g.player.y
+    g._update_health_drops()
+    assert g.player.health == min(g.player.max_health, 2 + 25)
+    assert getattr(g, "health_drops", []) == []
+
+
+def test_big_boss_health_drop(monkeypatch):
+    """Big bosses (spawned by horde events) should also drop health."""
+    pygame.init()
+    g = Game(debug=True)
+    g.select_stage("purgatory")
+    g.awaiting_weapon_choice = False
+    g.awaiting_upgrade = False
+    setattr(g, "awaiting_tower_choice", False)
+    g.game_state.awaiting_weapon_choice = False
+    g.game_state.awaiting_upgrade = False
+    g.game_state.awaiting_tower_choice = False
+    g.game_state.awaiting_weapon_choice = False
+    em = g.enemy_manager
+    monkeypatch.setattr(random, "randint", lambda a, b: 30)
+    boss = em.spawn_boss("big")
+    assert boss is not None and boss.enemy_type == "boss_big"
+    g.player.health = 3
+    boss.take_damage(boss.max_health)
+    g.update_game()
+    drops = getattr(g, "health_drops", [])
+    assert len(drops) == 1
+    assert drops[0].get("heal") == 30
+    assert drops[0].get("radius") == 8
+    assert drops[0].get("y", 0) >= 0
+    drops[0]["x"] = g.player.x
+    drops[0]["y"] = g.player.y
+    g._update_health_drops()
+    assert g.player.health == min(g.player.max_health, 3 + 30)
+    assert getattr(g, "health_drops", []) == []
+
+
+def test_health_drop_sound(monkeypatch):
+    """Spawning a health drop should play the click sound when audio is on."""
+    g = Game(debug=True)
+    calls = []
+
+    # fake sound object with play method
+    class DummySound:
+        def play(self_inner):
+            calls.append(True)
+
+    from src.utils import sound as sound_utils
+
+    monkeypatch.setattr(sound_utils, "suono_click_soft", lambda: DummySound())
+
+    g.sounds_enabled = True
+    g.spawn_health_drop(5, 5, 10)
+    assert calls, "Sound should be played when sounds_enabled is True"
+
+    calls.clear()
+    g.sounds_enabled = False
+    g.spawn_health_drop(6, 6, 8)
+    assert not calls, "No sound when sounds are disabled"
 
 
 def test_boss_take_damage_direct_shows_floating_text():

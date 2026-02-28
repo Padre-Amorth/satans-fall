@@ -10,7 +10,7 @@ def setup_dummy_sdl():
 
 def test_ui_draw_hud_runs(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     # set some state
     g.score = 123
@@ -27,7 +27,7 @@ def test_ui_draw_hud_runs(tmp_path: Path) -> None:
 
 def test_game_draw_hud_delegates_to_ui(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     called = {"v": False}
 
@@ -41,7 +41,7 @@ def test_game_draw_hud_delegates_to_ui(tmp_path: Path) -> None:
 
 def test_game_draw_center_messages_delegates(tmp_path: Path) -> None:
     setup_dummy_sdl()
-    g = Game(permanent_stats_file=str(tmp_path / "permanent_stats.json"))
+    g = Game()
 
     called = {"v": False}
 

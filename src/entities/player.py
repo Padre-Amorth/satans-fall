@@ -36,6 +36,9 @@ class Player(BaseSprite):
         self.y: Any = y
         self.width = 61  # Increased by another 10%
         self.height = 73  # Increased by another 10%
+        # remember originals for later scaling
+        self.original_width = self.width
+        self.original_height = self.height
         self.max_health = PLAYER_BASE_HEALTH
         self.health: float = float(self.max_health)
         self.speed: float = 220.0  # user-requested base speed (px/s)
@@ -292,6 +295,36 @@ class Player(BaseSprite):
             XP_BASE * (XP_GROWTH ** (self.level - 1))
         )  # Increase XP requirement
         # Note: Upgrade selection will be handled in the game class
+
+    def set_scale(self, scale: float) -> None:
+        """Adjust the player sprite size according to a scale factor.
+
+        The image and walking frames are recreated from the original base
+        dimensions to avoid progressive distortion.  The rectangle is updated
+        to keep the player centred on the same position.
+        """
+        try:
+            # compute new dimensions based on original sizes
+            ow = getattr(self, "original_width", self.width)
+            oh = getattr(self, "original_height", self.height)
+            self.width = max(1, int(ow * scale))
+            self.height = max(1, int(oh * scale))
+            if self.base_image is not None:
+                self.image = pygame.transform.scale(
+                    self.base_image, (self.width, self.height)
+                )
+            # also scale walk frames if present
+            if hasattr(self, "walk_frames") and self.walk_frames:
+                self.walk_frames = [
+                    pygame.transform.scale(f, (self.width, self.height))
+                    for f in self.walk_frames
+                ]
+            # update rect to keep centre constant
+            old_center = self.rect.center
+            self.rect = self.image.get_rect()
+            self.rect.center = old_center
+        except Exception:
+            pass
 
     def draw(self, screen, shake_x=0, shake_y=0, anim_frame=0, is_moving=False) -> None:
         # Apply shake offset

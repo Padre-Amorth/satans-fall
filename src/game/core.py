@@ -2587,6 +2587,12 @@ class Game:
             # a temporary blasphemy_5 revive — display only centered messages.
             self.draw_pause_menu(shake_x, shake_y)
 
+        # Always draw pause confirmation dialog if active (can appear even without pause menu)
+        # This allows ALT+F4 to show quit confirmation during gameplay
+        if getattr(self, "pause_confirmation", None):
+            if hasattr(self, "ui") and hasattr(self.ui, "draw_pause_confirmation_dialog"):
+                self.ui.draw_pause_confirmation_dialog(shake_x, shake_y)
+
     def draw_hud(self, shake_x=0, shake_y=0) -> None:
         """Backward-compatible wrapper that delegates HUD drawing to UI manager."""
         if hasattr(self, "ui") and hasattr(self.ui, "draw_hud"):

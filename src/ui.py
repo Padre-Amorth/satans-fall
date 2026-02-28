@@ -75,8 +75,8 @@ class PygameUIManager:
                 FOG_TIMER_RANGE,
             )
 
-            # allow particles to occupy top ~40%; bottom of texture <=40%
-            y_limit = int(HEIGHT * 0.4)
+            # allow particles to occupy top ~50%; bottom of texture <=50%
+            y_limit = int(HEIGHT * 0.50)
             if start_random:
                 self.x = random.randint(-self.width, WIDTH)
             else:
@@ -308,9 +308,9 @@ class PygameUIManager:
         try:
             for p in list(getattr(self, "_fog_particles", [])):
                 p.update()
-                # clamp bottom edge within top 40% after update
-                if p.y + p.width > self.height * 0.4:
-                    p.y = self.height * 0.4 - p.width
+                # clamp bottom edge within top 50% after update
+                if p.y + p.width > self.height * 0.50:
+                    p.y = self.height * 0.50 - p.width
                 if self.screen and self.pygame:
                     p.draw(self.screen)
         except Exception:
@@ -2407,7 +2407,15 @@ class PygameUIManager:
         except Exception:
             pass
 
-        # If a pause confirmation is active, draw Yes/No dialog
+        # Draw pause confirmation dialog if active (overlay handled by caller)
+        self.draw_pause_confirmation_dialog(shake_x, shake_y)
+
+    def draw_pause_confirmation_dialog(self, shake_x=0, shake_y=0) -> None:
+        """Draw the pause confirmation Yes/No dialog (can be called any time, not just when paused)."""
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return
+
         try:
             if getattr(self.game, "pause_confirmation", None):
                 pc = self.game.pause_confirmation

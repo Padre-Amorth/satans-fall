@@ -35,7 +35,13 @@ class InputHandler:
                 continue
             if event.type == pygame.QUIT:
                 logger.info("[EVENT] QUIT received")
-                self.game.running = False
+                # Show exit confirmation dialog instead of quitting immediately
+                if getattr(self.game, "showing_main_menu", False):
+                    # In main menu: use exit_confirm_pending (displays "Exit Game?")
+                    self.game.exit_confirm_pending = True
+                else:
+                    # In game: use pause_confirmation (displays "Quit to menu?")
+                    self.game.pause_confirmation = {"action": "quit", "selection": 0}
             elif event.type == pygame.KEYDOWN:
                 self.handle_keydown(event.key)
             elif event.type == pygame.MOUSEMOTION:

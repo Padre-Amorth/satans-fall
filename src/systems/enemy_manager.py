@@ -190,7 +190,16 @@ class EnemyManager:
 
         side: "left", "right", or "top". If omitted, defaults to "top" so giants
         appear from above and within wall constraints like other enemies.
+
+        Note: Respects the 12-second cooldown unless a limbo horde is active.
         """
+        # Check 12-second cooldown (except during limbo horde)
+        if not getattr(self.game, "limbo_horde_active", False):
+            if (
+                self.game.time_elapsed - self.spawn_system.last_giant_spawn_time
+            ) < 12.0:
+                return None  # Cooldown active, don't spawn
+
         # Default to spawning from the top (inside walls) unless caller specifies a side
         if side is None:
             side = "top"  # default behavior: spawn from above, inside walls
@@ -218,6 +227,11 @@ class EnemyManager:
         # Base non-boss giant/custode speed (use giant value as fallback)
         speed = ENEMY_BASE_SPEEDS.get("giant", 45)
         e = self.spawn(x, y, etype, health, speed)
+        # Update cooldown timer
+        try:
+            self.spawn_system.last_giant_spawn_time = self.game.time_elapsed
+        except Exception:
+            pass
         return e
 
     def spawn_crusader_enemy(self, side: str | None = None) -> Enemy:
@@ -617,12 +631,12 @@ class EnemyManager:
             health = 300 * getattr(self.game, "difficulty_multiplier", 1.0)
             speed = ENEMY_BASE_SPEEDS.get("boss_medium", 45)
         elif boss_type == "inquisitor":
-            # Special Limbo boss (HP increased by 50%, now reduced by 10%)
+            # Special Limbo boss (HP increased by 50%, now reduced by 15%)
             enemy_type = "boss_inquisitor"
-            # Base HP: 525 -> apply -10% for tuning
+            # Base HP: 525 -> apply -15% for tuning
             health = int(
-                1050 * 0.9 * getattr(self.game, "difficulty_multiplier", 1.0)
-            )  # Doubled from 525 -> 944
+                950 * 0.9 * getattr(self.game, "difficulty_multiplier", 1.0)
+            )  # Reduced from 1050 -> 855
             speed = ENEMY_BASE_SPEEDS.get(
                 "boss_inquisitor", 50
             )  # inquisitor speed from balance
@@ -682,6 +696,9 @@ class EnemyManager:
         # Track active
         if boss not in self.active:
             self.active.append(boss)
+        # Mark that this boss should drop health when defeated
+        boss.should_drop_health = True
+
         # Add to boss group on game
         try:
             self.game.bosses.add(boss)

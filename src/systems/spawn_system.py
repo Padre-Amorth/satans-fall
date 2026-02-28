@@ -40,11 +40,12 @@ class SpawnSystem:
         """Return ``True`` if a giant (or similar big enemy) may spawn now.
 
         A 12‑second cooldown is enforced by comparing the current global
-        ``game.time_elapsed`` to ``last_giant_spawn_time``.  Limbo horde phases
-        ignore the restriction so they can flood the screen with giants.
+        ``game.time_elapsed`` to ``last_giant_spawn_time``.  During an active
+        limbo horde, casual giant spawns are blocked (only horde script spawns).
         """
+        # Block casual giant spawns during active horde (only script-controlled spawns allowed)
         if getattr(self.game, "limbo_horde_active", False):
-            return True
+            return False
         return (self.game.time_elapsed - self.last_giant_spawn_time) >= 12.0
 
     def update_enemy_spawning(self) -> None:
@@ -83,8 +84,10 @@ class SpawnSystem:
                 self._start_limbo_horde()
 
         # Use manager timers if manager exists
-        # block any further spawning once the horde has been completed
-        if getattr(self.game, "limbo_horde_completed", False):
+        # block any further spawning once the horde has been completed or victory screen is showing
+        if getattr(self.game, "limbo_horde_completed", False) or getattr(
+            self.game, "showing_victory", False
+        ):
             return
 
         if self.game.enemy_manager is not None:
@@ -316,6 +319,8 @@ class SpawnSystem:
                 if getattr(self.game, "limbo_horde_completed", False):
                     self.game.limbo_horde_started = False
                     self.game.limbo_horde_active = False
+                    # Reset giant spawn cooldown when horde ends so the 12-second rule applies again
+                    self.last_giant_spawn_time = self.game.time_elapsed
             except Exception:
                 pass
             # Keep big spawn flag in manager if available

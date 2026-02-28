@@ -146,12 +146,12 @@ PURGATORY_CLOUD_BUMP_ALPHA = 20
 # speeds are initialized within bounds.
 FOG_PARTICLE_COUNT = 12  # number of fog particles to maintain
 FOG_TEXTURE_SIZE = 450  # diameter of generated cloud texture (increased 50%)
-FOG_MIN_SPEED = 0.15  # horizontal velocity range
-FOG_MAX_SPEED = 0.4
+FOG_MIN_SPEED = 0.3  # horizontal velocity range (increased from 0.15)
+FOG_MAX_SPEED = 0.65  # (increased from 0.4)
 FOG_AMPLITUDE_RANGE = (10, 30)  # vertical sine amplitude
 FOG_TIMER_RANGE = (0, 10)  # initial timer offset
 FOG_COLOR = (200, 210, 220)  # blue‑gray fog tint
-FOG_ALPHA = 40  # maximum alpha for texture
+FOG_ALPHA = 65  # maximum alpha for texture (increased from 40)
 
 # colors for dynamic fog particles by Purgatory variant
 PURGATORY_FOG_COLORS: dict[str, tuple[int, int, int]] = {

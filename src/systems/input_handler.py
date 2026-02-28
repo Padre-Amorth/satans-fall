@@ -36,12 +36,22 @@ class InputHandler:
             if event.type == pygame.QUIT:
                 logger.info("[EVENT] QUIT received")
                 # Show exit confirmation dialog instead of quitting immediately
-                if getattr(self.game, "showing_main_menu", False):
-                    # In main menu: use exit_confirm_pending (displays "Exit Game?")
-                    self.game.exit_confirm_pending = True
-                else:
+                # Determine context: in-game vs. menu
+                # If selected_stage is set AND we're not in any menu overlay, we're in-game
+                in_game = (
+                    getattr(self.game, "selected_stage", None) is not None
+                    and not getattr(self.game, "showing_main_menu", False)
+                    and not getattr(self.game, "showing_stage_menu", False)
+                    and not getattr(self.game, "showing_permanent_upgrades", False)
+                    and not getattr(self.game, "showing_profiles_menu", False)
+                    and not getattr(self.game, "showing_game_over", False)
+                )
+                if in_game:
                     # In game: use pause_confirmation (displays "Quit to menu?")
                     self.game.pause_confirmation = {"action": "quit", "selection": 0}
+                else:
+                    # In menu: use exit_confirm_pending (displays "Exit Game?")
+                    self.game.exit_confirm_pending = True
             elif event.type == pygame.KEYDOWN:
                 self.handle_keydown(event.key)
             elif event.type == pygame.MOUSEMOTION:

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Test that boss death is detected in update loop and triggers victory countdown."""
-import sys
+
 import os
+import sys
 
 # Suppress pygame output
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 
-import pygame
 from src.game import Game
 
 
@@ -42,11 +42,11 @@ def test_boss_death_triggers_victory():
 
     # Kill the boss by just setting health = 0 (no collision)
     boss.health = 0
-    print(f"[OK] Boss health set to 0")
+    print("[OK] Boss health set to 0")
 
     # Call update() which should detect the dead boss and trigger victory setup
     g.update()
-    print(f"[OK] Update called after boss death")
+    print("[OK] Update called after boss death")
 
     # Check if victory was triggered
     ready_for_victory = getattr(g, "limbo_horde_ready_for_victory", False)
@@ -93,5 +93,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"ERROR: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """Test script to verify max weapons in Limbo and level 6 weapon choice"""
 
-import os
-import sys
+import pygame
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from game import Game
+from src.game import Game
 
 
 def test_limbo_max_weapons():

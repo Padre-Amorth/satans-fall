@@ -97,6 +97,9 @@ The included `.pre-commit-config.yaml` will run `ruff --fix` on changed files so
 - **Dynamic Enemy Spawning**: Enemies spawn from all sides of the screen
 - **XP and Leveling**: Gain experience from defeated enemies, level up automatically
 - **Weapon System**: Choose from 3 powerful weapons every 3 levels:
+  - Each selection box now reserves a small icon area on the left; designers
+    can place weapon artwork in `assets/weapon_<id>.png` and configure the
+    corresponding `icon` field in `src/weapons.py`.
   - **Orbitals**: Summon orbiting sentinels that auto-target enemies
   - **Shotgun**: Fire spread of pellets with cooldown
   - **Spear**: Piercing spear that hits all enemies in path

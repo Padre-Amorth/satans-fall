@@ -420,9 +420,14 @@ class Projectile(BaseSprite):
                 try:
                     from src.assets.manager import get_image
 
+                    # allow either bare name or weapon-prefixed filename
                     asset = get_image(
-                        "tenebrae.png", (self.radius * 4, self.radius * 2)
+                        "tenebrae.png", (self.radius * 3, self.radius * 2)
                     )
+                    if asset is None:
+                        asset = get_image(
+                            f"weapon_{self.appearance}.png", (self.radius * 3, self.radius * 2)
+                        )
                     if asset is not None:
                         self.image = asset
                         self.rect = self.image.get_rect(center=(self.x, self.y))

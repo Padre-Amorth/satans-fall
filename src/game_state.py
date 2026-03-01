@@ -329,17 +329,20 @@ class GameStateManager:
                             ),
                         }
                     )
-            return choices[:3]
-
-        if len(self.player_weapons) < 3 and unowned_weapons:
-            weapon: str = random.choice(unowned_weapons)
-            choices.append(
-                {
-                    "id": f"acquire_{weapon}",
-                    "name": WEAPON_DEFS[weapon]["name"],
-                    "description": WEAPON_DEFS[weapon]["description"],
-                }
-            )
+            # Attach icon info for any acquired weapons (level-6 special case)
+            for c in choices:
+                wid = None
+                cid = c.get("id", "")
+                if cid.startswith("acquire_"):
+                    wid = cid.split("acquire_")[-1]
+                elif cid.endswith("_upgrade"):
+                    wid = cid[: -len("_upgrade")]
+                if wid:
+                    # use definition icon or default pattern
+                    icon = WEAPON_DEFS.get(wid, {}).get("icon")
+                    if not icon:
+                        icon = f"weapon_{wid.lower()}.png"
+                    c["icon"] = icon
 
         # Offer weapon upgrades for owned weapons
         for weapon in self.player_weapons:
@@ -370,6 +373,17 @@ class GameStateManager:
                         "description": "Increase damage by 10%",
                     }
                 )
+
+        # Final pass: ensure icon metadata accompanies each choice
+        for c in choices:
+            wid = None
+            cid = c.get("id", "")
+            if cid.startswith("acquire_"):
+                wid = cid.split("acquire_")[-1]
+            elif cid.endswith("_upgrade"):
+                wid = cid[: -len("_upgrade")]
+            if wid:
+                c["icon"] = WEAPON_DEFS.get(wid, {}).get("icon")
 
         return choices[:3]
 
@@ -417,8 +431,14 @@ class GameStateManager:
             filtered = defs
 
         choices = random.sample(filtered, min(3, len(filtered)))
+        # Include icon key just like the regular weapon choice generator does.
         return [
-            {"id": c["id"], "name": c["name"], "description": c["description"]}
+            {
+                "id": c["id"],
+                "name": c["name"],
+                "description": c["description"],
+                "icon": WEAPON_DEFS.get(c["id"], {}).get("icon"),
+            }
             for c in choices
         ]
 

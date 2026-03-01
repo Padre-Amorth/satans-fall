@@ -25,7 +25,16 @@ from src.balance import (
     XP_BASE,
 )
 from src.entities.player import Player
+from src.game.persistence import (
+    get_profile_info,
+    load_last_profile_slot,
+    load_permanent_stats,
+    migrate_legacy_save,
+    profile_path,
+    save_permanent_stats,
+)
 from src.game.ui_helpers import FloatingText
+from src.game.weapons import init_player_weapons, init_weapons
 from src.game_constants import (
     DEFAULT_FPS,
     DEFAULT_HEIGHT,
@@ -36,15 +45,6 @@ from src.game_constants import (
     WALL_THICKNESS,
 )
 from src.game_state import GameStateManager
-from src.game.weapons import init_weapons, init_player_weapons
-from src.game.persistence import (
-    load_last_profile_slot,
-    load_permanent_stats,
-    save_permanent_stats,
-    get_profile_info,
-    profile_path,
-    migrate_legacy_save,
-)
 from src.projectile import FliesProjectile
 from src.systems.collision_system import CollisionSystem
 from src.systems.enemy_manager import EnemyManager
@@ -2596,7 +2596,9 @@ class Game:
         # Always draw pause confirmation dialog if active (can appear even without pause menu)
         # This allows ALT+F4 to show quit confirmation during gameplay
         if getattr(self, "pause_confirmation", None):
-            if hasattr(self, "ui") and hasattr(self.ui, "draw_pause_confirmation_dialog"):
+            if hasattr(self, "ui") and hasattr(
+                self.ui, "draw_pause_confirmation_dialog"
+            ):
                 self.ui.draw_pause_confirmation_dialog(shake_x, shake_y)
 
     def draw_hud(self, shake_x=0, shake_y=0) -> None:
@@ -2947,7 +2949,7 @@ class Game:
         # limbo_final is extra punishing: ramp slopes should be doubled
         if stage == "limbo_final":
             try:
-                from src.balance import SPAWN_RAMP_SLOPE_PRE, SPAWN_RAMP_SLOPE_POST
+                from src.balance import SPAWN_RAMP_SLOPE_POST, SPAWN_RAMP_SLOPE_PRE
 
                 self.spawn_ramp_slope_pre = SPAWN_RAMP_SLOPE_PRE * 2
                 self.spawn_ramp_slope_post = SPAWN_RAMP_SLOPE_POST * 2
@@ -3508,9 +3510,8 @@ class Game:
         # Check if the horde boss has died (independent of projectile collisions).
         # If boss_limbo_horde is dead and we haven't set the victory flag yet,
         # do so now so the countdown can begin.
-        if (
-            getattr(self, "limbo_horde_active", False)
-            and not getattr(self, "limbo_horde_completed", False)
+        if getattr(self, "limbo_horde_active", False) and not getattr(
+            self, "limbo_horde_completed", False
         ):
             for boss in list(self.bosses):
                 if (
@@ -3523,11 +3524,10 @@ class Game:
                         self.limbo_horde_active = False
                         self.limbo_horde_completed = True
                         self.limbo_horde_ready_for_victory = True
-                        if getattr(self, "debug", False):
-                            print(
-                                f"[LIMBO_HORDE] Boss death detected in update! "
-                                f"Setting victory ready. Enemies: {len(self.enemies)}, Bosses: {len(self.bosses)}"
-                            )
+                        print(
+                            f"[LIMBO_HORDE] Boss death detected in update! "
+                            f"Setting victory ready. Enemies: {len(self.enemies)}, Bosses: {len(self.bosses)}"
+                        )
                         # Clear all remaining enemies and bosses immediately
                         try:
                             self.enemies.empty()
@@ -3536,12 +3536,6 @@ class Game:
                             pass
                     except Exception:
                         pass
-            # Only log boss scan when in non-horde stages or when debug is enabled
-            if getattr(self, "debug", False) and (
-                not getattr(self, "limbo_horde_active", False)
-                or getattr(self, "limbo_horde_completed", False)
-            ):
-                pass  # Don't print anything when not actively in horde
 
         # If the horde has been defeated we don't immediately show the
         # victory overlay; we want to wait until every enemy has actually
@@ -3563,16 +3557,18 @@ class Game:
             and getattr(self, "limbo_horde_victory_timer", 0) <= 0
         ):
             should_check = True
-            if getattr(self, "debug", False):
-                print("[LIMBO_HORDE] Fallback victory timer check (completed but no ready flag)")
+            print(
+                "[LIMBO_HORDE] Fallback victory timer check (completed but no ready flag)"
+            )
         if should_check:
             # wait for *all* foes to vanish: both normal enemies and any bosses
             enemies_empty = (not getattr(self, "enemies", None)) or len(
                 self.enemies
             ) == 0
             bosses_empty = (not getattr(self, "bosses", None)) or len(self.bosses) == 0
-            if getattr(self, "debug", False):
-                print(f"[LIMBO_HORDE] ready_for_victory check: enemies_empty={enemies_empty} bosses_empty={bosses_empty} enemy_count={len(self.enemies)} boss_count={len(self.bosses)}")
+            print(
+                f"[LIMBO_HORDE] ready_for_victory check: enemies_empty={enemies_empty} bosses_empty={bosses_empty} enemy_count={len(self.enemies)} boss_count={len(self.bosses)}"
+            )
             if enemies_empty and bosses_empty:
                 try:
                     self.limbo_horde_victory_timer = int(self.fps * 5)
@@ -3580,19 +3576,27 @@ class Game:
                     self.limbo_horde_victory_timer = 0
                 # consume the flag so we don't trigger again
                 self.limbo_horde_ready_for_victory = False
-                if getattr(self, "debug", False):
-                    print(f"[LIMBO_HORDE] Victory timer started: {self.limbo_horde_victory_timer} frames")
+                print(
+                    f"[LIMBO_HORDE] Victory timer started: {self.limbo_horde_victory_timer} frames"
+                )
 
         # After limbo explosion we wait a moment then show victory screen
         # Timer decrements every frame once it's been set
         if getattr(self, "limbo_horde_victory_timer", 0) > 0:
             self.limbo_horde_victory_timer -= 1
-            if getattr(self, "debug", False) and self.limbo_horde_victory_timer % 30 == 0:
-                print(f"[LIMBO_HORDE] Victory timer countdown: {self.limbo_horde_victory_timer} frames remaining")
+            if (
+                getattr(self, "debug", False)
+                and self.limbo_horde_victory_timer % 30 == 0
+            ):
+                print(
+                    f"[LIMBO_HORDE] Victory timer countdown: {self.limbo_horde_victory_timer} frames remaining"
+                )
             if self.limbo_horde_victory_timer <= 0:
                 # begin full victory overlay sequence (will stay until keypress)
                 if getattr(self, "debug", False):
-                    print(f"[LIMBO_HORDE] Victory timer expired! Showing victory screen!")
+                    print(
+                        "[LIMBO_HORDE] Victory timer expired! Showing victory screen!"
+                    )
                 self.showing_victory = True
                 self.victory_alpha = 0
         # Handle limbo final boss countdown separately; when it expires we show
@@ -3600,8 +3604,13 @@ class Game:
         if getattr(self, "limbo_final_victory_timer", 0) > 0:
             self.limbo_final_victory_timer -= 1
             # optionally log every second when debugging
-            if getattr(self, "debug", False) and self.limbo_final_victory_timer % self.fps == 0:
-                print(f"[LIMBO_FINAL] Countdown: {self.limbo_final_victory_timer} frames remaining")
+            if (
+                getattr(self, "debug", False)
+                and self.limbo_final_victory_timer % self.fps == 0
+            ):
+                print(
+                    f"[LIMBO_FINAL] Countdown: {self.limbo_final_victory_timer} frames remaining"
+                )
             if self.limbo_final_victory_timer <= 0:
                 if getattr(self, "debug", False):
                     print("[LIMBO_FINAL] Countdown expired, triggering defeat")
@@ -3983,9 +3992,11 @@ class Game:
                     try:
                         if getattr(self, "debug", False):
                             print(
-                                "[CORE] death flag check", boss.enemy_type,
+                                "[CORE] death flag check",
+                                boss.enemy_type,
                                 getattr(self, "selected_stage", None),
-                                "started?", getattr(self, "limbo_final_victory_started", False),
+                                "started?",
+                                getattr(self, "limbo_final_victory_started", False),
                             )
                         if (
                             getattr(boss, "enemy_type", "") == "boss_limbo"
@@ -3998,7 +4009,9 @@ class Game:
                             if getattr(self, "debug", False):
                                 print("[CORE] limbo_final timer started")
                             try:
-                                self.show_centered_message("BOSS DEFEATED!", 2000, (255, 255, 0))
+                                self.show_centered_message(
+                                    "BOSS DEFEATED!", 2000, (255, 255, 0)
+                                )
                             except Exception:
                                 pass
                     except Exception:
@@ -4010,9 +4023,7 @@ class Game:
                         if et.startswith("boss_"):
                             heal_amt = random.randint(10, 20)
                             try:
-                                self.spawn_health_drop(
-                                    boss.x, boss.y, heal_amt
-                                )
+                                self.spawn_health_drop(boss.x, boss.y, heal_amt)
                             except Exception:
                                 pass
                     except Exception:

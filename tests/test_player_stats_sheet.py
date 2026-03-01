@@ -12,10 +12,7 @@ def setup_dummy_sdl():
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from game import Game  # noqa: E402
+from src.game import Game  # noqa: E402
 
 
 def test_draw_player_stats_does_not_crash():

@@ -2,7 +2,7 @@ import os
 import sys
 
 # ensure project root is on path when running this test directly
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from src.game import Game
 

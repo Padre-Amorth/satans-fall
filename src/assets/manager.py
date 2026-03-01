@@ -34,6 +34,15 @@ def _load_original(name: str) -> Optional[pygame.Surface]:
     try loading again.
     """
     path = os.path.join(_ASSETS_DIR, name)
+    # Try case-insensitive match if file missing (handles Tenebrae.PNG etc).
+    if not os.path.exists(path):
+        try:
+            for fname in os.listdir(_ASSETS_DIR):
+                if fname.lower() == name.lower():
+                    path = os.path.join(_ASSETS_DIR, fname)
+                    break
+        except Exception:
+            pass
 
     if name in _original_cache:
         cached = _original_cache[name]

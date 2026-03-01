@@ -9,24 +9,50 @@ def test_spawn_inquisitor_on_limbo_wave():
     g.select_stage("limbo")
     em = g.enemy_manager
 
-    # Non-3 wave -> inquisitor
-    g.wave = 1
-    em.wave_boss_spawned = False
-    em.update_wave_boss(38)
-    bosses = [b for b in g.bosses if getattr(b, "enemy_type", "") == "boss_inquisitor"]
-    assert len(bosses) >= 1
+    # Any wave in Limbo should spawn an inquisitor boss only
+    for wave in (1, 3, 6):
+        try:
+            g.bosses.empty()
+        except Exception:
+            g.bosses = []
+        g.wave = wave
+        em.wave_boss_spawned = False
+        em.update_wave_boss(38)
+        bosses = [
+            b for b in g.bosses if getattr(b, "enemy_type", "") == "boss_inquisitor"
+        ]
+        assert len(bosses) >= 1, f"expected inquisitor on limbo wave {wave}"
+        # make sure no big boss sneaked in
+        assert not any(
+            b.enemy_type == "boss_big" for b in g.bosses
+        ), "boss_big must not spawn on limbo"
 
-    # Wave divisible by 3 -> boss_big instead of inquisitor
-    try:
-        g.bosses.empty()
-    except Exception:
-        g.bosses = []
-    em.wave_boss_spawned = False
+
+def test_legacy_spawn_system_never_creates_big_in_limbo():
+    """When the EnemyManager is absent the fallback logic must also avoid
+    boss_big on limbo stages.
+    """
+    pygame.init()
+    g = Game(debug=True)
+    # remove manager to force fallback path
+    g.enemy_manager = None
+    g.select_stage("limbo")
+    # simulate a wave where the normal logic would try to spawn a boss
     g.wave = 3
-    em.update_wave_boss(38)
-    bosses = [b for b in g.bosses if getattr(b, "enemy_type", "") == "boss_big"]
-    assert len(bosses) >= 1
+    g.wave_time = 38.0
+    g.wave_boss_spawned = False
 
+    # wave boss logic occurs during wave progression rather than plain
+    # enemy spawning. call the helper directly the same way the main loop
+    # would.
+    g.update_wave_progression()
+
+    bosses = [b for b in g.bosses if hasattr(b, "enemy_type")]
+    assert bosses, "expected some boss to spawn via legacy path"
+    # limbo stages should never produce boss_big
+    assert all(b.enemy_type != "boss_big" for b in bosses), "legacy path spawned boss_big"
+    # with the fallback now supporting inquisitors, we should see one
+    assert any(b.enemy_type == "boss_inquisitor" for b in bosses), "expected inquisitor instead"
 
 def test_inquisitor_projectile_slows_player_on_hit():
     pygame.init()

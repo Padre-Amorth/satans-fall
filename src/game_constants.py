@@ -4,31 +4,40 @@ DEFAULT_WIDTH = 1280
 DEFAULT_HEIGHT = 720
 DEFAULT_FPS = 60
 
-# Duration (in frames) of the storm-tier7 "Hellectric flux" special when
+# Duration (in frames) of the storm-tier7 "Voltaic Mayhem" special when
 # activated.  The beam can persist up to this many frames but also cancels
 # early if the right mouse button is released.
-HELECTRIC_MAX_DURATION = 5 * DEFAULT_FPS
+VOLTAIC_MAYHEM_MAX_DURATION = 5 * DEFAULT_FPS
 
 # Movement speed for the beam's controllable endpoint (pixels/second).  The
 # endpoint will chase the mouse cursor at this rate rather than teleporting
 # instantly, giving the ability a more deliberate feel.
-HELECTRIC_SPEED = 200
+VOLTAIC_MAYHEM_SPEED = 200
 
-# radius of the pulsing electric circle drawn at the cursor during Hellectric flux
-HELECTRIC_IMPACT_RADIUS = 50
+# radius of the pulsing electric circle drawn at the cursor during Voltaic Mayhem
+VOLTAIC_MAYHEM_IMPACT_RADIUS = 50
 
-# a small fraction of the hellectric flux beams will be tinted a more
+# a small fraction of the Voltaic Mayhem beams will be tinted a more
 # purplish/violaceous color.  the probability controls how often the effect
 # occurs; the hue itself is chosen to blend with the existing cyan palette
 # without going completely purple.
-HELECTRIC_VIOLET_CHANCE = 0.25  # 0.0-1.0 probability per beam
-HELECTRIC_VIOLET_COLOR = (180, 150, 255)  # rgb colour used when chance triggers
+VOLTAIC_MAYHEM_VIOLET_CHANCE = 0.25  # 0.0-1.0 probability per beam
+VOLTAIC_MAYHEM_VIOLET_COLOR = (180, 150, 255)  # rgb colour used when chance triggers
 
 # -- Fire tier-7 special: large area bomb
 # radius now 20px larger than original so effects feel beefier
 FIRE_SPECIAL_RADIUS = 70  # px (was 50, then 60)
 FIRE_SPECIAL_DAMAGE = 20  # flat damage per explosion
 FIRE_SPECIAL_CHARGES = 4  # number of shots per activation
+
+# Winged enemies detonate when touching the player.  The configuration
+# constants below control the visual radius, how long the orange circle
+# lingers, and the flat damage inflicted.  These were originally hard‑coded
+# in the collision logic but have been promoted so tests can rely on them.
+WINGED_EXPLOSION_RADIUS = 30  # visual radius of the contact explosion
+WINGED_EXPLOSION_DURATION = 6  # frames the effect persists
+WINGED_EXPLOSION_COLOR = (255, 120, 0)  # slightly bright orange
+WINGED_CONTACT_DAMAGE = 15  # damage dealt to player on contact
 # Duration of the firing window (player has this many frames to use all charges)
 # extended to eight seconds for more flexibility.
 FIRE_SPECIAL_DURATION = 8 * DEFAULT_FPS
@@ -164,6 +173,14 @@ PURGATORY_FOG_COLORS: dict[str, tuple[int, int, int]] = {
 SELECTION_BOX_WIDTH = 560
 SELECTION_BOX_HEIGHT = 80
 SELECTION_BOX_SPACING = 14
+
+# When showing weapon choices the UI will optionally display a small icon
+# representing each weapon on the left side of the box.  These constants
+# control the rendered icon size and gap between the icon and the text
+# that follows.  They are intentionally modest so the overall box width
+# does not need to change; spacing is applied inside the existing layout.
+WEAPON_ICON_SIZE = 48       # width/height in pixels
+WEAPON_ICON_PADDING = 8     # space between icon and subsequent text
 
 # Common resolution presets shown in the Options -> Resolution menu
 DEFAULT_DISPLAY_PRESETS = [

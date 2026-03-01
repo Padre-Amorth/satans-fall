@@ -6,10 +6,11 @@ from src.game import Game
 
 def test_limbo_boss_fallback_scales_to_width():
     pygame.init()
-    # force missing asset by monkeypatching get_image
+    # force missing asset by monkeypatching get_image and flush any cache
     original = am.get_image
     am.get_image = lambda name, size=None: None
     try:
+        am.clear_cache()
         g = Game(debug=True)
         em = g.enemy_manager
         boss = em.spawn_boss("limbo")

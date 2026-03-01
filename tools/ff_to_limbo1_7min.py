@@ -46,6 +46,11 @@ def main() -> int:
         action="store_true",
         help="Continue running the game indefinitely after reaching target time",
     )
+    p.add_argument(
+        "--no-auto-exit",
+        action="store_true",
+        help="When used with --play, do not auto-exit on boss observation or after the safety timeout",
+    )
     args = p.parse_args()
 
     # Jump to exactly 7 minutes (420 seconds) in the stage rather than
@@ -126,6 +131,25 @@ def main() -> int:
 
     print("\nStarting game at 7:00...")
 
+    # Force UI/menu flags off so the game starts in-play rather than showing menus.
+    try:
+        g.showing_main_menu = False
+        g.showing_stage_menu = False
+        g.showing_profiles_menu = False
+        g.showing_permanent_upgrades = False
+        g.showing_prologo_end = False
+        g.showing_game_over = False
+        g.showing_victory = False
+        g.awaiting_weapon_choice = False
+        g.is_initial_weapon_choice = False
+        g.awaiting_tower_choice = False
+        g.is_initial_tower_choice = False
+        g.paused = False
+        g.stage_start_countdown = 0
+        g.stage_start_timer = 0
+    except Exception:
+        pass
+
     # two modes: a brief live preview or full-play mode.
     if not args.play:
         # preview for a fixed number of seconds then exit automatically.
@@ -175,12 +199,13 @@ def main() -> int:
                 g.clock.tick(g.fps)
                 frames += 1
                 # safety: if we simulate more than 60 seconds, bail out
-                if frames > int(g.fps * 60):
-                    print("[WARN] reached 60 seconds of simulation, exiting")
-                    break
-                if boss_reported:
-                    print("[INFO] Exiting after boss observed")
-                    break
+                if not args.no_auto_exit:
+                    if frames > int(g.fps * 60):
+                        print("[WARN] reached 60 seconds of simulation, exiting")
+                        break
+                    if boss_reported:
+                        print("[INFO] Exiting after boss observed")
+                        break
         except Exception:
             import traceback
 

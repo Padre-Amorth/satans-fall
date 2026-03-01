@@ -12,6 +12,8 @@ from src.game_constants import (
     STATUE_ASSET_VERTICAL_OFFSET,
     STATUE_BASE_Y,
     WALL_THICKNESS,
+    WEAPON_ICON_SIZE,
+    WEAPON_ICON_PADDING,
 )
 from src.weapons import WEAPON_DEFS
 
@@ -2365,11 +2367,6 @@ class PygameUIManager:
         font_large = self.get_font(36)
         font_medium = self.get_font(28)
 
-        overlay = pygame.Surface((self.width, self.height))
-        overlay.set_alpha(128)
-        overlay.fill((0, 0, 0))
-        self.screen.blit(overlay, (0, 0))
-
         title = self.get_text("PAUSED", font_large, (255, 255, 255))
         self.screen.blit(
             title,
@@ -3605,7 +3602,7 @@ class PygameUIManager:
                 pass
 
         # (statues/towers will be drawn later, after special effects, to ensure
-        # they stay above everything including hellectric beams)
+        # they stay above everything including Voltaic Mayhem beams)
 
         # NOTE: statue projectile visual indicators removed (kept internal data for logic/tests)
 
@@ -3713,7 +3710,7 @@ class PygameUIManager:
             pass
 
         # Always render statues/towers last so they layer above projectiles and
-        # even hellectric flux rays.  ``draw_pedestals`` is a no-op except in
+        # even Voltaic Mayhem rays.  ``draw_pedestals`` is a no-op except in
         # Limbo, while the dynamic tower code handles Purgatory/Hell.
         try:
             if hasattr(self, "draw_pedestals"):
@@ -3755,7 +3752,7 @@ class PygameUIManager:
             and getattr(self.game, "limbo_final_lightning_strike", False)
         ):
             self.draw_lightning_effect(shake_x, shake_y)
-        # Hellectric flux cursor ring (pulsing) for storm-tier7 special
+        # Voltaic Mayhem cursor ring (pulsing) for storm-tier7 special
         if pygame is not None:
             try:
                 # fire special explosions (orange) drawn first
@@ -3847,17 +3844,17 @@ class PygameUIManager:
                         )
                     except Exception:
                         pass
-                if getattr(self.game, "hellectric_active", False):
+                if getattr(self.game, "voltaic_active", False):
                     # draw a semitransparent pulsing circle at the beam endpoint (which
                     # now moves toward the cursor at a fixed speed rather than
                     # instantly following it).
                     mx = getattr(
-                        self.game, "hellectric_x", getattr(self.game, "mouse_x", 0)
+                        self.game, "voltaic_x", getattr(self.game, "mouse_x", 0)
                     )
                     my = getattr(
-                        self.game, "hellectric_y", getattr(self.game, "mouse_y", 0)
+                        self.game, "voltaic_y", getattr(self.game, "mouse_y", 0)
                     )
-                    radius = getattr(self.game, "HELLECTRIC_IMPACT_RADIUS", 50)
+                    radius = getattr(self.game, "VOLTAIC_MAYHEM_IMPACT_RADIUS", 50)
                     # constant alpha to avoid flashing/intermittence
                     alpha = 150
                     color = (180, 220, 255, alpha)
@@ -4715,16 +4712,42 @@ class PygameUIManager:
                         self.game.screen, stripe_col, (bx, by, 3, box_height)
                     )
 
+                # --- content layout ------------------------------------------------
+                # reserve a fixed margin for the icon on the left; the actual
+                # graphic is optional but the blank space keeps the text
+                # columns aligned across all choices.
+                icon_start_x = bx + 16
+                content_x = icon_start_x + WEAPON_ICON_SIZE + WEAPON_ICON_PADDING
+
+                # draw an icon if the weapon definition provided one
+                icon_path = weapon.get("icon")
+                if icon_path:
+                    icon_surf = get_image(icon_path, (WEAPON_ICON_SIZE, WEAPON_ICON_SIZE))
+                    # if the named asset wasn't found, try the alternate naming
+                    # convention (strip or add "weapon_" prefix) so manually
+                    # dropped files still work.
+                    if icon_surf is None:
+                        if icon_path.startswith("weapon_"):
+                            alt = icon_path[len("weapon_"):]
+                        else:
+                            alt = f"weapon_{icon_path}"
+                        icon_surf = get_image(alt, (WEAPON_ICON_SIZE, WEAPON_ICON_SIZE))
+                    if icon_surf:
+                        icon_y = by + (box_height - WEAPON_ICON_SIZE) // 2
+                        self.game.screen.blit(icon_surf, (icon_start_x, icon_y))
+
+                # key (e.g. "[1]") comes after icon/margin
                 key_surf = self.get_text(f"[{i + 1}]", font_key, C_KEY)
                 self.game.screen.blit(
                     key_surf,
-                    (bx + 16, by + box_height // 2 - key_surf.get_height() // 2),
+                    (content_x, by + box_height // 2 - key_surf.get_height() // 2),
                 )
+                content_x += key_surf.get_width() + WEAPON_ICON_PADDING
 
                 name_surf = self.get_text(weapon["name"], font_name, name_col)
                 desc_surf = self.get_text(weapon["description"], font_desc, C_DESC)
                 block_h = name_surf.get_height() + 4 + desc_surf.get_height()
-                name_x = bx + 52
+                name_x = content_x
                 name_y = by + (box_height - block_h) // 2
                 self.game.screen.blit(name_surf, (name_x, name_y))
                 self.game.screen.blit(
@@ -5092,6 +5115,21 @@ class PygameUIManager:
                 (
                     self.game.width // 2 - title_surf.get_width() // 2 + shake_x,
                     200 + shake_y,
+                ),
+            )
+
+            # instructions
+            instr = self.get_text(
+                "ENTER → Next level    ESC → Main menu",
+                self.get_font(24),
+                (200, 200, 200),
+            ).copy()
+            instr.set_alpha(int(self.game.victory_alpha))
+            self.game.screen.blit(
+                instr,
+                (
+                    self.game.width // 2 - instr.get_width() // 2 + shake_x,
+                    300 + shake_y,
                 ),
             )
         except Exception as e:

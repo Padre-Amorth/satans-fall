@@ -425,6 +425,19 @@ class UpgradeSystem:
                             ),
                         }
                     )
+            # ensure icons propagate even for the early level-6 branch
+            for c in choices:
+                wid = None
+                cid = c.get("id", "")
+                if cid.startswith("acquire_"):
+                    wid = cid.split("acquire_")[-1]
+                elif cid.endswith("_upgrade"):
+                    wid = cid[: -len("_upgrade")]
+                if wid:
+                    icon = WEAPON_DEFS.get(wid, {}).get("icon")
+                    if not icon:
+                        icon = f"weapon_{wid.lower()}.png"
+                    c["icon"] = icon
             return choices[:3]
 
         all_weapons = [
@@ -474,7 +487,17 @@ class UpgradeSystem:
         if not available_weapons:
             return []
 
-        return random.sample(available_weapons, min(3, len(available_weapons)))
+        result = random.sample(available_weapons, min(3, len(available_weapons)))
+        # attach icon info for returned entries (fallback if necessary)
+        for c in result:
+            wid = c.get("id")
+            if wid:
+                icon = WEAPON_DEFS.get(wid, {}).get("icon")
+                if not icon:
+                    icon = f"weapon_{wid.lower()}.png"
+                c["icon"] = icon
+        return result
+        return result
 
     def generate_weapon_upgrade_choices(self):
         """Generate weapon upgrade choices for owned weapons"""
@@ -905,12 +928,12 @@ class UpgradeSystem:
             if key_prefix == "fire":
                 lines.append("AR.MAGA.EDDON")
                 lines.append(
-                    "Right-click fires up to 4 burning orbs (r=50px, 20 dmg); "
-                    "each shot appears 0.5s after click, words linger ≥2s, 5s window"
+                    "Right-click fires up to 4 burning orbs "
+                
                 )
             elif key_prefix == "storm":
-                lines.append("Hellectric flux")
-                lines.append("Right-click to fire controllable lightning from towers")
+                lines.append("Voltaic Mayhem")
+                lines.append("Controllable stream of electric chaos")
                 lines.append(
                     "Endpoint moves toward cursor at limited speed (≈200px/sec)"
                 )
@@ -928,7 +951,7 @@ class UpgradeSystem:
                     lines.append("Chain lightning +2 targets")
                 elif tier == 2:
                     lines.append(
-                        "Chain-kills trigger lightning explosion — damages nearby enemies"
+                        "Chain-kills trigger lightning explosion"
                     )
                 else:
                     lines.append("Chain lightning +2 targets")

@@ -7,11 +7,9 @@ Verifies that:
 """
 
 import sys
-from pathlib import Path
 
-import pytest
 import pygame
-
+import pytest
 
 from src.game import Game  # noqa: E402
 from src.systems.spawn_system import SpawnSystem  # noqa: E402
@@ -52,8 +50,6 @@ def test_no_giants_spawn_after_horde(stage_name):
     giants_created = []
     horde_defeated_frame = None
     showing_victory_frame = None
-
-
 
     # Spawn the horde boss on frame 0
     boss_spawned = False
@@ -121,9 +117,7 @@ def test_no_giants_spawn_after_horde(stage_name):
     print(f"{'='*60}")
 
     if giants_created:
-        print(
-            f"FAIL: {len(giants_created)} giants spawned after horde completion!"
-        )
+        print(f"FAIL: {len(giants_created)} giants spawned after horde completion!")
         for frame, enemy in giants_created:
             print(f"  - Frame {frame}: giant spawned")
         return False
@@ -132,17 +126,15 @@ def test_no_giants_spawn_after_horde(stage_name):
         if horde_defeated_frame is not None:
             print(f"  - Horde defeated at frame {horde_defeated_frame}")
         if showing_victory_frame is not None:
-            print(
-                f"  - Victory screen appeared at frame {showing_victory_frame}"
-            )
+            print(f"  - Victory screen appeared at frame {showing_victory_frame}")
         return True
 
 
 def test_all_limbo_stages():
     """Test that NO giants spawn after horde in all three limbo stages."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("NO GIANTS SPAWN AFTER HORDE TEST")
-    print("="*60)
+    print("=" * 60)
 
     stages = ["limbo", "limbo_2", "limbo_3"]
     results = {}
@@ -159,9 +151,9 @@ def test_all_limbo_stages():
             results[stage] = False
 
     # Final summary
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("FINAL SUMMARY")
-    print("="*60)
+    print("=" * 60)
     for stage, passed in results.items():
         status = "PASS" if passed else "FAIL"
         print(f"{stage:12} -> {status}")

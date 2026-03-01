@@ -1,4 +1,4 @@
-"""Tower special-ability system — energy, fire, blizzard, and hellectric state/logic."""
+"""Tower special-ability system — energy, fire, blizzard, and Voltaic Mayhem state/logic."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ LOG = logging.getLogger(__name__)
 
 
 class TowerSpecialSystem:
-    """Owns all special-ability state and implements fire / blizzard / hellectric logic.
+    """Owns all special-ability state and implements fire / blizzard / Voltaic Mayhem logic.
 
     Designed as a Service-Locator system: receives and holds a reference to the
     Game instance so it can read enemies, game_state, permanent_stats, etc.
@@ -45,35 +45,35 @@ class TowerSpecialSystem:
         # --- Input state for beam ---
         self.right_mouse_held: bool = False
 
-        # --- Hellectric flux (storm tier-7) ---
-        self.hellectric_active: bool = False
-        self.hellectric_time_left: int = 0
-        self.hellectric_x: float = 0.0
-        self.hellectric_y: float = 0.0
-        self._hellectric_accum: Dict[int, int] = {}
+        # --- Voltaic Mayhem (storm tier-7) ---
+        self.voltaic_active: bool = False
+        self.voltaic_time_left: int = 0
+        self.voltaic_x: float = 0.0
+        self.voltaic_y: float = 0.0
+        self._voltaic_accum: Dict[int, int] = {}
 
         # copy constants for convenience (mirrors what _init_game_state did)
         try:
             from src.game_constants import (
-                HELECTRIC_IMPACT_RADIUS,
-                HELECTRIC_MAX_DURATION,
-                HELECTRIC_SPEED,
-                HELECTRIC_VIOLET_CHANCE,
-                HELECTRIC_VIOLET_COLOR,
+                VOLTAIC_MAYHEM_IMPACT_RADIUS,
+                VOLTAIC_MAYHEM_MAX_DURATION,
+                VOLTAIC_MAYHEM_SPEED,
+                VOLTAIC_MAYHEM_VIOLET_CHANCE,
+                VOLTAIC_MAYHEM_VIOLET_COLOR,
             )
 
-            self.HELLECTRIC_MAX_DURATION = HELECTRIC_MAX_DURATION
-            self.HELLECTRIC_IMPACT_RADIUS = HELECTRIC_IMPACT_RADIUS
-            self.HELLECTRIC_SPEED = HELECTRIC_SPEED
+            self.VOLTAIC_MAYHEM_MAX_DURATION = VOLTAIC_MAYHEM_MAX_DURATION
+            self.VOLTAIC_MAYHEM_IMPACT_RADIUS = VOLTAIC_MAYHEM_IMPACT_RADIUS
+            self.VOLTAIC_MAYHEM_SPEED = VOLTAIC_MAYHEM_SPEED
             # chance and colour for occasional violet beams
-            self.HELLECTRIC_VIOLET_CHANCE = HELECTRIC_VIOLET_CHANCE
-            self.HELLECTRIC_VIOLET_COLOR = HELECTRIC_VIOLET_COLOR
+            self.VOLTAIC_MAYHEM_VIOLET_CHANCE = VOLTAIC_MAYHEM_VIOLET_CHANCE
+            self.VOLTAIC_MAYHEM_VIOLET_COLOR = VOLTAIC_MAYHEM_VIOLET_COLOR
         except Exception:
-            self.HELLECTRIC_MAX_DURATION = 0
-            self.HELLECTRIC_IMPACT_RADIUS = 0
-            self.HELLECTRIC_SPEED = 0
-            self.HELLECTRIC_VIOLET_CHANCE = 0
-            self.HELLECTRIC_VIOLET_COLOR = (150, 200, 255)
+            self.VOLTAIC_MAYHEM_MAX_DURATION = 0
+            self.VOLTAIC_MAYHEM_IMPACT_RADIUS = 0
+            self.VOLTAIC_MAYHEM_SPEED = 0
+            self.VOLTAIC_MAYHEM_VIOLET_CHANCE = 0
+            self.VOLTAIC_MAYHEM_VIOLET_COLOR = (150, 200, 255)
 
     def special_unlocked(self) -> bool:
         """Return True if any placed tower has its last‑skill slot active.
@@ -235,28 +235,28 @@ class TowerSpecialSystem:
                     }
                 )
 
-            # Activate Hellectric Flux if storm tower is placed with storm_7 unlocked
+            # Activate Voltaic Mayhem if storm tower is placed with storm_7 unlocked
             if "storm" in placed_types:
                 # start the beam; it will run while right mouse held or until time runs out
                 try:
-                    LOG.info("hellectric branch activated")
+                    LOG.info("voltaic branch activated")
                 except Exception:
                     pass
-                self.hellectric_active = True
+                self.voltaic_active = True
                 # initialize the movable endpoint at the current mouse position so
                 # the beam doesn't jump from (0,0)
-                self.hellectric_x = getattr(self.game, "mouse_x", 0)
-                self.hellectric_y = getattr(self.game, "mouse_y", 0)
+                self.voltaic_x = getattr(self.game, "mouse_x", 0)
+                self.voltaic_y = getattr(self.game, "mouse_y", 0)
                 # fall back to constant if attribute missing
-                dur = getattr(self, "HELLECTRIC_MAX_DURATION", None)
+                dur = getattr(self, "VOLTAIC_MAYHEM_MAX_DURATION", None)
                 if dur is None:
                     try:
-                        from src.game_constants import HELECTRIC_MAX_DURATION
+                        from src.game_constants import VOLTAIC_MAYHEM_MAX_DURATION
 
-                        dur = HELECTRIC_MAX_DURATION
+                        dur = VOLTAIC_MAYHEM_MAX_DURATION
                     except Exception:
                         dur = 0
-                self.hellectric_time_left = dur
+                self.voltaic_time_left = dur
 
             return True
         return False
@@ -446,8 +446,8 @@ class TowerSpecialSystem:
                 pass
         self.fire_smoke = alive
 
-    def update_hellectric_flux(self) -> None:
-        """Update state for the storm special (Hellectric flux).
+    def update_voltaic_mayhem(self) -> None:
+        """Update state for the storm special (Voltaic Mayhem).
 
         Beams originate from each placed storm tower and stretch to the current
         mouse position.  They damage any enemy whose hitbox comes within a
@@ -459,28 +459,28 @@ class TowerSpecialSystem:
         # If the special is not currently active we can clear any stored
         # accumulators and bail early.  This ensures lingering entries don't
         # persist between activations.
-        if not getattr(self, "hellectric_active", False):
-            self._hellectric_accum.clear()
+        if not getattr(self, "voltaic_active", False):
+            self._voltaic_accum.clear()
             return
 
         # decrement timer and disable when expired; deactivate when the
         # counter hits zero so that the effect ends immediately on the frame
         # it expires rather than waiting for the next update call.
-        self.hellectric_time_left -= 1
-        if self.hellectric_time_left <= 0:
-            self.hellectric_active = False
-            self._hellectric_accum.clear()
+        self.voltaic_time_left -= 1
+        if self.voltaic_time_left <= 0:
+            self.voltaic_active = False
+            self._voltaic_accum.clear()
             return
 
         # compute desired endpoint (mouse) and move current endpoint toward it
         mx = getattr(self.game, "mouse_x", 0)
         my = getattr(self.game, "mouse_y", 0)
         # ensure we have endpoint coords in case activation failed to set them
-        hx = getattr(self, "hellectric_x", mx)
-        hy = getattr(self, "hellectric_y", my)
+        hx = getattr(self, "voltaic_x", mx)
+        hy = getattr(self, "voltaic_y", my)
         # move endpoint toward mouse using configured speed (pixels/sec)
         try:
-            speed = getattr(self, "HELLECTRIC_SPEED", 0) / float(self.game.fps or 1)
+            speed = getattr(self, "VOLTAIC_MAYHEM_SPEED", 0) / float(self.game.fps or 1)
         except Exception:
             speed = 0
         # vector from current to target
@@ -493,7 +493,7 @@ class TowerSpecialSystem:
             frac = speed / dist
             hx += dx * frac
             hy += dy * frac
-        self.hellectric_x, self.hellectric_y = hx, hy
+        self.voltaic_x, self.voltaic_y = hx, hy
 
         # damage radius: use enemy radius plus small margin
         from src import game_constants
@@ -507,7 +507,7 @@ class TowerSpecialSystem:
             if tower is None or getattr(tower, "tower_type", None) != "storm":
                 continue
             tx, ty = getattr(tower, "x", 0), getattr(tower, "y", 0)
-            # apply same offset as statue projectiles so hellectric beams start
+            # apply same offset as statue projectiles so voltaic beams start
             # from the actual shot origin rather than the tower centre.  use the
             # shared helper from weapon_system so both systems stay in sync.
             try:
@@ -540,9 +540,9 @@ class TowerSpecialSystem:
                 try:
                     import random
 
-                    if random.random() < getattr(self, "HELLECTRIC_VIOLET_CHANCE", 0):
+                    if random.random() < getattr(self, "VOLTAIC_MAYHEM_VIOLET_CHANCE", 0):
                         beam_effect["color"] = getattr(
-                            self, "HELLECTRIC_VIOLET_COLOR", (150, 200, 255)
+                            self, "VOLTAIC_MAYHEM_VIOLET_COLOR", (150, 200, 255)
                         )
                 except Exception:
                     pass
@@ -554,7 +554,7 @@ class TowerSpecialSystem:
                         # explosion should linger a bit longer so player sees it
                         "timer": 16,
                         "explosion": True,
-                        "radius": getattr(self, "HELLECTRIC_IMPACT_RADIUS", 50),
+                        "radius": getattr(self, "VOLTAIC_MAYHEM_IMPACT_RADIUS", 50),
                         # brighter cyan for better contrast
                         "color": (150, 240, 255),
                     }
@@ -593,21 +593,21 @@ class TowerSpecialSystem:
                     # accumulate damage for throttled display
                     try:
                         eid = id(enemy)
-                        total = self._hellectric_accum.get(eid, 0) + 1
-                        self._hellectric_accum[eid] = total
+                        total = self._voltaic_accum.get(eid, 0) + 1
+                        self._voltaic_accum[eid] = total
                         if total >= 10:
                             # show a bundled "10" above the enemy
                             try:
                                 self.game.spawn_floating_text("10", ex, ey - 8)
                             except Exception:
                                 pass
-                            self._hellectric_accum[eid] = total - 10
+                            self._voltaic_accum[eid] = total - 10
                     except Exception:
                         pass
                     # drop the entry if the enemy died to avoid leaks
                     try:
                         if getattr(enemy, "health", 1) <= 0:
-                            self._hellectric_accum.pop(eid, None)
+                            self._voltaic_accum.pop(eid, None)
                     except Exception:
                         pass
 
@@ -635,7 +635,7 @@ class TowerSpecialSystem:
         return True
 
     def update(self) -> None:
-        """Per-frame update: smoke, pending shots, fire timer, hellectric beam."""
+        """Per-frame update: smoke, pending shots, fire timer, Voltaic Mayhem beam."""
         self._update_fire_smoke()
 
         # process delayed-fire shots
@@ -678,7 +678,7 @@ class TowerSpecialSystem:
                 except Exception:
                     pass
 
-        self.update_hellectric_flux()
+        self.update_voltaic_mayhem()
 
     def reset(self) -> None:
         """Clear all run-specific special-ability state."""
@@ -688,6 +688,6 @@ class TowerSpecialSystem:
         self.fire_special_index = 0
         self.pending_fire_clicks.clear()
         self.fire_smoke.clear()
-        self.hellectric_active = False
-        self.hellectric_time_left = 0
-        self._hellectric_accum.clear()
+        self.voltaic_active = False
+        self.voltaic_time_left = 0
+        self._voltaic_accum.clear()

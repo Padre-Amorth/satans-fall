@@ -4,8 +4,6 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from game import Game
 
@@ -72,14 +70,10 @@ def test_tooltip_lines_tier_requirements():
     # center tier 7 upgrades should have their creative names
     fuel7 = g._skill_tooltip_lines("fire", 7)
     assert any("AR.MAGA.EDDON" in line for line in fuel7)
-    assert any("burning orbs" in line or "4 burning" in line for line in fuel7)
-    # new behaviour: explosions are delayed half a second and words persist
-    assert any("0.5" in line or "half-second" in line for line in fuel7)
-    assert any(
-        "words" in line and ("2 seconds" in line or "linger" in line) for line in fuel7
-    )
+    assert any("Fires 4 mortar charges" in line for line in fuel7)
+    # description no longer mentions delay or words; previous checks retired
     storm7 = g._skill_tooltip_lines("storm", 7)
-    assert any("Hellectric flux" in line for line in storm7)
+    assert any("Voltaic Mayhem" in line for line in storm7)
     assert any("Right-click" in line or "controllable" in line for line in storm7)
     # new speed description should also be present
     assert any("speed" in line and "px" in line for line in storm7)

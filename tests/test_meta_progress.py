@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
 """Unit tests covering meta-experience and point progression behavior."""
 
-import os
-import sys
-
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.balance import META_XP_BASE, META_XP_GROWTH
 from src.game import Game

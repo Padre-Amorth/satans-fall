@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file.
 
 - **Inquisitor slow tuning:** boss and normal inquisitor projectiles now apply a 1.5‑second slow (half the previous duration).  Projectile creation now uses `int(1.5 * fps)` for flexibility.  Updated relevant unit tests to expect the shorter slow.
 
+- **Winged enemy contact behaviour:** winged flyers now detonate when they touch the player, creating a small orange explosion and dealing **15 damage**.  New configuration constants control the visual radius, duration and damage; collision logic and unit tests have been added accordingly.
+
 - **Health drops from wave bosses:** end-of-wave bosses (`boss_medium`, `boss_big`, and `boss_inquisitor`) now release a green bonus on death that falls **even faster** (1.5 px/frame) and is still tiny (radius 8).  The drop is more transparent overall and pulses gently to catch the eye while staying subtle.  Drops are clamped to spawn at the top of the visible battlefield when bosses die off-screen. Added game logic, rendering, sound, collision handling, and comprehensive unit tests for the mechanic.
 
 - **Bug fix:** `EnemyManager.spawn_boss` regained support for the `"mid"` boss type (`boss_medium`) which had been accidentally removed—tests now exercise mid, big and inquisitor bosses.

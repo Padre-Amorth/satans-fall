@@ -70,3 +70,50 @@ def test_winged_wave_restriction():
     expected = int(expected_base * 1.2) * 2
     assert wing.max_health == expected
     assert hasattr(wing, "shield_hp") and wing.shield_hp == wing.max_health
+
+
+def test_winged_explodes_on_player_contact():
+    """A winged enemy should detonate when it touches the player.
+
+    The explosion should create a brief visual effect and deal a flat damage
+    value specified by the constants in :mod:`src.game_constants`.
+    """
+    import pygame
+    from src.game import Game
+    from src.entities.enemy import Enemy
+    from src.game_constants import (
+        WINGED_CONTACT_DAMAGE,
+        WINGED_EXPLOSION_RADIUS,
+        WINGED_EXPLOSION_DURATION,
+    )
+
+    pygame.init()
+    g = Game(debug=True)
+
+    # ensure clean state
+    try:
+        g.enemies.empty()
+    except Exception:
+        g.enemies = []
+    g.game_state.fire_explosions.clear()
+
+    # place enemy exactly on top of player to force immediate contact
+    w = Enemy(g.player.x, g.player.y, enemy_type="winged", health=5)
+    try:
+        g.enemies.add(w)
+    except Exception:
+        g.enemies.append(w)
+
+    before_hp = g.player.health
+    # trigger collision handling once
+    g.handle_collisions()
+
+    assert g.player.health == before_hp - WINGED_CONTACT_DAMAGE
+    assert len(g.game_state.fire_explosions) == 1
+    exp = g.game_state.fire_explosions[0]
+    assert exp["radius"] == WINGED_EXPLOSION_RADIUS
+    assert exp["timer"] == WINGED_EXPLOSION_DURATION
+    # enemy should have been removed from the active list
+    assert not any(
+        getattr(e, "enemy_type", "") == "winged" for e in g.enemies
+    )

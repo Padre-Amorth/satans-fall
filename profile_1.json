@@ -1,24 +1,54 @@
 {
   "version": 1,
   "name": "Profile 1",
-  "last_played": "2026-02-27T23:49:19",
+  "last_played": "2026-03-01T10:01:36",
   "permanent_stats": {
-    "power": 0,
-    "vigor": 0,
-    "adrenaline": 0,
-    "structure": 0,
-    "blasphemy_1": 0,
-    "blasphemy_2": 0,
-    "fire_1": 0,
-    "fire_2": 0,
-    "fire_3": 0
+    "power": 5,
+    "vigor": 5,
+    "adrenaline": 1,
+    "structure": 10,
+    "blasphemy_1": 2,
+    "blasphemy_2": 3,
+    "blasphemy_3": 3,
+    "blasphemy_4": 2,
+    "blasphemy_5": 1,
+    "blasphemy_10": 1,
+    "blasphemy_9": 3,
+    "blasphemy_8": 3,
+    "blasphemy_7": 3,
+    "blasphemy_6": 3,
+    "ice_1": 1,
+    "ice_2": 0,
+    "ice_3": 0,
+    "ice_7": 0,
+    "storm_1": 1,
+    "storm_2": 1,
+    "storm_3": 1,
+    "storm_7": 1,
+    "storm_4": 1,
+    "storm_5": 1,
+    "storm_6": 1,
+    "fire_1": 1,
+    "fire_2": 1,
+    "fire_3": 1,
+    "fire_7": 1,
+    "fire_4": 1,
+    "fire_5": 1,
+    "fire_6": 1
   },
   "global_progress": {
-    "meta_xp": 910,
-    "meta_level": 1,
+    "meta_xp": 66022,
+    "meta_level": 21,
     "meta_points": 0,
-    "stages_cleared": {},
-    "display": {},
+    "stages_cleared": {
+      "limbo_final": true
+    },
+    "display": {
+      "window_size": [
+        1390,
+        841
+      ]
+    },
     "audio": {
       "enabled": true
     },

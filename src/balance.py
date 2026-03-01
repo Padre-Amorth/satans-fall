@@ -28,12 +28,12 @@ BURST_PAUSE: int = 60
 STATUE_FIRE_RATE: int = 85  # cooldown set to 85 (applied to both statues and towers)
 
 # Spawning / waves
-BASE_SPAWN_RATE: int = 72
+BASE_SPAWN_RATE: int = 80  # increased from 72 to reduce spawn frequency (fewer enemies)
 SPAWN_MIN_RATE: int = 30
 SPAWN_RAMP_START_WAVE: int = 3
 SPAWN_RAMP_SLOPE_PRE: int = 3
 SPAWN_RAMP_SLOPE_POST: float = (
-    4.2  # more gradual ramp so spawn_min_rate is reached ~wave 10
+    3.8  # reduced from 4.2 to slow spawn acceleration in later waves
 )
 
 # Limbo-specific spawn slowdown: adds frames between spawns so each 10s

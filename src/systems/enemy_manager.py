@@ -261,10 +261,10 @@ class EnemyManager:
 
     def update_big_enemy_timer(self) -> None:
         """Decrement big enemy timer and spawn a giant when it hits zero (once per wave)."""
-        # Don't update timer during victory screen or horde completion
+        # Don't update timer during victory screen, horde completion, or active horde
         if getattr(self.game, "limbo_horde_completed", False) or getattr(
             self.game, "showing_victory", False
-        ):
+        ) or getattr(self.game, "limbo_horde_active", False):
             return
 
         self.big_enemy_timer -= 1
@@ -432,14 +432,11 @@ class EnemyManager:
             return
 
         if not self.wave_boss_spawned and wave_time >= 38:
-            # If we're in a Limbo stage: normally spawn Inquisitor, but
-            # replace with boss_big on waves divisible by 3 (wave 3,6,9...).
+            # If we're in a Limbo stage: always spawn the inquisitor boss –
+            # the "boss_big" wave boss is forbidden.  This rule applies even on
+            # waves divisible by three and matches the new design requirement.
             if getattr(self.game, "is_limbo_stage", lambda: False)():
-                current_wave = getattr(self.game, "wave", 0)
-                if current_wave % 3 == 0 and current_wave > 0:
-                    self.spawn_boss("big")
-                else:
-                    self.spawn_boss("inquisitor")
+                self.spawn_boss("inquisitor")
             # Purgatory: alternate end-of-wave boss between medium and inquisitor
             elif getattr(self.game, "selected_stage", "").startswith(
                 ("purgatory", "hell")

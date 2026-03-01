@@ -10,15 +10,14 @@ import sys
 from pathlib import Path
 
 import pygame
+import pytest
 
-# Add project to path - must be before import to allow src imports
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
 
 from src.game import Game  # noqa: E402
 from src.systems.spawn_system import SpawnSystem  # noqa: E402
 
 
+@pytest.mark.parametrize("stage_name", ["limbo", "limbo_2", "limbo_3"])
 def test_limbo_victory_timing_single_stage(stage_name):
     """Test victory screen timing for a single limbo stage."""
     print(f"\n{'='*60}")
@@ -139,9 +138,7 @@ def test_limbo_victory_timing_single_stage(stage_name):
     print(f"RESULTS FOR {stage_name.upper()}")
     print(f"{'='*60}")
 
-    if state_log["showing_victory_frame"] is None:
-        print("FAIL: Victory screen never appeared!")
-        return False
+    assert state_log["showing_victory_frame"] is not None, "Victory screen never appeared!"
 
     victory_delay = state_log["showing_victory_frame"] - (
         state_log["ready_for_victory_frame"] or 0
@@ -153,16 +150,12 @@ def test_limbo_victory_timing_single_stage(stage_name):
     print(f"Expected delay: {expected_delay} frames (5 seconds)")
     print(f"Tolerance: ±{tolerance} frames (±1 second)")
 
-    if abs(victory_delay - expected_delay) <= tolerance:
-        print("PASS: Victory screen timing is correct!")
-        return True
-    else:
-        print(
-            f"FAIL: Victory screen timing is off by {abs(victory_delay - expected_delay)} frames"
-        )
-        return False
+    assert abs(victory_delay - expected_delay) <= tolerance, (
+        f"Timing off by {abs(victory_delay - expected_delay)} frames"
+    )
 
 
+@pytest.mark.skip("legacy helper, individual stages are parametrized")
 def test_all_limbo_stages():
     """Test victory screen timing across all three limbo stages."""
     print("\n" + "=" * 60)

@@ -1,33 +1,6 @@
 # Asset Esterni - Guida
 
-*Nota: i muri nei vari livelli usano ora un grigio scuro uniforme; la
-modifica non richiede immagini esterne.*
 
-### Nebbia di Purgatory
-I livelli di Purgatory hanno una copertura di nebbia statica grigia che viene
-sovrapposta all'intero schermo **dopo** che le mura e gli oggetti sono stati
-Disegnati, garantendo che persino i muri si vedano attraverso la foschia. La
-versione attuale non usa più particelle volumetriche laterali; l'effetto è
-realizzato esclusivamente con un semplice overlay semi‑trasparente.
-
-In aggiunta, un effetto più recente disegna **nuvole ovali molto grandi** che
-fluttuano nella metà superiore dello stage (dove i nemici compaiono).  Le
-nuvole nascono parzialmente tagliate dalla parte alta dello schermo — la
-costante `PURGATORY_CLOUD_SPAWN_Y_RANGE` include valori negativi per
-generarle oltre il bordo superiore — e rimangono confinate nella porzione
-superiore (15 % dell'altezza). Sono molto trasparenti: l'opacità base è
-controllata da `PURGATORY_CLOUD_ALPHA` (e i dossi irregolari da
-`PURGATORY_CLOUD_BUMP_ALPHA`).  La frequenza di apparizione è regolata da
-`PURGATORY_CLOUD_SPAWN_RATE`; per abbassare ancora la quantità basta ridurre
-questa costante (ora impostata a circa 0.033 per ridurre il numero di nuvole di
-un terzo rispetto al valore precedente).  Le precedenti "nuvole" sono state sostituite da un nuovo sistema di
-particelle più morbido e volumetrico.  Vengono mantenute un numero fisso di
-particelle (attualmente 12, regolabile tramite la costante `FOG_PARTICLE_COUNT`),
-ognuna con una texture sfumata generata al runtime.  Si muovono lentamente in
-orizzontale e oscillano verticalmente in modo sinusoidale; quando escono dal
-lato destro ricompaiono a sinistra.  I parametri principali (numero, dimensione
-del texture, velocità, ampiezza, ofset di timer, colore e alpha) si trovano
-nelle costanti `FOG_*` di `src/game_constants.py`.
 
 - L'opacità e il colore sono ora configurabili tramite le costanti
   `PURGATORY_OVERLAY_ALPHA` e `PURGATORY_OVERLAY_COLOR` in
@@ -75,8 +48,11 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
   - Dimensione: 40x40 pixel
   - Angelo volante (tipo speciale)
 
+- **File:**  enemy_winged.png
+
 - **File:** `assets/enemy_giant.png`
-- **File:** `assets/enemy_crusader.png`  (optional external sprite for the new crusader enemy)
+
+- **File:** `assets/enemy_crusader.png`  
   - Dimensione: 60x60 pixel
   - Nemico gigante (spawn ogni 12 secondi)
 
@@ -240,11 +216,56 @@ Dopo aver aggiunto le immagini:
 2. Le immagini caricate appariranno al posto delle forme
 3. Se vedi errori nella console, controlla i nomi dei file e i formati
 
+## Generare Icone Automatiche
+
+Se preferisci non creare manualmente i file per ogni arma, puoi sfruttare il
+contenuto dei proiettili per generare automaticamente le icone.  Esegui lo
+script seguente dalla radice del progetto:
+
+```sh
+python scripts/generate_weapon_icons.py
+```
+
+Il programma produrrà una PNG per ogni voce definita in
+`src/weapons.py` (nomi convertiti in minuscolo).  Gli asset esistenti verranno
+sovrascritti.
+
 ## Rimuovere Immagini
 
 Per tornare alle forme geometriche, basta rimuovere o rinominare i file dalla cartella `assets/`.
 
 ### Icone Upgrade
+
+### Icone Armi
+
+- **File pattern:** `assets/weapon_<id>.png`
+  - Artwork displayed beside each entry in the weapon selection screen.  A
+    fixed square on the left of each choice is reserved even if the file is
+    missing, so the text alignment remains consistent.
+  - **Important:** icons are expected to be **transparent** where no graphic
+    is needed; do **not** draw a filled background.  Imported assets will
+    look better with clear regions.
+  - `<id>` should match the internal weapon identifier used in
+    `src/weapons.py` (case sensitive).
+
+  Esempi di nomi attualmente definiti nell'asset manager:
+
+  - `weapon_shotgun.png`  (Hellgun)
+  - `weapon_orbital.png`  (Orbitals)
+  - `weapon_spear.png`    (Spear)
+  - `weapon_flies.png`    (Flies)
+  - `weapon_beast.png`    (The number of the beast)
+  - `weapon_skullboom.png`
+  - `weapon_demonstrike.png` (DemonStrike)
+  - `weapon_tenebrae.png` (Tenebrae)
+
+For the Tenebrae weapon the actual projectile graphic may be placed in
+`assets/tenebrae.png`; the code will also fall back to
+`weapon_tenebrae.png` if the former is missing.  This mirrors the icon
+naming and lets you share a single file for both purposes if desired.
+
+  In futuro altri armi possono essere aggiunte seguendo lo stesso schema.
+
 - **File:** `assets/icon_damage.png`
   - Dimensione: 64x64 pixel
   - Icona per upgrade Danno

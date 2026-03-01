@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Test to verify limbo horde victory countdown starts immediately on boss death."""
-import sys
+
 import os
+import sys
 
 # Suppress pygame output
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 
-import pygame
 from src.game import Game
 
 
@@ -60,7 +60,7 @@ def test_victory_countdown_on_boss_death():
         g.limbo_horde_ready_for_victory = True
         g.enemies.empty()  # Clear remaining enemies
         g.bosses.empty()  # Clear bosses (boss will be removed)
-        print(f"  Manually triggered victory setup")
+        print("  Manually triggered victory setup")
 
     # First update to process the victory countdown logic
     g.update()
@@ -77,19 +77,23 @@ def test_victory_countdown_on_boss_death():
     # Note: timer is decremented in the same update, so we expect 299 frames
     expected_timer = int(g.fps * 5) - 1
     if timer_after_death < expected_timer or timer_after_death > expected_timer + 1:
-        print(f"FAIL: Timer should be around {expected_timer} frames, got {timer_after_death}")
+        print(
+            f"FAIL: Timer should be around {expected_timer} frames, got {timer_after_death}"
+        )
         return False
 
-    print(f"[OK] Victory countdown started: {timer_after_death} frames remaining (nearly 5 seconds)")
+    print(
+        f"[OK] Victory countdown started: {timer_after_death} frames remaining (nearly 5 seconds)"
+    )
 
     # Verify victory screen NOT shown yet
     if getattr(g, "showing_victory", False):
         print("FAIL: Victory screen shown before countdown!")
         return False
-    print(f"[OK] Victory screen NOT shown yet (countdown active)")
+    print("[OK] Victory screen NOT shown yet (countdown active)")
 
     # Fast-forward through the countdown
-    print(f"  Counting down...")
+    print("  Counting down...")
     for i in range(timer_after_death):
         g.update()
         current_timer = getattr(g, "limbo_horde_victory_timer", 0)
@@ -102,7 +106,7 @@ def test_victory_countdown_on_boss_death():
         print("FAIL: Victory screen not shown after countdown!")
         return False
 
-    print(f"[OK] Victory screen appeared after countdown!")
+    print("[OK] Victory screen appeared after countdown!")
     return True
 
 
@@ -119,5 +123,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"ERROR: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

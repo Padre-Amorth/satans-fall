@@ -205,6 +205,16 @@ class InputHandler:
                 self.continue_to_limbo()
             elif key == pygame.K_ESCAPE:
                 self.game.reset_game()
+        elif getattr(self.game, "showing_victory", False):
+            # on victory overlay provide two choices
+            if key == pygame.K_RETURN or key == pygame.K_SPACE:
+                logger.info("ENTER pressed on victory screen; advancing")
+                self.continue_after_victory()
+                return
+            elif key == pygame.K_ESCAPE:
+                logger.info("ESC pressed on victory screen; returning to menu")
+                self.show_stage_menu()
+                return
         elif self.game.showing_stage_menu and self.game.showing_limbo_menu:
             if key == pygame.K_ESCAPE:
                 self.game.showing_limbo_menu = False
@@ -1351,11 +1361,11 @@ class InputHandler:
             ):
                 # if beam already active, a second click should cancel it
                 try:
-                    if getattr(self.game, "hellectric_active", False):
+                    if getattr(self.game, "voltaic_active", False):
                         # cancel active beam
-                        self.game.hellectric_active = False
+                        self.game.voltaic_active = False
                         if getattr(self.game, "tower_special", None):
-                            self.game.tower_special._hellectric_accum.clear()
+                            self.game.tower_special._voltaic_accum.clear()
                         try:
                             self.game.right_mouse_held = False
                         except Exception:
@@ -1612,6 +1622,8 @@ class InputHandler:
         self.game.showing_stage_menu = False
         self.game.showing_permanent_upgrades = False
         self.game.showing_prologo_end = False
+        # also clear any active victory overlay so the UI doesn't linger
+        self.game.showing_victory = False
         # If we were showing the game over overlay, clear it and resume normal menu state
         self.game.showing_game_over = False
         self.game.paused = False
@@ -1970,6 +1982,18 @@ class InputHandler:
                     logger.debug("Could not find final boss to force lightning")
             self.game.fast_forward_applied = True
 
+        # Debug: fast-forward to limbo-final near boss spawn time if requested
+        if (
+            stage == "limbo_final"
+            and getattr(self.game, "fast_forward_limbo_final", False)
+            and not getattr(self.game, "fast_forward_applied", False)
+        ):
+            logger.debug("Fast-forward: advancing time_elapsed for limbo_final stage")
+            # push time close to boss spawn threshold without actually spawning
+            self.game.time_elapsed = 165
+            # do not trigger events yet; boss will spawn naturally in update loop
+            self.game.fast_forward_applied = True
+
     def toggle_pause(self) -> None:
         """Toggle pause state."""
         if not self.game.awaiting_upgrade and not self.game.showing_prologo_end:
@@ -1992,4 +2016,25 @@ class InputHandler:
         self.game.showing_prologo_end = False
         self.game.selected_stage = "limbo"
         self.game.generate_dead_trees()
+        self.game.reset_run()
+
+    def continue_after_victory(self) -> None:
+        """After a victory overlay, start the next limbo variant (or return to limbo).
+
+        Cycling order: limbo -> limbo_2 -> limbo_3 -> limbo
+        """
+        self.game.showing_victory = False
+        # pick next in sequence if we're on limbo series
+        seq = ["limbo", "limbo_2", "limbo_3"]
+        cur = getattr(self.game, "selected_stage", None)
+        if cur in seq:
+            nxt = seq[(seq.index(cur) + 1) % len(seq)]
+        else:
+            nxt = "limbo"
+        self.game.selected_stage = nxt
+        if nxt.startswith("limbo"):
+            try:
+                self.game.generate_dead_trees()
+            except Exception:
+                pass
         self.game.reset_run()

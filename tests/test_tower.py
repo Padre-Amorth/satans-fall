@@ -11,7 +11,7 @@ from src.game_constants import (  # noqa: E402
     FIRE_SPECIAL_DURATION,
     FIRE_SPECIAL_RADIUS,
     FIRE_SPECIAL_WORDS,
-    HELECTRIC_VIOLET_COLOR,
+    VOLTAIC_MAYHEM_VIOLET_COLOR,
 )
 from src.projectile import Projectile  # used by updated tests  # noqa: E402
 
@@ -1026,7 +1026,7 @@ def test_fire_special_expire():
     assert g.fire_special_timer == 0
 
 
-def test_helectric_flux_expires_after_duration():
+def test_voltaic_mayhem_expires_after_duration():
     """Beam remains active for its full duration and automatically ends.
 
     The ability should shut off as soon as the timer runs out rather than
@@ -1046,7 +1046,7 @@ def test_helectric_flux_expires_after_duration():
     g.mouse_x, g.mouse_y = 50, 50
 
     assert g.activate_tower_special() is True
-    assert g.hellectric_active
+    assert g.voltaic_active
     # simulate enough frames that the automatic duration should expire
     # force the random generator to select the violet tint so we can assert
     import random
@@ -1057,12 +1057,12 @@ def test_helectric_flux_expires_after_duration():
     random.random = lambda: 0.0
     saw_violet = False
 
-    for _ in range(g.HELLECTRIC_MAX_DURATION + 2):
+    for _ in range(g.VOLTAIC_MAYHEM_MAX_DURATION + 2):
         prev = len(getattr(g.game_state, "chain_lightning_effects", []))
         g.update_game()
         # beam remains active until timer runs out
-        if g.hellectric_time_left > 0:
-            assert g.hellectric_active
+        if g.voltaic_time_left > 0:
+            assert g.voltaic_active
             effects = getattr(g.game_state, "chain_lightning_effects", [])
             assert len(effects) >= prev
             # at least one effect should represent the impact explosion/circle
@@ -1070,7 +1070,7 @@ def test_helectric_flux_expires_after_duration():
                 e.get("explosion") for e in effects
             ), "no explosion effect present"
             # check for at least one violet-colored beam
-            if any(e.get("color") == HELECTRIC_VIOLET_COLOR for e in effects):
+            if any(e.get("color") == VOLTAIC_MAYHEM_VIOLET_COLOR for e in effects):
                 saw_violet = True
             # ensure UI can draw the special ring and it actually paints
             # pixels in the expected area rather than leaving a blank surface.
@@ -1078,26 +1078,26 @@ def test_helectric_flux_expires_after_duration():
             g.ui.screen.fill((0, 0, 0, 255))
             g.ui.draw_special_effects()
             # sample a few points around the beam endpoint (not raw cursor)
-            mx, my = g.hellectric_x, g.hellectric_y
+            mx, my = g.voltaic_x, g.voltaic_y
             changed = False
-            for dy in (-g.HELLECTRIC_IMPACT_RADIUS, 0, g.HELLECTRIC_IMPACT_RADIUS):
-                for dx in (-g.HELLECTRIC_IMPACT_RADIUS, 0, g.HELLECTRIC_IMPACT_RADIUS):
+            for dy in (-g.VOLTAIC_MAYHEM_IMPACT_RADIUS, 0, g.VOLTAIC_MAYHEM_IMPACT_RADIUS):
+                for dx in (-g.VOLTAIC_MAYHEM_IMPACT_RADIUS, 0, g.VOLTAIC_MAYHEM_IMPACT_RADIUS):
                     x = int(mx + dx)
                     y = int(my + dy)
                     if 0 <= x < g.width and 0 <= y < g.height:
                         color = g.ui.screen.get_at((x, y))
                         if color != (0, 0, 0, 255):
                             changed = True
-            assert changed, "hellectric radius did not draw any pixels"
+            assert changed, "Voltaic Mayhem radius did not draw any pixels"
         else:
-            assert not g.hellectric_active
+            assert not g.voltaic_active
 
     random.random = old_rand
     assert saw_violet, "no violet beam was produced"
 
 
-def test_helectric_flux_toggles_on_click():
-    """Pressing right click again should cancel an active hellectric beam."""
+def test_voltaic_mayhem_toggles_on_click():
+    """Pressing right click again should cancel an active Voltaic Mayhem beam."""
     import pygame
 
     from src.core.entities.tower import Tower
@@ -1113,7 +1113,7 @@ def test_helectric_flux_toggles_on_click():
     g.mouse_x, g.mouse_y = 50, 50
 
     assert g.activate_tower_special() is True
-    assert g.hellectric_active
+    assert g.voltaic_active
     # right_mouse_held property should match the beam state for compatibility
     assert getattr(g, "right_mouse_held", False) is True
 
@@ -1125,7 +1125,7 @@ def test_helectric_flux_toggles_on_click():
     g.handle_events()
 
     g.update_game()
-    assert not g.hellectric_active
+    assert not g.voltaic_active
     assert getattr(g, "right_mouse_held", False) is False
     assert "cancelled" in called[0].lower()
 
@@ -1221,8 +1221,8 @@ def test_fire_explosion_draws_pixels():
     assert outline_ok, "outer yellow ring missing from fire explosion"
 
 
-def test_helectric_flux_endpoint_moves_at_limited_speed():
-    """Endpoint should only move toward the cursor at the configured speed."""
+def test_voltaic_mayhem_endpoint_moves_at_limited_speed():
+    """Endpoint should only move toward the cursor at the configured speed for Voltaic Mayhem."""
     import math
 
     from src.core.entities.tower import Tower
@@ -1236,26 +1236,26 @@ def test_helectric_flux_endpoint_moves_at_limited_speed():
     g.mouse_x, g.mouse_y = 200, 0
     assert g.activate_tower_special() is True
     # endpoint should start at the current mouse position
-    assert (g.hellectric_x, g.hellectric_y) == (200, 0)
+    assert (g.voltaic_x, g.voltaic_y) == (200, 0)
     # move cursor instantly to new location far to the right
     g.mouse_x, g.mouse_y = 400, 0
-    prev_x, prev_y = g.hellectric_x, g.hellectric_y
+    prev_x, prev_y = g.voltaic_x, g.voltaic_y
     g.update_game()
-    dx = g.hellectric_x - prev_x
-    dy = g.hellectric_y - prev_y
+    dx = g.voltaic_x - prev_x
+    dy = g.voltaic_y - prev_y
     moved = math.hypot(dx, dy)
-    from src.game_constants import HELECTRIC_SPEED
+    from src.game_constants import VOLTAIC_MAYHEM_SPEED
 
-    maxmove = HELECTRIC_SPEED / g.fps
+    maxmove = VOLTAIC_MAYHEM_SPEED / g.fps
     assert moved <= maxmove + 1e-6, "endpoint moved too quickly"
     # after sufficient frames the endpoint should reach the cursor
     frames = int((400 - 200) / maxmove) + 2
     for _ in range(frames):
         g.update_game()
-    assert abs(g.hellectric_x - 400) < 1 and abs(g.hellectric_y - 0) < 1
+    assert abs(g.voltaic_x - 400) < 1 and abs(g.voltaic_y - 0) < 1
 
 
-def test_helectric_flux_damages_enemies():
+def test_voltaic_mayhem_damages_enemies():
     from src.core.entities.tower import Tower
     from src.entities.enemy import Enemy
     from src.game import Game
@@ -1277,8 +1277,8 @@ def test_helectric_flux_damages_enemies():
     assert enemy.health < start_hp
 
 
-def test_helectric_flux_damages_boss():
-    """Boss entities should also take damage from Hellectric flux."""
+def test_voltaic_mayhem_damages_boss():
+    """Boss entities should also take damage from Voltaic Mayhem."""
     from src.core.entities.tower import Tower
     from src.entities.enemy import Enemy
     from src.game import Game
@@ -1304,7 +1304,7 @@ def test_helectric_flux_damages_boss():
     assert boss.health < start_hp
 
 
-def test_helectric_flux_text_throttled():
+def test_voltaic_mayhem_text_throttled():
     """Floating numbers only appear every 10 points of beam damage."""
     from src.core.entities.tower import Tower
     from src.entities.enemy import Enemy
@@ -1339,7 +1339,7 @@ def test_helectric_flux_text_throttled():
 
 def test_both_specials_activate_when_both_towers_placed():
     """If both tower types are placed and both specials are unlocked,
-    using the right-click should trigger both Blizzard and Hellectric Flux.
+    using the right-click should trigger both Blizzard and Voltaic Mayhem.
     """
     from src.core.entities.tower import Tower
     from src.game import Game
@@ -1357,8 +1357,8 @@ def test_both_specials_activate_when_both_towers_placed():
     g.mouse_x, g.mouse_y = 200, 150
 
     assert g.activate_tower_special() is True
-    # hellectric beam should be active (storm tower with storm_7)
-    assert getattr(g, "hellectric_active", False)
+    # Voltaic Mayhem beam should be active (storm tower with storm_7)
+    assert getattr(g, "voltaic_active", False)
     # fire special is not expected since no fire tower is present
     # (previous version of this test erroneously checked charges)    # one Blizzard puddle should exist at mouse (ice tower with ice_7)
     puddles = getattr(g, "blizzard_puddles", [])

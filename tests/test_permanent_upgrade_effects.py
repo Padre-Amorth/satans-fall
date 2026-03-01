@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
 """Tests for permanent upgrade effects on player multipliers."""
 
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import pytest
 
-from game import Game
+from src.game import Game
 
 
 def test_power_gives_five_percent_per_level():

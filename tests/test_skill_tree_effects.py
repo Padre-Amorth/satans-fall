@@ -8,8 +8,6 @@ Fire-rate per-slot is +10% for FIRE/ICE but **+20%** for STORM (per design chang
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from game import Game
 

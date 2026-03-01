@@ -3066,40 +3066,28 @@ class CollisionSystem:
                     projectile.kill()
 
                 if boss.health <= 0:
-                    # Trigger limbo horde victory when boss dies (only condition needed)
+                    # For limbo horde: don't set victory flags here; let the game.update() detect
+                    # the dead boss and handle it. This ensures the boss stays in the list long
+                    # enough for the detection code to find it.
                     if boss.enemy_type == "boss_limbo_horde":
+                        # Show defeat message
                         try:
-                            g.limbo_horde_boss_killed = True
-                            g.limbo_horde_active = False
-                            g.limbo_horde_completed = True
-                            g.limbo_horde_ready_for_victory = True
-                            if getattr(g, "debug", False):
-                                print(
-                                    f"[LIMBO_HORDE] Boss killed! Setting victory ready. "
-                                    f"Enemies: {len(g.enemies)}, Bosses: {len(g.bosses)}"
-                                )
-                            # Show horde defeat message and prepare victory
-                            try:
-                                g.show_centered_message(
-                                    "HORDE DEFEATED!", 2000, (255, 255, 0)
-                                )
-                            except Exception:
-                                pass
-                            # Stop spawning more waves
-                            try:
-                                g.wave_time = g.wave_duration
-                            except Exception:
-                                pass
-                            # Clear all remaining enemies and bosses immediately so victory countdown starts
-                            try:
-                                g.enemies.empty()
-                                g.bosses.empty()
-                                if getattr(g, "debug", False):
-                                    print(f"[LIMBO_HORDE] Cleared enemies and bosses, ready for victory countdown")
-                            except Exception:
-                                pass
+                            g.show_centered_message(
+                                "HORDE DEFEATED!", 2000, (255, 255, 0)
+                            )
                         except Exception:
                             pass
+                        # Stop spawning more waves
+                        try:
+                            g.wave_time = g.wave_duration
+                        except Exception:
+                            pass
+                        # Don't call .empty() here; let game.update() handle the cleanup
+                        # This ensures the boss death is properly detected
+                        if getattr(g, "debug", False):
+                            print(
+                                f"[LIMBO_HORDE] Boss marked dead in collision; game.update() will detect and clean up"
+                            )
                     g.add_score(boss.max_health * 25)
                     # Give XP for boss kill (per-type table, flat values)
                     boss_xp_map: Dict[str, int] = {

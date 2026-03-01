@@ -1,10 +1,6 @@
-import os
-import sys
-
 import pygame
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from game import Game
+from src.game import Game
 
 
 def test_mouse_wheel_ignored_in_pause_menu():

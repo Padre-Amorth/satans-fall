@@ -186,7 +186,7 @@ def test_limbs_statue_above_projectiles():
     """Ensure statues render after both projectiles and special effects.
 
     Previously the limbo pedestal call happened immediately after projectiles,
-    meaning later effects such as hellectric beams could overdraw the statue.
+    meaning later effects such as Voltaic Mayhem beams could overdraw the statue.
     We intercept calls to the projectile layer, the special-effects layer, and
     the pedestal renderer to log the order and assert the statue comes last.
     """

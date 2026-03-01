@@ -20,3 +20,12 @@ def test_fast_forward_prologo_flag_still_works():
     g.select_stage("prologo")
     assert g.time_elapsed >= 236
     assert any(b.enemy_type == "boss_final" for b in g.bosses)
+
+
+def test_current_game_global_is_consistent():
+    pygame.init()
+    g = Game(debug=True)
+    # ensure both module paths point to the same object
+    from src.game import CURRENT_GAME as pkg_cg
+    from src.game.core import CURRENT_GAME as core_cg
+    assert pkg_cg is core_cg is g

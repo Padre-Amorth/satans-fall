@@ -1,9 +1,3 @@
-import os
-import sys
-
-# ensure src package is importable when running tests directly
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from src.game import Game
 from src.weapons import WEAPON_DEFS
 
@@ -20,6 +14,9 @@ def test_initial_weapon_choices_do_not_offer_purgatory_only_in_limbo():
         ids = [c["id"] for c in choices]
         seen.update(ids)
         assert "DemonStrike" not in ids
+        # each choice should include an icon key (may be None if no asset)
+        for c in choices:
+            assert "icon" in c, "initial weapon choice missing icon field"
 
     # Confirm DemonStrike exists in defs but was not sampled for limbo initial choices
     assert "DemonStrike" in WEAPON_DEFS

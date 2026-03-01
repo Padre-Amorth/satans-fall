@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Test to verify limbo horde victory screen only appears after boss death."""
-import sys
+
 import os
+import sys
 
 # Suppress pygame output
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 
-import pygame
 from src.game import Game
 
 
@@ -29,7 +29,7 @@ def test_horde_victory_after_boss_death_only():
     g.limbo_horde_boss_killed = False
     g.limbo_horde_ready_for_victory = False
 
-    print(f"[OK] Horde manually started")
+    print("[OK] Horde manually started")
 
     # Manually spawn the horde boss
     g.spawn_system.spawn_boss("limbo_horde")
@@ -38,7 +38,7 @@ def test_horde_victory_after_boss_death_only():
     if getattr(g, "showing_victory", False):
         print("FAIL: Victory screen shown before boss death!")
         return False
-    print(f"[OK] Victory screen NOT shown before boss death")
+    print("[OK] Victory screen NOT shown before boss death")
 
     # Get the boss
     if not g.bosses:
@@ -49,7 +49,7 @@ def test_horde_victory_after_boss_death_only():
     print(f"[OK] Boss spawned with {boss.health} health")
 
     # Kill the boss
-    print(f"  Killing boss...")
+    print("  Killing boss...")
     boss.health = 0
     g.update()
 
@@ -62,24 +62,24 @@ def test_horde_victory_after_boss_death_only():
     print(f"  Victory timer: {victory_timer}")
 
     if victory_timer > 0:
-        print(f"[OK] Victory countdown started after boss death")
+        print("[OK] Victory countdown started after boss death")
         # Fast-forward to victory screen appearance
         for _ in range(victory_timer + 1):
             g.update()
 
         if getattr(g, "showing_victory", False):
-            print(f"[OK] Victory screen appeared after boss death")
+            print("[OK] Victory screen appeared after boss death")
             return True
         else:
-            print(f"FAIL: Victory screen didn't appear after countdown")
+            print("FAIL: Victory screen didn't appear after countdown")
             return False
     else:
         # Should show victory immediately if room is empty
         if getattr(g, "showing_victory", False):
-            print(f"[OK] Victory screen appeared immediately (room empty)")
+            print("[OK] Victory screen appeared immediately (room empty)")
             return True
         else:
-            print(f"FAIL: Victory not triggered after boss death")
+            print("FAIL: Victory not triggered after boss death")
             print(f"  Enemies: {len(g.enemies)}, Bosses: {len(g.bosses)}")
             return False
 
@@ -87,7 +87,7 @@ def test_horde_victory_after_boss_death_only():
 if __name__ == "__main__":
     try:
         success = test_horde_victory_after_boss_death_only()
-        print("\n" + ("="*50))
+        print("\n" + ("=" * 50))
         if success:
             print("SUCCESS: Victory screen timing is correct!")
         else:
@@ -96,5 +96,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"ERROR: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

@@ -708,18 +708,18 @@ class Enemy(BaseSprite):
                         self.float_speed = 0.02
                         self.float_time = 0
                 else:
-                    # once entrance is complete, float/oscillate in place
+                    # once entrance is complete, move diagonally in triangular pattern
                     self.float_time += self.float_speed
-                    # horizontal sine-wave drift
-                    self.x = (
-                        self.float_center_x
-                        + math.sin(self.float_time) * self.float_amplitude
-                    )
-                    # small vertical bobbing so it never sits perfectly still
-                    self.y = target_y + math.sin(self.float_time * 1.5) * 10
+                    # sawtooth wave for diagonal left-right movement
+                    sawtooth_x = ((self.float_time % (math.pi * 2)) / (math.pi * 2)) * 2 - 1
+                    # triangle wave for diagonal up-down movement
+                    triangle_y = 1 - abs(2 * ((self.float_time / (math.pi * 2)) % 1) - 1)
+
+                    self.x = self.float_center_x + sawtooth_x * self.float_amplitude
+                    self.y = target_y + (triangle_y - 0.5) * self.float_amplitude
                     # enforce bounds: stay in upper half and within walls
                     self.x = max(50, min(game.width - 50, self.x))
-                    self.y = min(self.y, game.height / 2)
+                    self.y = max(target_y * 0.5, min(game.height / 2, self.y))
                 # movement handled; fall through to the remainder of update
                 # (shooting and special attack code should still run)
                 pass

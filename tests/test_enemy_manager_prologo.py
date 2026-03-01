@@ -178,8 +178,8 @@ def test_towers_fire_at_limbo_boss():
     assert found, "No tower projectile spawned against boss in correct direction"
 
 
-def test_hellectric_beams_start_at_statue_offsets():
-    """Hellectric beam origins should equal statue projectile start points.
+def test_voltaic_beams_start_at_statue_offsets():
+    """Voltaic Mayhem beam origins should equal statue projectile start points.
 
     We configure left/right storm towers in each relevant stage and fire once.
     The chain_lightning_effects list should contain a beam beginning at the
@@ -203,10 +203,10 @@ def test_hellectric_beams_start_at_statue_offsets():
         # place two storm towers at known coords
         g.left_tower = Tower(100, 200, tower_type="storm")
         g.right_tower = Tower(500, 200, tower_type="storm")
-        # activate hellectric with at least two frames of duration so we don't
-        # expire before the first update (see update_hellectric_flux logic)
-        g.hellectric_active = True
-        g.hellectric_time_left = 2
+        # activate Voltaic Mayhem with at least two frames of duration so we don't
+        # expire before the first update (see update_voltaic_mayhem logic)
+        g.voltaic_active = True
+        g.voltaic_time_left = 2
         # record expected origins using the shared helper; this ensures the test
         # mirrors production logic exactly and will catch drift if the helper
         # ever changes.
@@ -215,9 +215,9 @@ def test_hellectric_beams_start_at_statue_offsets():
         left_origin = (100 + stage_x, 200 + stage_y)
         right_origin = (500 - stage_x, 200 + stage_y)
         # run update once
-        g.tower_special.update_hellectric_flux()
+        g.tower_special.update_voltaic_mayhem()
         beams = g.game_state.chain_lightning_effects
-        assert beams, f"No hellectric beam produced for stage {stage}"
+        assert beams, f"No Voltaic Mayhem beam produced for stage {stage}"
         origs = [
             b["points"][0] for b in beams if "points" in b and len(b["points"]) > 0
         ]

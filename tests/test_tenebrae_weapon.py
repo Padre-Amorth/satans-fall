@@ -3,7 +3,6 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pygame
 import pytest
@@ -85,6 +84,36 @@ def test_tenebrae_firing_and_cooldown():
 
     # cooldown timer set
     assert game.tenebrae_cooldown_timer > 0
+
+
+def test_tenebrae_projectile_asset_fallback(tmp_path, monkeypatch):
+    """Ensure draw_projectile tries both 'tenebrae.png' and
+    'weapon_tenebrae.png' when loading an external asset."""
+    import src.assets.manager as am
+    from src.projectile import Projectile
+
+    # point asset manager at temporary directory and clear caches
+    monkeypatch.setattr(am, "_ASSETS_DIR", str(tmp_path))
+    am.clear_cache()
+
+    # create a dummy Surface to act as the asset and save under *only* the
+    # weapon-prefixed name
+    pygame.init()
+    surf = pygame.Surface((20, 10), pygame.SRCALPHA)
+    pygame.draw.rect(surf, (123, 45, 67), (0, 0, 20, 10))
+    pygame.image.save(surf, os.path.join(str(tmp_path), "weapon_tenebrae.png"))
+
+    # now create a projectile that will attempt to load the asset
+    proj = Projectile(0, 0, 0, 0, radius=6, appearance="tenebrae")
+    # after construction the draw_projectile has already run once; check image
+    assert proj.image.get_size() == (20, 10)
+    # next, remove the prefixed file and create the plain name and ensure
+    # re-draw picks that one instead
+    os.remove(os.path.join(str(tmp_path), "weapon_tenebrae.png"))
+    pygame.image.save(surf, os.path.join(str(tmp_path), "tenebrae.png"))
+    am.clear_cache()
+    proj.draw_projectile()
+    assert proj.image.get_size() == (20, 10)
 
 
 def test_tenebrae_damages_boss():

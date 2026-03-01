@@ -5,7 +5,6 @@ import sys
 import pygame
 
 # ensure project root on path when tests are run directly
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.entities.enemy import Enemy
 from src.game import Game

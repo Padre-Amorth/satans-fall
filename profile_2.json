@@ -1,18 +1,18 @@
 {
   "version": 1,
   "name": "amorth",
-  "last_played": "2026-02-28T10:35:16",
+  "last_played": "2026-02-28T10:44:01",
   "permanent_stats": {
     "power": 0,
-    "vigor": 0,
+    "vigor": 1,
     "adrenaline": 0,
     "structure": 0,
     "blasphemy_1": 0
   },
   "global_progress": {
-    "meta_xp": 19175,
+    "meta_xp": 18896,
     "meta_level": 17,
-    "meta_points": 1,
+    "meta_points": 0,
     "stages_cleared": {
       "limbo_final": true
     },

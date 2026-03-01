@@ -10,7 +10,7 @@
 ### High-Priority Extraction Candidates
 
 1. **Helper Properties & Proxies** (~20L)
-   - Tower special proxies: `_hellectric_accum`, `_tower_energy`, `_fire_special_*`
+   - Tower special proxies: `_voltaic_accum`, `_tower_energy`, `_fire_special_*`
    - Boss state proxies: `_wave_boss_spawned`, `_prologo_*`
    - Could move to separate module if needed; currently low value since they're thin wrappers
 

@@ -259,18 +259,26 @@ class Game:
         self._pending_fire_clicks: List[dict] = []
         self._fire_smoke: List[dict] = []
         self._right_mouse_held: bool = False
-        self._hellectric_active: bool = False
-        self._hellectric_time_left: int = 0
-        self._hellectric_x: float = 0.0
-        self._hellectric_y: float = 0.0
-        self._hellectric_accum: dict[int, int] = {}
-        self._HELLECTRIC_MAX_DURATION: int = 0
-        self._HELLECTRIC_IMPACT_RADIUS: int = 0
-        self._HELLECTRIC_SPEED: int = 0
+        self._voltaic_active: bool = False
+        self._voltaic_time_left: int = 0
+        self._voltaic_x: float = 0.0
+        self._voltaic_y: float = 0.0
+        self._voltaic_accum: dict[int, int] = {}
+        self._VOLTAIC_MAYHEM_MAX_DURATION: int = 0
+        self._VOLTAIC_MAYHEM_IMPACT_RADIUS: int = 0
+        self._VOLTAIC_MAYHEM_SPEED: int = 0
 
+        # Register self as current running game for modules that need quick access
         # Register self as current running game for modules that need quick access
         global CURRENT_GAME
         CURRENT_GAME = self
+        # also update package-level alias so imports from `src.game` see the same
+        try:
+            import src.game as _pkg
+
+            _pkg.CURRENT_GAME = self
+        except Exception:
+            pass
         # Gameplay defaults used by tests and early update paths
         self.stage_start_countdown = 0
         self.stage_start_timer = 0
@@ -415,7 +423,7 @@ class Game:
         Historically this tracked whether the player was holding the right
         mouse button so the storm special could cancel when released.  With
         the new toggle behaviour it now simply mirrors the active state of
-        the hellectric beam when possible; the input handler keeps it in sync.
+        the Voltaic Mayhem beam when possible; the input handler keeps it in sync.
         """
         ts = getattr(self, "tower_special", None)
         return ts.right_mouse_held if ts is not None else self._right_mouse_held
@@ -433,120 +441,120 @@ class Game:
             self._right_mouse_held = val
 
     @property
-    def hellectric_active(self) -> bool:
+    def voltaic_active(self) -> bool:
         ts = getattr(self, "tower_special", None)
-        return ts.hellectric_active if ts is not None else self._hellectric_active
+        return ts.voltaic_active if ts is not None else self._voltaic_active
 
-    @hellectric_active.setter
-    def hellectric_active(self, val: bool) -> None:
-        ts = getattr(self, "tower_special", None)
-        if ts is not None:
-            ts.hellectric_active = val
-        else:
-            self._hellectric_active = val
-
-    @property
-    def hellectric_time_left(self) -> int:
-        ts = getattr(self, "tower_special", None)
-        return ts.hellectric_time_left if ts is not None else self._hellectric_time_left
-
-    @hellectric_time_left.setter
-    def hellectric_time_left(self, val: int) -> None:
+    @voltaic_active.setter
+    def voltaic_active(self, val: bool) -> None:
         ts = getattr(self, "tower_special", None)
         if ts is not None:
-            ts.hellectric_time_left = val
+            ts.voltaic_active = val
         else:
-            self._hellectric_time_left = val
+            self._voltaic_active = val
 
     @property
-    def hellectric_x(self) -> float:
+    def voltaic_time_left(self) -> int:
         ts = getattr(self, "tower_special", None)
-        return ts.hellectric_x if ts is not None else self._hellectric_x
+        return ts.voltaic_time_left if ts is not None else self._voltaic_time_left
 
-    @hellectric_x.setter
-    def hellectric_x(self, val: float) -> None:
+    @voltaic_time_left.setter
+    def voltaic_time_left(self, val: int) -> None:
         ts = getattr(self, "tower_special", None)
         if ts is not None:
-            ts.hellectric_x = val
+            ts.voltaic_time_left = val
         else:
-            self._hellectric_x = val
+            self._voltaic_time_left = val
 
     @property
-    def hellectric_y(self) -> float:
+    def voltaic_x(self) -> float:
         ts = getattr(self, "tower_special", None)
-        return ts.hellectric_y if ts is not None else self._hellectric_y
+        return ts.voltaic_x if ts is not None else self._voltaic_x
 
-    @hellectric_y.setter
-    def hellectric_y(self, val: float) -> None:
+    @voltaic_x.setter
+    def voltaic_x(self, val: float) -> None:
         ts = getattr(self, "tower_special", None)
         if ts is not None:
-            ts.hellectric_y = val
+            ts.voltaic_x = val
         else:
-            self._hellectric_y = val
+            self._voltaic_x = val
 
     @property
-    def _hellectric_accum(self) -> dict[int, int]:
+    def voltaic_y(self) -> float:
+        ts = getattr(self, "tower_special", None)
+        return ts.voltaic_y if ts is not None else self._voltaic_y
+
+    @voltaic_y.setter
+    def voltaic_y(self, val: float) -> None:
+        ts = getattr(self, "tower_special", None)
+        if ts is not None:
+            ts.voltaic_y = val
+        else:
+            self._voltaic_y = val
+
+    @property
+    def _voltaic_accum(self) -> dict[int, int]:
         ts = getattr(self, "tower_special", None)
         return (
-            ts._hellectric_accum
+            ts._voltaic_accum
             if ts is not None
-            else getattr(self, "__hellectric_accum_backing", {})
+            else getattr(self, "__voltaic_accum_backing", {})
         )
 
-    @_hellectric_accum.setter
-    def _hellectric_accum(self, val: dict[int, int]) -> None:
+    @_voltaic_accum.setter
+    def _voltaic_accum(self, val: dict[int, int]) -> None:
         ts = getattr(self, "tower_special", None)
         if ts is not None:
-            ts._hellectric_accum = val
+            ts._voltaic_accum = val
         else:
-            setattr(self, "__hellectric_accum_backing", val)
+            setattr(self, "__voltaic_accum_backing", val)
 
     @property
-    def HELLECTRIC_MAX_DURATION(self) -> int:
+    def VOLTAIC_MAYHEM_MAX_DURATION(self) -> int:
         ts = getattr(self, "tower_special", None)
         return (
-            ts.HELLECTRIC_MAX_DURATION
+            ts.VOLTAIC_MAYHEM_MAX_DURATION
             if ts is not None
-            else self._HELLECTRIC_MAX_DURATION
+            else self._VOLTAIC_MAYHEM_MAX_DURATION
         )
 
-    @HELLECTRIC_MAX_DURATION.setter
-    def HELLECTRIC_MAX_DURATION(self, val: int) -> None:
+    @VOLTAIC_MAYHEM_MAX_DURATION.setter
+    def VOLTAIC_MAYHEM_MAX_DURATION(self, val: int) -> None:
         ts = getattr(self, "tower_special", None)
         if ts is not None:
-            ts.HELLECTRIC_MAX_DURATION = val
+            ts.VOLTAIC_MAYHEM_MAX_DURATION = val
         else:
-            self._HELLECTRIC_MAX_DURATION = val
+            self._VOLTAIC_MAYHEM_MAX_DURATION = val
 
     @property
-    def HELLECTRIC_IMPACT_RADIUS(self) -> int:
+    def VOLTAIC_MAYHEM_IMPACT_RADIUS(self) -> int:
         ts = getattr(self, "tower_special", None)
         return (
-            ts.HELLECTRIC_IMPACT_RADIUS
+            ts.VOLTAIC_MAYHEM_IMPACT_RADIUS
             if ts is not None
-            else self._HELLECTRIC_IMPACT_RADIUS
+            else self._VOLTAIC_MAYHEM_IMPACT_RADIUS
         )
 
-    @HELLECTRIC_IMPACT_RADIUS.setter
-    def HELLECTRIC_IMPACT_RADIUS(self, val: int) -> None:
+    @VOLTAIC_MAYHEM_IMPACT_RADIUS.setter
+    def VOLTAIC_MAYHEM_IMPACT_RADIUS(self, val: int) -> None:
         ts = getattr(self, "tower_special", None)
         if ts is not None:
-            ts.HELLECTRIC_IMPACT_RADIUS = val
+            ts.VOLTAIC_MAYHEM_IMPACT_RADIUS = val
         else:
-            self._HELLECTRIC_IMPACT_RADIUS = val
+            self._VOLTAIC_MAYHEM_IMPACT_RADIUS = val
 
     @property
-    def HELLECTRIC_SPEED(self) -> int:
+    def VOLTAIC_MAYHEM_SPEED(self) -> int:
         ts = getattr(self, "tower_special", None)
-        return ts.HELLECTRIC_SPEED if ts is not None else self._HELLECTRIC_SPEED
+        return ts.VOLTAIC_MAYHEM_SPEED if ts is not None else self._VOLTAIC_MAYHEM_SPEED
 
-    @HELLECTRIC_SPEED.setter
-    def HELLECTRIC_SPEED(self, val: int) -> None:
+    @VOLTAIC_MAYHEM_SPEED.setter
+    def VOLTAIC_MAYHEM_SPEED(self, val: int) -> None:
         ts = getattr(self, "tower_special", None)
         if ts is not None:
-            ts.HELLECTRIC_SPEED = val
+            ts.VOLTAIC_MAYHEM_SPEED = val
         else:
-            self._HELLECTRIC_SPEED = val
+            self._VOLTAIC_MAYHEM_SPEED = val
 
     def special_unlocked(self) -> bool:
         """Delegate to TowerSpecialSystem."""
@@ -593,10 +601,10 @@ class Game:
         if self.tower_special:
             self.tower_special._update_fire_smoke()
 
-    def update_hellectric_flux(self) -> None:
+    def update_voltaic_mayhem(self) -> None:
         """Delegate to TowerSpecialSystem."""
         if self.tower_special:
-            self.tower_special.update_hellectric_flux()
+            self.tower_special.update_voltaic_mayhem()
 
     def _init_weapons(self) -> None:
         init_weapons(self)
@@ -730,6 +738,9 @@ class Game:
         # as the kill count reached the expected horde size which could leave
         # stray enemies still on-screen; the overlay would then flash early.
         self.limbo_horde_ready_for_victory: bool = False
+        # Limbo Final kill countdown (starts when boss_limbo is slain)
+        self.limbo_final_victory_timer: int = 0
+        self.limbo_final_victory_started: bool = False
         # Scripted satan growth event triggered after fourth horde phase.
         self.satan_growth_active: bool = False
         self.satan_growth_elapsed: int = 0
@@ -863,7 +874,7 @@ class Game:
         except Exception:
             self.input_handler = None
 
-        # Initialize TowerSpecialSystem (handles energy bar and fire/blizzard/hellectric specials)
+        # Initialize TowerSpecialSystem (handles energy bar and fire/blizzard/Voltaic Mayhem specials)
         try:
             from src.systems.tower_special_system import TowerSpecialSystem
 
@@ -2937,6 +2948,16 @@ class Game:
                     self.enemy_manager.enemy_spawn_rate = self.enemy_spawn_rate
             except Exception:
                 pass
+
+        # limbo_final is extra punishing: ramp slopes should be doubled
+        if stage == "limbo_final":
+            try:
+                from src.balance import SPAWN_RAMP_SLOPE_PRE, SPAWN_RAMP_SLOPE_POST
+
+                self.spawn_ramp_slope_pre = SPAWN_RAMP_SLOPE_PRE * 2
+                self.spawn_ramp_slope_post = SPAWN_RAMP_SLOPE_POST * 2
+            except Exception:
+                pass
         return result
 
     def generate_dead_trees(self) -> None:
@@ -3126,6 +3147,9 @@ class Game:
         self.limbo_horde_schedule = []
         self.limbo_horde_phase_index = 0
         self.limbo_horde_ready_for_victory = False
+        # clear any pending limbo final victory countdown
+        self.limbo_final_victory_timer = 0
+        self.limbo_final_victory_started = False
         # reset satan growth state
         self.satan_growth_active = False
         self.satan_growth_elapsed = 0
@@ -3285,47 +3309,9 @@ class Game:
     def record_enemy_kill(self) -> None:
         """Record a single enemy kill for the current run.
 
-        In addition to the existing meta-xp logic we track kills during the
-        Limbo horde event so we can trigger Satan's explosion once half the
-        horde has been dealt with.
+        Awards meta-xp. For limbo horde, victory is triggered ONLY by boss death,
+        not by enemy kill count (which is unreliable and can be gamed).
         """
-        # limbo horde tracking
-        try:
-            if getattr(self, "limbo_horde_active", False):
-                self.limbo_horde_killed += 1
-                # trigger explosion when at least half of the horde has been killed
-                # once the player has slain every member of the horde, finish level
-                if (
-                    not getattr(self, "limbo_horde_completed", False)
-                    and self.limbo_horde_killed >= self.limbo_horde_initial
-                ):
-                    # mark event completed (no more spawns) but *do not* start
-                    # the victory countdown until we actually clear all enemies.
-                    # previously the timer was started immediately which meant
-                    # stray/leftover foes could still be on-screen when the win
-                    # overlay appeared.
-                    self.limbo_horde_active = False
-                    self.limbo_horde_completed = True
-                    # track that we're eligible to show victory once the room is
-                    # empty; update() will trigger the countdown later
-                    self.limbo_horde_ready_for_victory = True
-                    # show celebratory message right away (still useful even if
-                    # some enemies linger)
-                    try:
-                        self.show_centered_message(
-                            "HORDE DEFEATED!", 2000, (255, 255, 0)
-                        )
-                    except Exception:
-                        pass
-                    # bump the wave time so no additional waves start; this can
-                    # happen immediately as it's independent of enemy count
-                    try:
-                        self.wave_time = self.wave_duration
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
         # Award meta_xp for enemy kills
         try:
             self.award_meta_xp(5)
@@ -3354,6 +3340,12 @@ class Game:
 
     def select_profile(self, slot: int) -> None:
         """Set the active profile slot and load its data."""
+        # Save the CURRENT profile before switching so in-memory progress isn't lost
+        if getattr(self, "active_profile_slot", None) is not None:
+            try:
+                self.save_permanent_stats()
+            except Exception:
+                pass
         self.active_profile_slot = slot
         # Reset stats before loading so old data doesn't bleed in
         self.permanent_stats = {}
@@ -3402,6 +3394,12 @@ class Game:
         but there is no longer any mechanism to save them between sessions.  A
         fresh Game() will always start with zero permanent stats.
         """
+        # Persist meta progress (XP, level, points) before resetting the run
+        if getattr(self, "active_profile_slot", None) is not None:
+            try:
+                self.save_permanent_stats()
+            except Exception:
+                pass
         self.reset_run()
         self.selected_stage = None
         # Preserve `permanent_stats` so assigned points remain across runs until the
@@ -3443,10 +3441,12 @@ class Game:
             self.showing_stage_menu,
             self.showing_permanent_upgrades,
             self.showing_prologo_end,
+            self.showing_main_menu,
         )
         self.showing_stage_menu = False
         self.showing_permanent_upgrades = False
         self.showing_prologo_end = False
+        self.showing_main_menu = False
         try:
             return self.update()
         finally:
@@ -3454,6 +3454,7 @@ class Game:
                 self.showing_stage_menu,
                 self.showing_permanent_upgrades,
                 self.showing_prologo_end,
+                self.showing_main_menu,
             ) = prev_states
 
     def stop_game_loop(self) -> None:
@@ -3521,12 +3522,32 @@ class Game:
         # performed here during the normal per-frame update so the final
         # removal (which usually happens just after record_enemy_kill is
         # called) gets a chance to run first.
-        if getattr(self, "limbo_horde_ready_for_victory", False):
+        # The normal path uses ``limbo_horde_ready_for_victory`` which is set
+        # by ``record_enemy_kill`` when the final horde member is slain.  In
+        # extremely rare situations the flag might be lost or never set (e.g.
+        # exotic race conditions, or tests that mutate the state directly).  We
+        # still want a countdown to start once the room is empty if the horde
+        # is marked completed, so include that as a fallback condition.  Also
+        # only run the check if a timer isn't already active to avoid spinning
+        # the counter back up repeatedly.
+        should_check = getattr(self, "limbo_horde_ready_for_victory", False)
+        if (
+            not should_check
+            and getattr(self, "limbo_horde_completed", False)
+            and not getattr(self, "limbo_horde_ready_for_victory", False)
+            and getattr(self, "limbo_horde_victory_timer", 0) <= 0
+        ):
+            should_check = True
+            if getattr(self, "debug", False):
+                print("[LIMBO_HORDE] Fallback victory timer check (completed but no ready flag)")
+        if should_check:
             # wait for *all* foes to vanish: both normal enemies and any bosses
             enemies_empty = (not getattr(self, "enemies", None)) or len(
                 self.enemies
             ) == 0
             bosses_empty = (not getattr(self, "bosses", None)) or len(self.bosses) == 0
+            if getattr(self, "debug", False):
+                print(f"[LIMBO_HORDE] ready_for_victory check: enemies_empty={enemies_empty} bosses_empty={bosses_empty} enemy_count={len(self.enemies)} boss_count={len(self.bosses)}")
             if enemies_empty and bosses_empty:
                 try:
                     self.limbo_horde_victory_timer = int(self.fps * 5)
@@ -3534,14 +3555,35 @@ class Game:
                     self.limbo_horde_victory_timer = 0
                 # consume the flag so we don't trigger again
                 self.limbo_horde_ready_for_victory = False
+                if getattr(self, "debug", False):
+                    print(f"[LIMBO_HORDE] Victory timer started: {self.limbo_horde_victory_timer} frames")
 
         # After limbo explosion we wait a moment then show victory screen
+        # Timer decrements every frame once it's been set
         if getattr(self, "limbo_horde_victory_timer", 0) > 0:
             self.limbo_horde_victory_timer -= 1
+            if getattr(self, "debug", False) and self.limbo_horde_victory_timer % 30 == 0:
+                print(f"[LIMBO_HORDE] Victory timer countdown: {self.limbo_horde_victory_timer} frames remaining")
             if self.limbo_horde_victory_timer <= 0:
                 # begin full victory overlay sequence (will stay until keypress)
+                if getattr(self, "debug", False):
+                    print(f"[LIMBO_HORDE] Victory timer expired! Showing victory screen!")
                 self.showing_victory = True
                 self.victory_alpha = 0
+        # Handle limbo final boss countdown separately; when it expires we show
+        # the specialized defeat screen rather than the generic overlay.
+        if getattr(self, "limbo_final_victory_timer", 0) > 0:
+            self.limbo_final_victory_timer -= 1
+            # optionally log every second when debugging
+            if getattr(self, "debug", False) and self.limbo_final_victory_timer % self.fps == 0:
+                print(f"[LIMBO_FINAL] Countdown: {self.limbo_final_victory_timer} frames remaining")
+            if self.limbo_final_victory_timer <= 0:
+                if getattr(self, "debug", False):
+                    print("[LIMBO_FINAL] Countdown expired, triggering defeat")
+                try:
+                    self.limbo_final_defeat()
+                except Exception:
+                    pass
         # update victory overlay fade if active
         if getattr(self, "showing_victory", False):
             if self.victory_alpha < 255:
@@ -3620,7 +3662,7 @@ class Game:
         # Increment frame counter for animations
         self.frame_count += 1
 
-        # Update tower special system (fire/blizzard/hellectric)
+        # Update tower special system (fire/blizzard/Voltaic Mayhem)
         if self.tower_special is not None:
             self.tower_special.update()
 
@@ -3885,8 +3927,20 @@ class Game:
 
         # Check for dead bosses after update (e.g., from burn damage over time) and remove them
         if hasattr(self.bosses, "sprites"):
+            if getattr(self, "debug", False):
+                try:
+                    print(f"[CORE] scanning {len(self.bosses.sprites())} bosses for death")
+                except Exception:
+                    print("[CORE] scanning bosses for death (count unknown)")
             for boss in list(self.bosses.sprites()):
+                if getattr(self, "debug", False):
+                    try:
+                        print(f"[CORE] boss in loop, type={getattr(boss,'enemy_type',None)} health={getattr(boss,'health',None)}")
+                    except Exception:
+                        pass
                 if hasattr(boss, "health") and boss.health <= 0:
+                    if getattr(self, "debug", False):
+                        print(f"[CORE] boss death detected for {getattr(boss,'enemy_type',None)}")
                     # Boss death handling (similar to enemy death but with different XP multiplier)
                     # For now, use enemy-like handling; adjust if bosses have special death logic
                     self.add_score(boss.max_health * 25)  # Bosses give more score
@@ -3907,6 +3961,45 @@ class Game:
                         ):
                             try:
                                 self._propagate_burn(boss)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                    # spawn limbo_final countdown if appropriate
+                    try:
+                        if getattr(self, "debug", False):
+                            print(
+                                "[CORE] death flag check", boss.enemy_type,
+                                getattr(self, "selected_stage", None),
+                                "started?", getattr(self, "limbo_final_victory_started", False),
+                            )
+                        if (
+                            getattr(boss, "enemy_type", "") == "boss_limbo"
+                            and getattr(self, "selected_stage", None) == "limbo_final"
+                            and not getattr(self, "limbo_final_victory_started", False)
+                        ):
+                            # begin 5‑second timer
+                            self.limbo_final_victory_timer = int(self.fps * 5)
+                            self.limbo_final_victory_started = True
+                            if getattr(self, "debug", False):
+                                print("[CORE] limbo_final timer started")
+                            try:
+                                self.show_centered_message("BOSS DEFEATED!", 2000, (255, 255, 0))
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                    # Spawn health drop for all bosses
+                    try:
+                        et = getattr(boss, "enemy_type", "")
+                        if et.startswith("boss_"):
+                            heal_amt = random.randint(10, 20)
+                            try:
+                                self.spawn_health_drop(
+                                    boss.x, boss.y, heal_amt
+                                )
                             except Exception:
                                 pass
                     except Exception:
@@ -3954,10 +4047,10 @@ class Game:
                                 pass
                     except Exception:
                         pass
-                    # spawn health drop for wave-style bosses
+                    # spawn health drop for all bosses
                     try:
                         et = boss.get("enemy_type", "")
-                        if et in ("boss_medium", "boss_big"):
+                        if et.startswith("boss_"):
                             heal_amt = random.randint(10, 20)
                             try:
                                 self.spawn_health_drop(
@@ -4510,6 +4603,13 @@ class Game:
         # Stop any screen shake immediately so the overlay is stable
         self.shake_timer = 0
         self.shake_intensity = 0
+
+        # Persist meta progress so XP earned this run isn't lost
+        if getattr(self, "active_profile_slot", None) is not None:
+            try:
+                self.save_permanent_stats()
+            except Exception:
+                pass
 
         # Do not schedule an automatic return to menu; require explicit key press
         logger.info("Game over triggered; showing game over screen (awaiting keypress)")

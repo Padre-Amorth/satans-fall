@@ -3066,10 +3066,47 @@ class CollisionSystem:
                     projectile.kill()
 
                 if boss.health <= 0:
-                    # record horde boss death before propagating to kill counter
+                    # Trigger limbo horde victory when boss dies (only condition needed)
                     if boss.enemy_type == "boss_limbo_horde":
                         try:
                             g.limbo_horde_boss_killed = True
+                            g.limbo_horde_active = False
+                            g.limbo_horde_completed = True
+                            g.limbo_horde_ready_for_victory = True
+                            if getattr(g, "debug", False):
+                                print(
+                                    f"[LIMBO_HORDE] Boss killed! Setting victory ready. "
+                                    f"Enemies: {len(g.enemies)}, Bosses: {len(g.bosses)}"
+                                )
+                            # Show horde defeat message and prepare victory
+                            try:
+                                g.show_centered_message(
+                                    "HORDE DEFEATED!", 2000, (255, 255, 0)
+                                )
+                            except Exception:
+                                pass
+                            # Stop spawning more waves
+                            try:
+                                g.wave_time = g.wave_duration
+                            except Exception:
+                                pass
+                            # Force-kill remaining enemies so victory triggers immediately
+                            try:
+                                for e in list(g.enemies):
+                                    try:
+                                        e.health = 0
+                                        e.kill()
+                                    except Exception:
+                                        pass
+                                for b in list(g.bosses):
+                                    if b is not boss:  # Don't re-kill the one we just killed
+                                        try:
+                                            b.health = 0
+                                            b.kill()
+                                        except Exception:
+                                            pass
+                            except Exception:
+                                pass
                         except Exception:
                             pass
                     g.add_score(boss.max_health * 25)
@@ -3089,10 +3126,9 @@ class CollisionSystem:
                         g.trigger_level_up()
                     # record boss kill like a normal enemy (awards meta XP)
                     try:
-                        print("DEBUG: about to record_enemy_kill for boss")
                         g.record_enemy_kill()
-                    except Exception as e:
-                        print("DEBUG: record_enemy_kill raised", e)
+                    except Exception:
+                        pass
                     # give a small amount of meta XP for boss kills so the
                     # external progress bar advances mid-run; use 10% of
                     # boss_base_xp (rounded)

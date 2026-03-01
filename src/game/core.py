@@ -721,9 +721,6 @@ class Game:
 
         # Limbo horde event (for regular limbo levels)
         self.limbo_horde_started: bool = False
-        self.limbo_horde_initial: int = 0
-        self.limbo_horde_remaining: int = 0
-        self.limbo_horde_killed: int = 0
         # timer used for spawn gating (resets each spawn)
         self.limbo_horde_timer: int = 0
         # track how many frames have elapsed since the horde began; needed to
@@ -731,12 +728,10 @@ class Game:
         self.limbo_horde_elapsed: int = 0
         self.limbo_horde_active: bool = False
         self.limbo_horde_completed: bool = False
-        # after explosion we countdown and then end with victory screen
+        # Victory is triggered when boss_limbo_horde dies; countdown starts when
+        # all enemies have been cleared from the screen
         self.limbo_horde_victory_timer: int = 0
-        # additional flag used to defer the victory countdown until *all*
-        # enemies have been cleared.  Previously we started the timer as soon
-        # as the kill count reached the expected horde size which could leave
-        # stray enemies still on-screen; the overlay would then flash early.
+        # Flag set when boss dies; victory countdown starts once room is empty
         self.limbo_horde_ready_for_victory: bool = False
         # Limbo Final kill countdown (starts when boss_limbo is slain)
         self.limbo_final_victory_timer: int = 0
@@ -3136,9 +3131,6 @@ class Game:
 
         # Reset limbo horde tracking
         self.limbo_horde_started = False
-        self.limbo_horde_initial = 0
-        self.limbo_horde_remaining = 0
-        self.limbo_horde_killed = 0
         self.limbo_horde_timer = 0
         self.limbo_horde_elapsed = 0
         self.limbo_horde_active = False
@@ -3146,7 +3138,6 @@ class Game:
         self.limbo_horde_ready_for_victory = False
         self.limbo_horde_schedule = []
         self.limbo_horde_phase_index = 0
-        self.limbo_horde_ready_for_victory = False
         # clear any pending limbo final victory countdown
         self.limbo_final_victory_timer = 0
         self.limbo_final_victory_started = False

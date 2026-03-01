@@ -41,10 +41,15 @@ class SpawnSystem:
 
         A 12‑second cooldown is enforced by comparing the current global
         ``game.time_elapsed`` to ``last_giant_spawn_time``.  During an active
-        limbo horde, casual giant spawns are blocked (only horde script spawns).
+        limbo horde or after horde completion, casual giant spawns are blocked.
         """
         # Block casual giant spawns during active horde (only script-controlled spawns allowed)
         if getattr(self.game, "limbo_horde_active", False):
+            return False
+        # Block giant spawns after horde completion (waiting for victory)
+        if getattr(self.game, "limbo_horde_completed", False):
+            return False
+        if getattr(self.game, "showing_victory", False):
             return False
         return (self.game.time_elapsed - self.last_giant_spawn_time) >= 12.0
 
@@ -84,9 +89,12 @@ class SpawnSystem:
                 self._start_limbo_horde()
 
         # Use manager timers if manager exists
-        # block any further spawning once the horde has been completed or victory screen is showing
-        if getattr(self.game, "limbo_horde_completed", False) or getattr(
-            self.game, "showing_victory", False
+        # block any further spawning once the horde has been completed,
+        # the limbo-final boss has been killed, or a victory/defeat overlay is showing
+        if (
+            getattr(self.game, "limbo_horde_completed", False)
+            or getattr(self.game, "showing_victory", False)
+            or getattr(self.game, "limbo_final_victory_timer", 0) > 0
         ):
             return
 
@@ -101,11 +109,7 @@ class SpawnSystem:
                 self.game.enemy_manager.enemy_spawn_timer -= 1
 
             # also handle horde phased spawning if active
-            if (
-                self.game.limbo_horde_active
-                and self.game.limbo_horde_remaining > 0
-                and self.game.limbo_horde_schedule
-            ):
+            if self.game.limbo_horde_active and self.game.limbo_horde_schedule:
                 # increment elapsed frames
                 self.game.limbo_horde_elapsed += 1
                 # process any phases whose trigger time has arrived
@@ -159,11 +163,7 @@ class SpawnSystem:
                 self.game.enemy_spawn_timer -= 1
 
             # horde handling without enemy_manager uses the same phased logic
-            if (
-                self.game.limbo_horde_active
-                and self.game.limbo_horde_remaining > 0
-                and self.game.limbo_horde_schedule
-            ):
+            if self.game.limbo_horde_active and self.game.limbo_horde_schedule:
                 self.game.limbo_horde_elapsed += 1
                 while (
                     self.game.limbo_horde_phase_index
@@ -262,6 +262,15 @@ class SpawnSystem:
 
     def update_wave_progression(self) -> None:
         """Handle wave progression and boss spawning"""
+        # Block ALL wave progression once the limbo horde has been completed or
+        # the victory screen is showing.  Without this, new waves keep starting
+        # which spawn wave bosses and reset big_spawned_this_wave, allowing
+        # giants to appear and preventing the "enemies empty" victory condition.
+        if getattr(self.game, "limbo_horde_completed", False) or getattr(
+            self.game, "showing_victory", False
+        ):
+            return
+
         # Wave progression based on elapsed seconds or on explicit frame boundary
         frames_per_wave = int(self.game.wave_duration * self.game.fps)
         frame_boundary_hit: bool = (
@@ -396,7 +405,10 @@ class SpawnSystem:
                             self.game.selected_stage == "prologo"
                             and self.game.prologo_final_boss_spawned
                         ):
-                            if self.game.wave % 3 == 0 and self.game.wave > 0:
+                            # new rule: limbo stages never get the "big" wave boss
+                            if getattr(self.game, "is_limbo_stage", lambda: False)():
+                                self.spawn_boss("inquisitor")
+                            elif self.game.wave % 3 == 0 and self.game.wave > 0:
                                 self.spawn_boss("big")
                             else:
                                 self.spawn_boss("mid")
@@ -407,7 +419,9 @@ class SpawnSystem:
                         self.game.selected_stage == "prologo"
                         and self.game.prologo_final_boss_spawned
                     ):
-                        if self.game.wave % 3 == 0 and self.game.wave > 0:
+                        if getattr(self.game, "is_limbo_stage", lambda: False)():
+                            self.spawn_boss("inquisitor")
+                        elif self.game.wave % 3 == 0 and self.game.wave > 0:
                             self.spawn_boss("big")
                         else:
                             self.spawn_boss("mid")
@@ -599,6 +613,11 @@ class SpawnSystem:
         """
         self.game.limbo_horde_started = True
         self.game.limbo_horde_active = True
+        # boss has not appeared yet
+        try:
+            self.game.limbo_horde_boss_spawned = False
+        except Exception:
+            pass
         # build schedule: times are offsets from the moment the horde starts
         f = self.game.fps
         # fixed phases as per design; mark the fourth phase with a growth
@@ -644,13 +663,14 @@ class SpawnSystem:
                 "boss_count": 1,
             }
         )
-        total = sum(entry["count"] for entry in schedule)
+        # compute total including any bosses; the original implementation
+        # forgot to count ``boss_count`` entries, which meant the event could
+        # prematurely mark itself complete before the final boss ever spawned.
+        total = 0
+        for entry in schedule:
+            total += entry.get("count", 0) + entry.get("boss_count", 0)
         self.game.limbo_horde_schedule = schedule
         self.game.limbo_horde_phase_index = 0
-        # record size for kill‑tracking & display
-        self.game.limbo_horde_initial = total
-        self.game.limbo_horde_remaining = total
-        self.game.limbo_horde_killed = 0
         self.game.limbo_horde_timer = 0
         self.game.limbo_horde_elapsed = 0
         # broadcast warning
@@ -912,7 +932,6 @@ class SpawnSystem:
         if not phase.get("special", False):
             for _ in range(count):
                 self.spawn_enemy()
-                self.game.limbo_horde_remaining -= 1
         else:
             # custom composition entries take precedence
             if phase.get("custom"):
@@ -928,7 +947,6 @@ class SpawnSystem:
                         else:
                             # treat remaining as normal
                             self.spawn_enemy()
-                        self.game.limbo_horde_remaining -= 1
                 # spawn any bosses specified separately.  we mirror the logic
                 # used in the non-custom path so that limbo stages get the
                 # specialised boss type instead of the generic wave boss.
@@ -937,12 +955,15 @@ class SpawnSystem:
                     try:
                         if stage.startswith("limbo"):
                             self.game.spawn_boss("limbo_horde")
+                            try:
+                                self.game.limbo_horde_boss_spawned = True
+                            except Exception:
+                                pass
                         else:
                             self.game.spawn_boss("big")
                     except Exception:
                         print("[DEBUG] boss spawn failed, fallback giant")
                         self.spawn_enemy(forced_type="giant")
-                    self.game.limbo_horde_remaining -= 1
                 return
             # Determine how many bosses this phase should include; default 0
             boss_count = phase.get("boss_count", 0)
@@ -962,16 +983,13 @@ class SpawnSystem:
             # spawn giants first
             for _ in range(giant_count):
                 self.spawn_enemy(forced_type="giant")
-                self.game.limbo_horde_remaining -= 1
             # spawn shielded variants next
             for _ in range(shielded_count):
                 # force a shielded spawn; spawn_enemy handles this type
                 self.spawn_enemy(forced_type="shielded")
-                self.game.limbo_horde_remaining -= 1
             # then inquisitors
             for _ in range(inquisitor_count):
                 self.spawn_enemy(forced_type="inquisitor")
-                self.game.limbo_horde_remaining -= 1
             # finally, add the configured number of big bosses (or a
             # specialised Limbo boss during the limbo horde).  The default
             # behaviour used to spawn ``boss_big`` here which meant the horde
@@ -986,12 +1004,15 @@ class SpawnSystem:
                         # spawn a specialised horde boss type so it can have a
                         # unique asset separate from the final-stage boss.
                         self.game.spawn_boss("limbo_horde")
+                        try:
+                            self.game.limbo_horde_boss_spawned = True
+                        except Exception:
+                            pass
                     else:
                         self.game.spawn_boss("big")
                 except Exception:
                     print("[DEBUG] boss spawn failed, fallback giant")
                     self.spawn_enemy(forced_type="giant")
-                self.game.limbo_horde_remaining -= 1
 
     def spawn_enemy_projectiles(self) -> None:
         """Have some enemies shoot projectiles at the player"""
@@ -1300,6 +1321,11 @@ class SpawnSystem:
             enemy_type = "boss_big"
             health = 600 * self.game.difficulty_multiplier
             speed = ENEMY_BASE_SPEEDS.get("boss_big", 40)
+        elif boss_type == "inquisitor":
+            # explicit support so legacy path can spawn inquisitor bosses too
+            enemy_type = "boss_inquisitor"
+            health = 950 * self.game.difficulty_multiplier
+            speed = ENEMY_BASE_SPEEDS.get("boss_inquisitor", 40)
         elif boss_type == "limbo":
             # Final Limbo boss (standard encounter)
             enemy_type = "boss_limbo"

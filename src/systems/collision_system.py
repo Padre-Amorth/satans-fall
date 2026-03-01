@@ -1740,10 +1740,6 @@ class CollisionSystem:
                                                 targ.kill()
                                             except Exception:
                                                 try:
-                                                    try:
-                                                        g.record_enemy_kill()
-                                                    except Exception:
-                                                        pass
                                                     g.enemies.remove(targ)
                                                 except Exception:
                                                     pass
@@ -2154,10 +2150,6 @@ class CollisionSystem:
                                     targ.kill()
                                 except Exception:
                                     try:
-                                        try:
-                                            g.record_enemy_kill()
-                                        except Exception:
-                                            pass
                                         g.enemies.remove(targ)
                                     except Exception:
                                         pass
@@ -3074,6 +3066,12 @@ class CollisionSystem:
                     projectile.kill()
 
                 if boss.health <= 0:
+                    # record horde boss death before propagating to kill counter
+                    if boss.enemy_type == "boss_limbo_horde":
+                        try:
+                            g.limbo_horde_boss_killed = True
+                        except Exception:
+                            pass
                     g.add_score(boss.max_health * 25)
                     # Give XP for boss kill (per-type table, flat values)
                     boss_xp_map: Dict[str, int] = {
@@ -3100,6 +3098,12 @@ class CollisionSystem:
                     # boss_base_xp (rounded)
                     try:
                         g.award_meta_xp(int(boss_base_xp * 0.1))
+                    except Exception:
+                        pass
+                    # Spawn health drop when boss dies
+                    try:
+                        heal_amt = random.randint(10, 20)
+                        g.spawn_health_drop(boss.x, boss.y, heal_amt)
                     except Exception:
                         pass
                     boss.kill()  # Remove dead boss
@@ -3231,13 +3235,6 @@ class CollisionSystem:
                                     g.record_enemy_kill()
                                 except Exception:
                                     pass
-                                if g.player_xp >= g.xp_to_next_level:
-                                    g.trigger_level_up()
-                                targ.kill()
-                                try:
-                                    g.record_enemy_kill()
-                                except Exception:
-                                    pass
 
                     # Add chain lightning effect to game state
                     if len(chain_points) > 1:
@@ -3278,6 +3275,49 @@ class CollisionSystem:
         if hasattr(g.enemies, "sprites"):
             hit_enemies = pygame.sprite.spritecollide(g.player, g.enemies, False)
             for enemy in hit_enemies:
+                # winged units explode on player contact
+                if getattr(enemy, "enemy_type", "") == "winged":
+                    # play small explosion effect and deal flat damage
+                    try:
+                        from src.game_constants import (
+                            WINGED_CONTACT_DAMAGE,
+                            WINGED_EXPLOSION_COLOR,
+                            WINGED_EXPLOSION_DURATION,
+                            WINGED_EXPLOSION_RADIUS,
+                        )
+                    except Exception:
+                        WINGED_EXPLOSION_RADIUS = 30
+                        WINGED_EXPLOSION_DURATION = 6
+                        WINGED_EXPLOSION_COLOR = (255, 120, 0)
+                        WINGED_CONTACT_DAMAGE = 15
+                    try:
+                        g.player.take_damage(WINGED_CONTACT_DAMAGE)
+                    except Exception:
+                        pass
+                    try:
+                        g.game_state.fire_explosions.append(
+                            {
+                                "x": enemy.x,
+                                "y": enemy.y,
+                                "radius": WINGED_EXPLOSION_RADIUS,
+                                "timer": WINGED_EXPLOSION_DURATION,
+                                "max_timer": WINGED_EXPLOSION_DURATION,
+                                "color": WINGED_EXPLOSION_COLOR,
+                            }
+                        )
+                    except Exception:
+                        pass
+                    # remove the enemy immediately
+                    try:
+                        enemy.kill()
+                    except Exception:
+                        try:
+                            g.enemies.remove(enemy)
+                        except Exception:
+                            pass
+                    # skip the normal contact handling
+                    continue
+
                 actual_damage = (enemy.damage / g.fps) * g.damage_reduction_multiplier
                 g.player.take_damage(actual_damage)
                 contact_damage_to_enemy: float = 2.0 / g.fps
@@ -3299,6 +3339,44 @@ class CollisionSystem:
                 dx = ex - g.player.x
                 dy = ey - g.player.y
                 if dx * dx + dy * dy <= (er + (g.player.width // 2)) ** 2:
+                    # winged explosion behavior for non-sprite enemies
+                    if getattr(enemy, "enemy_type", "") == "winged":
+                        try:
+                            from src.game_constants import (
+                                WINGED_CONTACT_DAMAGE,
+                                WINGED_EXPLOSION_COLOR,
+                                WINGED_EXPLOSION_DURATION,
+                                WINGED_EXPLOSION_RADIUS,
+                            )
+                        except Exception:
+                            WINGED_EXPLOSION_RADIUS = 30
+                            WINGED_EXPLOSION_DURATION = 6
+                            WINGED_EXPLOSION_COLOR = (255, 120, 0)
+                            WINGED_CONTACT_DAMAGE = 15
+                        try:
+                            g.player.take_damage(WINGED_CONTACT_DAMAGE)
+                        except Exception:
+                            pass
+                        try:
+                            g.game_state.fire_explosions.append(
+                                {
+                                    "x": enemy.x,
+                                    "y": enemy.y,
+                                    "radius": WINGED_EXPLOSION_RADIUS,
+                                    "timer": WINGED_EXPLOSION_DURATION,
+                                    "max_timer": WINGED_EXPLOSION_DURATION,
+                                    "color": WINGED_EXPLOSION_COLOR,
+                                }
+                            )
+                        except Exception:
+                            pass
+                        # attempt to remove object-style enemy
+                        try:
+                            g.enemies.remove(enemy)
+                        except Exception:
+                            pass
+                        continue
+
                     actual_damage = (
                         getattr(enemy, "damage", 5) / g.fps
                     ) * g.damage_reduction_multiplier
@@ -3474,6 +3552,12 @@ class CollisionSystem:
                             boss.enemy_type.replace("boss_", ""), 100
                         )
                         g.award_meta_xp(int(boss_base_xp * 0.1))
+                    except Exception:
+                        pass
+                    # Spawn health drop when boss dies
+                    try:
+                        heal_amt = random.randint(10, 20)
+                        g.spawn_health_drop(boss.x, boss.y, heal_amt)
                     except Exception:
                         pass
                     try:

@@ -209,6 +209,10 @@ class Enemy(BaseSprite):
         if enemy_type == "custode":
             self._custode_split: bool = False
 
+        # Track if this enemy's death has been recorded in the limbo horde counter.
+        # Prevents double-counting if record_enemy_kill() is called multiple times.
+        self.death_recorded: bool = False
+
         # Calculate radius from width/height (average)
         self.radius: int = (self.width + self.height) // 4
 
@@ -2036,22 +2040,35 @@ class Enemy(BaseSprite):
 
         # Centralized safeguard: if this is the Prologo or Limbo Final boss and
         # it is currently in the immortal/regeneration phase, ignore incoming damage.
+        # attempt to pull the active game instance; the project has two
+        # module paths (`src.game` and `src.game.core`), so try both to be
+        # robust in tests and runtime.
+        CURRENT_GAME = None
         try:
-            from src.game import CURRENT_GAME
+            from src.game import CURRENT_GAME as _cg
 
-            if CURRENT_GAME is not None:
-                if (
-                    getattr(self, "enemy_type", "") == "boss_final"
-                    and getattr(CURRENT_GAME, "selected_stage", None) == "prologo"
-                    and getattr(CURRENT_GAME, "prologo_final_boss_immortal", False)
-                ) or (
-                    getattr(self, "enemy_type", "") == "boss_limbo"
-                    and getattr(CURRENT_GAME, "selected_stage", None) == "limbo_final"
-                    and getattr(CURRENT_GAME, "limbo_final_boss_immortal", False)
-                ):
-                    return
+            CURRENT_GAME = _cg
         except Exception:
             pass
+        if CURRENT_GAME is None:
+            try:
+                from src.game.core import CURRENT_GAME as _cg
+
+                CURRENT_GAME = _cg
+            except Exception:
+                pass
+
+        if CURRENT_GAME is not None:
+            if (
+                getattr(self, "enemy_type", "") == "boss_final"
+                and getattr(CURRENT_GAME, "selected_stage", None) == "prologo"
+                and getattr(CURRENT_GAME, "prologo_final_boss_immortal", False)
+            ) or (
+                getattr(self, "enemy_type", "") == "boss_limbo"
+                and getattr(CURRENT_GAME, "selected_stage", None) == "limbo_final"
+                and getattr(CURRENT_GAME, "limbo_final_boss_immortal", False)
+            ):
+                return
 
         # Shield absorption: shield_hp takes the hit first; health only decreases when shield is gone
         if getattr(self, "shield_hp", 0) > 0:
@@ -2101,7 +2118,9 @@ class Enemy(BaseSprite):
                     except Exception:
                         pass
                 # spawn health drop for any qualifying boss once
-                if self.enemy_type in ("boss_medium", "boss_big", "boss_inquisitor"):
+                if self.enemy_type.startswith("boss_") or getattr(
+                    self, "should_drop_health", False
+                ):
                     if not getattr(self, "health_drop_spawned", False):
                         try:
                             import random

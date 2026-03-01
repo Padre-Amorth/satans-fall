@@ -3505,22 +3505,56 @@ class Game:
                 self.paused = False
             self._paused_by_blasphemy5 = False
 
+        # Check if the horde boss has died (independent of projectile collisions).
+        # If boss_limbo_horde is dead and we haven't set the victory flag yet,
+        # do so now so the countdown can begin.
+        if (
+            getattr(self, "limbo_horde_active", False)
+            and not getattr(self, "limbo_horde_completed", False)
+        ):
+            for boss in list(self.bosses):
+                if (
+                    getattr(boss, "enemy_type", "") == "boss_limbo_horde"
+                    and boss.health <= 0
+                ):
+                    # Boss has died; trigger victory setup
+                    try:
+                        self.limbo_horde_boss_killed = True
+                        self.limbo_horde_active = False
+                        self.limbo_horde_completed = True
+                        self.limbo_horde_ready_for_victory = True
+                        if getattr(self, "debug", False):
+                            print(
+                                f"[LIMBO_HORDE] Boss death detected in update! "
+                                f"Setting victory ready. Enemies: {len(self.enemies)}, Bosses: {len(self.bosses)}"
+                            )
+                        # Clear all remaining enemies and bosses immediately
+                        try:
+                            self.enemies.empty()
+                            self.bosses.empty()
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+            # Only log boss scan when in non-horde stages or when debug is enabled
+            if getattr(self, "debug", False) and (
+                not getattr(self, "limbo_horde_active", False)
+                or getattr(self, "limbo_horde_completed", False)
+            ):
+                pass  # Don't print anything when not actively in horde
+
         # If the horde has been defeated we don't immediately show the
         # victory overlay; we want to wait until every enemy has actually
-        # vanished from the screen.  When record_enemy_kill detected the
-        # final horde kill it sets ``limbo_horde_ready_for_victory`` but the
-        # countdown is postponed until the enemy group empties.  The check is
-        # performed here during the normal per-frame update so the final
-        # removal (which usually happens just after record_enemy_kill is
-        # called) gets a chance to run first.
-        # The normal path uses ``limbo_horde_ready_for_victory`` which is set
-        # by ``record_enemy_kill`` when the final horde member is slain.  In
-        # extremely rare situations the flag might be lost or never set (e.g.
-        # exotic race conditions, or tests that mutate the state directly).  We
-        # still want a countdown to start once the room is empty if the horde
-        # is marked completed, so include that as a fallback condition.  Also
-        # only run the check if a timer isn't already active to avoid spinning
-        # the counter back up repeatedly.
+        # vanished from the screen.  When boss_limbo_horde dies it sets
+        # ``limbo_horde_ready_for_victory`` but the countdown is postponed
+        # until the enemy group empties.  The check is performed here during
+        # the normal per-frame update so the final removal gets a chance to run.
+        # In extremely rare situations the flag might be lost (e.g. exotic race
+        # conditions, or tests that mutate the state directly).  We still want
+        # a countdown to start once the room is empty if the horde is marked
+        # completed, so include that as a fallback condition.  Also only run
+        # the check if a timer isn't already active to avoid spinning the
+        # counter back up repeatedly.
         should_check = getattr(self, "limbo_horde_ready_for_victory", False)
         if (
             not should_check
@@ -3918,20 +3952,8 @@ class Game:
 
         # Check for dead bosses after update (e.g., from burn damage over time) and remove them
         if hasattr(self.bosses, "sprites"):
-            if getattr(self, "debug", False):
-                try:
-                    print(f"[CORE] scanning {len(self.bosses.sprites())} bosses for death")
-                except Exception:
-                    print("[CORE] scanning bosses for death (count unknown)")
             for boss in list(self.bosses.sprites()):
-                if getattr(self, "debug", False):
-                    try:
-                        print(f"[CORE] boss in loop, type={getattr(boss,'enemy_type',None)} health={getattr(boss,'health',None)}")
-                    except Exception:
-                        pass
                 if hasattr(boss, "health") and boss.health <= 0:
-                    if getattr(self, "debug", False):
-                        print(f"[CORE] boss death detected for {getattr(boss,'enemy_type',None)}")
                     # Boss death handling (similar to enemy death but with different XP multiplier)
                     # For now, use enemy-like handling; adjust if bosses have special death logic
                     self.add_score(boss.max_health * 25)  # Bosses give more score

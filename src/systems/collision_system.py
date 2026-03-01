@@ -3090,21 +3090,12 @@ class CollisionSystem:
                                 g.wave_time = g.wave_duration
                             except Exception:
                                 pass
-                            # Force-kill remaining enemies so victory triggers immediately
+                            # Clear all remaining enemies and bosses immediately so victory countdown starts
                             try:
-                                for e in list(g.enemies):
-                                    try:
-                                        e.health = 0
-                                        e.kill()
-                                    except Exception:
-                                        pass
-                                for b in list(g.bosses):
-                                    if b is not boss:  # Don't re-kill the one we just killed
-                                        try:
-                                            b.health = 0
-                                            b.kill()
-                                        except Exception:
-                                            pass
+                                g.enemies.empty()
+                                g.bosses.empty()
+                                if getattr(g, "debug", False):
+                                    print(f"[LIMBO_HORDE] Cleared enemies and bosses, ready for victory countdown")
                             except Exception:
                                 pass
                         except Exception:

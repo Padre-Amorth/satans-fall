@@ -9,21 +9,17 @@ Verifies that:
 import sys
 from pathlib import Path
 
+import pytest
 import pygame
 
-# Add project to path - must be before import to allow src imports
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
 
 from src.game import Game  # noqa: E402
 from src.systems.spawn_system import SpawnSystem  # noqa: E402
 
 
+@pytest.mark.parametrize("stage_name", ["limbo", "limbo_2", "limbo_3"])
 def test_no_giants_spawn_after_horde(stage_name):
     """Test that NO giants spawn after horde completion."""
-    print(f"\n{'='*60}")
-    print(f"Testing {stage_name.upper()} - NO GIANTS AFTER HORDE")
-    print(f"{'='*60}")
 
     pygame.init()
     pygame.display.set_mode((1280, 720))
@@ -57,15 +53,24 @@ def test_no_giants_spawn_after_horde(stage_name):
     horde_defeated_frame = None
     showing_victory_frame = None
 
-    print(f"\n[SIMULATION] Starting frame-by-frame simulation (max {max_frames} frames)...")
+
+
+    # Spawn the horde boss on frame 0
+    boss_spawned = False
 
     while total_frames < max_frames:
-        # Manually complete the horde on frame 0
-        if total_frames == 0:
-            game.limbo_horde_killed = game.limbo_horde_initial
-            # Trigger the record_enemy_kill logic directly
-            game.record_enemy_kill()
-            print(f"\n  Frame {total_frames}: Horde completion triggered")
+        # Spawn and kill the horde boss on frame 0
+        if total_frames == 0 and not boss_spawned:
+            game.spawn_system.spawn_boss("limbo_horde")
+            boss_spawned = True
+            print(f"\n  Frame {total_frames}: Limbo horde boss spawned")
+
+        # Kill the boss on frame 10 to give time for setup
+        if total_frames == 10 and boss_spawned:
+            if game.bosses:
+                boss = list(game.bosses)[0]
+                boss.health = 0
+                print(f"  Frame {total_frames}: Boss health set to 0 (death triggered)")
 
         # Track initial enemy count before update
         enemies_before = len(game.enemies)

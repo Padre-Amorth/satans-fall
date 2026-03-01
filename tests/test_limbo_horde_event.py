@@ -53,7 +53,9 @@ def test_limbo_horde_triggers_and_completes(stage):
     # verify the aggregate size recorded by the game matches the sum of
     # counts *plus any bosses*.  This is what the player actually needs to
     # kill before victory can appear.
-    initial_total = sum(e.get("count", 0) + e.get("boss_count", 0) for e in base_expected)
+    initial_total = sum(
+        e.get("count", 0) + e.get("boss_count", 0) for e in base_expected
+    )
     assert g.limbo_horde_initial == initial_total
     # remaining may have decreased by whatever spawned on the first update call
     # so we don't assert exact equality here
@@ -123,14 +125,18 @@ def test_limbo_horde_triggers_and_completes(stage):
     except Exception:
         g.enemies = type(g.enemies)()
     assert not g.limbo_horde_completed, "horde finished early before boss could appear"
-    assert not getattr(g, "limbo_horde_boss_spawned", False), "boss should not have spawned yet"
+    assert not getattr(
+        g, "limbo_horde_boss_spawned", False
+    ), "boss should not have spawned yet"
     # 48s final burst – only verify the boss eventually arrives and the
     # horde completes once all creatures (including that boss) are gone.
     for _ in range(int(g.fps * 10)):
         g.spawn_system.update_enemy_spawning()
     # after schedule runs boss_spawned flag should now be True even if player
     # cleared things instantly
-    assert getattr(g, "limbo_horde_boss_spawned", False), "flag should flip when boss spawns"
+    assert getattr(
+        g, "limbo_horde_boss_spawned", False
+    ), "flag should flip when boss spawns"
     boss_spawned = any(
         b.enemy_type == "boss_limbo_horde" for b in getattr(g, "bosses", [])
     )
@@ -138,7 +144,9 @@ def test_limbo_horde_triggers_and_completes(stage):
     while g.limbo_horde_remaining > 0:
         g.spawn_system.update_enemy_spawning()
     # after killing everything the event must be marked complete
-    assert g.limbo_horde_completed, "horde should only complete after all creatures (including boss) are dead"
+    assert (
+        g.limbo_horde_completed
+    ), "horde should only complete after all creatures (including boss) are dead"
     all_ids = {id(e) for e in g.enemies}
     all_ids |= {id(b) for b in getattr(g, "bosses", [])}
     total_spawned = len(all_ids)
@@ -149,6 +157,7 @@ def test_limbo_horde_triggers_and_completes(stage):
 
 
 # additional regression tests for the SATANIC VICTORY overlay
+
 
 def _make_victory_game(stage="limbo"):
     g = Game(debug=True)
@@ -551,6 +560,8 @@ def test_victory_timer_fallback_when_ready_lost():
     # one update should start the timer via fallback
     g.update()
     assert g.limbo_horde_victory_timer > 0, "Fallback timer did not start"
+
+
 def test_satan_growth_scripted():
     """After the fourth horde burst the player should scale and gain buffs.
 

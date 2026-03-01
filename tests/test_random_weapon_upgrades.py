@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """Test script to verify weapon upgrades are random in normal upgrades"""
 
-import os
-import sys
-
-
 from game import Game
 
 

@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """Tests for the skill trees in Permanent Upgrades (FIRE/STORM/ICE)."""
 
-import os
-import sys
-
-
 from game import Game
 
 

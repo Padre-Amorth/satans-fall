@@ -540,7 +540,9 @@ class TowerSpecialSystem:
                 try:
                     import random
 
-                    if random.random() < getattr(self, "VOLTAIC_MAYHEM_VIOLET_CHANCE", 0):
+                    if random.random() < getattr(
+                        self, "VOLTAIC_MAYHEM_VIOLET_CHANCE", 0
+                    ):
                         beam_effect["color"] = getattr(
                             self, "VOLTAIC_MAYHEM_VIOLET_COLOR", (150, 200, 255)
                         )

@@ -38,6 +38,7 @@ def test_limbo_bg_image_is_masked_to_walls(
 
     # Patch the asset manager's get_image function directly
     from src.assets import manager as am
+
     monkeypatch.setattr(am, "get_image", fake_get_image)
     g = Game()
 

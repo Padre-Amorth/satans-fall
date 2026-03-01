@@ -5,10 +5,6 @@ Right-column tiers (4..6) grant per-slot bonuses: FIRE +10% damage per active sl
 Fire-rate per-slot is +10% for FIRE/ICE but **+20%** for STORM (per design change).
 """
 
-import os
-import sys
-
-
 from game import Game
 
 

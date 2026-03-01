@@ -3086,7 +3086,7 @@ class CollisionSystem:
                         # This ensures the boss death is properly detected
                         if getattr(g, "debug", False):
                             print(
-                                f"[LIMBO_HORDE] Boss marked dead in collision; game.update() will detect and clean up"
+                                "[LIMBO_HORDE] Boss marked dead in collision; game.update() will detect and clean up"
                             )
                     g.add_score(boss.max_health * 25)
                     # Give XP for boss kill (per-type table, flat values)

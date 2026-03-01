@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Test script to verify level 3 weapon selection"""
 
-import pygame
-
 from src.game import Game
 
 

@@ -50,9 +50,14 @@ def test_legacy_spawn_system_never_creates_big_in_limbo():
     bosses = [b for b in g.bosses if hasattr(b, "enemy_type")]
     assert bosses, "expected some boss to spawn via legacy path"
     # limbo stages should never produce boss_big
-    assert all(b.enemy_type != "boss_big" for b in bosses), "legacy path spawned boss_big"
+    assert all(
+        b.enemy_type != "boss_big" for b in bosses
+    ), "legacy path spawned boss_big"
     # with the fallback now supporting inquisitors, we should see one
-    assert any(b.enemy_type == "boss_inquisitor" for b in bosses), "expected inquisitor instead"
+    assert any(
+        b.enemy_type == "boss_inquisitor" for b in bosses
+    ), "expected inquisitor instead"
+
 
 def test_inquisitor_projectile_slows_player_on_hit():
     pygame.init()

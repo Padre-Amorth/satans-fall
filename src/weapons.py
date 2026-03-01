@@ -482,7 +482,12 @@ def get_weapon_definitions() -> List[Dict[str, str]]:
         if not icon:
             icon = f"weapon_{wid.lower()}.png"
         result.append(
-            {"id": wid, "name": d["name"], "description": d["description"], "icon": icon}
+            {
+                "id": wid,
+                "name": d["name"],
+                "description": d["description"],
+                "icon": icon,
+            }
         )
     return result
 

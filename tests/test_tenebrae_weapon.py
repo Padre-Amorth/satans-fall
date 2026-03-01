@@ -1,7 +1,6 @@
 """Tests for the Tenebrae weapon mechanics and integration (formerly Darkness)."""
 
 import os
-import sys
 
 
 import pygame

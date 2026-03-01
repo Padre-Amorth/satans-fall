@@ -114,6 +114,4 @@ def test_winged_explodes_on_player_contact():
     assert exp["radius"] == WINGED_EXPLOSION_RADIUS
     assert exp["timer"] == WINGED_EXPLOSION_DURATION
     # enemy should have been removed from the active list
-    assert not any(
-        getattr(e, "enemy_type", "") == "winged" for e in g.enemies
-    )
+    assert not any(getattr(e, "enemy_type", "") == "winged" for e in g.enemies)

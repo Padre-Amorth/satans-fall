@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Test script to verify level 6 weapon selection with max weapons"""
 
-import pygame
-
 from src.game import Game
 
 

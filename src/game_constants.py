@@ -179,8 +179,8 @@ SELECTION_BOX_SPACING = 14
 # control the rendered icon size and gap between the icon and the text
 # that follows.  They are intentionally modest so the overall box width
 # does not need to change; spacing is applied inside the existing layout.
-WEAPON_ICON_SIZE = 48       # width/height in pixels
-WEAPON_ICON_PADDING = 8     # space between icon and subsequent text
+WEAPON_ICON_SIZE = 48  # width/height in pixels
+WEAPON_ICON_PADDING = 8  # space between icon and subsequent text
 
 # Common resolution presets shown in the Options -> Resolution menu
 DEFAULT_DISPLAY_PRESETS = [

@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """Test script to verify max weapons in Prologue and level 6 weapon choice"""
 
-import os
-import sys
-
-
 from game import Game
 
 

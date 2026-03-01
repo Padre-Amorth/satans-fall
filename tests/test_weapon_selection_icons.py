@@ -103,7 +103,9 @@ def test_weapon_selection_draws_icon_and_offsets(monkeypatch):
     icon_x, icon_y = icon_blits[0][1]
 
     # ensure no background rect was drawn since icons now stay transparent
-    assert not rect_calls, "Background rect should not be drawn when transparency is preferred"
+    assert (
+        not rect_calls
+    ), "Background rect should not be drawn when transparency is preferred"
 
     # now find the key text blit and ensure it is to the right of the icon
     key_surf = text_surfs.get("[1]")
@@ -111,7 +113,9 @@ def test_weapon_selection_draws_icon_and_offsets(monkeypatch):
     key_blits = [b for b in blits if b[0] is key_surf]
     assert key_blits, "Key text not blitted"
     key_x, key_y = key_blits[0][1]
-    assert key_x > icon_x + game_constants.WEAPON_ICON_SIZE - 1, "key should appear to the right of the icon"
+    assert (
+        key_x > icon_x + game_constants.WEAPON_ICON_SIZE - 1
+    ), "key should appear to the right of the icon"
 
     # and weapon name should appear further to the right than the key
     name_surf = text_surfs.get(WEAPON_DEFS["shotgun"]["name"])
@@ -150,13 +154,17 @@ def test_weapon_selection_draws_icon_and_offsets(monkeypatch):
     g.weapon_choices = [
         {"id": "acquire_tenebrae", "name": "Tenebrae", "description": "Desc"}
     ]
+
     # record get_image attempts
     def fake_get2(name, size=None):
         calls.append((name, size))
         # simulate failure for the primary name so alternate path is exercised
         if name == "weapon_tenebrae.png":
             return None
-        return pygame.Surface((game_constants.WEAPON_ICON_SIZE, game_constants.WEAPON_ICON_SIZE))
+        return pygame.Surface(
+            (game_constants.WEAPON_ICON_SIZE, game_constants.WEAPON_ICON_SIZE)
+        )
+
     monkeypatch.setattr("src.assets.manager.get_image", fake_get2)
     # redraw
     g.ui.draw_weapon_selection()

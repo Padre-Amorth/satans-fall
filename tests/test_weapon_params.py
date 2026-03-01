@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """Tests for centralized weapon parameter helpers and integration."""
 
-import os
-import sys
-
-
 from game import Game
 from src.weapons import (
     flies_damage_heal_mult,

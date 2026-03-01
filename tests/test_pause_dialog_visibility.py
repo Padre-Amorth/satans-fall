@@ -1,6 +1,3 @@
-import os
-import sys
-
 from game import Game
 
 

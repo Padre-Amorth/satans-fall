@@ -7,7 +7,6 @@ Verifies that:
 """
 
 import sys
-from pathlib import Path
 
 import pygame
 import pytest
@@ -138,7 +137,9 @@ def test_limbo_victory_timing_single_stage(stage_name):
     print(f"RESULTS FOR {stage_name.upper()}")
     print(f"{'='*60}")
 
-    assert state_log["showing_victory_frame"] is not None, "Victory screen never appeared!"
+    assert (
+        state_log["showing_victory_frame"] is not None
+    ), "Victory screen never appeared!"
 
     victory_delay = state_log["showing_victory_frame"] - (
         state_log["ready_for_victory_frame"] or 0
@@ -150,9 +151,9 @@ def test_limbo_victory_timing_single_stage(stage_name):
     print(f"Expected delay: {expected_delay} frames (5 seconds)")
     print(f"Tolerance: ±{tolerance} frames (±1 second)")
 
-    assert abs(victory_delay - expected_delay) <= tolerance, (
-        f"Timing off by {abs(victory_delay - expected_delay)} frames"
-    )
+    assert (
+        abs(victory_delay - expected_delay) <= tolerance
+    ), f"Timing off by {abs(victory_delay - expected_delay)} frames"
 
 
 @pytest.mark.skip("legacy helper, individual stages are parametrized")

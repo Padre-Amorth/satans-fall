@@ -4722,13 +4722,15 @@ class PygameUIManager:
                 # draw an icon if the weapon definition provided one
                 icon_path = weapon.get("icon")
                 if icon_path:
-                    icon_surf = get_image(icon_path, (WEAPON_ICON_SIZE, WEAPON_ICON_SIZE))
+                    icon_surf = get_image(
+                        icon_path, (WEAPON_ICON_SIZE, WEAPON_ICON_SIZE)
+                    )
                     # if the named asset wasn't found, try the alternate naming
                     # convention (strip or add "weapon_" prefix) so manually
                     # dropped files still work.
                     if icon_surf is None:
                         if icon_path.startswith("weapon_"):
-                            alt = icon_path[len("weapon_"):]
+                            alt = icon_path[len("weapon_") :]
                         else:
                             alt = f"weapon_{icon_path}"
                         icon_surf = get_image(alt, (WEAPON_ICON_SIZE, WEAPON_ICON_SIZE))

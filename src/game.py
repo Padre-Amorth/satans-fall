@@ -3447,9 +3447,8 @@ class Game:
             # Only update horde counters if the event has started and hasn't
             # already been completed.  ``limbo_horde_initial`` will be zero
             # outside of a horde, so the check is harmless in other stages.
-            if (
-                getattr(self, "limbo_horde_initial", 0) > 0
-                and not getattr(self, "limbo_horde_completed", False)
+            if getattr(self, "limbo_horde_initial", 0) > 0 and not getattr(
+                self, "limbo_horde_completed", False
             ):
                 self.limbo_horde_killed += 1
                 # trigger explosion when at least half of the horde has been killed

@@ -1080,8 +1080,16 @@ def test_voltaic_mayhem_expires_after_duration():
             # sample a few points around the beam endpoint (not raw cursor)
             mx, my = g.voltaic_x, g.voltaic_y
             changed = False
-            for dy in (-g.VOLTAIC_MAYHEM_IMPACT_RADIUS, 0, g.VOLTAIC_MAYHEM_IMPACT_RADIUS):
-                for dx in (-g.VOLTAIC_MAYHEM_IMPACT_RADIUS, 0, g.VOLTAIC_MAYHEM_IMPACT_RADIUS):
+            for dy in (
+                -g.VOLTAIC_MAYHEM_IMPACT_RADIUS,
+                0,
+                g.VOLTAIC_MAYHEM_IMPACT_RADIUS,
+            ):
+                for dx in (
+                    -g.VOLTAIC_MAYHEM_IMPACT_RADIUS,
+                    0,
+                    g.VOLTAIC_MAYHEM_IMPACT_RADIUS,
+                ):
                     x = int(mx + dx)
                     y = int(my + dy)
                     if 0 <= x < g.width and 0 <= y < g.height:

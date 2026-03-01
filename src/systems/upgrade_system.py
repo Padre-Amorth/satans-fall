@@ -927,10 +927,7 @@ class UpgradeSystem:
             # center-tier upgrades now have proper names
             if key_prefix == "fire":
                 lines.append("AR.MAGA.EDDON")
-                lines.append(
-                    "Right-click fires up to 4 burning orbs "
-                
-                )
+                lines.append("Right-click fires up to 4 burning orbs ")
             elif key_prefix == "storm":
                 lines.append("Voltaic Mayhem")
                 lines.append("Controllable stream of electric chaos")
@@ -950,9 +947,7 @@ class UpgradeSystem:
                 if tier == 1:
                     lines.append("Chain lightning +2 targets")
                 elif tier == 2:
-                    lines.append(
-                        "Chain-kills trigger lightning explosion"
-                    )
+                    lines.append("Chain-kills trigger lightning explosion")
                 else:
                     lines.append("Chain lightning +2 targets")
             elif key_prefix == "ice" and tier == 1:

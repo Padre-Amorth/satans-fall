@@ -28,4 +28,5 @@ def test_current_game_global_is_consistent():
     # ensure both module paths point to the same object
     from src.game import CURRENT_GAME as pkg_cg
     from src.game.core import CURRENT_GAME as core_cg
+
     assert pkg_cg is core_cg is g

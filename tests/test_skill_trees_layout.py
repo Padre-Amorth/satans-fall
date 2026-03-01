@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """Tests for the new 2-column + center layout and unlocking rules for skill trees."""
 
-import os
-import sys
-
-
 from game import Game
 
 

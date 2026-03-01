@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """Tests for skill tree tooltip content and rendering safety."""
 
-import os
-import sys
-
-
 from game import Game
 
 

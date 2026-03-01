@@ -1,9 +1,5 @@
 """Test script for SkullBoom weapon functionality"""
 
-import os
-import sys
-
-
 import pygame
 import pytest
 

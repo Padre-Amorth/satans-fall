@@ -1,8 +1,5 @@
 """Test that pygame.QUIT event shows confirmation dialogs."""
 
-import os
-import sys
-
 import pygame
 
 from game import Game

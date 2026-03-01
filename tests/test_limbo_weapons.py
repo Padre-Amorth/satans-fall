@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Test script to verify max weapons in Limbo and level 6 weapon choice"""
 
-import pygame
-
 from src.game import Game
 
 

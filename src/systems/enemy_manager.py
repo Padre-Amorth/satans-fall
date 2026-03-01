@@ -262,9 +262,11 @@ class EnemyManager:
     def update_big_enemy_timer(self) -> None:
         """Decrement big enemy timer and spawn a giant when it hits zero (once per wave)."""
         # Don't update timer during victory screen, horde completion, or active horde
-        if getattr(self.game, "limbo_horde_completed", False) or getattr(
-            self.game, "showing_victory", False
-        ) or getattr(self.game, "limbo_horde_active", False):
+        if (
+            getattr(self.game, "limbo_horde_completed", False)
+            or getattr(self.game, "showing_victory", False)
+            or getattr(self.game, "limbo_horde_active", False)
+        ):
             return
 
         self.big_enemy_timer -= 1

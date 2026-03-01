@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """Test behavior around weapon max levels"""
 
-import os
-import sys
-
-
 from game import Game
 
 

@@ -711,9 +711,13 @@ class Enemy(BaseSprite):
                     # once entrance is complete, move diagonally in triangular pattern
                     self.float_time += self.float_speed
                     # sawtooth wave for diagonal left-right movement
-                    sawtooth_x = ((self.float_time % (math.pi * 2)) / (math.pi * 2)) * 2 - 1
+                    sawtooth_x = (
+                        (self.float_time % (math.pi * 2)) / (math.pi * 2)
+                    ) * 2 - 1
                     # triangle wave for diagonal up-down movement
-                    triangle_y = 1 - abs(2 * ((self.float_time / (math.pi * 2)) % 1) - 1)
+                    triangle_y = 1 - abs(
+                        2 * ((self.float_time / (math.pi * 2)) % 1) - 1
+                    )
 
                     self.x = self.float_center_x + sawtooth_x * self.float_amplitude
                     self.y = target_y + (triangle_y - 0.5) * self.float_amplitude

@@ -2,7 +2,6 @@
 """Tests for the player stats sheet renderer."""
 
 import os
-import sys
 
 import pygame
 

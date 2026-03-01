@@ -426,7 +426,8 @@ class Projectile(BaseSprite):
                     )
                     if asset is None:
                         asset = get_image(
-                            f"weapon_{self.appearance}.png", (self.radius * 3, self.radius * 2)
+                            f"weapon_{self.appearance}.png",
+                            (self.radius * 3, self.radius * 2),
                         )
                     if asset is not None:
                         self.image = asset

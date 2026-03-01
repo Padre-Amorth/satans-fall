@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """Tests for acquiring weapons and default levels"""
 
-import os
-import sys
-
-
 from game import Game
 
 

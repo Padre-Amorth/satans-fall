@@ -1280,8 +1280,8 @@ class SpawnSystem:
         else:
             # Enter from right, move left
             x = float(self.game.width + half_w + 10)
-        # Random vertical spawn position in mid-screen corridor
-        y = float(random.randint(200, 500))
+        # Random vertical spawn position: 100px higher than mid-screen, still randomized
+        y = float(random.randint(100, 400))
         # Pentagram: 500 base health (will get 1500 shield added in __init__)
         health = 500.0 * getattr(self.game, "difficulty_multiplier", 1.0)
         speed = ENEMY_BASE_SPEEDS.get("pentagram", 50.0)

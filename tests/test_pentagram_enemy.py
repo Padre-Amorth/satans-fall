@@ -44,7 +44,7 @@ def test_pentagram_horizontal_movement():
     """Verify pentagram moves horizontally (x changes, y oscillates)."""
     from src.entities.enemy import Enemy
 
-    e = Enemy(100.0, 300.0, "pentagram", 500.0, 50.0)
+    e = Enemy(100.0, 250.0, "pentagram", 500.0, 50.0)
     e.direction = 1  # moving right
 
     # Simulate 60 frames

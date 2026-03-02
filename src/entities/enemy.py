@@ -694,14 +694,16 @@ class Enemy(BaseSprite):
 
         elif self.enemy_type == "pentagram":
             # Five-pointed star (pentagram) in dark red/crimson with gold center
+            # Inverted: point downward instead of upward
             cx = self.width // 2
             cy = self.height // 2
             outer_r = min(cx, cy) - 4
             inner_r = outer_r * 0.4
             # Calculate star vertices: 5 outer points + 5 inner points, alternating
+            # Inverted: start at 90 degrees (pointing down) instead of -90 (pointing up)
             points = []
             for i in range(10):
-                angle = math.radians(-90 + i * 36)  # -90 degrees to point upward
+                angle = math.radians(90 + i * 36)  # 90 degrees to point downward
                 r = outer_r if i % 2 == 0 else inner_r
                 points.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
             # Draw outer border (bright red)

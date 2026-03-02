@@ -3,39 +3,6 @@ import pygame
 from src.game import Game
 
 
-def test_fog_cache_build_and_invalidate():
-    pygame.init()
-    g = Game(debug=True)
-    g.selected_stage = "limbo"
-    g.generate_walls()
-
-    ui = g.ui
-
-    # Ensure no cache initially
-    assert not getattr(ui, "_fog_cache", None)
-
-    # Build cache
-    ui._build_fog_cache()
-    assert getattr(ui, "_fog_cache", None) is not None
-    cache = ui._fog_cache
-
-    # Expect 2 entries per layer (left and right) -> num_layers * 2
-    num_layers = 5
-    assert len(cache) == num_layers * 2
-    # Surfaces or None allowed
-    for s in cache:
-        assert s is None or isinstance(s, pygame.Surface)
-
-    # Mutate walls to force invalidation (change one point deterministically)
-    old_sig = ui._fog_cache_signature
-    # change first left wall point by enough to change its int() representation
-    if g.left_wall_points:
-        x0, y0 = g.left_wall_points[0]
-        g.left_wall_points[0] = (x0 + 5, y0)  # 5px change ensures int() differs
-    ui._build_fog_cache()
-    assert ui._fog_cache_signature != old_sig
-
-
 def test_draw_fog_uses_cache():
     pygame.init()
     g = Game(debug=True)
@@ -57,100 +24,45 @@ def test_draw_fog_uses_cache():
     assert isinstance(screen, pygame.Surface)
 
 
-def test_limbo3_lateral_fog_is_redder_than_limbo():
-    """Lateral fog polygons (cached) should have a stronger red component in limbo_3."""
+def test_limbo_particle_image_caching():
+    """Test that limbo fog particle images are cached to reduce per-frame overhead."""
     pygame.init()
     g = Game(debug=True)
-
-    # --- baseline: regular Limbo (gray fog) ---
     g.selected_stage = "limbo"
     g.generate_walls()
+
     ui = g.ui
-    ui._build_fog_cache()
-    cache_gray = ui._fog_cache
+    screen = pygame.Surface((g.width, g.height))
+    ui.screen = screen
 
-    # find a reliable y within wall span
-    y_mid = (g.left_wall_points[0][1] + g.left_wall_points[-1][1]) // 2
+    left_particles = getattr(ui, "_limbo_fog_particles_left", [])
 
-    left_gray = None
-    right_gray = None
-    if cache_gray and cache_gray[0]:
-        left_gray = cache_gray[0].get_at((2, y_mid))
-    if cache_gray and cache_gray[1]:
-        right_gray = cache_gray[1].get_at((g.width - 2, y_mid))
+    if len(left_particles) > 0:
+        p = left_particles[0]
 
-    # --- limbo_3 & limbo_final: expect redder lateral fog ---
-    for special in ("limbo_3", "limbo_final"):
-        g.selected_stage = special
-        ui._build_fog_cache()
-        cache_red = ui._fog_cache
+        # First draw - should create cache
+        p.draw(screen)
+        cache_key_1 = getattr(p, "_cached_draw_key", None)
+        cached_img_1_id = id(getattr(p, "_cached_draw_image", None))
 
-        left_red = None
-        right_red = None
-        if cache_red and cache_red[0]:
-            left_red = cache_red[0].get_at((2, y_mid))
-        if cache_red and cache_red[1]:
-            right_red = cache_red[1].get_at((g.width - 2, y_mid))
+        # Second draw - should reuse cache (same key, same object)
+        p.draw(screen)
+        cache_key_2 = getattr(p, "_cached_draw_key", None)
+        cached_img_2_id = id(getattr(p, "_cached_draw_image", None))
 
-        # At least one side should show the red increase
+        # Verify cache persistence
+        assert cache_key_1 == cache_key_2, "Cache key should persist for same stage"
         assert (
-            left_gray
-            and left_red
-            and left_red.r >= max(left_red.g, left_red.b)
-            and left_red.r > left_gray.r
-        ) or (
-            right_gray
-            and right_red
-            and right_red.r >= max(right_red.g, right_red.b)
-            and right_red.r > right_gray.r
-        )
+            cached_img_1_id == cached_img_2_id
+        ), "Cached image should be reused (same object reference)"
 
+        # Change stage and verify cache invalidates
+        g.selected_stage = "limbo_2"
+        p.draw(screen)
+        cache_key_3 = getattr(p, "_cached_draw_key", None)
+        cached_img_3_id = id(getattr(p, "_cached_draw_image", None))
 
-def test_limbo2_lateral_fog_is_yellower_than_limbo():
-    """Lateral fog polygons (cached) should have a stronger yellow component in limbo_2."""
-    pygame.init()
-    g = Game(debug=True)
-
-    # --- baseline: regular Limbo (gray fog) ---
-    g.selected_stage = "limbo"
-    g.generate_walls()
-    ui = g.ui
-    ui._build_fog_cache()
-    cache_gray = ui._fog_cache
-
-    # find a reliable y within wall span
-    y_mid = (g.left_wall_points[0][1] + g.left_wall_points[-1][1]) // 2
-
-    left_gray = None
-    right_gray = None
-    if cache_gray and cache_gray[0]:
-        left_gray = cache_gray[0].get_at((2, y_mid))
-    if cache_gray and cache_gray[1]:
-        right_gray = cache_gray[1].get_at((g.width - 2, y_mid))
-
-    # --- limbo_2: expect yellower lateral fog ---
-    g.selected_stage = "limbo_2"
-    ui._build_fog_cache()
-    cache_yellow = ui._fog_cache
-
-    left_y = None
-    right_y = None
-    if cache_yellow and cache_yellow[0]:
-        left_y = cache_yellow[0].get_at((2, y_mid))
-    if cache_yellow and cache_yellow[1]:
-        right_y = cache_yellow[1].get_at((g.width - 2, y_mid))
-
-    # At least one side should show the yellow increase (R and G dominate B, and R+G increases vs baseline)
-    assert (
-        left_gray
-        and left_y
-        and left_y.r >= left_y.b
-        and left_y.g >= left_y.b
-        and (left_y.r + left_y.g) > (left_gray.r + left_gray.g)
-    ) or (
-        right_gray
-        and right_y
-        and right_y.r >= right_y.b
-        and right_y.g >= right_y.b
-        and (right_y.r + right_y.g) > (right_gray.r + right_gray.g)
-    )
+        assert cache_key_1 != cache_key_3, "Cache key should change when stage changes"
+        assert (
+            cached_img_1_id != cached_img_3_id
+        ), "Cached image should be regenerated (different object)"

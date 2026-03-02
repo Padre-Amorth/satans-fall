@@ -3627,9 +3627,11 @@ class PygameUIManager:
         # Choose overlay color based on limbo variant
         stage = getattr(self.game, "selected_stage", None)
         if stage == "limbo_2":
-            limbo_overlay_color = (75, 70, 60)  # Subtle yellow/orange for limbo_2
-        elif stage in ("limbo_3", "limbo_final"):
-            limbo_overlay_color = (75, 60, 60)  # Subtle red for limbo_3 and limbo_final
+            limbo_overlay_color = (80, 75, 55)  # More orange tint for limbo_2
+        elif stage == "limbo_3":
+            limbo_overlay_color = (80, 60, 60)  # Red tint for limbo_3
+        elif stage == "limbo_final":
+            limbo_overlay_color = (70, 45, 55)  # Darker red tint for limbo_final
         else:
             limbo_overlay_color = (60, 60, 60)  # Gray for default limbo
 

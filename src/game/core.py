@@ -296,32 +296,9 @@ class Game:
         self.game_over_fade_speed = max(
             1, int(255 / ((self.game_over_fade_duration_ms / 1000.0) * self.fps))
         )
-        # Blasphemy_5 per-run revive consumed flag (reset at start of each run)
-        self.blasphemy_5_revived = False
-        # Timer (frames) used to auto-resume after a blasphemy_5 revive pause
-        self.blasphemy_5_pause_timer: int = 0
-        # Marker so we only auto-unpause when the pause was caused by blasphemy_5
-        self._paused_by_blasphemy5: bool = False
-        # Blasphemy_5 blink cooldown tracker (frames remaining)
-        self.blasphemy_5_blink_cooldown: int = 0
-        # Blasphemy_5 blink animation state: 0=none, 1=pre-blink, 2=post-blink
-        self.blasphemy_5_blink_state: int = 0
-        # Blasphemy_5 blink animation timer (counts down)
-        self.blasphemy_5_blink_timer: int = 0
-        # Store target position during blink animation
-        self.blasphemy_5_blink_target_x: float = 0
-        self.blasphemy_5_blink_target_y: float = 0
-        # Store origin position for particle effects
-        self.blasphemy_5_blink_origin_x: float = 0
-        self.blasphemy_5_blink_origin_y: float = 0
-        # Particles list for blink effect
-        self.blasphemy_5_blink_particles: list = []
-        self.blasphemy_5_invisible: bool = (
-            False  # Player invisible during blink transit
-        )
-        self.blasphemy_5_invulnerable: bool = (
-            False  # Player invulnerable during blink transit
-        )
+        # Blasphemy 5 state is now managed by Blasphemy5System (initialized in _init_managers)
+        # Old attributes are kept for backward compat but delegated via properties
+
         self.player_xp = 0
         self.player_level = 1
         self.xp_to_next_level = XP_BASE
@@ -624,6 +601,138 @@ class Game:
         if self.tower_special:
             self.tower_special.update_voltaic_mayhem()
 
+    # ===== Blasphemy 5 System Properties ===== #
+    # These properties delegate to Blasphemy5System for backward compatibility
+
+    @property
+    def blasphemy_5_invisible(self) -> bool:
+        """Delegate to Blasphemy5System (read by ui.py)."""
+        return (
+            self.blasphemy5_system.blasphemy_5_invisible
+            if self.blasphemy5_system
+            else False
+        )
+
+    @property
+    def blasphemy_5_invulnerable(self) -> bool:
+        """Delegate to Blasphemy5System (read by collision_system.py)."""
+        return (
+            self.blasphemy5_system.blasphemy_5_invulnerable
+            if self.blasphemy5_system
+            else False
+        )
+
+    @property
+    def blasphemy_5_blink_particles(self) -> list[dict]:
+        """Delegate to Blasphemy5System (read by ui.py)."""
+        return (
+            self.blasphemy5_system.blasphemy_5_blink_particles
+            if self.blasphemy5_system
+            else []
+        )
+
+    @property
+    def blasphemy_5_blink_cooldown(self) -> int:
+        """Delegate to Blasphemy5System (read/written by tests)."""
+        return (
+            self.blasphemy5_system.blasphemy_5_blink_cooldown
+            if self.blasphemy5_system
+            else 0
+        )
+
+    @blasphemy_5_blink_cooldown.setter
+    def blasphemy_5_blink_cooldown(self, value: int) -> None:
+        if self.blasphemy5_system:
+            self.blasphemy5_system.blasphemy_5_blink_cooldown = value
+
+    @property
+    def blasphemy_5_blink_state(self) -> int:
+        """Delegate to Blasphemy5System (read/written by tests)."""
+        return (
+            self.blasphemy5_system.blasphemy_5_blink_state
+            if self.blasphemy5_system
+            else 0
+        )
+
+    @blasphemy_5_blink_state.setter
+    def blasphemy_5_blink_state(self, value: int) -> None:
+        if self.blasphemy5_system:
+            self.blasphemy5_system.blasphemy_5_blink_state = value
+
+    @property
+    def blasphemy_5_blink_timer(self) -> int:
+        """Delegate to Blasphemy5System (read/written by tests)."""
+        return (
+            self.blasphemy5_system.blasphemy_5_blink_timer
+            if self.blasphemy5_system
+            else 0
+        )
+
+    @blasphemy_5_blink_timer.setter
+    def blasphemy_5_blink_timer(self, value: int) -> None:
+        if self.blasphemy5_system:
+            self.blasphemy5_system.blasphemy_5_blink_timer = value
+
+    @property
+    def blasphemy_5_blink_target_x(self) -> float:
+        """Delegate to Blasphemy5System (read/written by tests)."""
+        return (
+            self.blasphemy5_system.blasphemy_5_blink_target_x
+            if self.blasphemy5_system
+            else 0.0
+        )
+
+    @blasphemy_5_blink_target_x.setter
+    def blasphemy_5_blink_target_x(self, value: float) -> None:
+        if self.blasphemy5_system:
+            self.blasphemy5_system.blasphemy_5_blink_target_x = value
+
+    @property
+    def blasphemy_5_blink_target_y(self) -> float:
+        """Delegate to Blasphemy5System (read/written by tests)."""
+        return (
+            self.blasphemy5_system.blasphemy_5_blink_target_y
+            if self.blasphemy5_system
+            else 0.0
+        )
+
+    @blasphemy_5_blink_target_y.setter
+    def blasphemy_5_blink_target_y(self, value: float) -> None:
+        if self.blasphemy5_system:
+            self.blasphemy5_system.blasphemy_5_blink_target_y = value
+
+    @property
+    def blasphemy_5_blink_origin_x(self) -> float:
+        """Delegate to Blasphemy5System (read by tests)."""
+        return (
+            self.blasphemy5_system.blasphemy_5_blink_origin_x
+            if self.blasphemy5_system
+            else 0.0
+        )
+
+    @property
+    def blasphemy_5_blink_origin_y(self) -> float:
+        """Delegate to Blasphemy5System (read by tests)."""
+        return (
+            self.blasphemy5_system.blasphemy_5_blink_origin_y
+            if self.blasphemy5_system
+            else 0.0
+        )
+
+    @property
+    def blasphemy_5_revived(self) -> bool:
+        """Delegate to Blasphemy5System (read by reset_run, tests)."""
+        return (
+            self.blasphemy5_system.blasphemy_5_revived
+            if self.blasphemy5_system
+            else False
+        )
+
+    @blasphemy_5_revived.setter
+    def blasphemy_5_revived(self, value: bool) -> None:
+        if self.blasphemy5_system:
+            self.blasphemy5_system.blasphemy_5_revived = value
+
     def _init_weapons(self) -> None:
         init_weapons(self)
 
@@ -894,6 +1003,14 @@ class Game:
             self.tower_special = TowerSpecialSystem(self)
         except Exception:
             self.tower_special = None
+
+        # Initialize Blasphemy5System (handles blink teleport and revive)
+        try:
+            from src.systems.blasphemy5_system import Blasphemy5System
+
+            self.blasphemy5_system = Blasphemy5System(self)
+        except Exception:
+            self.blasphemy5_system = None
 
         # Initialize ProjectileManager (handles pooling/spawn management)
         try:
@@ -3071,14 +3188,14 @@ class Game:
         if self.tower_special is not None:
             self.tower_special.reset()
 
+        # Reset Blasphemy 5 system (revive + blink state)
+        if self.blasphemy5_system is not None:
+            self.blasphemy5_system.reset()
+
         # Reset player
         self.player.x = self.width // 2
         self.player.y = self.height - 80
         self.player.health = self.player.max_health
-        # Reset blasphemy_5 state for the new run
-        self.blasphemy_5_revived = False
-        self.blasphemy_5_pause_timer = 0
-        self._paused_by_blasphemy5 = False
 
         # Reset game over flag so it can be triggered again in this run
         self._game_over_triggered = False
@@ -3497,29 +3614,9 @@ class Game:
         # update any fire-special smoke particles that are drifting
         self._update_fire_smoke()
 
-        # Update blasphemy_5 blink animation (pre-blink delay + teleport + post-blink delay)
-        self.update_blasphemy5_blink_animation()
-
-        # Update blasphemy_5 blink cooldown
-        if self.blasphemy_5_blink_cooldown > 0:
-            self.blasphemy_5_blink_cooldown -= 1
-
-        # Handle blasphemy_5 auto-resume timer (counts down even while paused).
-        # When the timer expires, automatically unpause if the pause was set by
-        # blasphemy_5.  Previously this check only ran while the victory overlay
-        # was active which meant the game would remain stuck paused after the
-        # revive animation ended.  The new logic guarantees we resume regardless
-        # of other UI state as long as the pause flag was set by blasphemy_5.
-        if getattr(self, "blasphemy_5_pause_timer", 0) > 0:
-            self.blasphemy_5_pause_timer -= 1
-        # auto-unpause as soon as the timer reaches zero
-        if getattr(self, "blasphemy_5_pause_timer", 0) <= 0 and getattr(
-            self, "_paused_by_blasphemy5", False
-        ):
-            # only clear the paused flag if we're still paused
-            if self.paused:
-                self.paused = False
-            self._paused_by_blasphemy5 = False
+        # Update Blasphemy 5 system (blink animation + cooldown + auto-resume)
+        if self.blasphemy5_system:
+            self.blasphemy5_system.update()
 
         # Check if the horde boss has died (independent of projectile collisions).
         # If boss_limbo_horde is dead and we haven't set the victory flag yet,
@@ -4324,307 +4421,31 @@ class Game:
                     self._game_over_triggered = True
                     self.game_over()
 
+    def execute_blasphemy5_blink(self) -> None:
+        """Execute Blasphemy 5 blink ability: teleport 120px in movement direction.
+
+        Delegates to Blasphemy5System.
+        """
+        if self.blasphemy5_system:
+            self.blasphemy5_system.execute_blasphemy5_blink()
+
     def _handle_blasphemy5_revive(self) -> bool:
         """Handle blasphemy-10 one-time player revive on death.
 
+        Delegates to Blasphemy5System.
         Returns True if revive was triggered, False otherwise.
         """
-        if self.permanent_stats.get("blasphemy_10", 0) and not getattr(
-            self, "blasphemy_5_revived", False
-        ):
-            try:
-                self.blasphemy_5_revived = True
-                # Heal to 50% of max health (do not exceed max_health)
-                self.player.health = max(1, int(self.player.max_health * 0.5))
-
-                # Create a red revive explosion at player position
-                try:
-                    px = int(self.player.x)
-                    py = int(self.player.y)
-                    explosion_radius = 100
-
-                    # Area explosion visual (use same structure as skullboom_explosions)
-                    # Explosion duration matches the automatic pause length so the ring
-                    # finishes as the game auto-resumes.
-                    explode_duration = int(2 * self.fps)
-                    self.skullboom_explosions.append(
-                        {
-                            "x": px,
-                            "y": py,
-                            "radius": explosion_radius,
-                            "max_radius": explosion_radius,
-                            "timer": explode_duration,
-                            "max_timer": explode_duration,
-                            "color": (255, 80, 80),
-                            # inner_color used for the large halo (more orange)
-                            "inner_color": (255, 150, 50),
-                            "revive": True,
-                        }
-                    )
-
-                    # Spawn red particles for visual flair (more numerous / larger for a punchy effect)
-                    for _ in range(36):
-                        ang = random.uniform(0, 2 * math.pi)
-                        # wider speed range for varied motion
-                        spd = random.choice(
-                            [
-                                random.uniform(40, 120),
-                                random.uniform(120, 260),
-                                random.uniform(260, 420),
-                            ]
-                        )
-                        vx = math.cos(ang) * spd
-                        vy = math.sin(ang) * spd
-                        from src.entities.enemy import BurnParticle as _BP
-
-                        life = random.randint(16, 48)
-                        size = random.randint(2, 8)
-                        p = _BP(
-                            px + random.uniform(-10, 10),
-                            py + random.uniform(-10, 10),
-                            vx,
-                            vy,
-                            life=life,
-                            size=size,
-                        )
-                        # Make ~30% of particles orange-leaning for visual variety
-                        if random.random() < 0.30:
-                            setattr(p, "color_override", (255, 150, 50))
-                        self.blasphemy5_particles.append(p)
-
-                    # Damage nearby enemies within radius (increased)
-                    dmg_amount = 45
-                    all_targets = []
-                    all_targets.extend(
-                        self.enemies
-                        if getattr(self, "enemies", None) is not None
-                        else []
-                    )
-                    if hasattr(self, "bosses") and self.bosses:
-                        if hasattr(self.bosses, "sprites"):
-                            all_targets.extend(self.bosses.sprites())
-                        else:
-                            all_targets.extend(self.bosses)
-
-                    for enemy in all_targets:
-                        try:
-                            ex, ey = self._enemy_pos(enemy)
-                            dist = math.hypot(ex - px, ey - py)
-                            if dist <= explosion_radius:
-                                try:
-                                    enemy.take_damage(dmg_amount, show_floating=False)
-                                except Exception:
-                                    try:
-                                        enemy.health = max(0, enemy.health - dmg_amount)
-                                    except Exception:
-                                        pass
-                                # show red floating damage
-                                try:
-                                    self.spawn_floating_text(
-                                        str(dmg_amount),
-                                        ex,
-                                        ey - self._enemy_radius(enemy) - 8,
-                                        color=(255, 100, 100),
-                                        font_size=20,
-                                    )
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-
-                # Pause the game and schedule auto-resume after 2 seconds
-                self.paused = True
-                self._paused_by_blasphemy5 = True
-                self.blasphemy_5_pause_timer = int(2 * self.fps)
-                # Provide player feedback (larger text, no exclamation)
-                try:
-                    self.show_centered_message("REVIVED", 2000, (200, 80, 80), 64)
-                except Exception:
-                    pass
-                return True
-            except Exception:
-                # If anything goes wrong with revive, fall back to normal game over
-                pass
+        if self.blasphemy5_system:
+            return self.blasphemy5_system._handle_blasphemy5_revive()
         return False
-
-    def execute_blasphemy5_blink(self) -> None:
-        """Execute Blasphemy 5 blink ability: teleport 120px in current movement direction.
-
-        Gets called when spacebar is pressed during gameplay and blasphemy_5 > 0.
-        Teleports the player in the direction they are currently moving.
-        Animation: 12 frame pre-blink delay + 20 frame arrival delay.
-        """
-        blasphemy_5_level = self.permanent_stats.get("blasphemy_5", 0)
-        if blasphemy_5_level <= 0:
-            return
-
-        # If already blinking or cooldown active, don't start another blink
-        if self.blasphemy_5_blink_state > 0:
-            return
-
-        if self.blasphemy_5_blink_cooldown > 0:
-            return
-
-        # Get movement direction from currently pressed keys (not from velocity, which may be 1 frame behind in real gameplay)
-        keys = pygame.key.get_pressed()
-        vx = 0
-        vy = 0
-
-        # Horizontal movement
-        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            vx = -self.player.speed
-        elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            vx = self.player.speed
-
-        # Vertical movement
-        if keys[pygame.K_UP] or keys[pygame.K_w]:
-            vy = -self.player.speed
-        elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
-            vy = self.player.speed
-
-        # If no keys are pressed, fall back to velocity (for testing, or edge cases)
-        if abs(vx) < 0.1 and abs(vy) < 0.1:
-            vx = self.player.velocity_x
-            vy = self.player.velocity_y
-
-        # If still not moving, don't blink (no direction to go)
-        if abs(vx) < 0.1 and abs(vy) < 0.1:
-            return
-
-        # Normalize direction vector
-        magnitude = math.hypot(vx, vy)
-        if magnitude > 0:
-            vx_norm = vx / magnitude
-            vy_norm = vy / magnitude
-        else:
-            return
-
-        # Blink distance: 120px
-        blink_distance = 120.0
-
-        # Calculate new position
-        new_x = self.player.x + vx_norm * blink_distance
-        new_y = self.player.y + vy_norm * blink_distance
-
-        # Ensure new position stays within bounds
-        margin = 30
-        new_x = max(margin, min(self.width - margin, new_x))
-        new_y = max(margin, min(self.height - margin, new_y))
-
-        # Store origin position for particle effects
-        self.blasphemy_5_blink_origin_x = self.player.x
-        self.blasphemy_5_blink_origin_y = self.player.y
-
-        # Store target and start pre-blink animation (10 frames)
-        self.blasphemy_5_blink_target_x = new_x
-        self.blasphemy_5_blink_target_y = new_y
-        self.blasphemy_5_blink_state = 1  # Pre-blink state
-        self.blasphemy_5_blink_timer = 10  # 10 frame pre-delay before teleport
-        self.blasphemy_5_invisible = False  # Player visible during pre-blink
-        self.blasphemy_5_invulnerable = (
-            True  # Player immortal immediately on spacebar press
-        )
-
-        # Create violet particles at origin point (6-8 particles)
-        num_particles = random.randint(6, 8)
-        self.blasphemy_5_blink_particles = []
-        for _ in range(num_particles):
-            # Spread particles in a circle around the origin
-            angle = random.uniform(0, 2 * math.pi)
-            speed = random.uniform(0.5, 2.0)
-            particle = {
-                "x": self.player.x,
-                "y": self.player.y,
-                "vx": math.cos(angle) * speed,
-                "vy": math.sin(angle) * speed,
-                "life": 25,  # frames until particle dies (5 pre + 20 invisible frames)
-                "max_life": 25,  # Track max life for fade calculation
-                "alpha": 160,
-                "size": 6,  # slightly larger particles (was 4)
-            }
-            self.blasphemy_5_blink_particles.append(particle)
-
-        # Set cooldown: 5 seconds (300 frames @ 60fps)
-        self.blasphemy_5_blink_cooldown = int(5 * self.fps)
 
     def update_blasphemy5_blink_animation(self) -> None:
         """Update blink animation state and execute teleport when ready.
 
-        States:
-        - 0: No animation
-        - 1: Pre-blink (5 frames of anticipation, player visible & vulnerable)
-        - 2: Invisible phase (20 frames, player invisible & invulnerable in transit)
-        - 3: Post-blink (10 frames of arrival, player visible & vulnerable)
+        Delegates to Blasphemy5System (called from _update_pre_guard_state).
         """
-        if self.blasphemy_5_blink_state == 0:
-            return
-
-        self.blasphemy_5_blink_timer -= 1
-
-        # Update blink particles (fade out and spread)
-        for p in self.blasphemy_5_blink_particles:
-            p["x"] += p["vx"]
-            p["y"] += p["vy"]
-            p["life"] -= 1
-            # Fade alpha as life decreases
-            max_life = p.get("max_life", 24)
-            p["alpha"] = int(160 * (max(0, p["life"]) / max(1, max_life)))
-
-        # Remove dead particles
-        self.blasphemy_5_blink_particles = [
-            p for p in self.blasphemy_5_blink_particles if p["life"] > 0
-        ]
-
-        if self.blasphemy_5_blink_state == 1:  # Pre-blink state
-            self.blasphemy_5_invisible = False
-            self.blasphemy_5_invulnerable = True  # Remain immortal during pre-blink
-            if self.blasphemy_5_blink_timer <= 0:
-                # Transition to invisible phase (15 frames of transit)
-                self.blasphemy_5_blink_state = 2
-                self.blasphemy_5_blink_timer = 15
-                self.blasphemy_5_invisible = True
-                self.blasphemy_5_invulnerable = True
-
-        elif self.blasphemy_5_blink_state == 2:  # Invisible phase
-            # Player is invisible and invulnerable during transit
-            self.blasphemy_5_invisible = True
-            self.blasphemy_5_invulnerable = True
-            if self.blasphemy_5_blink_timer <= 0:
-                # Execute teleport at end of invisible phase
-                self.player.x = self.blasphemy_5_blink_target_x
-                self.player.y = self.blasphemy_5_blink_target_y
-                # Create violet particles at arrival point (6-8 particles)
-                num_particles = random.randint(6, 8)
-                for _ in range(num_particles):
-                    # Spread particles in a circle around the arrival point
-                    angle = random.uniform(0, 2 * math.pi)
-                    speed = random.uniform(0.5, 2.0)
-                    particle = {
-                        "x": self.player.x,
-                        "y": self.player.y,
-                        "vx": math.cos(angle) * speed,
-                        "vy": math.sin(angle) * speed,
-                        "life": 10,  # frames until particle dies (match post-blink duration)
-                        "max_life": 10,  # Track max life for fade calculation
-                        "alpha": 160,
-                        "size": 6,
-                    }
-                    self.blasphemy_5_blink_particles.append(particle)
-                # Move to post-blink state (10 frames of arrival animation)
-                self.blasphemy_5_blink_state = 3
-                self.blasphemy_5_blink_timer = 10
-                self.blasphemy_5_invisible = False
-
-        elif self.blasphemy_5_blink_state == 3:  # Post-blink state
-            self.blasphemy_5_invisible = False
-            self.blasphemy_5_invulnerable = False
-            if self.blasphemy_5_blink_timer <= 0:
-                # Animation complete
-                self.blasphemy_5_blink_state = 0
-                self.blasphemy_5_invisible = False
-                self.blasphemy_5_invulnerable = False
+        if self.blasphemy5_system:
+            self.blasphemy5_system.update_blasphemy5_blink_animation()
 
     def handle_input(self) -> None:
         """Handle player movement input"""

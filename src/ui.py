@@ -12,8 +12,8 @@ from src.game_constants import (
     STATUE_ASSET_VERTICAL_OFFSET,
     STATUE_BASE_Y,
     WALL_THICKNESS,
-    WEAPON_ICON_SIZE,
     WEAPON_ICON_PADDING,
+    WEAPON_ICON_SIZE,
 )
 from src.weapons import WEAPON_DEFS
 
@@ -172,9 +172,13 @@ class PygameUIManager:
 
             # Position on left or right edge with some horizontal offset
             if self.side == "left":
-                self.x = random.randint(-150, 100)  # Toward the left edge with more variation
+                self.x = random.randint(
+                    -150, 100
+                )  # Toward the left edge with more variation
             else:
-                self.x = random.randint(WIDTH - 500, WIDTH - 250)  # Toward the center from right with more variation
+                self.x = random.randint(
+                    WIDTH - 500, WIDTH - 250
+                )  # Toward the center from right with more variation
 
             # Reduced speeds so particles stay visible longer and accumulate in lower area
             self.speed = random.uniform(FOG_MIN_SPEED * 0.3, FOG_MAX_SPEED * 0.6)
@@ -221,7 +225,7 @@ class PygameUIManager:
             elif stage == "limbo_3":
                 color = (200, 140, 100)  # Orangish tint for limbo_3
             elif stage == "limbo_final":
-                color = (220, 100, 140)  # Red/violet tint for limbo_final
+                color = (160, 60, 110)  # Dark purple/red tint for limbo_final
             else:
                 color = PURGATORY_FOG_COLORS.get(stage, FOG_COLOR)
 
@@ -239,7 +243,12 @@ class PygameUIManager:
                 try:
                     img_to_draw = self._tinted_image.copy()
                     # limbo_1 (and limbo without suffix) uses slightly reduced alpha for subtlety
-                    if stage == "limbo" or stage is None or not isinstance(stage, str) or stage == "limbo_1":
+                    if (
+                        stage == "limbo"
+                        or stage is None
+                        or not isinstance(stage, str)
+                        or stage == "limbo_1"
+                    ):
                         img_to_draw.set_alpha(int(255 * 0.7))  # 70% opacity for limbo_1
                     self._cached_draw_image = img_to_draw
                     self._cached_draw_key = cache_key
@@ -429,7 +438,9 @@ class PygameUIManager:
             self._limbo_fog_particles_left: list[PygameUIManager.LimboFogParticle] = []
             self._limbo_fog_particles_right: list[PygameUIManager.LimboFogParticle] = []
             if tex:
-                for _ in range(12):  # 12 particles per side for balance (presence without FPS hit)
+                for _ in range(
+                    12
+                ):  # 12 particles per side for balance (presence without FPS hit)
                     self._limbo_fog_particles_left.append(
                         PygameUIManager.LimboFogParticle(self, tex, side="left")
                     )

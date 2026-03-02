@@ -38,6 +38,12 @@ WINGED_EXPLOSION_RADIUS = 30  # visual radius of the contact explosion
 WINGED_EXPLOSION_DURATION = 6  # frames the effect persists
 WINGED_EXPLOSION_COLOR = (255, 120, 0)  # slightly bright orange
 WINGED_CONTACT_DAMAGE = 15  # damage dealt to player on contact
+
+# Archer enemy tuning
+ARCHER_VERTICAL_LIMIT = 250  # vertical boundary so archers stay in upper region
+ARCHER_PROJECTILE_DAMAGE = 12
+ARCHER_PROJECTILE_RADIUS = 5
+
 # Duration of the firing window (player has this many frames to use all charges)
 # extended to eight seconds for more flexibility.
 FIRE_SPECIAL_DURATION = 8 * DEFAULT_FPS
@@ -121,7 +127,7 @@ PURGATORY_OVERLAY_COLOR = (190, 190, 190)  # light gray mist
 # rendered on top of the walls/objects but beneath any particle effects, and
 # it uses ``convert()`` + ``set_alpha()`` for maximum blit performance.
 # Default values give a subtle bluish‑gray wash.
-LIMBO_OVERLAY_ALPHA = 20
+LIMBO_OVERLAY_ALPHA = 80
 LIMBO_OVERLAY_COLOR = (60, 60, 60)
 
 # Full-screen haze for Hell stages — dark red ember tint.
@@ -154,7 +160,7 @@ PURGATORY_CLOUD_BUMP_ALPHA = 20
 # their horizontal velocity range.  Tests will validate the new count and
 # speeds are initialized within bounds.
 FOG_PARTICLE_COUNT = 12  # number of fog particles to maintain
-FOG_TEXTURE_SIZE = 450  # diameter of generated cloud texture (increased 50%)
+FOG_TEXTURE_SIZE = 500  # diameter of generated cloud texture
 FOG_MIN_SPEED = 0.3  # horizontal velocity range (increased from 0.15)
 FOG_MAX_SPEED = 0.65  # (increased from 0.4)
 FOG_AMPLITUDE_RANGE = (10, 30)  # vertical sine amplitude
@@ -238,8 +244,13 @@ LIMBO_FINAL_ACCEL_START_TIME: float = (
 )
 LIMBO_FINAL_HALT_BEFORE_BOSS: float = 5.0  # seconds before boss when spawning stops
 
-# Additional limbo stages horde event
-LIMBO_HORDE_TIME: float = 480.0  # seconds into run when huge horde arrives (8 minutes)
+# Additional limbo stages horde event — tuning by stage variant
+LIMBO_HORDE_TIME: float = (
+    480.0  # seconds into run when huge horde arrives (8 minutes) — used by limbo_3 and limbo_final
+)
+LIMBO_HORDE_TIME_1: float = 360.0  # limbo: 6 minutes
+LIMBO_HORDE_TIME_2: float = 420.0  # limbo_2: 7 minutes
+LIMBO_HORDE_TIME_3: float = 480.0  # limbo_3: 8 minutes
 # tuning for the (legacy) horde system.  the current implementation
 # uses a scripted, multi‑phase schedule instead of a simple rate-based burst.
 # these constants remain around mostly for testing and backward compatibility
@@ -274,24 +285,27 @@ STAGE_SETTINGS: dict[str, dict[str, Any]] = {
     },
     "limbo": {
         "bg_color": (0, 0, 0),
+        "bg_image_external": "limbo_background.png",  # optional full‑screen external image like prologue/purgatory
         "bg_image": "limbo_battlefield.png",
         "floor_color": (100, 50, 0),
         # walls are now dark gray like prologue
-        "wall_color": (40, 40, 40),
+        "wall_color": (25, 25, 25),
         "building_color": None,  # No buildings in limbo
     },
     "limbo_2": {
         "bg_color": (0, 0, 0),
+        "bg_image_external": "limbo_background.png",
         "bg_image": "limbo_battlefield.png",
         "floor_color": (100, 50, 0),
-        "wall_color": (40, 40, 40),
+        "wall_color": (25, 25, 25),
         "building_color": None,
     },
     "limbo_3": {
         "bg_color": (0, 0, 0),
+        "bg_image_external": "limbo_background.png",
         "bg_image": "limbo_battlefield.png",
         "floor_color": (100, 50, 0),
-        "wall_color": (40, 40, 40),
+        "wall_color": (25, 25, 25),
         "building_color": None,
     },
     # special final variant: visually identical to limbo_3 but triggers its own
@@ -299,9 +313,10 @@ STAGE_SETTINGS: dict[str, dict[str, Any]] = {
     # straightforward and allows tuning later without affecting limbo_3.
     "limbo_final": {
         "bg_color": (0, 0, 0),
+        "bg_image_external": "limbo_background.png",
         "bg_image": "limbo_battlefield.png",
         "floor_color": (100, 50, 0),
-        "wall_color": (40, 40, 40),
+        "wall_color": (25, 25, 25),
         "building_color": None,
     },
     "purgatory": {

@@ -13,6 +13,9 @@ from src.game_constants import (
     LIMBO_FINAL_ACCEL_START_TIME,
     LIMBO_FINAL_HALT_BEFORE_BOSS,
     LIMBO_HORDE_TIME,
+    LIMBO_HORDE_TIME_1,
+    LIMBO_HORDE_TIME_2,
+    LIMBO_HORDE_TIME_3,
 )
 from src.projectile import Projectile
 
@@ -72,19 +75,28 @@ class SpawnSystem:
         if self.game.selected_stage in ("limbo", "limbo_2", "limbo_3") and not getattr(
             self.game, "limbo_horde_started", False
         ):
+            # Determine horde spawn time based on stage
+            horde_time_threshold = {
+                "limbo": LIMBO_HORDE_TIME_1,
+                "limbo_2": LIMBO_HORDE_TIME_2,
+                "limbo_3": LIMBO_HORDE_TIME_3,
+            }.get(self.game.selected_stage, LIMBO_HORDE_TIME)
+
             # add noisy logging only in debug mode (useful for ff scripts)
             if getattr(self.game, "debug", False):
                 logger.debug(
-                    "[horde-check] stage=%s time_elapsed=%.3f started=%s",
+                    "[horde-check] stage=%s time_elapsed=%.3f started=%s threshold=%.1f",
                     self.game.selected_stage,
                     self.game.time_elapsed,
                     getattr(self.game, "limbo_horde_started", False),
+                    horde_time_threshold,
                 )
-            if self.game.time_elapsed >= LIMBO_HORDE_TIME:
+            if self.game.time_elapsed >= horde_time_threshold:
                 if getattr(self.game, "debug", False):
                     logger.debug(
-                        "[spawn_system] triggering horde at time %s",
+                        "[spawn_system] triggering horde at time %s (stage %s)",
                         self.game.time_elapsed,
+                        self.game.selected_stage,
                     )
                 self._start_limbo_horde()
 
@@ -216,7 +228,9 @@ class SpawnSystem:
                         self.spawn_big_enemy()
                         self.game.big_spawned_this_wave = True
                         if self.game.wave >= 6:
-                            self.game.big_enemy_timer = self.game.big_enemy_fast_interval
+                            self.game.big_enemy_timer = (
+                                self.game.big_enemy_fast_interval
+                            )
                         else:
                             self.game.big_enemy_timer = 12 * self.game.fps
 
@@ -227,7 +241,10 @@ class SpawnSystem:
                     pass
             else:
                 self.game.big_enemy_timer -= 1
-                if self.game.big_enemy_timer <= 0 and not self.game.big_spawned_this_wave:
+                if (
+                    self.game.big_enemy_timer <= 0
+                    and not self.game.big_spawned_this_wave
+                ):
                     self.spawn_big_enemy()
                     self.game.big_spawned_this_wave = True
                     if self.game.wave >= 6:
@@ -760,6 +777,11 @@ class SpawnSystem:
                 # fast flying zig-zag enemy
                 health = 30 * self.game.difficulty_multiplier
                 speed = ENEMY_BASE_SPEEDS.get("winged", 120)
+            elif enemy_type == "archer":
+                # slow archer unit
+                # start with normal enemy HP; the Enemy ctor will double it
+                health = 50 * self.game.difficulty_multiplier
+                speed = ENEMY_BASE_SPEEDS.get("archer", 40)
             else:
                 # fallback to default normal values
                 health = 50 * self.game.difficulty_multiplier
@@ -816,42 +838,77 @@ class SpawnSystem:
                     self.last_giant_spawn_time = self.game.time_elapsed
                 except Exception:
                     pass
-            # Allow a small chance for 'strong' already in waves 1-2 (10%), larger chance in later waves
-            elif (
-                self.game.wave < 3 and rand < 0.10
-            ):  # 10% chance for strong in waves 1-2
+            # compute dynamic spawn probabilities that shift with wave count:
+            wave = getattr(self.game, "wave", 0)
+            # base values
+            base_strong = 0.10 if wave < 3 else 0.15
+            base_normal = 0.30
+            base_angel = 0.20
+            base_winged = 0.10 if wave >= 3 else 0.0
+            # adjustments per wave
+            strong_chance = max(base_strong - wave * 0.005, 0.05)  # more rare over time
+            normal_chance = min(base_normal + wave * 0.005, 0.50)  # increases with wave
+            angel_chance = max(base_angel - wave * 0.005, 0.05)  # decreases with wave
+            winged_chance = base_winged
+            if wave >= 3:
+                winged_chance = min(base_winged + (wave - 2) * 0.01, 0.30)
+            # archer chance is always half of normal chance, but only from wave 3 onward in prologo
+            stage = getattr(self.game, "selected_stage", "") or ""
+            if stage == "prologo" and wave < 3:
+                archer_chance = 0.0
+            else:
+                archer_chance = normal_chance * 0.5
+            # ensure total doesn't exceed 1.0 by scaling if necessary
+            total = (
+                strong_chance
+                + normal_chance
+                + angel_chance
+                + winged_chance
+                + archer_chance
+            )
+            if total > 1.0:
+                factor = 1.0 / total
+                strong_chance *= factor
+                normal_chance *= factor
+                angel_chance *= factor
+                winged_chance *= factor
+                archer_chance *= factor
+            # now pick based on cumulative thresholds
+            cumulative = strong_chance
+            if rand < cumulative:
                 enemy_type = "strong"
                 health = 70 * self.game.difficulty_multiplier
                 speed = ENEMY_BASE_SPEEDS.get("strong", 60)
-            elif (
-                self.game.wave >= 3 and rand < 0.15
-            ):  # 15% chance for strong after wave 3
-                enemy_type = "strong"
-                health = 70 * self.game.difficulty_multiplier  # Doubled from 35
-                # Strong enemies (from balance)
-                speed = ENEMY_BASE_SPEEDS.get("strong", 60)
-            elif rand < 0.3:  # 30% chance for normal
-                enemy_type = "normal"
-                health = 50 * self.game.difficulty_multiplier  # Doubled from 25
-                # Normal enemies (from balance)
-                speed = ENEMY_BASE_SPEEDS.get("normal", 75)
-            elif rand < 0.5:  # 20% chance for angel
-                enemy_type = "angel"
-                health = 40 * self.game.difficulty_multiplier  # Doubled from 20
-                # Angel speed (from balance)
-                speed = ENEMY_BASE_SPEEDS.get("angel", 60)
-            elif (
-                rand < 0.6 and getattr(self.game, "wave", 0) >= 3
-            ):  # winged only if wave >=3
-                enemy_type = "winged"
-                health = 30 * self.game.difficulty_multiplier
-                speed = ENEMY_BASE_SPEEDS.get("winged", 120)
-            else:  # remaining chance for weak (may include early-winged attempts)
-                enemy_type = "weak"
-                # base HP increased from 30 → 45 as per tuning request
-                health = 45 * self.game.difficulty_multiplier
-                # Weak enemies (from balance)
-                speed = ENEMY_BASE_SPEEDS.get("weak", 35)
+            else:
+                cumulative += normal_chance
+                if rand < cumulative:
+                    enemy_type = "normal"
+                    health = 50 * self.game.difficulty_multiplier  # Doubled from 25
+                    speed = ENEMY_BASE_SPEEDS.get("normal", 75)
+                else:
+                    cumulative += angel_chance
+                    if rand < cumulative:
+                        enemy_type = "angel"
+                        health = 40 * self.game.difficulty_multiplier  # Doubled from 20
+                        speed = ENEMY_BASE_SPEEDS.get("angel", 60)
+                    else:
+                        cumulative += winged_chance
+                        if rand < cumulative:
+                            enemy_type = "winged"
+                            health = 30 * self.game.difficulty_multiplier
+                            speed = ENEMY_BASE_SPEEDS.get("winged", 120)
+                        else:
+                            cumulative += archer_chance
+                            if rand < cumulative:
+                                enemy_type = "archer"
+                                # start with normal health; constructor will double it
+                                health = 50 * self.game.difficulty_multiplier
+                                speed = ENEMY_BASE_SPEEDS.get("archer", 40)
+                            else:
+                                enemy_type = "weak"
+                                # base HP increased from 30 → 45 as per tuning request
+                                health = 45 * self.game.difficulty_multiplier
+                                speed = ENEMY_BASE_SPEEDS.get("weak", 35)
 
         # mage override: only after purgatory starts and once timer expires (~15s)
         if (getattr(self.game, "selected_stage", None) or "").startswith(
@@ -887,14 +944,28 @@ class SpawnSystem:
                         # if already two mages, do nothing; wait until one is gone
                         pass
 
+        # Check archer count limit (max 2 at once)
+        if enemy_type == "archer":
+            archer_count = 0
+            for e in getattr(self.game, "enemies", []):
+                if getattr(e, "enemy_type", None) == "archer":
+                    archer_count += 1
+            if archer_count >= 2:
+                # already 2 archers, convert to normal enemy instead
+                enemy_type = "normal"
+                health = 50 * self.game.difficulty_multiplier
+                speed = ENEMY_BASE_SPEEDS.get("normal", 75)
+
         # convert some strong enemies into shielded variants for non-prologo stages
         if enemy_type == "strong" and (
             getattr(self.game, "selected_stage", None) or ""
         ) not in ("", "prologo"):
-            # only consider after determining final type, reuse rand for consistency
-            # 50% of the time (increased)
+            # probability of turning into shielded grows with wave number
+            # start at roughly 50% and approach 90% over time
             try:
-                if random.random() < 0.50:
+                wave = getattr(self.game, "wave", 0)
+                shield_prob = min(0.50 + wave * 0.02, 0.90)
+                if random.random() < shield_prob:
                     enemy_type = "shielded"
             except Exception:
                 pass

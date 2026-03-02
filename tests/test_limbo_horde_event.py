@@ -12,18 +12,29 @@ import pygame
 import pytest
 
 from src.game import Game
-from src.game_constants import LIMBO_HORDE_TIME
+from src.game_constants import (
+    LIMBO_HORDE_TIME_1,
+    LIMBO_HORDE_TIME_2,
+    LIMBO_HORDE_TIME_3,
+)
 
 
-@pytest.mark.parametrize("stage", ["limbo", "limbo_2", "limbo_3"])
-def test_limbo_horde_triggers_and_completes(stage):
+@pytest.mark.parametrize(
+    "stage,horde_time",
+    [
+        ("limbo", LIMBO_HORDE_TIME_1),
+        ("limbo_2", LIMBO_HORDE_TIME_2),
+        ("limbo_3", LIMBO_HORDE_TIME_3),
+    ],
+)
+def test_limbo_horde_triggers_and_completes(stage, horde_time):
     g = Game()
     # ensure the game is running and stage is initialized
     g.reset_game()
     g.select_stage(stage)
 
     # fast-forward to the horde threshold and run until all phases have fired
-    g.time_elapsed = LIMBO_HORDE_TIME
+    g.time_elapsed = horde_time
     # trigger spawn system to build schedule
     g.spawn_system.update_enemy_spawning()
     # once started the schedule should match our expected offsets and counts
@@ -82,7 +93,7 @@ def test_limbo_horde_triggers_and_completes(stage):
     g = Game()
     g.reset_game()
     g.select_stage(stage)
-    g.time_elapsed = LIMBO_HORDE_TIME
+    g.time_elapsed = horde_time
     g.spawn_system.update_enemy_spawning()
     assert len(g.enemies) == 10
     for _ in range(int(g.fps * 5)):
@@ -187,9 +198,84 @@ def test_victory_overlay_enter_advances_stage():
     assert g.selected_stage != current
     assert g.selected_stage in ("limbo", "limbo_2", "limbo_3")
 
+    # weapon choice should run immediately and countdown must not have started yet
+    assert getattr(
+        g, "awaiting_weapon_choice", False
+    ), "Should be awaiting weapon selection"
+    assert (
+        g.stage_start_countdown == 0
+    ), "Countdown should be deferred while choosing weapon"
+    assert g.stage_start_timer == 0
 
-@pytest.mark.parametrize("stage", ["limbo", "limbo_2", "limbo_3"])
-def test_no_wave_boss_during_limbo_horde(stage):
+    # simulate selecting the first weapon and verify countdown begins
+    g.handle_keydown(pygame.K_1)
+    assert not getattr(
+        g, "awaiting_weapon_choice", False
+    ), "Weapon choice should be cleared after selection"
+    assert g.stage_start_countdown == 3
+    assert g.stage_start_timer == g.fps
+
+
+def test_victory_overlay_esc_does_not_reappear():
+    """Pressing ESC should dismiss the overlay and never bring it back.
+
+    Previously the victory logic left limbo_horde_completed/timer active
+    when the user backed out to the menu, which meant the ``update_game``
+    fallback branch would restart the countdown while the menu was visible.
+    The result was the SATANIC VICTORY screen popping up again a few seconds
+    later, trapping the player.  Regression tests exercise both the menu and
+    stage-advance paths.
+    """
+    pygame.init()
+    g = _make_victory_game("limbo")
+    # simulate state that could trigger the fallback logic
+    g.limbo_horde_completed = True
+    g.limbo_horde_victory_timer = 0
+
+    g.handle_keydown(pygame.K_ESCAPE)
+    assert g.showing_main_menu
+    assert not g.showing_victory
+
+    # run some frames to ensure the overlay does not come back
+    for _ in range(int(g.fps * 10)):
+        g.update_game()
+    assert not g.showing_victory
+    assert g.limbo_horde_victory_timer == 0
+    assert not g.limbo_horde_completed
+    # also verify no residual weapon choice or countdown occurred
+    assert not getattr(g, "awaiting_weapon_choice", False)
+    assert g.stage_start_countdown == 0
+
+
+def test_victory_overlay_enter_does_not_reappear():
+    """Advancing a stage after victory should not immediately trigger a new
+    overlay on the following level."""
+    pygame.init()
+    g = _make_victory_game("limbo")
+    g.limbo_horde_completed = True
+    g.limbo_horde_victory_timer = 0
+    curr = g.selected_stage
+    g.handle_keydown(pygame.K_RETURN)
+    assert not g.showing_victory
+    assert g.selected_stage != curr
+
+    # the reset_run called during continue_after_victory should clear the
+    # completed flag, but verify that the timer remains inert over a few
+    # frames so the overlay cannot reappear.
+    for _ in range(int(g.fps * 10)):
+        g.update_game()
+    assert not g.showing_victory
+
+
+@pytest.mark.parametrize(
+    "stage,horde_time",
+    [
+        ("limbo", LIMBO_HORDE_TIME_1),
+        ("limbo_2", LIMBO_HORDE_TIME_2),
+        ("limbo_3", LIMBO_HORDE_TIME_3),
+    ],
+)
+def test_no_wave_boss_during_limbo_horde(stage, horde_time):
     """Wave boss logic must be suppressed once a regular limbo horde is active.
 
     Without this guard the timer-based wave boss will fire around the 38s
@@ -202,7 +288,7 @@ def test_no_wave_boss_during_limbo_horde(stage):
     g = Game(debug=True)
     g.select_stage(stage)
     # trigger the horde schedule
-    g.time_elapsed = LIMBO_HORDE_TIME
+    g.time_elapsed = horde_time
     g.spawn_system.update_enemy_spawning()
 
     # make sure wave boss could spawn if unchecked
@@ -278,7 +364,7 @@ def test_boss_forced_even_if_cleared_early():
     g.reset_game()
     g.select_stage("limbo")
     # trigger horde
-    g.time_elapsed = LIMBO_HORDE_TIME
+    g.time_elapsed = LIMBO_HORDE_TIME_1
     g.spawn_system.update_enemy_spawning()
     # wipe each wave as soon as it spawns
     for frame in range(int(g.fps * 60)):
@@ -427,8 +513,15 @@ def test_victory_timer_starts_after_room_empty():
     assert g.showing_victory
 
 
-@pytest.mark.parametrize("stage", ["limbo", "limbo_2", "limbo_3"])
-def test_victory_delayed_until_all_enemies_cleared(stage):
+@pytest.mark.parametrize(
+    "stage,horde_time",
+    [
+        ("limbo", LIMBO_HORDE_TIME_1),
+        ("limbo_2", LIMBO_HORDE_TIME_2),
+        ("limbo_3", LIMBO_HORDE_TIME_3),
+    ],
+)
+def test_victory_delayed_until_all_enemies_cleared(stage, horde_time):
     """The win countdown is deferred until the room is empty.
 
     To reproduce the original bug we manually bump the kill counter past the
@@ -445,7 +538,7 @@ def test_victory_delayed_until_all_enemies_cleared(stage):
     # trigger the horde and let some actual sprites spawn so the group is
     # non-empty. we don't care about the exact number, just that there are
     # enemies we won't remove until later.
-    g.time_elapsed = LIMBO_HORDE_TIME
+    g.time_elapsed = horde_time
     for _ in range(int(g.fps * 2)):
         g.spawn_system.update_enemy_spawning()
     initial = g.limbo_horde_initial
@@ -577,7 +670,7 @@ def test_satan_growth_scripted():
     # record base health before anything happens
     base_health = g.player.max_health
     # trigger the horde
-    g.time_elapsed = LIMBO_HORDE_TIME
+    g.time_elapsed = LIMBO_HORDE_TIME_1
     # run until the phase index moves past the fourth entry
     while g.limbo_horde_phase_index < 4:
         g.spawn_system.update_enemy_spawning()

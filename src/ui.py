@@ -2516,6 +2516,88 @@ class PygameUIManager:
                 except Exception:
                     pass
 
+        # Draw EXIT confirmation prompt if pending
+        if getattr(self.game, "exit_confirm_pending", False):
+            # Semi-transparent overlay
+            overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 160))
+            self.screen.blit(overlay, (0, 0))
+
+            # Dialog box
+            dialog_width = 400
+            dialog_height = 150
+            dialog_x = (self.width - dialog_width) // 2
+            dialog_y = (self.height - dialog_height) // 2
+
+            pygame.draw.rect(
+                self.screen,
+                (30, 15, 30),
+                (dialog_x, dialog_y, dialog_width, dialog_height),
+            )
+            pygame.draw.rect(
+                self.screen,
+                (100, 50, 100),
+                (dialog_x, dialog_y, dialog_width, dialog_height),
+                2,
+            )
+
+            # Text
+            q_text = pygame.font.Font(None, 28).render(
+                "Exit Game?", True, (255, 200, 200)
+            )
+            self.screen.blit(
+                q_text,
+                (
+                    dialog_x + (dialog_width - q_text.get_width()) // 2,
+                    dialog_y + 30,
+                ),
+            )
+
+            # Yes/No buttons
+            btn_width = 80
+            btn_height = 40
+            spacing = 30
+            yes_x = dialog_x + (dialog_width - btn_width * 2 - spacing) // 2
+            no_x = yes_x + btn_width + spacing
+            btn_y = dialog_y + dialog_height - 60
+
+            yes_rect = pygame.Rect(yes_x, btn_y, btn_width, btn_height)
+            no_rect = pygame.Rect(no_x, btn_y, btn_width, btn_height)
+
+            yes_hovered = yes_rect.collidepoint(
+                getattr(self.game, "mouse_x", 0), getattr(self.game, "mouse_y", 0)
+            )
+            no_hovered = no_rect.collidepoint(
+                getattr(self.game, "mouse_x", 0), getattr(self.game, "mouse_y", 0)
+            )
+
+            # Draw buttons
+            yes_bg = (80, 30, 30) if yes_hovered else (50, 20, 20)
+            no_bg = (30, 60, 30) if no_hovered else (20, 40, 20)
+
+            pygame.draw.rect(self.screen, yes_bg, yes_rect)
+            pygame.draw.rect(self.screen, (150, 50, 50), yes_rect, 2)
+            pygame.draw.rect(self.screen, no_bg, no_rect)
+            pygame.draw.rect(self.screen, (50, 150, 50), no_rect, 2)
+
+            # Button text
+            yes_text = pygame.font.Font(None, 24).render("YES", True, (255, 150, 150))
+            no_text = pygame.font.Font(None, 24).render("NO", True, (150, 255, 150))
+            self.screen.blit(
+                yes_text,
+                (
+                    yes_x + (btn_width - yes_text.get_width()) // 2,
+                    btn_y + (btn_height - yes_text.get_height()) // 2,
+                ),
+            )
+            self.screen.blit(
+                no_text,
+                (
+                    no_x + (btn_width - no_text.get_width()) // 2,
+                    btn_y + (btn_height - no_text.get_height()) // 2,
+                ),
+            )
+
     def draw_pause_menu(self, shake_x=0, shake_y=0) -> None:
         """Draw the pause menu (migrated from Game)."""
         pygame = self.pygame
@@ -3646,63 +3728,6 @@ class PygameUIManager:
         # LIMBO: Skip lateral fog layers to show the background asset clearly
         return
 
-        # Fallback to dynamic drawing if cache absent
-        pygame = self.pygame
-        wall_thickness = WALL_THICKNESS
-        base_r, base_g, base_b = 60, 60, 60
-        for i in range(num_layers):
-            opacity: float = (num_layers - i) / num_layers
-            layer_offset: int = 250 * (i + 1) // num_layers
-            r = int(base_r * (1 - opacity * 0.6))
-            g = int(base_g * (1 - opacity * 0.6))
-            b = int(base_b * (1 - opacity * 0.6))
-            color: tuple[int, int, int] = (r, g, b)
-            left_fog_points = []
-            for point in self.game.left_wall_points:
-                left_fog_points.append((0 + shake_x, point[1] + shake_y))
-            for point in reversed(self.game.left_wall_points):
-                left_fog_points.append(
-                    (
-                        point[0] - wall_thickness - layer_offset + shake_x,
-                        point[1] + shake_y,
-                    )
-                )
-            if len(left_fog_points) > 2:
-                fog_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-                pygame.draw.polygon(
-                    fog_surface, color + (int(128 * opacity),), left_fog_points
-                )
-                try:
-                    fog_surface = fog_surface.convert_alpha()
-                except Exception:
-                    pass
-                self.screen.blit(fog_surface, (0, 0))
-
-            # Right fog - create polygon following wall structure
-            right_fog_points = []
-            # Wall edge going down (outer wall + layer offset)
-            for point in self.game.right_wall_points:
-                right_fog_points.append(
-                    (
-                        point[0] + wall_thickness + layer_offset + shake_x,
-                        point[1] + shake_y,
-                    )
-                )
-            # Screen edge going up
-            for point in reversed(self.game.right_wall_points):
-                right_fog_points.append((self.width + shake_x, point[1] + shake_y))
-
-            if len(right_fog_points) > 2:
-                fog_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-                pygame.draw.polygon(
-                    fog_surface, color + (int(128 * opacity),), right_fog_points
-                )
-                try:
-                    fog_surface = fog_surface.convert_alpha()
-                except Exception:
-                    pass
-                self.screen.blit(fog_surface, (0, 0))
-
     def draw_game_objects(self, shake_x=0, shake_y=0) -> None:
         if not self.screen:
             return
@@ -3810,14 +3835,33 @@ class PygameUIManager:
             except Exception:
                 pass
 
-        # Draw player
-        self.game.player.draw(
-            self.screen,
-            shake_x,
-            shake_y,
-            self.game.player_anim_frame,
-            self.game.player_is_moving,
-        )
+        # Draw player (skip if invisible during blink transit)
+        if not getattr(self.game, "blasphemy_5_invisible", False):
+            self.game.player.draw(
+                self.screen,
+                shake_x,
+                shake_y,
+                self.game.player_anim_frame,
+                self.game.player_is_moving,
+            )
+
+        # Draw Blasphemy 5 blink particles (if any)
+        try:
+            blink_particles = getattr(self.game, "blasphemy_5_blink_particles", [])
+            for p in list(blink_particles):
+                try:
+                    # Draw violet semi-transparent circle
+                    size = p.get("size", 6)
+                    surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+                    alpha = p.get("alpha", 160)
+                    pygame.draw.circle(surf, (150, 100, 200, alpha), (size, size), size)
+                    px = int(p["x"] + shake_x - size)
+                    py = int(p["y"] + shake_y - size)
+                    self.screen.blit(surf, (px, py))
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
         # Draw player burn particles (if any)
         try:

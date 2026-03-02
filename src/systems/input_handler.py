@@ -139,7 +139,7 @@ class InputHandler:
                     1, self.game.pause_confirmation["selection"] + 1
                 )
                 return
-            elif key == pygame.K_RETURN or key == pygame.K_SPACE or key == pygame.K_y:
+            elif key == pygame.K_RETURN or key == pygame.K_y:
                 # Confirm
                 if self.game.pause_confirmation["selection"] == 0:
                     action = self.game.pause_confirmation["action"]
@@ -170,8 +170,8 @@ class InputHandler:
         # Handle game over keys before any menu logic so ESC always returns to
         # the main menu even if a stage menu flag was left true due to a bug.
         if getattr(self.game, "showing_game_over", False):
-            if key == pygame.K_RETURN or key == pygame.K_SPACE:
-                # Restart is disabled — ignore Enter/Space
+            if key == pygame.K_RETURN:
+                # Restart is disabled — ignore Enter
                 return
             elif key == pygame.K_ESCAPE:
                 logger.info("Escape pressed on game over screen; returning to menu")
@@ -199,6 +199,8 @@ class InputHandler:
                 self.show_permanent_upgrades()
         elif self.game.showing_permanent_upgrades:
             if key == pygame.K_ESCAPE:
+                # Save before closing the menu to preserve any point changes
+                self.game.save_permanent_stats()
                 self.show_stage_menu()
         elif self.game.showing_prologo_end:
             if key == pygame.K_RETURN:
@@ -207,7 +209,7 @@ class InputHandler:
                 self.game.reset_game()
         elif getattr(self.game, "showing_victory", False):
             # on victory overlay provide two choices
-            if key == pygame.K_RETURN or key == pygame.K_SPACE:
+            if key == pygame.K_RETURN:
                 logger.info("ENTER pressed on victory screen; advancing")
                 self.continue_after_victory()
                 return
@@ -262,10 +264,13 @@ class InputHandler:
                     )
                 except Exception:
                     pass
-            elif key == pygame.K_RETURN or key == pygame.K_SPACE:
+            elif key == pygame.K_RETURN:
                 self.game.apply_weapon(
                     self.game.weapon_choices[self.game.selected_weapon_index]["id"]
                 )
+            elif key == pygame.K_SPACE:
+                # Blink disabled during weapon choice
+                pass
         elif self.game.awaiting_tower_choice:
             if key == pygame.K_1 and len(self.game.tower_choices) > 0:
                 self.game.apply_tower(self.game.tower_choices[0]["id"])
@@ -294,10 +299,13 @@ class InputHandler:
                     )
                 except Exception:
                     pass
-            elif key == pygame.K_RETURN or key == pygame.K_SPACE:
+            elif key == pygame.K_RETURN:
                 self.game.apply_tower(
                     self.game.tower_choices[self.game.selected_tower_index]["id"]
                 )
+            elif key == pygame.K_SPACE:
+                # Blink disabled during tower choice
+                pass
             elif key == pygame.K_ESCAPE and not self.game.is_initial_tower_choice:
                 # Cancel tower selection and resume
                 self.game.awaiting_tower_choice = False
@@ -329,7 +337,7 @@ class InputHandler:
                 self.game.pause_menu_option = max(0, self.game.pause_menu_option - 1)
             elif key == pygame.K_DOWN or key == pygame.K_s:
                 self.game.pause_menu_option = min(1, self.game.pause_menu_option + 1)
-            elif key == pygame.K_RETURN or key == pygame.K_SPACE:
+            elif key == pygame.K_RETURN:
                 self.execute_pause_option()
         else:
             if key == pygame.K_ESCAPE:
@@ -339,6 +347,9 @@ class InputHandler:
                 self.game.showing_player_stats = not self.game.showing_player_stats
                 # Pause game while viewing stats
                 self.game.paused = self.game.showing_player_stats
+            if key == pygame.K_SPACE:
+                # Blasphemy 5 Blink ability
+                self.game.execute_blasphemy5_blink()
             if key == pygame.K_F3:
                 self.game.show_fps = not getattr(self.game, "show_fps", True)
 
@@ -893,6 +904,33 @@ class InputHandler:
                     self.game.showing_purgatory_menu = False
                     self.game.showing_stage_menu = True
             elif self.game.showing_permanent_upgrades:
+                # EXIT confirmation dialog has HIGHEST priority - blocks all other clicks
+                if getattr(self.game, "exit_confirm_pending", False):
+                    dialog_w, dialog_h = 400, 160
+                    dialog_x = self.game.width // 2 - dialog_w // 2
+                    dialog_y = self.game.height // 2 - dialog_h // 2
+
+                    # YES button (left)
+                    yes_w, yes_h = 75, 36
+                    yes_x = dialog_x + dialog_w // 2 - yes_w - 12
+                    yes_y = dialog_y + dialog_h - 52
+                    yes_rect = pygame.Rect(yes_x, yes_y, yes_w, yes_h)
+                    if yes_rect.collidepoint(pos):
+                        self.game.running = False
+                        return
+
+                    # NO button (right)
+                    no_w, no_h = 75, 36
+                    no_x = dialog_x + dialog_w // 2 + 12
+                    no_y = dialog_y + dialog_h - 52
+                    no_rect = pygame.Rect(no_x, no_y, no_w, no_h)
+                    if no_rect.collidepoint(pos):
+                        self.game.exit_confirm_pending = False
+                        return
+
+                    # Any other click on the overlay dismisses nothing, just return
+                    return
+
                 # Handle clicks on permanent stat upgrades
                 stat_configs = [
                     {
@@ -1630,6 +1668,18 @@ class InputHandler:
         self.game.game_over_alpha = 0
         # Clear any selected stage so the main menu is truly reset
         self.game.selected_stage = None
+        # when leaving a limbo victory we must also reset the horde tracking
+        # state/timer.  otherwise the fallback logic in ``update_game`` can
+        # restart the countdown while we're sitting in the menu, causing the
+        # SATANIC VICTORY overlay to pop up again after a few seconds (see
+        # regression described in issue).
+        try:
+            self.game.limbo_horde_completed = False
+            self.game.limbo_horde_ready_for_victory = False
+            self.game.limbo_horde_victory_timer = 0
+        except Exception:
+            # defensive: in some tests the attributes may not exist
+            pass
 
     def show_permanent_upgrades(self) -> None:
         """Show permanent stats upgrade menu.
@@ -2023,6 +2073,15 @@ class InputHandler:
 
         Cycling order: limbo -> limbo_2 -> limbo_3 -> limbo
         """
+        # clear horde/victory timer before switching stages; the new level
+        # should start clean and not accidentally re-trigger the overlay.
+        try:
+            self.game.limbo_horde_victory_timer = 0
+            self.game.limbo_horde_completed = False
+            self.game.limbo_horde_ready_for_victory = False
+        except Exception:
+            pass
+
         self.game.showing_victory = False
         # pick next in sequence if we're on limbo series
         seq = ["limbo", "limbo_2", "limbo_3"]
@@ -2031,10 +2090,23 @@ class InputHandler:
             nxt = seq[(seq.index(cur) + 1) % len(seq)]
         else:
             nxt = "limbo"
-        self.game.selected_stage = nxt
-        if nxt.startswith("limbo"):
+
+        # Use Game.select_stage to ensure full initialization:
+        # - runs reset_run()
+        # - applies spawn rate penalties
+        # - sets is_initial_weapon_choice / tower choice flags
+        # - starts countdown only if no choice is pending
+        try:
+            self.game.select_stage(nxt)
+        except Exception:
+            # fall back to manual logic in case select_stage is unavailable
+            self.game.selected_stage = nxt
+            if nxt.startswith("limbo"):
+                try:
+                    self.game.generate_dead_trees()
+                except Exception:
+                    pass
             try:
-                self.game.generate_dead_trees()
+                self.game.reset_run()
             except Exception:
                 pass
-        self.game.reset_run()

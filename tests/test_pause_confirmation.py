@@ -1,6 +1,6 @@
 import pygame
 
-from game import Game
+from src.game import Game
 
 
 def test_quit_confirmation_yes():

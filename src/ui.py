@@ -143,6 +143,115 @@ class PygameUIManager:
             except Exception:
                 surface.blit(self.image, (self.x, self.y))
 
+    class LimboFogParticle:
+        """Particle for LIMBO stages: moves vertically from bottom to top on side edges."""
+
+        def __init__(self, ui, image, side="left"):
+            self.ui = ui
+            self.image = image
+            self.width = image.get_width()
+            self.side = side  # "left" or "right"
+            self.reset(start_random=True)
+
+        def reset(self, start_random=False):
+            WIDTH = self.ui.width
+            HEIGHT = self.ui.height
+            from src.game_constants import (
+                FOG_AMPLITUDE_RANGE,
+                FOG_MAX_SPEED,
+                FOG_MIN_SPEED,
+                FOG_TIMER_RANGE,
+            )
+
+            # Vertical movement from bottom to top - concentrated in lower half
+            # Start mostly in bottom 50% (60-100% of height) to keep particles visible longer
+            if start_random:
+                self.y = random.randint(int(HEIGHT * 0.6), HEIGHT)
+            else:
+                self.y = HEIGHT + random.randint(-50, 50)
+
+            # Position on left or right edge with some horizontal offset
+            if self.side == "left":
+                self.x = random.randint(-150, 100)  # Toward the left edge with more variation
+            else:
+                self.x = random.randint(WIDTH - 500, WIDTH - 250)  # Toward the center from right with more variation
+
+            # Reduced speeds so particles stay visible longer and accumulate in lower area
+            self.speed = random.uniform(FOG_MIN_SPEED * 0.3, FOG_MAX_SPEED * 0.6)
+            self.amplitude = random.uniform(*FOG_AMPLITUDE_RANGE)
+            self.timer = random.uniform(*FOG_TIMER_RANGE)
+
+        def update(self):
+            # vertical upward movement
+            self.y -= self.speed
+            # horizontal sine-wave wobble
+            self.timer += 0.02
+            x_offset = math.sin(self.timer) * 0.5
+            self.x += x_offset
+            # reset when off top edge
+            if self.y < -self.width:
+                self.reset()
+
+        def _apply_tint(self, color):
+            """Pre-bake a tinted copy of the texture for the given color."""
+            pygame_mod = self.ui.pygame
+            img = self.image.copy()
+            tint_surf = pygame_mod.Surface(img.get_size(), pygame_mod.SRCALPHA)
+            tint_surf.fill((*color, 255))
+            img.blit(tint_surf, (0, 0), special_flags=pygame_mod.BLEND_RGBA_MULT)
+            try:
+                if (
+                    getattr(pygame_mod, "display", None)
+                    and pygame_mod.display.get_init()
+                ):
+                    img = img.convert_alpha()
+            except Exception:
+                pass
+            self._tinted_image = img
+            self._tinted_color = color
+
+        def draw(self, surface):
+            from src.game_constants import FOG_COLOR, PURGATORY_FOG_COLORS
+
+            stage = getattr(self.ui.game, "selected_stage", None)
+
+            # Choose color based on stage
+            if stage == "limbo_2":
+                color = (150, 180, 140)  # Greenish tint for limbo_2
+            elif stage == "limbo_3":
+                color = (200, 140, 100)  # Orangish tint for limbo_3
+            elif stage == "limbo_final":
+                color = (220, 100, 140)  # Red/violet tint for limbo_final
+            else:
+                color = PURGATORY_FOG_COLORS.get(stage, FOG_COLOR)
+
+            # rebuild tinted texture only when color changes
+            if getattr(self, "_tinted_color", None) != color:
+                try:
+                    self._apply_tint(color)
+                except Exception:
+                    self._tinted_image = self.image
+                    self._tinted_color = color
+
+            # Cache the final image (with alpha) to avoid copy+set_alpha every frame
+            cache_key = (color, stage)
+            if getattr(self, "_cached_draw_key", None) != cache_key:
+                try:
+                    img_to_draw = self._tinted_image.copy()
+                    # limbo_1 (and limbo without suffix) uses slightly reduced alpha for subtlety
+                    if stage == "limbo" or stage is None or not isinstance(stage, str) or stage == "limbo_1":
+                        img_to_draw.set_alpha(int(255 * 0.7))  # 70% opacity for limbo_1
+                    self._cached_draw_image = img_to_draw
+                    self._cached_draw_key = cache_key
+                except Exception:
+                    self._cached_draw_image = self.image
+                    self._cached_draw_key = cache_key
+
+            try:
+                surface.blit(self._cached_draw_image, (self.x, self.y))
+            except Exception:
+                surface.blit(self.image, (self.x, self.y))
+
     def __init__(self, game) -> None:
         try:
             import pygame
@@ -161,6 +270,7 @@ class PygameUIManager:
         self.get_text = get_text
 
         self._init_fog_particles()
+        self._init_limbo_fog_particles()
 
     def _draw_button(self, rect, bg_normal, bg_hover, border_color, border_width=1):
         hov = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
@@ -305,6 +415,48 @@ class PygameUIManager:
         except Exception:
             self._fog_particles = []
 
+    def _init_limbo_fog_particles(self) -> None:
+        """Create LIMBO fog particles that move vertically from bottom to top."""
+        try:
+            from src.game_constants import (
+                FOG_ALPHA,
+                FOG_COLOR,
+                FOG_TEXTURE_SIZE,
+            )
+
+            # Create texture once
+            tex = self._create_fog_texture(FOG_TEXTURE_SIZE, FOG_COLOR, FOG_ALPHA)
+            self._limbo_fog_particles_left: list[PygameUIManager.LimboFogParticle] = []
+            self._limbo_fog_particles_right: list[PygameUIManager.LimboFogParticle] = []
+            if tex:
+                for _ in range(12):  # 12 particles per side for balance (presence without FPS hit)
+                    self._limbo_fog_particles_left.append(
+                        PygameUIManager.LimboFogParticle(self, tex, side="left")
+                    )
+                    self._limbo_fog_particles_right.append(
+                        PygameUIManager.LimboFogParticle(self, tex, side="right")
+                    )
+            else:
+                self._limbo_fog_particles_left = []
+                self._limbo_fog_particles_right = []
+        except Exception:
+            self._limbo_fog_particles_left = []
+            self._limbo_fog_particles_right = []
+
+    def _update_and_draw_limbo_fog_particles(self) -> None:
+        """Update positions and render LIMBO fog particles."""
+        try:
+            for p in list(getattr(self, "_limbo_fog_particles_left", [])):
+                p.update()
+                if self.screen and self.pygame:
+                    p.draw(self.screen)
+            for p in list(getattr(self, "_limbo_fog_particles_right", [])):
+                p.update()
+                if self.screen and self.pygame:
+                    p.draw(self.screen)
+        except Exception:
+            pass
+
     def _update_and_draw_fog_particles(self) -> None:
         """Update positions and render all fog particles to the screen."""
         try:
@@ -343,14 +495,8 @@ class PygameUIManager:
             and self.game.right_wall_points
             and not getattr(self.game, "background_image_drawn", False)
         ):
-            inside_points = (
-                self.game.left_wall_points + self.game.right_wall_points[::-1]
-            )
-            pygame.draw.polygon(
-                self.screen,
-                (100, 50, 0),
-                self._apply_shake_to_points(inside_points, shake_x, shake_y),
-            )
+            # LIMBO: skip procedural floor polygon, use only the asset background
+            pass
         elif (
             getattr(self.game, "selected_stage", None)
             and str(self.game.selected_stage).startswith(("purgatory", "hell"))
@@ -376,6 +522,7 @@ class PygameUIManager:
 
         is_hell_stage = getattr(self.game, "selected_stage", "").startswith("hell")
         is_prologo = getattr(self.game, "selected_stage", "") == "prologo"
+        is_limbo_stage = self.game.is_limbo_stage()
         render_wall_thickness = (
             WALL_THICKNESS * 2
             if is_hell_stage
@@ -383,7 +530,7 @@ class PygameUIManager:
         )
         cap_extension = max(6, render_wall_thickness // 4) if is_hell_stage else 0
 
-        if is_prologo:
+        if is_prologo or is_limbo_stage:
             section_size = 5
             num_points = len(self.game.left_wall_points)
             num_sections = (num_points + section_size - 1) // section_size
@@ -391,7 +538,7 @@ class PygameUIManager:
             thickness_variations = [rng.randint(-2, 2) for _ in range(num_sections)]
 
         if self.game.left_wall_points:
-            if is_prologo:
+            if is_prologo or is_limbo_stage:
                 left_wall_exterior = []
                 for i, point in enumerate(self.game.left_wall_points):
                     section = i // section_size
@@ -432,7 +579,7 @@ class PygameUIManager:
                     pass
 
         if self.game.right_wall_points:
-            if is_prologo:
+            if is_prologo or is_limbo_stage:
                 right_wall_exterior = []
                 for i, point in enumerate(self.game.right_wall_points):
                     section = i // section_size
@@ -3246,6 +3393,11 @@ class PygameUIManager:
             self._fog_cache_signature = None
             return
 
+        # LIMBO: Skip lateral fog layers to show the background asset clearly
+        self._fog_cache = []
+        self._fog_cache_signature = None
+        return
+
         # Create a signature from wall points to detect changes
         sig_left = tuple((int(x), int(y)) for (x, y) in self.game.left_wall_points)
         sig_right = tuple((int(x), int(y)) for (x, y) in self.game.right_wall_points)
@@ -3453,42 +3605,33 @@ class PygameUIManager:
         if not self.game.left_wall_points or not self.game.right_wall_points:
             return
 
-        from src.game_constants import LIMBO_OVERLAY_ALPHA, LIMBO_OVERLAY_COLOR
+        from src.game_constants import LIMBO_OVERLAY_ALPHA
+
+        # Update and render LIMBO fog particles (vertical rising from sides)
+        try:
+            self._update_and_draw_limbo_fog_particles()
+        except Exception:
+            pass
+
+        # Choose overlay color based on limbo variant
+        stage = getattr(self.game, "selected_stage", None)
+        if stage == "limbo_2":
+            limbo_overlay_color = (75, 70, 60)  # Subtle yellow/orange for limbo_2
+        elif stage in ("limbo_3", "limbo_final"):
+            limbo_overlay_color = (75, 60, 60)  # Subtle red for limbo_3 and limbo_final
+        else:
+            limbo_overlay_color = (60, 60, 60)  # Gray for default limbo
 
         self._draw_stage_overlay(
             "_limbo_overlay",
             "_limbo_overlay_color",
             "_limbo_overlay_alpha",
-            LIMBO_OVERLAY_COLOR,
+            limbo_overlay_color,
             LIMBO_OVERLAY_ALPHA,
         )
 
-        # Ensure cache is built and up-to-date
-        try:
-            self._build_fog_cache()
-        except Exception:
-            # If caching fails, fall back to original drawing
-            self._fog_cache = None
-            self._fog_cache_signature = None
-
-        pygame = self.pygame
-        wall_thickness = WALL_THICKNESS
-        num_layers = 5
-
-        if getattr(self, "_fog_cache", None):
-            # Blit pre-rendered fog layers with per-frame shake offsets
-            idx = 0
-            for i in range(num_layers):
-                left_surf = self._fog_cache[idx]
-                idx += 1
-                right_surf = self._fog_cache[idx]
-                idx += 1
-                if left_surf:
-                    # blit with shake offset
-                    self.screen.blit(left_surf, (shake_x, shake_y))
-                if right_surf:
-                    self.screen.blit(right_surf, (shake_x, shake_y))
-            return
+        # LIMBO: Skip lateral fog layers to show the background asset clearly
+        return
 
         # Fallback to dynamic drawing if cache absent
         pygame = self.pygame

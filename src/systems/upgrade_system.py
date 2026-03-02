@@ -703,7 +703,7 @@ class UpgradeSystem:
             self.game.permanent_stats.get("projectile_size", 0) * 0.0
         )
         self.game.damage_reduction_multiplier = 1.0 - (
-            self.game.permanent_stats.get("structure", 0) * 0.03
+            self.game.permanent_stats.get("structure", 0) * 0.02
             + self.game.permanent_stats.get("blasphemy_3", 0) * 0.10
         )
         self.game.xp_multiplier = (

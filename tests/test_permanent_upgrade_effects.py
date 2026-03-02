@@ -45,7 +45,7 @@ def test_permanent_stat_effect_texts():
     )
     assert (
         g.permanent_stat_effect_text("structure", 4)
-        == "-3% dmg taken/level (12% total); +3% XP/level (+12% XP total)"
+        == "-2% dmg taken/level (8% total); +3% XP/level (+12% XP total)"
     )
     # Blasphemy 1 now gives HP per level instead of damage
     assert (
@@ -61,12 +61,12 @@ def test_permanent_stat_effect_texts():
         == "-10% dmg taken/level (20% total)"
     )
     assert g.permanent_stat_effect_text("blasphemy_4", 3) == "+10% XP/level (30% total)"
-    # Blasphemy 5 is a binary revive ability; show its description even at level 0
+    # Blasphemy 5 is now a blink ability; show its description even at level 0
     assert (
         g.permanent_stat_effect_text("blasphemy_5", 0)
-        == "Revive once on death; restore 50% max HP"
+        == "Blink: teleport in moving direction (spacebar)"
     )
     assert (
         g.permanent_stat_effect_text("blasphemy_5", 1)
-        == "Revive once on death; restore 50% max HP"
+        == "Blink: teleport in moving direction (spacebar)"
     )

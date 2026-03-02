@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test behavior around weapon max levels"""
 
-from game import Game
+from src.game import Game
 
 
 def test_generate_weapon_upgrades_respects_max_level():

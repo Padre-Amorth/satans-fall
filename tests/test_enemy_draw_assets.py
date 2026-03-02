@@ -63,6 +63,12 @@ def test_draw_enemy_uses_asset_if_available(monkeypatch):
     c.draw_enemy()
     assert called.get("name") == "enemy_crusader.png", "Expected crusader asset name"
 
+    # archer asset should be attempted too
+    called.clear()
+    a = Enemy(0, 0, "archer", health=100, speed=40)
+    a.draw_enemy()
+    assert called.get("name") == "enemy_archer.png", "Expected archer asset name"
+
 
 def test_with_real_limbo_asset(tmp_path, monkeypatch):
     """If an actual file is placed in assets, Enemy.draw_enemy should load it.

@@ -3121,7 +3121,11 @@ class CollisionSystem:
                         g.spawn_health_drop(boss.x, boss.y, heal_amt)
                     except Exception:
                         pass
-                    boss.kill()  # Remove dead boss
+                    # Don't kill boss_limbo_horde here — game.update()
+                    # needs it in the bosses group to detect death and
+                    # start the victory countdown.
+                    if boss.enemy_type != "boss_limbo_horde":
+                        boss.kill()
                     if boss.enemy_type == "boss_medium":
                         g.show_centered_message(
                             "REINFORCEMENTS INCOMING!", 1800, (255, 204, 0)
@@ -3263,23 +3267,26 @@ class CollisionSystem:
         )
         for projectile in hit_projectiles:
             actual_damage = projectile.damage * g.damage_reduction_multiplier
-            g.player.take_damage(actual_damage)
-            # Apply slow effect to player if projectile carries it
-            try:
-                if getattr(projectile, "effect", None) == "slow":
-                    slow_duration = getattr(projectile, "slow_duration", 120)
-                    slow_factor = getattr(projectile, "slow_factor", 0.5)
-                    if (
-                        not hasattr(g.player, "slow_timer")
-                        or getattr(g.player, "slow_timer", 0) <= 0
-                    ):
-                        g.player.slow_timer = slow_duration
-                        g.player.slow_factor = slow_factor
-                        if not hasattr(g.player, "original_speed"):
-                            g.player.original_speed = g.player.speed
-                        g.player.speed = g.player.speed * g.player.slow_factor
-            except Exception:
-                pass
+            # Skip damage if player is invulnerable during blink
+            if not getattr(g, "blasphemy_5_invulnerable", False):
+                g.player.take_damage(actual_damage)
+            # Apply slow effect to player if projectile carries it (skip if invulnerable)
+            if not getattr(g, "blasphemy_5_invulnerable", False):
+                try:
+                    if getattr(projectile, "effect", None) == "slow":
+                        slow_duration = getattr(projectile, "slow_duration", 120)
+                        slow_factor = getattr(projectile, "slow_factor", 0.5)
+                        if (
+                            not hasattr(g.player, "slow_timer")
+                            or getattr(g.player, "slow_timer", 0) <= 0
+                        ):
+                            g.player.slow_timer = slow_duration
+                            g.player.slow_factor = slow_factor
+                            if not hasattr(g.player, "original_speed"):
+                                g.player.original_speed = g.player.speed
+                            g.player.speed = g.player.speed * g.player.slow_factor
+                except Exception:
+                    pass
 
             # Trigger screen & player shake
             g.shake_timer = 8
@@ -3305,10 +3312,12 @@ class CollisionSystem:
                         WINGED_EXPLOSION_DURATION = 6
                         WINGED_EXPLOSION_COLOR = (255, 120, 0)
                         WINGED_CONTACT_DAMAGE = 15
-                    try:
-                        g.player.take_damage(WINGED_CONTACT_DAMAGE)
-                    except Exception:
-                        pass
+                    # Skip damage if player is invulnerable during blink
+                    if not getattr(g, "blasphemy_5_invulnerable", False):
+                        try:
+                            g.player.take_damage(WINGED_CONTACT_DAMAGE, show_floating=False)
+                        except Exception:
+                            pass
                     try:
                         g.game_state.fire_explosions.append(
                             {
@@ -3334,9 +3343,28 @@ class CollisionSystem:
                     continue
 
                 actual_damage = (enemy.damage / g.fps) * g.damage_reduction_multiplier
-                g.player.take_damage(actual_damage)
-                contact_damage_to_enemy: float = 2.0 / g.fps
-                enemy.take_damage(contact_damage_to_enemy, show_floating=False)
+                # Skip damage if player is invulnerable during blink transit
+                if not getattr(g, "blasphemy_5_invulnerable", False):
+                    g.player.take_damage(actual_damage, show_floating=False)
+
+                # contact damage to enemy is now applied as a lump every
+                # two seconds rather than continuously.  we track a timer on
+                # the enemy instance which counts down each frame while the
+                # two hitboxes overlap; when it reaches zero we deal a fixed
+                # amount (4 HP) and reset the timer.  leaving contact clears
+                # the timer so the next collision starts fresh.
+                try:
+                    if not hasattr(enemy, "contact_timer"):
+                        # start counting once we detect the first frame of
+                        # contact.  2s * fps frames.
+                        enemy.contact_timer = int(g.fps * 2)
+                    else:
+                        enemy.contact_timer -= 1
+                    if enemy.contact_timer <= 0:
+                        enemy.take_damage(4, show_floating=False)
+                        enemy.contact_timer = int(g.fps * 2)
+                except Exception:
+                    pass
                 if g.frame_count % 10 == 0:
                     # Shorter, weaker shake for contact (burn particles disabled)
                     g.shake_timer = 6
@@ -3369,7 +3397,9 @@ class CollisionSystem:
                             WINGED_EXPLOSION_COLOR = (255, 120, 0)
                             WINGED_CONTACT_DAMAGE = 15
                         try:
-                            g.player.take_damage(WINGED_CONTACT_DAMAGE)
+                            # Skip damage if player is invulnerable during blink transit
+                            if not getattr(g, "blasphemy_5_invulnerable", False):
+                                g.player.take_damage(WINGED_CONTACT_DAMAGE, show_floating=False)
                         except Exception:
                             pass
                         try:
@@ -3395,16 +3425,23 @@ class CollisionSystem:
                     actual_damage = (
                         getattr(enemy, "damage", 5) / g.fps
                     ) * g.damage_reduction_multiplier
-                    g.player.take_damage(actual_damage)
-                    contact_damage_to_enemy = 2.0 / g.fps
-                    # Object-style enemy damage on contact
+                    # Skip damage if player is invulnerable during blink transit
+                    if not getattr(g, "blasphemy_5_invulnerable", False):
+                        g.player.take_damage(actual_damage, show_floating=False)
+
                     try:
-                        enemy.take_damage(contact_damage_to_enemy, show_floating=False)
+                        if not hasattr(enemy, "contact_timer"):
+                            enemy.contact_timer = int(g.fps * 2)
+                        else:
+                            enemy.contact_timer -= 1
+                        if enemy.contact_timer <= 0:
+                            enemy.take_damage(4, show_floating=False)
+                            enemy.contact_timer = int(g.fps * 2)
                     except Exception:
-                        # Best-effort fallback to attribute mutation
+                        # Best-effort fallback: apply tiny constant damage
                         try:
                             enemy.health = max(
-                                0, getattr(enemy, "health", 0) - contact_damage_to_enemy
+                                0, getattr(enemy, "health", 0) - (2.0 / g.fps)
                             )
                         except Exception:
                             pass
@@ -3422,7 +3459,7 @@ class CollisionSystem:
         hit_bosses = pygame.sprite.spritecollide(g.player, g.bosses, False)
         for boss in hit_bosses:
             contact_damage = (boss.damage / g.fps) * g.damage_reduction_multiplier
-            g.player.take_damage(contact_damage)
+            g.player.take_damage(contact_damage, show_floating=False)
             if g.frame_count % 10 == 0:
                 # Boss contact should produce a noticeable shake
                 g.shake_timer = 6
@@ -3524,20 +3561,46 @@ class CollisionSystem:
                             if hasattr(boss, "original_speed"):
                                 delattr(boss, "original_speed")
 
-        # Orbitals damage enemies on contact
+        # Orbitals damage enemies on contact (flat 15 per orb per creature)
         if "orbital" in g.player_weapons:
+            # Calculate orbital damage based on level (+10% at levels 3 and 5)
+            orbital_level = g.weapon_levels.get("orbital", 1)
+            orbital_damage = 15
+            if orbital_level >= 3:
+                orbital_damage = int(orbital_damage * 1.1)  # +10% at level 3+
+            if orbital_level >= 5:
+                orbital_damage = int(orbital_damage * 1.1)  # +10% at level 5+ (stacks: 1.1 * 1.1 = 1.21x)
+
             for orbital in g.orbitals:
                 ox = orbital.get("x", g.player.x)
                 oy = orbital.get("y", g.player.y)
+                # track which enemies have already been hit by this orbital
+                hits: set = orbital.setdefault("hit", set())
+
                 for enemy in g._enemies_iter():
                     ex, ey = g._enemy_pos(enemy)
                     dist = math.hypot(ex - ox, ey - oy)
+                    eid = id(enemy)
                     if dist < enemy.radius + 6:  # orbital radius is 6
-                        enemy.take_damage(1.0 / g.fps)  # slight damage per frame
+                        if eid not in hits:
+                            # apply a one‑time orbital damage with level bonuses
+                            enemy.take_damage(orbital_damage)
+                            hits.add(eid)
+                    else:
+                        # enemy has moved away, allow future re-hits
+                        if eid in hits:
+                            hits.remove(eid)
+
                 for boss in g.bosses:
                     dist = math.hypot(boss.x - ox, boss.y - oy)
+                    bid = id(boss)
                     if dist < boss.radius + 6:
-                        boss.take_damage(1.0 / g.fps)
+                        if bid not in hits:
+                            boss.take_damage(orbital_damage)
+                            hits.add(bid)
+                    else:
+                        if bid in hits:
+                            hits.remove(bid)
 
         # Fallback: in case a boss somehow reached zero health without
         # going through the normal boss-hit branch above (e.g. an atypical
@@ -3548,7 +3611,8 @@ class CollisionSystem:
         # trigger so the extra XP carries over correctly.
         for boss in list(getattr(g, "bosses", []) or []):
             try:
-                if getattr(boss, "health", 0) <= 0:
+                if getattr(boss, "health", 0) <= 0 and not getattr(boss, "_death_rewarded", False):
+                    boss._death_rewarded = True
                     # record as an enemy kill (increments meta XP by 1)
                     try:
                         g.record_enemy_kill()
@@ -3575,15 +3639,17 @@ class CollisionSystem:
                         g.spawn_health_drop(boss.x, boss.y, heal_amt)
                     except Exception:
                         pass
-                    try:
-                        boss.kill()
-                    except Exception:
+                    # Don't remove boss_limbo_horde here — game.update()
+                    # needs it in the group to detect death.
+                    if getattr(boss, "enemy_type", "") != "boss_limbo_horde":
                         try:
-                            # last resort: remove from group manually
-                            if hasattr(g.bosses, "remove"):
-                                g.bosses.remove(boss)
+                            boss.kill()
                         except Exception:
-                            pass
+                            try:
+                                if hasattr(g.bosses, "remove"):
+                                    g.bosses.remove(boss)
+                            except Exception:
+                                pass
             except Exception:
                 pass
 

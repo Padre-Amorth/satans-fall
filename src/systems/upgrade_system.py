@@ -282,8 +282,6 @@ class UpgradeSystem:
                 )
 
         max_choices = 3
-        if getattr(g, "permanent_stats", {}).get("blasphemy_10", 0):
-            max_choices = 4
 
         choices = random.sample(
             processed_upgrades, min(max_choices, len(processed_upgrades))
@@ -859,9 +857,9 @@ class UpgradeSystem:
                 f"+{crit_per:.0f}% crit chance/level ({crit_total:.0f}% total)"
             )
         if key == "structure":
-            per = 3.0
+            per = 2.0
             total = per * level
-            xp_total_pct = int(round(per * level))
+            xp_total_pct = int(round(3.0 * level))
             return f"-{per:.0f}% dmg taken/level ({total:.0f}% total); +3% XP/level (+{xp_total_pct}% XP total)"
         if key.startswith("blasphemy"):
             if key == "blasphemy_1":
@@ -884,13 +882,7 @@ class UpgradeSystem:
                 total = per * level
                 return f"+{per:.0f}% XP/level ({total:.0f}% total)"
             if key == "blasphemy_5":
-                # Show description even when the player hasn't unlocked it yet.  The
-                # UI code expects a non-empty string so that hovering over the slot
-                # always produces a tooltip; previously we returned an empty string
-                # at level 0 which meant the tooltip would never appear.  This
-                # matches user expectation that you can always see what the blasphemy
-                # would do before purchasing it.
-                return "Revive once on death; restore 50% max HP"
+                return "Blink: teleport in moving direction (spacebar); 5s cooldown"
             if key == "blasphemy_6":
                 per = 10.0
                 total = per * level
@@ -908,7 +900,7 @@ class UpgradeSystem:
                 total = per * level
                 return f"Reroll level-up upgrade choices: +{per:d} rerolls/level ({total:d} rerolls per run)"
             if key == "blasphemy_10":
-                return "Add an upgrade choice at level up"
+                return "Revive once on death; restore 50% max HP"
             return "No description available"
         return ""
 

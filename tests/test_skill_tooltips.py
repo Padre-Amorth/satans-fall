@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for skill tree tooltip content and rendering safety."""
 
-from game import Game
+from src.game import Game
 
 
 def test_tooltip_lines_tier_requirements():

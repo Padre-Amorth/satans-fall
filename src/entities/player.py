@@ -278,9 +278,42 @@ class Player(BaseSprite):
                     except Exception:
                         pass
 
-    def take_damage(self, damage) -> None:
+    def take_damage(self, damage, *, show_floating: bool = True) -> None:
+        """Subtract health and optionally display floating damage text.
+
+        The flag mirrors ``Enemy.take_damage`` and allows callers to suppress
+        numbers for contact damage or other silent effects.  ``Game`` is
+        accessed lazily via ``CURRENT_GAME`` to avoid circular imports.
+        """
         actual_damage = damage * self.damage_reduction_multiplier
         self.health = max(0, self.health - actual_damage)
+
+        if not show_floating:
+            return
+
+        # show floating text if a game instance is available
+        try:
+            from src.game import CURRENT_GAME
+
+            if CURRENT_GAME is not None:
+                try:
+                    # position near player centre
+                    x = getattr(self, "x", None) or (
+                        self.rect.centerx
+                        if getattr(self, "rect", None) is not None
+                        else 0
+                    )
+                    y = getattr(self, "y", None) or (
+                        self.rect.centery
+                        if getattr(self, "rect", None) is not None
+                        else 0
+                    )
+                    CURRENT_GAME.spawn_floating_text(str(int(actual_damage)), x, y)
+                except Exception:
+                    pass
+        except Exception:
+            # silent fail if import or attributes missing
+            pass
 
     def gain_xp(self, amount) -> None:
         self.xp += amount

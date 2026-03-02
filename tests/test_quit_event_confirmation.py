@@ -2,7 +2,7 @@
 
 import pygame
 
-from game import Game
+from src.game import Game
 
 
 def test_quit_event_in_game_shows_pause_confirmation():

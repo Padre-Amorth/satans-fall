@@ -175,6 +175,56 @@ class Projectile(BaseSprite):
     def draw_projectile(self) -> None:
         """Draw projectile, try to load image first"""
         # Special handling for different weapon types
+        # first, handle explicitly tagged "enemy_normal" projectiles (yellow balls)
+        if getattr(self, "appearance", None) == "enemy_normal":
+            self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+            try:
+                pygame.draw.circle(self.image, (255, 200, 0), (self.radius, self.radius), self.radius)
+            except Exception:
+                pygame.draw.circle(self.image, (255, 200, 0), (self.radius, self.radius), self.radius)
+            return
+
+        # orbital projectiles: light blue circles
+        if getattr(self, "source", None) == "orbital":
+            self.image = pygame.Surface(
+                (self.radius * 2, self.radius * 2), pygame.SRCALPHA
+            )
+            pygame.draw.circle(
+                self.image, (102, 204, 255), (self.radius, self.radius), self.radius
+            )
+            pygame.draw.circle(
+                self.image,
+                (51, 170, 255),
+                (self.radius, self.radius),
+                self.radius - 1,
+            )
+            return
+
+        # archers use a white/azure segment
+        if getattr(self, "appearance", None) == "archer_segment":
+            w = max(2, self.radius * 2 + 2)
+            h = max(2, int(self.radius * 0.4))
+            self.image = pygame.Surface((w, h), pygame.SRCALPHA)
+            # always azure for enemies (players never use this tag)
+            color = (200, 255, 255)
+            try:
+                pygame.draw.line(self.image, color, (0, h // 2), (w, h // 2), h)
+            except Exception:
+                pygame.draw.rect(self.image, color, (0, 0, w, h))
+            return
+
+        # next, draw a generic projectile segment only for player shots
+        # but skip if appearance is explicitly set (e.g. storm_statue, ice_statue)
+        if self.weapon_type is None and not self.is_enemy_projectile and getattr(self, "appearance", None) is None:
+            w = max(2, self.radius * 2)
+            h = max(2, int(self.radius * 0.4))
+            self.image = pygame.Surface((w, h), pygame.SRCALPHA)
+            color = (255, 255, 255)
+            try:
+                pygame.draw.line(self.image, color, (0, h // 2), (w, h // 2), h)
+            except Exception:
+                pygame.draw.rect(self.image, color, (0, 0, w, h))
+            return
         # spear custom asset support
         if getattr(self, "appearance", None) == "spear":
             try:
@@ -624,20 +674,6 @@ class Projectile(BaseSprite):
                 # Inner bright green core
                 inner_r = max(1, self.radius - 3)
                 pygame.draw.circle(self.image, (60, 255, 60), center, inner_r)
-            elif getattr(self, "source", None) == "orbital":
-                # Orbital projectiles: light blue circles
-                self.image = pygame.Surface(
-                    (self.radius * 2, self.radius * 2), pygame.SRCALPHA
-                )
-                pygame.draw.circle(
-                    self.image, (102, 204, 255), (self.radius, self.radius), self.radius
-                )
-                pygame.draw.circle(
-                    self.image,
-                    (51, 170, 255),
-                    (self.radius, self.radius),
-                    self.radius - 1,
-                )
 
             else:
                 # Regular projectiles or enemy projectiles
@@ -826,6 +862,20 @@ class Projectile(BaseSprite):
                 center=(draw_x + self.radius, draw_y + self.radius)
             )
             screen.blit(rotated_image, rotated_rect)
+        elif self.weapon_type is None and (
+            not self.is_enemy_projectile
+        ):
+            # rotate player segment
+            angle = math.degrees(math.atan2(self.vel_y, self.vel_x))
+            rotated = pygame.transform.rotate(self.image, -angle)
+            rect = rotated.get_rect(center=(draw_x + self.radius, draw_y + self.radius))
+            screen.blit(rotated, rect)
+        elif getattr(self, "appearance", None) == "archer_segment":
+            # rotate archer segment
+            angle = math.degrees(math.atan2(self.vel_y, self.vel_x))
+            rotated = pygame.transform.rotate(self.image, -angle)
+            rect = rotated.get_rect(center=(draw_x + self.radius, draw_y + self.radius))
+            screen.blit(rotated, rect)
         elif (
             self.weapon_type == "tenebrae"
             or getattr(self, "appearance", None) == "tenebrae"

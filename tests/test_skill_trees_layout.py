@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for the new 2-column + center layout and unlocking rules for skill trees."""
 
-from game import Game
+from src.game import Game
 
 
 def coords_for_tree(g: Game, col_index: int, tier_index: int):

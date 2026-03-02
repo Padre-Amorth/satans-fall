@@ -35,6 +35,19 @@
 - **Effect**: `last_giant_spawn_time` set to current `time_elapsed` when `limbo_horde_completed = True`
 - **Purpose**: Prevents immediate giant re-spawns after horde; enforces 12-second cooldown rule again
 
+### 5. Victory Overlay Persistence Bug
+**Files**:
+- `src/systems/input_handler.py`
+- `src/game.py`
+
+- **Symptom**: after the SATANIC VICTORY overlay was dismissed via ESC/ENTER, the screen would sometimes reappear a few seconds later (especially when returning to menu), trapping the player.
+- **Diagnostics**: leftover `limbo_horde_completed` flag and `limbo_horde_victory_timer` were not cleared when leaving the level; the fallback logic in `update_game` would restart the countdown even while in the menu.
+- **Fixes**:
+  * `InputHandler.show_stage_menu` now resets victory/horde state (completed flag, countdown timer, ready flag) in addition to the UI flags.
+  * `InputHandler.continue_after_victory` also clears the same before resetting the run.
+  * `update_game` victory timer logic now only runs when `selected_stage` is a limbo variant; it also drops the ready flag if the player leaves the stage mid‑countdown.
+- **Effect**: pressing ESC returns to the main menu and pressing ENTER advances the stage without any possibility of the victory overlay popping up again. Input handlers no longer raise exceptions.
+
 ## Verification
 
 ### Test Results: test_limbo_victory_timing.py

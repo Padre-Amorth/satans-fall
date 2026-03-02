@@ -1,11 +1,17 @@
 from src.balance import ENEMY_BASE_SPEEDS
 from src.entities.enemy import Enemy
+import math
 
 
 class DummyGame:
     def __init__(self, width=800, height=600):
         self.width = width
         self.height = height
+        # minimal projectile container used by boss shooting logic
+        class _DummyGroup:
+            def add(self, *args, **kwargs):
+                pass
+        self.enemy_projectiles = _DummyGroup()
 
     def clamp_to_walls(self, x):
         # simple horizontal clamping consistent with game logic
@@ -20,9 +26,8 @@ def test_boss_limbo_horde_speed_entry():
     )
 
 
-def test_boss_limbo_horde_moves_to_upper_half_and_oscillates():
+def test_boss_limbo_horde_moves_to_upper_half_and_bounces():
     g = DummyGame()
-    # mimic spawn offscreen above the playfield
     boss = Enemy(
         100,
         -50,
@@ -31,27 +36,71 @@ def test_boss_limbo_horde_moves_to_upper_half_and_oscillates():
         speed=ENEMY_BASE_SPEEDS["boss_limbo_horde"],
     )
 
-    # initial update should move the boss downward toward its staging area
-    boss.update(player=None, game=g)
+    # use a simple dummy player so shooting code never crashes
+    class DummyPlayer:
+        x = g.width // 2
+        y = g.height // 2
+
+    player = DummyPlayer()
+
+    # first update should still descend
+    boss.update(player=player, game=g)
     assert boss.y > -50, "Boss should descend from offscreen on first update"
 
-    # run updates until the boss reaches or passes the halfway mark
+    # run until boss has completed its entrance and acquired a velocity vector
     for _ in range(1000):
-        boss.update(player=None, game=g)
-    assert boss.y <= g.height / 2, "Boss should end up in the upper half of the screen"
-
-    # record positions for oscillation checks once entrance is complete
-    prev_x = boss.x
-    boss.update(player=None, game=g)
-
-    # horizontal position should change due to sine drift
-    assert (
-        boss.x != prev_x
-    ), "Boss should oscillate horizontally after reaching target height"
-    # vertical position should remain in upper half
+        boss.update(player=player, game=g)
     assert boss.y <= g.height / 2
-    # ensure small bobbing keeps it near the target zone
-    assert abs(boss.y - (g.height * 0.25)) < g.height * 0.25
+    assert hasattr(boss, "horde_vx"), "Boss should have velocity after entrance"
+
+    # record initial horizontal velocity and position
+    init_vx = boss.horde_vx
+    start_x = boss.x
+    start_y = boss.y
+
+    # ensure the speed was doubled correctly (angle 30°)
+    # new behaviour: speed is boosted by factor 3 (previously 2)
+    expected_vx = ENEMY_BASE_SPEEDS["boss_limbo_horde"] * 3.0 * math.cos(math.radians(30))
+    assert math.isclose(abs(init_vx), expected_vx, rel_tol=1e-2), "Horizontal speed should match boosted factor-3 value"
+
+    # simulate for a while and ensure there are no sudden teleports
+    prev_x, prev_y = boss.x, boss.y
+    for _ in range(500):
+        boss.update(player=player, game=g)
+        dx = abs(boss.x - prev_x)
+        dy = abs(boss.y - prev_y)
+        assert dx < 50 and dy < 50, "Movement should be smooth without big jumps"
+        # boss should always remain within the central horizontal zone
+        center = g.width / 2
+        assert center - 400 <= boss.x <= center + 400
+        assert boss.horde_y_min <= boss.y <= boss.horde_y_max
+        prev_x, prev_y = boss.x, boss.y
+
+    # continue check boundaries while waiting for a bounce reversal
+    for _ in range(5000):
+        boss.update(player=player, game=g)
+        center = g.width / 2
+        assert center - 400 <= boss.x <= center + 400
+        assert boss.horde_y_min <= boss.y <= boss.horde_y_max
+        if boss.horde_vx != init_vx:
+            reversed_once = True
+            break
+
+    # continue updating until we either see a reversal or hit a generous cap
+    reversed_once = False
+    for _ in range(5000):
+        boss.update(player=player, game=g)
+        if boss.horde_vx != init_vx:
+            reversed_once = True
+            break
+    assert reversed_once, "Boss should reverse direction when it hits a wall"
+
+    # final position should still be in upper half
+    assert boss.y <= g.height / 2
+    assert g.height * 0.25 * 0.5 <= boss.y <= g.height / 2
+    # and horizontally confined to the centre 800‑pixel band
+    center = g.width / 2
+    assert center - 400 <= boss.x <= center + 400
 
 
 def test_boss_limbo_horde_never_chases_player():

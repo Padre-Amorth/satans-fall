@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test script to verify weapon upgrades in normal upgrades"""
 
-from game import Game
+from src.game import Game
 
 
 def test_weapon_upgrades_in_normal_upgrades():

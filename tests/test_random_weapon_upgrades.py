@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test script to verify weapon upgrades are random in normal upgrades"""
 
-from game import Game
+from src.game import Game
 
 
 def test_random_weapon_upgrades():

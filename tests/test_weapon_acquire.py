@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for acquiring weapons and default levels"""
 
-from game import Game
+from src.game import Game
 
 
 def test_acquire_new_weapon_sets_level_and_orbitals():

@@ -40,7 +40,7 @@ def test_winged_wave_restriction():
     # wave 1 should never produce a winged on random roll
     g = Game(debug=True)
     g.wave = 1
-    with patch("random.random", return_value=0.55):
+    with patch("random.random", return_value=0.65):
         g.spawn_enemy()
     assert not any(getattr(e, "enemy_type", "") == "winged" for e in g.enemies)
 
@@ -59,7 +59,7 @@ def test_winged_wave_restriction():
     # wave 3 should allow winged spawn
     g = Game(debug=True)
     g.wave = 3
-    with patch("random.random", return_value=0.55):
+    with patch("random.random", return_value=0.65):
         g.spawn_enemy()
     wing = next(
         (e for e in g.enemies if getattr(e, "enemy_type", "") == "winged"), None

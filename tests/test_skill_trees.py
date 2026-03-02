@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for the skill trees in Permanent Upgrades (FIRE/STORM/ICE)."""
 
-from game import Game
+from src.game import Game
 
 
 def test_skill_tree_unlock_and_persistence(tmp_path):

@@ -225,7 +225,7 @@ class PygameUIManager:
             elif stage == "limbo_3":
                 color = (200, 140, 100)  # Orangish tint for limbo_3
             elif stage == "limbo_final":
-                color = (160, 60, 110)  # Dark purple/red tint for limbo_final
+                color = (140, 40, 70)  # Dark red tint for limbo_final
             else:
                 color = PURGATORY_FOG_COLORS.get(stage, FOG_COLOR)
 

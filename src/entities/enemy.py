@@ -208,6 +208,7 @@ class Enemy(BaseSprite):
             self.direction: int = random.choice([-1, 1])
             self._wave_time: float = 0.0  # accumulator for vertical oscillation
             self._spawn_y: float = 0.0  # will be set on first update frame
+            self._rotation_time: float = 0.0  # accumulator for vertical axis rotation
 
         # Make enemies slightly larger by 10 pixels (except final boss keeps canonical size)
         if self.enemy_type != "boss_final":
@@ -695,27 +696,34 @@ class Enemy(BaseSprite):
         elif self.enemy_type == "pentagram":
             # Five-pointed star (pentagram) in dark red/crimson with gold center
             # Inverted: point downward instead of upward
+            # Rotation around vertical (Y) axis: scale horizontally based on rotation time
             cx = self.width // 2
             cy = self.height // 2
             outer_r = min(cx, cy) - 4
             inner_r = outer_r * 0.4
+            # Get rotation factor: oscillates between 0.5 and 1.0 (fully rotated to fully face)
+            # Simulates spinning around vertical axis by scaling width
+            rotation_factor = getattr(self, "_rotation_time", 0.0)
+            width_scale = 0.5 + 0.5 * abs(math.cos(rotation_factor))  # 0.5 to 1.0
             # Calculate star vertices: 5 outer points + 5 inner points, alternating
             # Inverted: start at 90 degrees (pointing down) instead of -90 (pointing up)
             points = []
             for i in range(10):
                 angle = math.radians(90 + i * 36)  # 90 degrees to point downward
                 r = outer_r if i % 2 == 0 else inner_r
-                points.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
+                # Apply horizontal scaling for rotation effect
+                x_offset = r * math.cos(angle) * width_scale
+                y_offset = r * math.sin(angle)
+                points.append((cx + x_offset, cy + y_offset))
             # Draw outer border (bright red)
             pygame.draw.polygon(self.image, (220, 60, 60), points)
             # Fill interior (dark crimson)
             pygame.draw.polygon(self.image, (150, 15, 15), points, 0)
             # Outline border (bright red)
             pygame.draw.polygon(self.image, (220, 60, 60), points, 2)
-            # Center circle (gold)
-            pygame.draw.circle(
-                self.image, (200, 160, 20), (cx, cy), max(1, inner_r // 2)
-            )
+            # Center circle (gold) - also scales with width
+            center_radius = max(1, int(inner_r // 2 * width_scale))
+            pygame.draw.circle(self.image, (200, 160, 20), (cx, cy), center_radius)
 
         else:
             # Default demon (bosses)
@@ -1079,6 +1087,8 @@ class Enemy(BaseSprite):
                     # Pentagram: horizontal traversal with vertical oscillation
                     # Accumulate time for wave oscillation
                     self._wave_time += 0.04
+                    # Accumulate time for rotation around vertical axis
+                    self._rotation_time += 0.05
                     # Horizontal movement at constant speed
                     self.x += self.direction * self.speed / 60
                     # Vertical oscillation: sine wave ±40px around spawn point

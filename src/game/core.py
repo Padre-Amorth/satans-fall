@@ -59,7 +59,6 @@ if TYPE_CHECKING:
     from src.systems.projectile_manager import ProjectileManager
 
 logger: logging.Logger = logging.getLogger(__name__)
-LOG = logging.getLogger(__name__)
 
 # Global reference to running game instance (set in Game.__init__)
 CURRENT_GAME = None
@@ -268,7 +267,6 @@ class Game:
         self._VOLTAIC_MAYHEM_IMPACT_RADIUS: int = 0
         self._VOLTAIC_MAYHEM_SPEED: int = 0
 
-        # Register self as current running game for modules that need quick access
         # Register self as current running game for modules that need quick access
         global CURRENT_GAME
         CURRENT_GAME = self
@@ -1391,9 +1389,7 @@ class Game:
         if not self.left_wall_points or not self.right_wall_points:
             return x_pos
 
-        wall_thickness = (
-            WALL_THICKNESS if self.selected_stage == "prologo" else WALL_THICKNESS
-        )
+        wall_thickness = WALL_THICKNESS
         left_boundary = (
             max(point[0] for point in self.left_wall_points) + wall_thickness
         )
@@ -1416,9 +1412,7 @@ class Game:
             high = max(0, self.width - margin)
             return random.randint(low, high)
 
-        wall_thickness = (
-            WALL_THICKNESS if self.selected_stage == "prologo" else WALL_THICKNESS
-        )
+        wall_thickness = WALL_THICKNESS
         left_boundary = int(
             max(point[0] for point in self.left_wall_points) + wall_thickness + margin
         )
@@ -1745,6 +1739,53 @@ class Game:
             self.ui.draw_lightning_effect(shake_x, shake_y)
         return None
 
+    def _draw_particles(
+        self,
+        particles: list,
+        color_fn,
+        alpha_fn,
+        shake_x: int = 0,
+        shake_y: int = 0,
+        filter_fn=None,
+    ) -> None:
+        """Generic particle drawing helper.
+
+        Args:
+            particles: List of particle objects with x, y, size, life attributes
+            color_fn: Callable(particle) -> (r, g, b) or (r, g, b, a)
+            alpha_fn: Callable(particle) -> alpha_value (0-255)
+            shake_x, shake_y: Screen shake offset
+            filter_fn: Optional callable(particle) -> bool to filter particles to draw
+        """
+        try:
+            for p in list(particles):
+                try:
+                    # Apply optional filter (e.g., distance culling for blasphemy5)
+                    if filter_fn and not filter_fn(p):
+                        continue
+
+                    # Get color and alpha
+                    color = color_fn(p)
+                    alpha = alpha_fn(p)
+
+                    # Handle both RGB and RGBA colors
+                    if len(color) == 3:
+                        color = (*color, alpha)
+
+                    # Draw particle as small circle
+                    surf = pygame.Surface(
+                        (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
+                    )
+                    pygame.draw.circle(surf, color, (p.size + 1, p.size + 1), p.size)
+                    self.screen.blit(
+                        surf,
+                        (int(p.x - p.size) + shake_x, int(p.y - p.size) + shake_y),
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     def draw_skullboom_particles(self, shake_x=0, shake_y=0) -> None:
         """Draw SkullBoom explosion particles and area effects"""
         # Draw explosion area effects first (behind particles)
@@ -1925,62 +1966,30 @@ class Game:
                         except Exception:
                             pass
 
-                    # Particles (skull-bomb)
-                    for p in list(self.skullboom_particles):
-                        try:
-                            # draw as small filled circles with alpha based on life
-                            surf = pygame.Surface(
-                                (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
-                            )
-                            alpha_p = max(30, int(255 * (p.life / 40)))
-                            pygame.draw.circle(
-                                surf,
-                                (255, 180, 80, alpha_p),
-                                (p.size + 1, p.size + 1),
-                                p.size,
-                            )
-                            self.screen.blit(
-                                surf,
-                                (
-                                    int(p.x - p.size) + shake_x,
-                                    int(p.y - p.size) + shake_y,
-                                ),
-                            )
-                        except Exception:
-                            pass
+                    # Draw skullboom particles (orange/brown color)
+                    self._draw_particles(
+                        self.skullboom_particles,
+                        color_fn=lambda p: (255, 180, 80),
+                        alpha_fn=lambda p: max(30, int(255 * (p.life / 40))),
+                        shake_x=shake_x,
+                        shake_y=shake_y,
+                    )
 
                     # Particles specific to blasphemy_5 revive (draw in red/orange)
                     # Only draw particles that are currently inside the expanding ring
                     revive_center_x = explosion["x"]
                     revive_center_y = explosion["y"]
-                    for p in list(getattr(self, "blasphemy5_particles", [])):
-                        try:
-                            # cull particles outside the current expanding radius
-                            dist = math.hypot(
-                                p.x - revive_center_x, p.y - revive_center_y
-                            )
-                            if dist > current_radius:
-                                continue
-                            surf = pygame.Surface(
-                                (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
-                            )
-                            alpha_p = max(30, int(255 * (p.life / 48)))
-                            col = getattr(p, "color_override", (255, 80, 80))
-                            pygame.draw.circle(
-                                surf,
-                                (col[0], col[1], col[2], alpha_p),
-                                (p.size + 1, p.size + 1),
-                                p.size,
-                            )
-                            self.screen.blit(
-                                surf,
-                                (
-                                    int(p.x - p.size) + shake_x,
-                                    int(p.y - p.size) + shake_y,
-                                ),
-                            )
-                        except Exception:
-                            pass
+                    self._draw_particles(
+                        getattr(self, "blasphemy5_particles", []),
+                        color_fn=lambda p: getattr(p, "color_override", (255, 80, 80)),
+                        alpha_fn=lambda p: max(30, int(255 * (p.life / 48))),
+                        shake_x=shake_x,
+                        shake_y=shake_y,
+                        filter_fn=lambda p: (
+                            math.hypot(p.x - revive_center_x, p.y - revive_center_y)
+                            <= current_radius
+                        ),
+                    )
             except Exception:
                 pass
 
@@ -2178,35 +2187,17 @@ class Game:
         if not self.skullboom_particles:
             return
 
-        try:
-            pass
-        except Exception:
-            pass
-
     def draw_ice_particles(self, shake_x=0, shake_y=0) -> None:
         """Draw ice explosion particles"""
         if not self.ice_particles:
             return
-        try:
-            for p in list(self.ice_particles):
-                try:
-                    # Draw as small filled circles with alpha based on life (blue-ish color for ice)
-                    surf = pygame.Surface(
-                        (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
-                    )
-                    alpha_p = max(
-                        30, int(255 * (p.life / 30))
-                    )  # Ice particles live up to 30 frames
-                    pygame.draw.circle(
-                        surf, (100, 200, 255, alpha_p), (p.size + 1, p.size + 1), p.size
-                    )
-                    self.screen.blit(
-                        surf, (int(p.x - p.size) + shake_x, int(p.y - p.size) + shake_y)
-                    )
-                except Exception:
-                    pass
-        except Exception:
-            pass
+        self._draw_particles(
+            self.ice_particles,
+            color_fn=lambda p: (100, 200, 255),
+            alpha_fn=lambda p: max(30, int(255 * (p.life / 30))),
+            shake_x=shake_x,
+            shake_y=shake_y,
+        )
 
     def draw_ice_puddles(self, shake_x=0, shake_y=0) -> None:
         """Draw puddles (ice or blizzard) that slow enemies with organic shapes"""
@@ -2971,8 +2962,6 @@ class Game:
         # limbo_final is extra punishing: ramp slopes should be doubled
         if stage == "limbo_final":
             try:
-                from src.balance import SPAWN_RAMP_SLOPE_POST, SPAWN_RAMP_SLOPE_PRE
-
                 self.spawn_ramp_slope_pre = SPAWN_RAMP_SLOPE_PRE * 2
                 self.spawn_ramp_slope_post = SPAWN_RAMP_SLOPE_POST * 2
             except Exception:
@@ -3101,9 +3090,9 @@ class Game:
         self.damage_multiplier = 1.0
         self.fire_rate_multiplier = 1.0
         self.projectile_size_multiplier = 1.0
-        # Apply STRUCTURE effect (3% damage reduction per level)
+        # Apply STRUCTURE effect (2% damage reduction per level)
         self.damage_reduction_multiplier = 1.0 - (
-            self.permanent_stats.get("structure", 0) * 0.03
+            self.permanent_stats.get("structure", 0) * 0.02
         )
         # Ensure permanent stat effects are applied immediately (also sets xp_multiplier)
         self.apply_permanent_stats()
@@ -3503,13 +3492,8 @@ class Game:
             if msg["frames"] <= 0:
                 self.center_messages.remove(msg)
 
-    def update(self) -> None:
-        """Primary per-frame update called from ``update_game``.
-
-        This method contains the majority of in-game logic; ``update_game``
-        temporarily forces the game into in-game state so tests can call it
-        without menus interfering.
-        """
+    def _update_pre_guard_state(self) -> None:
+        """Update state that must tick even while paused (before early-return guards)."""
         # update any fire-special smoke particles that are drifting
         self._update_fire_smoke()
 
@@ -3587,18 +3571,20 @@ class Game:
             and getattr(self, "limbo_horde_victory_timer", 0) <= 0
         ):
             should_check = True
-            print(
-                "[LIMBO_HORDE] Fallback victory timer check (completed but no ready flag)"
-            )
+            if getattr(self, "debug", False):
+                logger.debug(
+                    "[LIMBO_HORDE] Fallback victory timer check (completed but no ready flag)"
+                )
         if should_check:
             # wait for *all* foes to vanish: both normal enemies and any bosses
             enemies_empty = (not getattr(self, "enemies", None)) or len(
                 self.enemies
             ) == 0
             bosses_empty = (not getattr(self, "bosses", None)) or len(self.bosses) == 0
-            print(
-                f"[LIMBO_HORDE] ready_for_victory check: enemies_empty={enemies_empty} bosses_empty={bosses_empty} enemy_count={len(self.enemies)} boss_count={len(self.bosses)}"
-            )
+            if getattr(self, "debug", False):
+                logger.debug(
+                    f"[LIMBO_HORDE] ready_for_victory check: enemies_empty={enemies_empty} bosses_empty={bosses_empty} enemy_count={len(self.enemies)} boss_count={len(self.bosses)}"
+                )
             if enemies_empty and bosses_empty:
                 try:
                     self.limbo_horde_victory_timer = int(self.fps * 5)
@@ -3606,9 +3592,10 @@ class Game:
                     self.limbo_horde_victory_timer = 0
                 # consume the flag so we don't trigger again
                 self.limbo_horde_ready_for_victory = False
-                print(
-                    f"[LIMBO_HORDE] Victory timer started: {self.limbo_horde_victory_timer} frames"
-                )
+                if getattr(self, "debug", False):
+                    logger.debug(
+                        f"[LIMBO_HORDE] Victory timer started: {self.limbo_horde_victory_timer} frames"
+                    )
 
         # After limbo explosion we wait a moment then show victory screen
         # Timer decrements every frame once it's been set
@@ -3618,7 +3605,7 @@ class Game:
                 getattr(self, "debug", False)
                 and self.limbo_horde_victory_timer % 30 == 0
             ):
-                print(
+                logger.debug(
                     f"[LIMBO_HORDE] Victory timer countdown: {self.limbo_horde_victory_timer} frames remaining"
                 )
             if self.limbo_horde_victory_timer <= 0:
@@ -3638,7 +3625,7 @@ class Game:
                 getattr(self, "debug", False)
                 and self.limbo_final_victory_timer % self.fps == 0
             ):
-                print(
+                logger.debug(
                     f"[LIMBO_FINAL] Countdown: {self.limbo_final_victory_timer} frames remaining"
                 )
             if self.limbo_final_victory_timer <= 0:
@@ -3655,6 +3642,425 @@ class Game:
                     255, self.victory_alpha + self.victory_fade_speed
                 )
             # do not auto-dismiss; input handler will clear the flag
+
+    def _remove_dead_enemies(self) -> None:
+        """Remove dead enemies and award score/XP. Handles both sprite groups and plain lists."""
+        # Check for dead enemies after update (e.g., from burn damage over time) and remove them
+        if hasattr(self.enemies, "sprites"):
+            for enemy in list(self.enemies.sprites()):
+                if hasattr(enemy, "health") and enemy.health <= 0:
+                    self.add_score(
+                        enemy.max_health
+                        * ENEMY_SCORE_PER_HEALTH
+                        * self.difficulty_multiplier
+                    )
+                    type_xp_local = {
+                        "weak": 10,
+                        "normal": 16,
+                        "strong": 25,
+                        "giant": 50,
+                        "angel": 22,
+                    }
+                    base_xp_local = type_xp_local.get(
+                        str(getattr(enemy, "enemy_type", "")), 12
+                    )
+                    self.player_xp += int(
+                        round(base_xp_local * getattr(self, "xp_multiplier", 1.0))
+                    )
+                    if self.player_xp >= self.xp_to_next_level:
+                        self.trigger_level_up()
+                    try:
+                        if (
+                            getattr(enemy, "burn_propagate_on_death", False)
+                            or getattr(enemy, "burn_propagate_hops", 0) > 0
+                        ):
+                            try:
+                                self._propagate_burn(enemy)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    try:
+                        enemy.kill()
+                    except Exception:
+                        pass
+        else:
+            for enemy in list(self.enemies):
+                # Plain-list enemies (object instances expected)
+                if getattr(enemy, "health", 0) <= 0:
+                    self.add_score(
+                        getattr(enemy, "max_health", 10)
+                        * ENEMY_SCORE_PER_HEALTH
+                        * self.difficulty_multiplier
+                    )
+                    try:
+                        if (
+                            getattr(enemy, "burn_propagate_on_death", False)
+                            or getattr(enemy, "burn_propagate_hops", 0) > 0
+                        ):
+                            try:
+                                self._propagate_burn(enemy)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    base_xp_local = 12
+                    try:
+                        base_xp_local = {
+                            "weak": 10,
+                            "normal": 16,
+                            "strong": 25,
+                            "giant": 50,
+                            "angel": 22,
+                        }.get(str(getattr(enemy, "enemy_type", "")), 12)
+                    except Exception:
+                        base_xp_local = 12
+                    self.player_xp += int(
+                        round(base_xp_local * getattr(self, "xp_multiplier", 1.0))
+                    )
+                    if self.player_xp >= self.xp_to_next_level:
+                        self.trigger_level_up()
+                    try:
+                        self.record_enemy_kill()
+                    except Exception:
+                        pass
+                    try:
+                        # Call kill() if implemented, then ensure removal from plain list
+                        if hasattr(enemy, "kill"):
+                            try:
+                                enemy.kill()
+                            except Exception:
+                                pass
+                        try:
+                            # Always attempt to remove from the plain list container
+                            self.enemies.remove(enemy)
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+
+                # Object/sprite enemies stored in a plain list (support for tests)
+                elif hasattr(enemy, "health") and enemy.health <= 0:
+                    try:
+                        self.add_score(
+                            enemy.max_health
+                            * ENEMY_SCORE_PER_HEALTH
+                            * self.difficulty_multiplier
+                        )
+                    except Exception:
+                        pass
+                    type_xp_local = {
+                        "weak": 10,
+                        "normal": 16,
+                        "strong": 25,
+                        "giant": 50,
+                        "angel": 22,
+                    }
+                    base_xp_local = type_xp_local.get(
+                        str(getattr(enemy, "enemy_type", "")), 12
+                    )
+                    try:
+                        self.player_xp += int(
+                            round(base_xp_local * getattr(self, "xp_multiplier", 1.0))
+                        )
+                    except Exception:
+                        pass
+                    if self.player_xp >= self.xp_to_next_level:
+                        self.trigger_level_up()
+                    # Propagate burn if flagged
+                    try:
+                        if (
+                            getattr(enemy, "burn_propagate_on_death", False)
+                            or getattr(enemy, "burn_propagate_hops", 0) > 0
+                        ):
+                            try:
+                                self._propagate_burn(enemy)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    try:
+                        # If enemy implements kill(), call it for symmetry with Group
+                        enemy.kill()
+                    except Exception:
+                        pass
+                    try:
+                        # remove from the plain list
+                        self.enemies.remove(enemy)
+                        try:
+                            self.record_enemy_kill()
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+
+    def _remove_dead_bosses(self) -> None:
+        """Remove dead bosses and award score/XP. Handles both sprite groups and dict lists."""
+        # Check for dead bosses after update (e.g., from burn damage over time) and remove them
+        if hasattr(self.bosses, "sprites"):
+            for boss in list(self.bosses.sprites()):
+                if hasattr(boss, "health") and boss.health <= 0:
+                    # Boss death handling (similar to enemy death but with different XP multiplier)
+                    # For now, use enemy-like handling; adjust if bosses have special death logic
+                    self.add_score(boss.max_health * 25)  # Bosses give more score
+                    boss_xp_map = {"medium": 80, "big": 150, "final": 400}
+                    boss_base_xp = boss_xp_map.get(
+                        boss.enemy_type.replace("boss_", ""), 100
+                    )
+                    self.player_xp += int(
+                        round(boss_base_xp * getattr(self, "xp_multiplier", 1.0))
+                    )
+                    if self.player_xp >= self.xp_to_next_level:
+                        self.trigger_level_up()
+                    # Propagate burn on boss death if applicable
+                    try:
+                        if (
+                            getattr(boss, "burn_propagate_on_death", False)
+                            or getattr(boss, "burn_propagate_hops", 0) > 0
+                        ):
+                            try:
+                                self._propagate_burn(boss)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                    # spawn limbo_final countdown if appropriate
+                    try:
+                        if getattr(self, "debug", False):
+                            print(
+                                "[CORE] death flag check",
+                                boss.enemy_type,
+                                getattr(self, "selected_stage", None),
+                                "started?",
+                                getattr(self, "limbo_final_victory_started", False),
+                            )
+                        if (
+                            getattr(boss, "enemy_type", "") == "boss_limbo"
+                            and getattr(self, "selected_stage", None) == "limbo_final"
+                            and not getattr(self, "limbo_final_victory_started", False)
+                        ):
+                            # begin 5‑second timer
+                            self.limbo_final_victory_timer = int(self.fps * 5)
+                            self.limbo_final_victory_started = True
+                            if getattr(self, "debug", False):
+                                print("[CORE] limbo_final timer started")
+                            try:
+                                self.show_centered_message(
+                                    "BOSS DEFEATED!", 2000, (255, 255, 0)
+                                )
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                    # Spawn health drop for all bosses
+                    try:
+                        et = getattr(boss, "enemy_type", "")
+                        if et.startswith("boss_"):
+                            heal_amt = random.randint(10, 20)
+                            try:
+                                self.spawn_health_drop(boss.x, boss.y, heal_amt)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                    # If a medium (wave) boss dies by any cause, schedule reinforcements
+                    try:
+                        if getattr(boss, "enemy_type", "") == "boss_medium":
+                            # Show the centered HUD message and schedule the reinforcement timer
+                            try:
+                                self.show_centered_message(
+                                    "REINFORCEMENTS INCOMING!", 1800, (255, 204, 0)
+                                )
+                            except Exception:
+                                pass
+                            try:
+                                # Clear any existing reinforcement timer then schedule a new one
+                                pygame.time.set_timer(pygame.USEREVENT + 1, 0)
+                                pygame.time.set_timer(
+                                    pygame.USEREVENT + 1, self.reinforcement_delay_ms
+                                )
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                    boss.kill()  # Remove dead boss
+        else:
+            for boss in list(self.bosses):
+                if isinstance(boss, dict) and boss.get("health", 0) <= 0:
+                    self.add_score(
+                        boss.get("max_health", 100) * 25 * self.difficulty_multiplier
+                    )  # Assuming bosses have higher multiplier
+                    if self.player_xp >= self.xp_to_next_level:
+                        self.trigger_level_up()
+                    # Propagate burn on boss death if applicable
+                    try:
+                        if (
+                            boss.get("burn_propagate_on_death", False)
+                            or boss.get("burn_propagate_hops", 0) > 0
+                        ):
+                            try:
+                                self._propagate_burn(boss)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    # spawn health drop for all bosses
+                    try:
+                        et = boss.get("enemy_type", "")
+                        if et.startswith("boss_"):
+                            heal_amt = random.randint(10, 20)
+                            try:
+                                self.spawn_health_drop(
+                                    boss.get("x", 0), boss.get("y", 0), heal_amt
+                                )
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    try:
+                        self.bosses.remove(boss)
+                    except Exception:
+                        pass
+
+    def _cull_offscreen_projectiles(self) -> None:
+        """Remove projectiles that have gone off-screen."""
+        # Remove player projectiles that go off-screen top
+        for projectile in self.projectiles:
+            if projectile.y < 0:
+                projectile.kill()
+
+        # Remove enemy projectiles that go off-screen in any direction
+        for projectile in self.enemy_projectiles:
+            if (
+                projectile.y > self.height
+                or projectile.x < 0
+                or projectile.x > self.width
+            ):
+                projectile.kill()
+
+        # Remove off-screen statue projectiles
+        for projectile in self.statue_projectiles[:]:
+            if (
+                getattr(projectile, "y", 0) < 0
+                or getattr(projectile, "y", 0) > self.height
+                or getattr(projectile, "x", 0) < 0
+                or getattr(projectile, "x", 0) > self.width
+            ):
+                self.statue_projectiles.remove(projectile)
+
+    def _update_particle_effects(self) -> None:
+        """Update all particle systems and puddle effects."""
+        # Update SkullBoom particles
+        # allow dict-style particles (legacy) but prefer objects with .alive property
+        self.skullboom_particles = [
+            p for p in self.skullboom_particles if getattr(p, "alive", True)
+        ]
+        for p in self.skullboom_particles:
+            p.update()
+
+        # Update blasphemy_5 particles (red revive explosion particles)
+        self.blasphemy5_particles = [p for p in self.blasphemy5_particles if p.alive]
+        for p in self.blasphemy5_particles:
+            p.update()
+
+        # Update ice particles
+        self.ice_particles = [p for p in self.ice_particles if p.alive]
+        for p in self.ice_particles:
+            p.update()
+
+        # Update SkullBoom explosions
+        self.skullboom_explosions = [
+            e for e in self.skullboom_explosions if e["timer"] > 0
+        ]
+        for explosion in self.skullboom_explosions:
+            explosion["timer"] -= 1
+
+        # Update ice puddles
+        self.ice_puddles = [p for p in self.ice_puddles if p["timer"] > 0]
+        for puddle in self.ice_puddles:
+            puddle["timer"] -= 1
+
+        # Blizzard puddles share behaviour with ice puddles but use their own list.
+        # ensure they expire after the configured duration so the zone vanishes.
+        if hasattr(self, "blizzard_puddles"):
+            # collect those that will expire this frame
+            expired = []
+            new_puddles = []
+            for puddle in self.blizzard_puddles:
+                if puddle.get("timer", 0) <= 1:
+                    expired.append(puddle.copy())
+                else:
+                    new_puddles.append(puddle)
+            # apply explosion damage for expired blizzard zones
+            if expired:
+                try:
+                    from src.game_constants import BLIZZARD_EXPIRE_DAMAGE
+                except Exception:
+                    BLIZZARD_EXPIRE_DAMAGE = 0
+                for p in expired:
+                    # damage normal enemies
+                    for enemy in list(self.enemies):
+                        ex, ey = self._enemy_pos(enemy)
+                        dx = ex - p["x"]
+                        dy = ey - p["y"]
+                        if dx * dx + dy * dy <= p["radius"] * p["radius"]:
+                            try:
+                                enemy.health = max(
+                                    0, enemy.health - BLIZZARD_EXPIRE_DAMAGE
+                                )
+                            except Exception:
+                                pass
+                            # show damage text above enemy
+                            try:
+                                self.spawn_floating_text(
+                                    str(int(BLIZZARD_EXPIRE_DAMAGE)),
+                                    ex,
+                                    ey - self._enemy_radius(enemy) - 8,
+                                )
+                            except Exception:
+                                pass
+                    # damage bosses as well
+                    if hasattr(self, "bosses") and self.bosses:
+                        items = (
+                            self.bosses.sprites()
+                            if hasattr(self.bosses, "sprites")
+                            else list(self.bosses)
+                        )
+                        for boss in items:
+                            bx, by = self._enemy_pos(boss)
+                            dx = bx - p["x"]
+                            dy = by - p["y"]
+                            if dx * dx + dy * dy <= p["radius"] * p["radius"]:
+                                try:
+                                    boss.health = max(
+                                        0, boss.health - BLIZZARD_EXPIRE_DAMAGE
+                                    )
+                                except Exception:
+                                    pass
+                                try:
+                                    self.spawn_floating_text(
+                                        str(int(BLIZZARD_EXPIRE_DAMAGE)),
+                                        bx,
+                                        by - self._enemy_radius(boss) - 8,
+                                    )
+                                except Exception:
+                                    pass
+            self.blizzard_puddles = new_puddles
+            for puddle in self.blizzard_puddles:
+                puddle["timer"] -= 1
+
+    def update(self) -> None:
+        """Primary per-frame update called from ``update_game``.
+
+        This method contains the majority of in-game logic; ``update_game``
+        temporarily forces the game into in-game state so tests can call it
+        without menus interfering.
+        """
+        self._update_pre_guard_state()
 
         # Handle stage start countdown
         if self.stage_start_countdown > 0:
@@ -3820,154 +4226,7 @@ class Game:
                             ent.update(self.player)
                         except Exception as e:
                             logger.exception("Error updating entity: %s", e)
-        # Check for dead enemies after update (e.g., from burn damage over time) and remove them
-        if hasattr(self.enemies, "sprites"):
-            for enemy in list(self.enemies.sprites()):
-                if hasattr(enemy, "health") and enemy.health <= 0:
-                    self.add_score(
-                        enemy.max_health
-                        * ENEMY_SCORE_PER_HEALTH
-                        * self.difficulty_multiplier
-                    )
-                    type_xp_local = {
-                        "weak": 10,
-                        "normal": 16,
-                        "strong": 25,
-                        "giant": 50,
-                        "angel": 22,
-                    }
-                    base_xp_local = type_xp_local.get(
-                        str(getattr(enemy, "enemy_type", "")), 12
-                    )
-                    self.player_xp += int(
-                        round(base_xp_local * getattr(self, "xp_multiplier", 1.0))
-                    )
-                    if self.player_xp >= self.xp_to_next_level:
-                        self.trigger_level_up()
-                    try:
-                        if (
-                            getattr(enemy, "burn_propagate_on_death", False)
-                            or getattr(enemy, "burn_propagate_hops", 0) > 0
-                        ):
-                            try:
-                                self._propagate_burn(enemy)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                    try:
-                        enemy.kill()
-                    except Exception:
-                        pass
-        else:
-            for enemy in list(self.enemies):
-                # Plain-list enemies (object instances expected)
-                if getattr(enemy, "health", 0) <= 0:
-                    self.add_score(
-                        getattr(enemy, "max_health", 10)
-                        * ENEMY_SCORE_PER_HEALTH
-                        * self.difficulty_multiplier
-                    )
-                    try:
-                        if (
-                            getattr(enemy, "burn_propagate_on_death", False)
-                            or getattr(enemy, "burn_propagate_hops", 0) > 0
-                        ):
-                            try:
-                                self._propagate_burn(enemy)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                    base_xp_local = 12
-                    try:
-                        base_xp_local = {
-                            "weak": 10,
-                            "normal": 16,
-                            "strong": 25,
-                            "giant": 50,
-                            "angel": 22,
-                        }.get(str(getattr(enemy, "enemy_type", "")), 12)
-                    except Exception:
-                        base_xp_local = 12
-                    self.player_xp += int(
-                        round(base_xp_local * getattr(self, "xp_multiplier", 1.0))
-                    )
-                    if self.player_xp >= self.xp_to_next_level:
-                        self.trigger_level_up()
-                    try:
-                        self.record_enemy_kill()
-                    except Exception:
-                        pass
-                    try:
-                        # Call kill() if implemented, then ensure removal from plain list
-                        if hasattr(enemy, "kill"):
-                            try:
-                                enemy.kill()
-                            except Exception:
-                                pass
-                        try:
-                            # Always attempt to remove from the plain list container
-                            self.enemies.remove(enemy)
-                        except Exception:
-                            pass
-                    except Exception:
-                        pass
-
-                # Object/sprite enemies stored in a plain list (support for tests)
-                elif hasattr(enemy, "health") and enemy.health <= 0:
-                    try:
-                        self.add_score(
-                            enemy.max_health
-                            * ENEMY_SCORE_PER_HEALTH
-                            * self.difficulty_multiplier
-                        )
-                    except Exception:
-                        pass
-                    type_xp_local = {
-                        "weak": 10,
-                        "normal": 16,
-                        "strong": 25,
-                        "giant": 50,
-                        "angel": 22,
-                    }
-                    base_xp_local = type_xp_local.get(
-                        str(getattr(enemy, "enemy_type", "")), 12
-                    )
-                    try:
-                        self.player_xp += int(
-                            round(base_xp_local * getattr(self, "xp_multiplier", 1.0))
-                        )
-                    except Exception:
-                        pass
-                    if self.player_xp >= self.xp_to_next_level:
-                        self.trigger_level_up()
-                    # Propagate burn if flagged
-                    try:
-                        if (
-                            getattr(enemy, "burn_propagate_on_death", False)
-                            or getattr(enemy, "burn_propagate_hops", 0) > 0
-                        ):
-                            try:
-                                self._propagate_burn(enemy)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                    try:
-                        # If enemy implements kill(), call it for symmetry with Group
-                        enemy.kill()
-                    except Exception:
-                        pass
-                    try:
-                        # remove from the plain list
-                        self.enemies.remove(enemy)
-                        try:
-                            self.record_enemy_kill()
-                        except Exception:
-                            pass
-                    except Exception:
-                        pass
+        self._remove_dead_enemies()
 
         # Bosses may be stored similarly
         if hasattr(self.bosses, "update"):
@@ -3989,143 +4248,9 @@ class Game:
                         except Exception:
                             pass
 
-        # Check for dead bosses after update (e.g., from burn damage over time) and remove them
-        if hasattr(self.bosses, "sprites"):
-            for boss in list(self.bosses.sprites()):
-                if hasattr(boss, "health") and boss.health <= 0:
-                    # Boss death handling (similar to enemy death but with different XP multiplier)
-                    # For now, use enemy-like handling; adjust if bosses have special death logic
-                    self.add_score(boss.max_health * 25)  # Bosses give more score
-                    boss_xp_map = {"medium": 80, "big": 150, "final": 400}
-                    boss_base_xp = boss_xp_map.get(
-                        boss.enemy_type.replace("boss_", ""), 100
-                    )
-                    self.player_xp += int(
-                        round(boss_base_xp * getattr(self, "xp_multiplier", 1.0))
-                    )
-                    if self.player_xp >= self.xp_to_next_level:
-                        self.trigger_level_up()
-                    # Propagate burn on boss death if applicable
-                    try:
-                        if (
-                            getattr(boss, "burn_propagate_on_death", False)
-                            or getattr(boss, "burn_propagate_hops", 0) > 0
-                        ):
-                            try:
-                                self._propagate_burn(boss)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
+        self._remove_dead_bosses()
 
-                    # spawn limbo_final countdown if appropriate
-                    try:
-                        if getattr(self, "debug", False):
-                            print(
-                                "[CORE] death flag check",
-                                boss.enemy_type,
-                                getattr(self, "selected_stage", None),
-                                "started?",
-                                getattr(self, "limbo_final_victory_started", False),
-                            )
-                        if (
-                            getattr(boss, "enemy_type", "") == "boss_limbo"
-                            and getattr(self, "selected_stage", None) == "limbo_final"
-                            and not getattr(self, "limbo_final_victory_started", False)
-                        ):
-                            # begin 5‑second timer
-                            self.limbo_final_victory_timer = int(self.fps * 5)
-                            self.limbo_final_victory_started = True
-                            if getattr(self, "debug", False):
-                                print("[CORE] limbo_final timer started")
-                            try:
-                                self.show_centered_message(
-                                    "BOSS DEFEATED!", 2000, (255, 255, 0)
-                                )
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-
-                    # Spawn health drop for all bosses
-                    try:
-                        et = getattr(boss, "enemy_type", "")
-                        if et.startswith("boss_"):
-                            heal_amt = random.randint(10, 20)
-                            try:
-                                self.spawn_health_drop(boss.x, boss.y, heal_amt)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-
-                    # If a medium (wave) boss dies by any cause, schedule reinforcements
-                    try:
-                        if getattr(boss, "enemy_type", "") == "boss_medium":
-                            # Show the centered HUD message and schedule the reinforcement timer
-                            try:
-                                self.show_centered_message(
-                                    "REINFORCEMENTS INCOMING!", 1800, (255, 204, 0)
-                                )
-                            except Exception:
-                                pass
-                            try:
-                                # Clear any existing reinforcement timer then schedule a new one
-                                pygame.time.set_timer(pygame.USEREVENT + 1, 0)
-                                pygame.time.set_timer(
-                                    pygame.USEREVENT + 1, self.reinforcement_delay_ms
-                                )
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-
-                    boss.kill()  # Remove dead boss
-        else:
-            for boss in list(self.bosses):
-                if isinstance(boss, dict) and boss.get("health", 0) <= 0:
-                    self.add_score(
-                        boss.get("max_health", 100) * 25 * self.difficulty_multiplier
-                    )  # Assuming bosses have higher multiplier
-                    if self.player_xp >= self.xp_to_next_level:
-                        self.trigger_level_up()
-                    # Propagate burn on boss death if applicable
-                    try:
-                        if (
-                            boss.get("burn_propagate_on_death", False)
-                            or boss.get("burn_propagate_hops", 0) > 0
-                        ):
-                            try:
-                                self._propagate_burn(boss)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                    # spawn health drop for all bosses
-                    try:
-                        et = boss.get("enemy_type", "")
-                        if et.startswith("boss_"):
-                            heal_amt = random.randint(10, 20)
-                            try:
-                                self.spawn_health_drop(
-                                    boss.get("x", 0), boss.get("y", 0), heal_amt
-                                )
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                    try:
-                        self.bosses.remove(boss)
-                    except Exception:
-                        pass
-
-        # Remove projectiles that go off-screen
-        for projectile in self.projectiles:
-            if projectile.y < 0:
-                projectile.kill()
-        for projectile in self.enemy_projectiles:
-            if projectile.y > self.height:
-                projectile.kill()
+        self._cull_offscreen_projectiles()
 
         # Update orbitals
         if "orbital" in self.player_weapons:
@@ -4157,104 +4282,7 @@ class Game:
         # Handle collisions
         self.collision_system.handle_collisions()
 
-        # Update SkullBoom particles
-        # allow dict-style particles (legacy) but prefer objects with .alive property
-        self.skullboom_particles = [
-            p for p in self.skullboom_particles if getattr(p, "alive", True)
-        ]
-        for p in self.skullboom_particles:
-            p.update()
-
-        # Update blasphemy_5 particles (red revive explosion particles)
-        self.blasphemy5_particles = [p for p in self.blasphemy5_particles if p.alive]
-        for p in self.blasphemy5_particles:
-            p.update()
-
-        # Update ice particles
-        self.ice_particles = [p for p in self.ice_particles if p.alive]
-        for p in self.ice_particles:
-            p.update()
-
-        # Update SkullBoom explosions
-        self.skullboom_explosions = [
-            e for e in self.skullboom_explosions if e["timer"] > 0
-        ]
-        for explosion in self.skullboom_explosions:
-            explosion["timer"] -= 1
-
-        # Update ice puddles
-        self.ice_puddles = [p for p in self.ice_puddles if p["timer"] > 0]
-        for puddle in self.ice_puddles:
-            puddle["timer"] -= 1
-
-        # Blizzard puddles share behaviour with ice puddles but use their own list.
-        # ensure they expire after the configured duration so the zone vanishes.
-        if hasattr(self, "blizzard_puddles"):
-            # collect those that will expire this frame
-            expired = []
-            new_puddles = []
-            for puddle in self.blizzard_puddles:
-                if puddle.get("timer", 0) <= 1:
-                    expired.append(puddle.copy())
-                else:
-                    new_puddles.append(puddle)
-            # apply explosion damage for expired blizzard zones
-            if expired:
-                try:
-                    from src.game_constants import BLIZZARD_EXPIRE_DAMAGE
-                except Exception:
-                    BLIZZARD_EXPIRE_DAMAGE = 0
-                for p in expired:
-                    # damage normal enemies
-                    for enemy in list(self.enemies):
-                        ex, ey = self._enemy_pos(enemy)
-                        dx = ex - p["x"]
-                        dy = ey - p["y"]
-                        if dx * dx + dy * dy <= p["radius"] * p["radius"]:
-                            try:
-                                enemy.health = max(
-                                    0, enemy.health - BLIZZARD_EXPIRE_DAMAGE
-                                )
-                            except Exception:
-                                pass
-                            # show damage text above enemy
-                            try:
-                                self.spawn_floating_text(
-                                    str(int(BLIZZARD_EXPIRE_DAMAGE)),
-                                    ex,
-                                    ey - self._enemy_radius(enemy) - 8,
-                                )
-                            except Exception:
-                                pass
-                    # damage bosses as well
-                    if hasattr(self, "bosses") and self.bosses:
-                        items = (
-                            self.bosses.sprites()
-                            if hasattr(self.bosses, "sprites")
-                            else list(self.bosses)
-                        )
-                        for boss in items:
-                            bx, by = self._enemy_pos(boss)
-                            dx = bx - p["x"]
-                            dy = by - p["y"]
-                            if dx * dx + dy * dy <= p["radius"] * p["radius"]:
-                                try:
-                                    boss.health = max(
-                                        0, boss.health - BLIZZARD_EXPIRE_DAMAGE
-                                    )
-                                except Exception:
-                                    pass
-                                try:
-                                    self.spawn_floating_text(
-                                        str(int(BLIZZARD_EXPIRE_DAMAGE)),
-                                        bx,
-                                        by - self._enemy_radius(boss) - 8,
-                                    )
-                                except Exception:
-                                    pass
-            self.blizzard_puddles = new_puddles
-            for puddle in self.blizzard_puddles:
-                puddle["timer"] -= 1
+        self._update_particle_effects()
 
         # Update floating texts (drawn later)
         self._update_floating_texts()
@@ -4262,38 +4290,12 @@ class Game:
         # Update health drop positions / player collisions
         self._update_health_drops()
 
-        # Update floating texts
-        self._update_floating_texts()
-
         # Update statue/tower weapons for Limbo and Purgatory
         if self.is_limbo_stage() or (
             self.selected_stage
             and str(self.selected_stage).startswith(("purgatory", "hell"))
         ):
             self.update_statue_weapons()
-
-        # Remove off-screen projectiles
-        for projectile in self.projectiles:
-            if projectile.y < 0:
-                projectile.kill()
-
-        for projectile in self.enemy_projectiles:
-            if (
-                projectile.y > self.height
-                or projectile.x < 0
-                or projectile.x > self.width
-            ):
-                projectile.kill()
-
-        # Remove off-screen statue projectiles
-        for projectile in self.statue_projectiles[:]:
-            if (
-                getattr(projectile, "y", 0) < 0
-                or getattr(projectile, "y", 0) > self.height
-                or getattr(projectile, "x", 0) < 0
-                or getattr(projectile, "x", 0) > self.width
-            ):
-                self.statue_projectiles.remove(projectile)
 
         # Update screen shake
         if self.shake_timer > 0:
@@ -4526,8 +4528,6 @@ class Game:
         )
 
         # Create violet particles at origin point (6-8 particles)
-        import random
-
         num_particles = random.randint(6, 8)
         self.blasphemy_5_blink_particles = []
         for _ in range(num_particles):
@@ -4596,8 +4596,6 @@ class Game:
                 self.player.x = self.blasphemy_5_blink_target_x
                 self.player.y = self.blasphemy_5_blink_target_y
                 # Create violet particles at arrival point (6-8 particles)
-                import random
-
                 num_particles = random.randint(6, 8)
                 for _ in range(num_particles):
                     # Spread particles in a circle around the arrival point

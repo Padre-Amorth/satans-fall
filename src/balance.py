@@ -64,8 +64,10 @@ ENEMY_BASE_SPEEDS: dict[str, float] = {
     "boss_limbo_horde": 45.0,
     # new fast zig-zagging flying enemy
     "winged": 120.0,
+    "archer": 40.0,  # slow-moving ranged enemy confined to top of screen
     # Crusader is extremely slow, slower than a giant
     "crusader": 30.0,
+    "pentagram": 50.0,  # slow horizontal traversal tank
 }
 
 

@@ -154,6 +154,29 @@ class Enemy(BaseSprite):
             self.width = 30
             self.height = 30
             self.damage = 10
+        elif enemy_type == "archer":
+            # Archer: slow-moving ranged attacker that stays near top of screen
+            self.width = 30
+            self.height = 30
+            self.damage = 10
+            # initialize firing pattern flag like inquisitor but simpler
+            self.archer_fire_single_next = True
+            # track burst state: which arrow in the 3-arrow burst (0=single, 1-3=burst arrows)
+            self.archer_burst_arrow = 0
+            # entry phase: move downward into view before settling
+            self.archer_entering = True
+            # randomize entry target between 150-210 for variety
+            self.archer_entry_target_y = random.randint(150, 210)
+            # randomize entry speed between 0.8-1.2 px/frame for smoother entry
+            self.archer_entry_speed = random.uniform(0.8, 1.2)
+            # impose vertical starting cap if spawn above limit (mostly for forced spawns)
+            try:
+                from src.game_constants import ARCHER_VERTICAL_LIMIT
+
+                if self.y > ARCHER_VERTICAL_LIMIT:
+                    self.y = ARCHER_VERTICAL_LIMIT
+            except Exception:
+                pass
         elif enemy_type == "boss_medium":
             self.width = 60
             self.height = 60
@@ -177,6 +200,14 @@ class Enemy(BaseSprite):
             self.width = 100
             self.height = 100
             self.damage = 30
+        elif enemy_type == "pentagram":
+            # Horizontal traversal tank shaped like a pentagram/star
+            self.width = 70
+            self.height = 70
+            self.damage = 0  # does not attack
+            self.direction: int = random.choice([-1, 1])
+            self._wave_time: float = 0.0  # accumulator for vertical oscillation
+            self._spawn_y: float = 0.0  # will be set on first update frame
 
         # Make enemies slightly larger by 10 pixels (except final boss keeps canonical size)
         if self.enemy_type != "boss_final":
@@ -198,6 +229,10 @@ class Enemy(BaseSprite):
             self.health = self.max_health
             # give them a shield equal to their health
             self.shield_hp: int = self.max_health
+        # Archers are beefier than normal—double health but no shield
+        if enemy_type == "archer":
+            self.max_health *= 2
+            self.health = self.max_health
 
         # Shield HP: shielded and mage enemies absorb damage through shield first
         if enemy_type in ("shielded", "mage"):
@@ -205,6 +240,13 @@ class Enemy(BaseSprite):
         # Mage support-caster state
         if enemy_type == "mage":
             self.shield_timer: int = 60 * 5  # frames until first shield cast
+
+        # Pentagram: HP fixed at 500 body + 1500 shield, independent of global multipliers
+        if enemy_type == "pentagram":
+            self.max_health = 500
+            self.health = 500
+            self.shield_hp = 1500
+            self.shield_max_hp = 1500
         # Custode split flag: True means this custode is already a split half
         if enemy_type == "custode":
             self._custode_split: bool = False
@@ -220,6 +262,10 @@ class Enemy(BaseSprite):
         self.shoot_cooldown: int | None = None
         if enemy_type == "normal":
             self.shoot_cooldown = random.randint(60, 120)
+        elif enemy_type == "archer":
+            # Archer uses its own cooldown pattern (single then burst) and is
+            # generally slower than normal enemies
+            self.shoot_cooldown = random.randint(120, 200)
         elif enemy_type == "boss_medium":
             self.shoot_cooldown = random.randint(60, 120)
         elif enemy_type == "boss_inquisitor":
@@ -646,6 +692,29 @@ class Enemy(BaseSprite):
                 self.image, (255, 255, 255), [(14, 8), (15, 12), (16, 8)]
             )
 
+        elif self.enemy_type == "pentagram":
+            # Five-pointed star (pentagram) in dark red/crimson with gold center
+            cx = self.width // 2
+            cy = self.height // 2
+            outer_r = min(cx, cy) - 4
+            inner_r = outer_r * 0.4
+            # Calculate star vertices: 5 outer points + 5 inner points, alternating
+            points = []
+            for i in range(10):
+                angle = math.radians(-90 + i * 36)  # -90 degrees to point upward
+                r = outer_r if i % 2 == 0 else inner_r
+                points.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
+            # Draw outer border (bright red)
+            pygame.draw.polygon(self.image, (220, 60, 60), points)
+            # Fill interior (dark crimson)
+            pygame.draw.polygon(self.image, (150, 15, 15), points, 0)
+            # Outline border (bright red)
+            pygame.draw.polygon(self.image, (220, 60, 60), points, 2)
+            # Center circle (gold)
+            pygame.draw.circle(
+                self.image, (200, 160, 20), (cx, cy), max(1, inner_r // 2)
+            )
+
         else:
             # Default demon (bosses)
             # Body (dark red/purple)
@@ -691,39 +760,80 @@ class Enemy(BaseSprite):
             # oscillating.  The speed for this type is slightly higher than the
             # normal final boss; it comes from ENEMY_BASE_SPEEDS.
             if self.enemy_type == "boss_limbo_horde" and game is not None:
-                # target a spot well above the centre of the screen (upper half)
+                # the horde boss should park itself in the upper half and then
+                # move along a single oblique line, ping‑ponging back and forth
+                # when it hits the stage walls.  previous implementation used
+                # sawtooth/triangle waves which produced an unpleasant jump at the
+                # end of each loop; the new code keeps the sprite anchored at its
+                # starting position and simply reverses velocity when a boundary is
+                # reached.
                 target_y = game.height * 0.25
                 if not hasattr(self, "horde_entrance_complete"):
-                    # initial entrance: descend from off‑screen until we reach the
-                    # target altitude.  We also slowly drift toward the horizontal
-                    # centre while descending.
+                    # entrance phase: descend from off‑screen and drift toward
+                    # centre horizontally.  identical to previous behaviour.
                     if self.y < target_y:
                         self.y += self.speed / 60
                         self.x += (game.width / 2 - self.x) * 0.01
                     else:
                         self.horde_entrance_complete = True
-                        # initialize float parameters for the subsequent phase
-                        self.float_center_x = self.x
-                        self.float_amplitude = game.width * 0.2
-                        self.float_speed = 0.02
-                        self.float_time = 0
+                        # after arrival we initialise a velocity vector that
+                        # points down‑right (oblique) and will be bounced off
+                        # the walls.  we also remember vertical bounds so the
+                        # boss never leaves the upper half.
+                        angle = math.radians(30)  # shallow 30° downward slope
+                        # boost the vector by three to increase overall movement
+                        # velocity (makes boss patrol faster across the central zone).
+                        speed_factor = 3.0
+                        self.horde_vx = self.speed * speed_factor * math.cos(angle)
+                        self.horde_vy = self.speed * speed_factor * math.sin(angle)
+                        self.horde_y_min = target_y * 0.5
+                        self.horde_y_max = game.height / 2
                 else:
-                    # once entrance is complete, move diagonally in triangular pattern
-                    self.float_time += self.float_speed
-                    # sawtooth wave for diagonal left-right movement
-                    sawtooth_x = (
-                        (self.float_time % (math.pi * 2)) / (math.pi * 2)
-                    ) * 2 - 1
-                    # triangle wave for diagonal up-down movement
-                    triangle_y = 1 - abs(
-                        2 * ((self.float_time / (math.pi * 2)) % 1) - 1
-                    )
+                    # movement after entrance: update position using the
+                    # velocity vector scaled per‑frame, then handle bounds.
+                    # first compute where we'd land so a fast update doesn't
+                    # skip past the wall
+                    next_x = self.x + self.horde_vx / 60
+                    next_y = self.y + self.horde_vy / 60
 
-                    self.x = self.float_center_x + sawtooth_x * self.float_amplitude
-                    self.y = target_y + (triangle_y - 0.5) * self.float_amplitude
-                    # enforce bounds: stay in upper half and within walls
-                    self.x = max(50, min(game.width - 50, self.x))
-                    self.y = max(target_y * 0.5, min(game.height / 2, self.y))
+                    # bounce horizontally if the next position would cross the
+                    # allowed zone (400px either side of screen centre).  This
+                    # keeps the boss from wandering all the way to the far walls
+                    # which made its movement feel too extreme.
+                    center = game.width / 2
+                    left_limit = center - 400
+                    right_limit = center + 400
+                    if next_x <= left_limit or next_x >= right_limit:
+                        # reverse both components to mirror the oblique vector
+                        self.horde_vx *= -1
+                        self.horde_vy *= -1
+                        next_x = self.x + self.horde_vx / 60
+                        next_y = self.y + self.horde_vy / 60
+
+                    # bounce vertically to stay within upper-half limits
+                    if next_y <= self.horde_y_min or next_y >= self.horde_y_max:
+                        self.horde_vy *= -1
+                        next_y = self.y + self.horde_vy / 60
+
+                    # assign the tentative coordinates
+                    self.x = next_x
+                    self.y = next_y
+
+                    # enforce final clamping so we never step outside walls;
+                    # if clamping actually moves the boss, flip the corresponding
+                    # velocity component to simulate a bounce at the boundary.
+                    # final clamp using the same 400px margin from centre
+                    center = game.width / 2
+                    left_limit = center - 400
+                    right_limit = center + 400
+                    clamped_x = max(left_limit, min(right_limit, self.x))
+                    if clamped_x != self.x:
+                        self.horde_vx *= -1
+                        self.x = clamped_x
+                    clamped_y = max(self.horde_y_min, min(self.horde_y_max, self.y))
+                    if clamped_y != self.y:
+                        self.horde_vy *= -1
+                        self.y = clamped_y
                 # movement handled; fall through to the remainder of update
                 # (shooting and special attack code should still run)
                 pass
@@ -962,6 +1072,86 @@ class Enemy(BaseSprite):
                         except Exception:
                             pass
                     # movement handled; skip other behaviour
+                    pass
+                elif self.enemy_type == "pentagram":
+                    # Pentagram: horizontal traversal with vertical oscillation
+                    # Accumulate time for wave oscillation
+                    self._wave_time += 0.04
+                    # Horizontal movement at constant speed
+                    self.x += self.direction * self.speed / 60
+                    # Vertical oscillation: sine wave ±40px around spawn point
+                    if self._spawn_y == 0.0:
+                        self._spawn_y = self.y
+                    self.y = self._spawn_y + math.sin(self._wave_time) * 40
+                    # Self-remove when fully off the exit side of the screen
+                    if game is not None:
+                        screen_w = getattr(game, "width", 1280)
+                        half_w = self.width // 2
+                        if self.direction == 1 and self.x > screen_w + half_w + 20:
+                            # Exited right side
+                            self.health = 0
+                        elif self.direction == -1 and self.x < -(half_w + 20):
+                            # Exited left side
+                            self.health = 0
+                elif self.enemy_type == "archer":
+                    # Entry phase: move downward into view
+                    if getattr(self, "archer_entering", False):
+                        entry_speed = getattr(self, "archer_entry_speed", 1.0)
+                        self.y += entry_speed
+                        # Once reached target Y, switch to normal behavior
+                        target_y = getattr(self, "archer_entry_target_y", 180)
+                        if self.y >= target_y:
+                            self.archer_entering = False
+                            self.y = target_y
+                    else:
+                        # Normal behavior: slow, jittery movement near the top of the screen
+                        try:
+                            from src.game_constants import ARCHER_VERTICAL_LIMIT
+
+                            # keep vertical bound
+                            if self.y > ARCHER_VERTICAL_LIMIT:
+                                self.y = ARCHER_VERTICAL_LIMIT
+                        except Exception:
+                            pass
+                        # Initialize target position if not set
+                        if not hasattr(self, "archer_target_x"):
+                            self.archer_target_x = self.x
+                            self.archer_reposition_timer = random.randint(180, 300)
+
+                        # Every 180-300 frames, archer picks new target position
+                        self.archer_reposition_timer -= 1
+                        if self.archer_reposition_timer <= 0:
+                            # Pick new random X target position (don't teleport, just set target)
+                            if game:
+                                try:
+                                    self.archer_target_x = game.random_x_between_walls()
+                                except Exception:
+                                    pass
+                            self.archer_reposition_timer = random.randint(180, 300)
+
+                        # Move toward target position gradually
+                        target_diff = self.archer_target_x - self.x
+                        if abs(target_diff) > 0.5:
+                            # Move toward target at slow speed (0.5 px/frame)
+                            move_toward = 0.5 if target_diff > 0 else -0.5
+                            self.x += move_toward
+
+                        # Add jitter on top of base movement
+                        self.x += random.uniform(-0.5, 0.5) * self.speed / 60
+                        self.y += random.uniform(-0.5, 0.5) * self.speed / 60
+
+                        if game:
+                            try:
+                                self.x = game.clamp_to_walls(self.x)
+                            except Exception:
+                                pass
+                        # ensure we stay within top region after jitter
+                        try:
+                            from src.game_constants import ARCHER_VERTICAL_LIMIT
+
+                            self.y = min(self.y, ARCHER_VERTICAL_LIMIT)
+                        except Exception:
+                            pass
                     pass
                 elif self.enemy_type == "normal" and game is not None:
                     # Lazily initialize a stop point/time near the center of the battlefield
@@ -1793,6 +1983,9 @@ class Enemy(BaseSprite):
 
     def shoot_at_player(self, player, game):
         """Handle shooting logic for different enemy types"""
+        # Archer doesn't shoot while entering screen
+        if self.enemy_type == "archer" and getattr(self, "archer_entering", False):
+            return
         try:
             # Mini‑Inquisitor (normal enemy with inquisitor appearance) fires only the single aimed slow projectile
             if (
@@ -1850,12 +2043,77 @@ class Enemy(BaseSprite):
                     self.y,
                     vel_x,
                     vel_y,
-                    damage=8,
+                    damage=10,
                     radius=5,
                     is_enemy_projectile=True,
+                    appearance="enemy_normal",  # yellow ball for normals
                 )
                 game.enemy_projectiles.add(projectile)
                 self.shoot_cooldown: int = random.randint(90, 180)
+            elif self.enemy_type == "archer":
+                # Archer fires a single arrow then a 3-arrow burst alternately
+                dx = player.x - self.x
+                dy = player.y - self.y
+                base_angle = math.atan2(dy, dx)
+                speed = 200
+                if getattr(self, "archer_fire_single_next", False):
+                    # Single arrow shot
+                    vel_x = math.cos(base_angle) * speed
+                    vel_y = math.sin(base_angle) * speed
+                    proj = Projectile(
+                        self.x,
+                        self.y,
+                        vel_x,
+                        vel_y,
+                        damage=getattr(game, "ARCHER_PROJECTILE_DAMAGE", 10),
+                        radius=getattr(game, "ARCHER_PROJECTILE_RADIUS", 5),
+                        is_enemy_projectile=True,
+                        appearance="archer_segment",
+                    )
+                    game.enemy_projectiles.add(proj)
+                    # Next cycle will be burst
+                    self.archer_fire_single_next = False
+                    # After single shot, shorter cooldown so burst starts soon
+                    self.shoot_cooldown = random.randint(50, 80)
+                else:
+                    # Burst mode: fire arrows in sequence with delay
+                    burst_arrow = getattr(self, "archer_burst_arrow", 0)
+                    if burst_arrow == 0:
+                        # Starting burst: schedule first arrow immediately, set longer cooldown
+                        burst_arrow = 1
+                        self.archer_burst_arrow = burst_arrow
+                        self.shoot_cooldown = 15  # short delay before first burst arrow
+                    elif burst_arrow in (1, 2, 3):
+                        # Fire one of the three arrows
+                        # Spread angles: left, center, right
+                        spread_angles = [
+                            base_angle - math.radians(8),
+                            base_angle,
+                            base_angle + math.radians(8),
+                        ]
+                        ang = spread_angles[burst_arrow - 1]
+                        vel_x = math.cos(ang) * speed
+                        vel_y = math.sin(ang) * speed
+                        proj = Projectile(
+                            self.x,
+                            self.y,
+                            vel_x,
+                            vel_y,
+                            damage=getattr(game, "ARCHER_PROJECTILE_DAMAGE", 10),
+                            radius=getattr(game, "ARCHER_PROJECTILE_RADIUS", 5),
+                            is_enemy_projectile=True,
+                            appearance="archer_segment",
+                        )
+                        game.enemy_projectiles.add(proj)
+                        if burst_arrow < 3:
+                            # More arrows coming
+                            self.archer_burst_arrow = burst_arrow + 1
+                            self.shoot_cooldown = 12  # delay between burst arrows
+                        else:
+                            # Burst complete, switch back to single
+                            self.archer_burst_arrow = 0
+                            self.archer_fire_single_next = True
+                            self.shoot_cooldown = random.randint(80, 140)
 
             elif self.enemy_type == "angel":
                 # Single aimed shot (same as normal but maybe different stats)
@@ -2244,7 +2502,15 @@ class Enemy(BaseSprite):
             )
             if (
                 self.enemy_type
-                in ("giant", "custode", "mage", "normal", "strong", "shielded")
+                in (
+                    "giant",
+                    "custode",
+                    "mage",
+                    "normal",
+                    "strong",
+                    "shielded",
+                    "archer",
+                )
                 or _is_inquisitor
             ):
                 anim_frame = getattr(self, "_anim_frame", 0)

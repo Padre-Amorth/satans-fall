@@ -304,6 +304,26 @@ class Game:
         self.blasphemy_5_pause_timer: int = 0
         # Marker so we only auto-unpause when the pause was caused by blasphemy_5
         self._paused_by_blasphemy5: bool = False
+        # Blasphemy_5 blink cooldown tracker (frames remaining)
+        self.blasphemy_5_blink_cooldown: int = 0
+        # Blasphemy_5 blink animation state: 0=none, 1=pre-blink, 2=post-blink
+        self.blasphemy_5_blink_state: int = 0
+        # Blasphemy_5 blink animation timer (counts down)
+        self.blasphemy_5_blink_timer: int = 0
+        # Store target position during blink animation
+        self.blasphemy_5_blink_target_x: float = 0
+        self.blasphemy_5_blink_target_y: float = 0
+        # Store origin position for particle effects
+        self.blasphemy_5_blink_origin_x: float = 0
+        self.blasphemy_5_blink_origin_y: float = 0
+        # Particles list for blink effect
+        self.blasphemy_5_blink_particles: list = []
+        self.blasphemy_5_invisible: bool = (
+            False  # Player invisible during blink transit
+        )
+        self.blasphemy_5_invulnerable: bool = (
+            False  # Player invulnerable during blink transit
+        )
         self.player_xp = 0
         self.player_level = 1
         self.xp_to_next_level = XP_BASE
@@ -1187,6 +1207,8 @@ class Game:
             "battlefield_cross.png",  # Bloody cross for battlefield decoration
             # optional Limbo battlefield image (see STAGE_SETTINGS)
             "limbo_battlefield.png",
+            # optional Limbo external/full‑screen image (see STAGE_SETTINGS)
+            "limbo_background.png",
             # optional Purgatory background(s) (see STAGE_SETTINGS)
             "purgatory_background.png",
             "purgatory_battlefield.png",
@@ -1744,7 +1766,7 @@ class Game:
                     elif explosion.get("revive"):
                         # eased progression (slower early, faster near the end)
                         eased = 1 - (progress**1.6)
-                        base_offset = 1.0  # revive uses full radius
+                        base_offset = 0.0  # revive starts small and expands
                         current_radius = int(
                             explosion["max_radius"]
                             * (base_offset + eased * (1 - base_offset))
@@ -3113,6 +3135,7 @@ class Game:
         if getattr(self, "spawn_system", None) is not None:
             try:
                 self.spawn_system.last_giant_spawn_time = -float("inf")
+                self.spawn_system.pentagram_spawned = False
             except Exception:
                 pass
         self.big_enemy_timer = 12 * self.fps
@@ -3489,6 +3512,13 @@ class Game:
         """
         # update any fire-special smoke particles that are drifting
         self._update_fire_smoke()
+
+        # Update blasphemy_5 blink animation (pre-blink delay + teleport + post-blink delay)
+        self.update_blasphemy5_blink_animation()
+
+        # Update blasphemy_5 blink cooldown
+        if self.blasphemy_5_blink_cooldown > 0:
+            self.blasphemy_5_blink_cooldown -= 1
 
         # Handle blasphemy_5 auto-resume timer (counts down even while paused).
         # When the timer expires, automatically unpause if the pause was set by
@@ -4293,11 +4323,11 @@ class Game:
                     self.game_over()
 
     def _handle_blasphemy5_revive(self) -> bool:
-        """Handle blasphemy-5 one-time player revive on death.
+        """Handle blasphemy-10 one-time player revive on death.
 
         Returns True if revive was triggered, False otherwise.
         """
-        if self.permanent_stats.get("blasphemy_5", 0) and not getattr(
+        if self.permanent_stats.get("blasphemy_10", 0) and not getattr(
             self, "blasphemy_5_revived", False
         ):
             try:
@@ -4416,6 +4446,187 @@ class Game:
                 # If anything goes wrong with revive, fall back to normal game over
                 pass
         return False
+
+    def execute_blasphemy5_blink(self) -> None:
+        """Execute Blasphemy 5 blink ability: teleport 120px in current movement direction.
+
+        Gets called when spacebar is pressed during gameplay and blasphemy_5 > 0.
+        Teleports the player in the direction they are currently moving.
+        Animation: 12 frame pre-blink delay + 20 frame arrival delay.
+        """
+        blasphemy_5_level = self.permanent_stats.get("blasphemy_5", 0)
+        if blasphemy_5_level <= 0:
+            return
+
+        # If already blinking or cooldown active, don't start another blink
+        if self.blasphemy_5_blink_state > 0:
+            return
+
+        if self.blasphemy_5_blink_cooldown > 0:
+            return
+
+        # Get movement direction from currently pressed keys (not from velocity, which may be 1 frame behind in real gameplay)
+        keys = pygame.key.get_pressed()
+        vx = 0
+        vy = 0
+
+        # Horizontal movement
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            vx = -self.player.speed
+        elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            vx = self.player.speed
+
+        # Vertical movement
+        if keys[pygame.K_UP] or keys[pygame.K_w]:
+            vy = -self.player.speed
+        elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            vy = self.player.speed
+
+        # If no keys are pressed, fall back to velocity (for testing, or edge cases)
+        if abs(vx) < 0.1 and abs(vy) < 0.1:
+            vx = self.player.velocity_x
+            vy = self.player.velocity_y
+
+        # If still not moving, don't blink (no direction to go)
+        if abs(vx) < 0.1 and abs(vy) < 0.1:
+            return
+
+        # Normalize direction vector
+        magnitude = math.hypot(vx, vy)
+        if magnitude > 0:
+            vx_norm = vx / magnitude
+            vy_norm = vy / magnitude
+        else:
+            return
+
+        # Blink distance: 120px
+        blink_distance = 120.0
+
+        # Calculate new position
+        new_x = self.player.x + vx_norm * blink_distance
+        new_y = self.player.y + vy_norm * blink_distance
+
+        # Ensure new position stays within bounds
+        margin = 30
+        new_x = max(margin, min(self.width - margin, new_x))
+        new_y = max(margin, min(self.height - margin, new_y))
+
+        # Store origin position for particle effects
+        self.blasphemy_5_blink_origin_x = self.player.x
+        self.blasphemy_5_blink_origin_y = self.player.y
+
+        # Store target and start pre-blink animation (10 frames)
+        self.blasphemy_5_blink_target_x = new_x
+        self.blasphemy_5_blink_target_y = new_y
+        self.blasphemy_5_blink_state = 1  # Pre-blink state
+        self.blasphemy_5_blink_timer = 10  # 10 frame pre-delay before teleport
+        self.blasphemy_5_invisible = False  # Player visible during pre-blink
+        self.blasphemy_5_invulnerable = (
+            True  # Player immortal immediately on spacebar press
+        )
+
+        # Create violet particles at origin point (6-8 particles)
+        import random
+
+        num_particles = random.randint(6, 8)
+        self.blasphemy_5_blink_particles = []
+        for _ in range(num_particles):
+            # Spread particles in a circle around the origin
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(0.5, 2.0)
+            particle = {
+                "x": self.player.x,
+                "y": self.player.y,
+                "vx": math.cos(angle) * speed,
+                "vy": math.sin(angle) * speed,
+                "life": 25,  # frames until particle dies (5 pre + 20 invisible frames)
+                "max_life": 25,  # Track max life for fade calculation
+                "alpha": 160,
+                "size": 6,  # slightly larger particles (was 4)
+            }
+            self.blasphemy_5_blink_particles.append(particle)
+
+        # Set cooldown: 5 seconds (300 frames @ 60fps)
+        self.blasphemy_5_blink_cooldown = int(5 * self.fps)
+
+    def update_blasphemy5_blink_animation(self) -> None:
+        """Update blink animation state and execute teleport when ready.
+
+        States:
+        - 0: No animation
+        - 1: Pre-blink (5 frames of anticipation, player visible & vulnerable)
+        - 2: Invisible phase (20 frames, player invisible & invulnerable in transit)
+        - 3: Post-blink (10 frames of arrival, player visible & vulnerable)
+        """
+        if self.blasphemy_5_blink_state == 0:
+            return
+
+        self.blasphemy_5_blink_timer -= 1
+
+        # Update blink particles (fade out and spread)
+        for p in self.blasphemy_5_blink_particles:
+            p["x"] += p["vx"]
+            p["y"] += p["vy"]
+            p["life"] -= 1
+            # Fade alpha as life decreases
+            max_life = p.get("max_life", 24)
+            p["alpha"] = int(160 * (max(0, p["life"]) / max(1, max_life)))
+
+        # Remove dead particles
+        self.blasphemy_5_blink_particles = [
+            p for p in self.blasphemy_5_blink_particles if p["life"] > 0
+        ]
+
+        if self.blasphemy_5_blink_state == 1:  # Pre-blink state
+            self.blasphemy_5_invisible = False
+            self.blasphemy_5_invulnerable = True  # Remain immortal during pre-blink
+            if self.blasphemy_5_blink_timer <= 0:
+                # Transition to invisible phase (15 frames of transit)
+                self.blasphemy_5_blink_state = 2
+                self.blasphemy_5_blink_timer = 15
+                self.blasphemy_5_invisible = True
+                self.blasphemy_5_invulnerable = True
+
+        elif self.blasphemy_5_blink_state == 2:  # Invisible phase
+            # Player is invisible and invulnerable during transit
+            self.blasphemy_5_invisible = True
+            self.blasphemy_5_invulnerable = True
+            if self.blasphemy_5_blink_timer <= 0:
+                # Execute teleport at end of invisible phase
+                self.player.x = self.blasphemy_5_blink_target_x
+                self.player.y = self.blasphemy_5_blink_target_y
+                # Create violet particles at arrival point (6-8 particles)
+                import random
+
+                num_particles = random.randint(6, 8)
+                for _ in range(num_particles):
+                    # Spread particles in a circle around the arrival point
+                    angle = random.uniform(0, 2 * math.pi)
+                    speed = random.uniform(0.5, 2.0)
+                    particle = {
+                        "x": self.player.x,
+                        "y": self.player.y,
+                        "vx": math.cos(angle) * speed,
+                        "vy": math.sin(angle) * speed,
+                        "life": 10,  # frames until particle dies (match post-blink duration)
+                        "max_life": 10,  # Track max life for fade calculation
+                        "alpha": 160,
+                        "size": 6,
+                    }
+                    self.blasphemy_5_blink_particles.append(particle)
+                # Move to post-blink state (10 frames of arrival animation)
+                self.blasphemy_5_blink_state = 3
+                self.blasphemy_5_blink_timer = 10
+                self.blasphemy_5_invisible = False
+
+        elif self.blasphemy_5_blink_state == 3:  # Post-blink state
+            self.blasphemy_5_invisible = False
+            self.blasphemy_5_invulnerable = False
+            if self.blasphemy_5_blink_timer <= 0:
+                # Animation complete
+                self.blasphemy_5_blink_state = 0
+                self.blasphemy_5_invisible = False
+                self.blasphemy_5_invulnerable = False
 
     def handle_input(self) -> None:
         """Handle player movement input"""

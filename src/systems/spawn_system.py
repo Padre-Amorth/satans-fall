@@ -38,6 +38,8 @@ class SpawnSystem:
         # waves; the value is reset to ``-inf`` so the first spawn is always
         # allowed.  The cooldown is waived when a limbo horde is active.
         self.last_giant_spawn_time: float = -float("inf")
+        # One-time pentagram flag for the current run
+        self.pentagram_spawned: bool = False
 
     def _can_spawn_giant(self) -> bool:
         """Return ``True`` if a giant (or similar big enemy) may spawn now.
@@ -99,6 +101,16 @@ class SpawnSystem:
                         self.game.selected_stage,
                     )
                 self._start_limbo_horde()
+
+        # Pentagram: spawn one-shot at t >= 60s
+        if (
+            not self.pentagram_spawned
+            and getattr(self.game, "time_elapsed", 0.0) >= 60.0
+            and not getattr(self.game, "limbo_horde_completed", False)
+            and not getattr(self.game, "showing_victory", False)
+            and not getattr(self.game, "showing_game_over", False)
+        ):
+            self._spawn_pentagram()
 
         # Use manager timers if manager exists
         # block any further spawning once the horde has been completed,
@@ -1255,6 +1267,33 @@ class SpawnSystem:
             self.last_giant_spawn_time = self.game.time_elapsed
         except Exception:
             pass
+
+    def _spawn_pentagram(self) -> None:
+        """Spawn the one-time pentagram tank enemy that traverses the stage horizontally."""
+        self.pentagram_spawned = True
+        # Choose entry side randomly
+        direction: int = random.choice([-1, 1])
+        half_w = 40  # half of final width (70 + 10 from global growth) / 2
+        if direction == 1:
+            # Enter from left, move right
+            x = float(-half_w - 10)
+        else:
+            # Enter from right, move left
+            x = float(self.game.width + half_w + 10)
+        # Random vertical spawn position in mid-screen corridor
+        y = float(random.randint(200, 500))
+        # Pentagram: 500 base health (will get 1500 shield added in __init__)
+        health = 500.0 * getattr(self.game, "difficulty_multiplier", 1.0)
+        speed = ENEMY_BASE_SPEEDS.get("pentagram", 50.0)
+        # Create the pentagram enemy
+        enemy = Enemy(x, y, "pentagram", health, speed)
+        # Override direction after construction for correct visuals/movement
+        enemy.direction = direction
+        # Add to game's enemy group
+        if hasattr(self.game.enemies, "add"):
+            self.game.enemies.add(enemy)
+        else:
+            self.game.enemies.append(enemy)
 
     def spawn_reinforcements(self, x=None, y=None, count=None):
         """Spawn a short-lived cluster of reinforcements near (x,y) or at a random building.

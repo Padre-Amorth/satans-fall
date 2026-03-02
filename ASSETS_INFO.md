@@ -52,9 +52,17 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
 
 - **File:** `assets/enemy_giant.png`
 
-- **File:** `assets/enemy_crusader.png`  
+- **File:** `assets/enemy_crusader.png`
   - Dimensione: 60x60 pixel
   - Nemico gigante (spawn ogni 12 secondi)
+
+- **File:** `assets/enemy_pentagram.png`
+  - Dimensione consigliata: 80x80 pixel
+  - Nemico tank a forma di stella a 5 punte (pentacolo)
+  - Appare una volta per stage dopo 60 secondi
+  - Attraversa lo stage orizzontalmente con oscillazione verticale
+  - Non attacca (danni = 0)
+  - Se assente, il gioco renderizza un pentacolo rosso/oro con arte vettoriale
 
 ### Boss
 - **File:** `assets/boss_small.png`
@@ -114,6 +122,10 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
   - Immagine di sfondo per la parte interna delle mura nei livelli `limbo`, `limbo_2`, `limbo_3` e `limbo_final`.
   - La variante `limbo_final` utilizza lo stesso sfondo ma introduce un boss dopo 3 minuti.
   - Se mancante, il gioco userà il riempimento arancione di default.
+- **External background:**
+  - **File:** `assets/limbo_background.png`
+  - Copre tutta la schermata esterna alle mura, come avviene per prologo e purgatorio.
+  - Se l'immagine manca, il gioco ricaverà la tinta da `bg_color`.
 
 ### Campo di battaglia (Purgatory)
 

@@ -1095,6 +1095,11 @@ class Enemy(BaseSprite):
                     if self._spawn_y == 0.0:
                         self._spawn_y = self.y
                     self.y = self._spawn_y + math.sin(self._wave_time) * 40
+                    # Redraw every frame to show rotation animation
+                    try:
+                        self.draw_enemy()
+                    except Exception:
+                        pass
                     # Self-remove when fully off the exit side of the screen
                     if game is not None:
                         screen_w = getattr(game, "width", 1280)

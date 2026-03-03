@@ -2771,12 +2771,6 @@ class Game:
     def record_enemy_kill(self) -> None:
         """Record a single enemy kill for the current run."""
         self.enemies_killed_this_run += 1
-        # Track limbo horde progress if it was started (informational only)
-        if getattr(self, "limbo_horde_initial", 0) > 0:
-            self.limbo_horde_killed += 1
-            self.limbo_horde_remaining = max(
-                0, self.limbo_horde_initial - self.limbo_horde_killed
-            )
         if self.score_system:
             self.score_system.record_enemy_kill()
 

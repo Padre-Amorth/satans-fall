@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "Profile 1",
-  "last_played": "2026-03-03T12:33:06",
+  "last_played": "2026-03-03T12:34:28",
   "permanent_stats": {
     "power": 0,
     "vigor": 2,
@@ -37,7 +37,7 @@
     "fire_6": 0
   },
   "global_progress": {
-    "meta_xp": 8021,
+    "meta_xp": 8026,
     "meta_level": 5,
     "meta_points": 5,
     "stages_cleared": {

@@ -699,6 +699,9 @@ class SpawnSystem:
         for entry in schedule:
             total += entry.get("count", 0) + entry.get("boss_count", 0)
         self.game.limbo_horde_schedule = schedule
+        self.game.limbo_horde_initial = total
+        self.game.limbo_horde_killed = 0
+        self.game.limbo_horde_remaining = total
         self.game.limbo_horde_phase_index = 0
         self.game.limbo_horde_timer = 0
         self.game.limbo_horde_elapsed = 0

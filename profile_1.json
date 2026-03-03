@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "Profile 1",
-  "last_played": "2026-03-03T10:55:58",
+  "last_played": "2026-03-03T12:31:25",
   "permanent_stats": {
     "power": 0,
     "vigor": 2,
@@ -29,9 +29,9 @@
     "storm_5": 0,
     "storm_6": 0,
     "fire_1": 1,
-    "fire_2": 1,
-    "fire_3": 1,
-    "fire_7": 1,
+    "fire_2": 0,
+    "fire_3": 0,
+    "fire_7": 0,
     "fire_4": 0,
     "fire_5": 0,
     "fire_6": 0

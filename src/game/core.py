@@ -859,6 +859,10 @@ class Game:
         self.limbo_horde_victory_timer: int = 0
         # Flag set when boss dies; victory countdown starts once room is empty
         self.limbo_horde_ready_for_victory: bool = False
+        # Track horde progress: initial total enemies/bosses, killed count, remaining count
+        self.limbo_horde_initial: int = 0
+        self.limbo_horde_killed: int = 0
+        self.limbo_horde_remaining: int = 0
         # Limbo Final kill countdown (starts when boss_limbo is slain)
         self.limbo_final_victory_timer: int = 0
         self.limbo_final_victory_started: bool = False
@@ -2654,6 +2658,9 @@ class Game:
         self.limbo_horde_active = False
         self.limbo_horde_completed = False
         self.limbo_horde_ready_for_victory = False
+        self.limbo_horde_initial = 0
+        self.limbo_horde_killed = 0
+        self.limbo_horde_remaining = 0
         self.limbo_horde_schedule = []
         self.limbo_horde_phase_index = 0
         # clear any pending limbo final victory countdown
@@ -2763,6 +2770,12 @@ class Game:
 
     def record_enemy_kill(self) -> None:
         """Record a single enemy kill for the current run."""
+        # Track limbo horde progress if it was started (informational only)
+        if getattr(self, "limbo_horde_initial", 0) > 0:
+            self.limbo_horde_killed += 1
+            self.limbo_horde_remaining = max(
+                0, self.limbo_horde_initial - self.limbo_horde_killed
+            )
         if self.score_system:
             self.score_system.record_enemy_kill()
 

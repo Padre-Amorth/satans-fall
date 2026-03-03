@@ -2015,7 +2015,9 @@ class Game:
     ) -> None:
         """Delegate to ParticleSystem."""
         if self.particle_system:
-            return self.particle_system._draw_blizzard_spiral_particles(puddle, px, py, radius)
+            return self.particle_system._draw_blizzard_spiral_particles(
+                puddle, px, py, radius
+            )
 
     def add_score(self, points) -> None:
         """Add unmodified points to the game's score.

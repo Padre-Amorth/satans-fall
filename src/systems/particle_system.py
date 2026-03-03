@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import math
 import random
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pygame
 
@@ -213,9 +213,7 @@ class ParticleSystem:
                                 "timer", 0
                             )
                             freq_hz = 2.0
-                            phase = (
-                                (elapsed / max(1, g.fps)) * (2 * math.pi) * freq_hz
-                            )
+                            phase = (elapsed / max(1, g.fps)) * (2 * math.pi) * freq_hz
                             pulse = 1.0 + 0.06 * math.sin(phase)  # +/-6% scale
 
                             display_radius = max(4, int(inner_radius * pulse))
@@ -705,9 +703,7 @@ class ParticleSystem:
             p.update()
 
         # Update SkullBoom explosions
-        g.skullboom_explosions = [
-            e for e in g.skullboom_explosions if e["timer"] > 0
-        ]
+        g.skullboom_explosions = [e for e in g.skullboom_explosions if e["timer"] > 0]
         for explosion in g.skullboom_explosions:
             explosion["timer"] -= 1
 
@@ -718,6 +714,7 @@ class ParticleSystem:
 
         # Blizzard puddles share behaviour with ice puddles but use their own list.
         # ensure they expire after the configured duration so the zone vanishes.
-        g.blizzard_puddles = [p for p in g.blizzard_puddles if p["timer"] > 0]
-        for puddle in g.blizzard_puddles:
-            puddle["timer"] -= 1
+        if hasattr(g, "blizzard_puddles"):
+            g.blizzard_puddles = [p for p in g.blizzard_puddles if p["timer"] > 0]
+            for puddle in g.blizzard_puddles:
+                puddle["timer"] -= 1

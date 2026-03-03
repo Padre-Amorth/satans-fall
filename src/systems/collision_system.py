@@ -3115,12 +3115,7 @@ class CollisionSystem:
                         g.award_meta_xp(int(boss_base_xp * 0.1))
                     except Exception:
                         pass
-                    # Spawn health drop when boss dies
-                    try:
-                        heal_amt = random.randint(10, 20)
-                        g.spawn_health_drop(boss.x, boss.y, heal_amt)
-                    except Exception:
-                        pass
+                    # Health drop spawning is handled by DeathSystem
                     # Don't kill boss_limbo_horde here — game.update()
                     # needs it in the bosses group to detect death and
                     # start the victory countdown.
@@ -3642,11 +3637,7 @@ class CollisionSystem:
                     except Exception:
                         pass
                     # Spawn health drop when boss dies
-                    try:
-                        heal_amt = random.randint(10, 20)
-                        g.spawn_health_drop(boss.x, boss.y, heal_amt)
-                    except Exception:
-                        pass
+                    # Health drop spawning is handled by DeathSystem
                     # Don't remove boss_limbo_horde here — game.update()
                     # needs it in the group to detect death.
                     if getattr(boss, "enemy_type", "") != "boss_limbo_horde":

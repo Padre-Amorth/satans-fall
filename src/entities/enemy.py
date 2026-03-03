@@ -2383,8 +2383,23 @@ class Enemy(BaseSprite):
                         )
                     except Exception:
                         pass
-                # Health drop spawning is handled by DeathSystem.remove_dead_bosses()
-                # to ensure it happens only once during the update cycle
+                # spawn health drop for any qualifying boss once
+                # Uses health_drop_spawned flag to prevent duplication with DeathSystem
+                if self.enemy_type.startswith("boss_") or getattr(
+                    self, "should_drop_health", False
+                ):
+                    if not getattr(self, "health_drop_spawned", False):
+                        try:
+                            import random
+
+                            heal_amt = random.randint(10, 20)
+                            try:
+                                CURRENT_GAME.spawn_health_drop(self.x, self.y, heal_amt)
+                                self.health_drop_spawned = True
+                            except Exception:
+                                pass
+                        except Exception:
+                            pass
         except Exception:
             pass
         # If this is the Prologo final boss and the damage reduced it to <=10% of

@@ -1,9 +1,9 @@
 {
   "version": 1,
   "name": "Profile 1",
-  "last_played": "2026-03-03T12:34:28",
+  "last_played": "2026-03-03T12:47:50",
   "permanent_stats": {
-    "power": 0,
+    "power": 1,
     "vigor": 2,
     "adrenaline": 1,
     "structure": 1,
@@ -21,32 +21,32 @@
     "ice_2": 1,
     "ice_3": 1,
     "ice_7": 1,
-    "storm_1": 0,
-    "storm_2": 0,
-    "storm_3": 0,
-    "storm_7": 0,
+    "storm_1": 1,
+    "storm_2": 1,
+    "storm_3": 1,
+    "storm_7": 1,
     "storm_4": 0,
     "storm_5": 0,
     "storm_6": 0,
     "fire_1": 1,
-    "fire_2": 0,
-    "fire_3": 0,
-    "fire_7": 0,
-    "fire_4": 0,
-    "fire_5": 0,
-    "fire_6": 0
+    "fire_2": 1,
+    "fire_3": 1,
+    "fire_7": 1,
+    "fire_4": 1,
+    "fire_5": 1,
+    "fire_6": 1
   },
   "global_progress": {
-    "meta_xp": 8026,
-    "meta_level": 5,
+    "meta_xp": 11386,
+    "meta_level": 6,
     "meta_points": 5,
     "stages_cleared": {
       "limbo_final": true
     },
     "display": {
       "window_size": [
-        1390,
-        841
+        1416,
+        796
       ]
     },
     "audio": {

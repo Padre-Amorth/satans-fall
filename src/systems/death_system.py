@@ -235,10 +235,12 @@ class DeathSystem:
                     except Exception:
                         pass
 
-                    # Spawn health drop for all bosses
+                    # Spawn health drop for all bosses (unless already spawned in take_damage)
                     try:
                         et = getattr(boss, "enemy_type", "")
-                        if et.startswith("boss_"):
+                        if et.startswith("boss_") and not getattr(
+                            boss, "health_drop_spawned", False
+                        ):
                             heal_amt = random.randint(10, 20)
                             try:
                                 self.spawn_health_drop(boss.x, boss.y, heal_amt)

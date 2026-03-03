@@ -13,7 +13,9 @@ from src.game import Game
 
 def test_draw_game_over_does_not_crash():
     game = Game(debug=True)
+    game.permanent_stats["blasphemy_10"] = 0  # Disable revive
     game.select_stage("prologo")
+    game.showing_main_menu = False  # Exit menu to allow gameplay updates
     game.stage_start_countdown = 0
 
     # Cause immediate death and make sure update triggers game over
@@ -33,7 +35,9 @@ def test_draw_game_over_does_not_crash():
 
 def test_game_over_escape_returns_to_menu():
     game = Game(debug=True)
+    game.permanent_stats["blasphemy_10"] = 0  # Disable revive
     game.select_stage("prologo")
+    game.showing_main_menu = False  # Exit menu to allow gameplay updates
     game.stage_start_countdown = 0
 
     # Trigger game over
@@ -56,7 +60,9 @@ def test_game_over_escape_with_stage_menu_left_open():
     and ensures our input handler always short-circuits out early.
     """
     game = Game(debug=True)
+    game.permanent_stats["blasphemy_10"] = 0  # Disable revive
     game.select_stage("prologo")
+    game.showing_main_menu = False  # Exit menu to allow gameplay updates
     game.stage_start_countdown = 0
 
     # Trigger game over normally
@@ -77,7 +83,9 @@ def test_game_over_escape_with_stage_menu_left_open():
 
 def test_game_over_prevents_gameplay_updates():
     game = Game(debug=True)
+    game.permanent_stats["blasphemy_10"] = 0  # Disable revive
     game.select_stage("prologo")
+    game.showing_main_menu = False  # Exit menu to allow gameplay updates
     game.stage_start_countdown = 0
 
     # Set some gameplay values
@@ -111,10 +119,11 @@ def test_blasphemy5_revive_auto_unpauses_and_draws():
     pygame.init()
     game = Game(debug=True)
     game.select_stage("prologo")
+    game.showing_main_menu = False  # Exit menu to allow gameplay updates
     game.stage_start_countdown = 0
 
     # give the player the upgrade
-    game.permanent_stats["blasphemy_5"] = 1
+    game.permanent_stats["blasphemy_10"] = 1
 
     # kill the player and run one frame to trigger revive
     game.player.health = 0

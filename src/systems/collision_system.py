@@ -3315,7 +3315,9 @@ class CollisionSystem:
                     # Skip damage if player is invulnerable during blink
                     if not getattr(g, "blasphemy_5_invulnerable", False):
                         try:
-                            g.player.take_damage(WINGED_CONTACT_DAMAGE, show_floating=False)
+                            g.player.take_damage(
+                                WINGED_CONTACT_DAMAGE, show_floating=False
+                            )
                         except Exception:
                             pass
                     try:
@@ -3399,7 +3401,9 @@ class CollisionSystem:
                         try:
                             # Skip damage if player is invulnerable during blink transit
                             if not getattr(g, "blasphemy_5_invulnerable", False):
-                                g.player.take_damage(WINGED_CONTACT_DAMAGE, show_floating=False)
+                                g.player.take_damage(
+                                    WINGED_CONTACT_DAMAGE, show_floating=False
+                                )
                         except Exception:
                             pass
                         try:
@@ -3569,7 +3573,9 @@ class CollisionSystem:
             if orbital_level >= 3:
                 orbital_damage = int(orbital_damage * 1.1)  # +10% at level 3+
             if orbital_level >= 5:
-                orbital_damage = int(orbital_damage * 1.1)  # +10% at level 5+ (stacks: 1.1 * 1.1 = 1.21x)
+                orbital_damage = int(
+                    orbital_damage * 1.1
+                )  # +10% at level 5+ (stacks: 1.1 * 1.1 = 1.21x)
 
             for orbital in g.orbitals:
                 ox = orbital.get("x", g.player.x)
@@ -3611,7 +3617,9 @@ class CollisionSystem:
         # trigger so the extra XP carries over correctly.
         for boss in list(getattr(g, "bosses", []) or []):
             try:
-                if getattr(boss, "health", 0) <= 0 and not getattr(boss, "_death_rewarded", False):
+                if getattr(boss, "health", 0) <= 0 and not getattr(
+                    boss, "_death_rewarded", False
+                ):
                     boss._death_rewarded = True
                     # record as an enemy kill (increments meta XP by 1)
                     try:

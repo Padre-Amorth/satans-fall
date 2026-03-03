@@ -2,6 +2,7 @@
 
 import pygame
 import pytest
+
 from src.game import Game
 
 

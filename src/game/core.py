@@ -10,7 +10,6 @@ from src.assets.manager import get_image
 from src.balance import (
     DEFAULT_DAMAGE_REDUCTION_MULTIPLIER,
     DEFAULT_PROJECTILE_SIZE_MULTIPLIER,
-    ENEMY_SCORE_PER_HEALTH,
     GAME_OVER_FADE_DURATION_MS,
     MAX_EXTRA_WEAPONS,
     PLAYER_BASE_DAMAGE,
@@ -1019,6 +1018,14 @@ class Game:
             self.score_system = ScoreSystem(self)
         except Exception:
             self.score_system = None
+
+        # Initialize DeathSystem (handles enemy/boss death, health drops, XP awards)
+        try:
+            from src.systems.death_system import DeathSystem
+
+            self.death_system = DeathSystem(self)
+        except Exception:
+            self.death_system = None
 
         # Initialize ProjectileManager (handles pooling/spawn management)
         try:
@@ -2197,54 +2204,10 @@ class Game:
     def _update_health_drops(self) -> None:
         """Move health drops downward and handle collection by the player.
 
-        Each frame the drop's ``y`` is incremented by its ``vy`` value.  If the
-        player intersects a drop the player is healed and the drop is removed.
-        Drops that fall past the bottom of the screen are also discarded.
+        Wrapper delegating to DeathSystem. See DeathSystem.update_health_drops()
         """
-        if not getattr(self, "health_drops", None):
-            return
-        alive: list[Dict[str, Any]] = []
-        # radius used for collision test; player radius is approximated as half
-        # of the larger dimension of the player sprite.
-        try:
-            pr = (
-                max(getattr(self.player, "width", 0), getattr(self.player, "height", 0))
-                / 2
-            )
-        except Exception:
-            pr = 0
-        for drop in list(self.health_drops):
-            # move
-            drop["y"] = drop.get("y", 0) + drop.get("vy", 0.5)
-
-            # check for collision with player
-            try:
-                dx = drop.get("x", 0) - getattr(self.player, "x", 0)
-                dy = drop.get("y", 0) - getattr(self.player, "y", 0)
-                dr = drop.get("radius", 12)
-                if dx * dx + dy * dy <= (pr + dr) * (pr + dr):
-                    heal_amt = drop.get("heal", 0)
-                    self.player.health = min(
-                        self.player.max_health, self.player.health + heal_amt
-                    )
-                    try:
-                        # let the player see the heal amount
-                        self.spawn_floating_text(
-                            f"+{int(heal_amt)}",
-                            drop.get("x", 0),
-                            drop.get("y", 0),
-                            color=(0, 255, 0),
-                        )
-                    except Exception:
-                        pass
-                    continue
-            except Exception:
-                pass
-
-            # keep if still on screen
-            if drop.get("y", 0) <= self.height + 50:
-                alive.append(drop)
-        self.health_drops = alive
+        if self.death_system:
+            return self.death_system.update_health_drops()
 
     def draw_floating_texts(self, shake_x: int = 0, shake_y: int = 0) -> None:
         """Draw all floating texts to self.screen applying shake offsets."""
@@ -3688,287 +3651,20 @@ class Game:
             # do not auto-dismiss; input handler will clear the flag
 
     def _remove_dead_enemies(self) -> None:
-        """Remove dead enemies and award score/XP. Handles both sprite groups and plain lists."""
-        # Check for dead enemies after update (e.g., from burn damage over time) and remove them
-        if hasattr(self.enemies, "sprites"):
-            for enemy in list(self.enemies.sprites()):
-                if hasattr(enemy, "health") and enemy.health <= 0:
-                    self.add_score(
-                        enemy.max_health
-                        * ENEMY_SCORE_PER_HEALTH
-                        * self.difficulty_multiplier
-                    )
-                    type_xp_local = {
-                        "weak": 10,
-                        "normal": 16,
-                        "strong": 25,
-                        "giant": 50,
-                        "angel": 22,
-                    }
-                    base_xp_local = type_xp_local.get(
-                        str(getattr(enemy, "enemy_type", "")), 12
-                    )
-                    self.player_xp += int(
-                        round(base_xp_local * getattr(self, "xp_multiplier", 1.0))
-                    )
-                    if self.player_xp >= self.xp_to_next_level:
-                        self.trigger_level_up()
-                    try:
-                        if (
-                            getattr(enemy, "burn_propagate_on_death", False)
-                            or getattr(enemy, "burn_propagate_hops", 0) > 0
-                        ):
-                            try:
-                                self._propagate_burn(enemy)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                    try:
-                        enemy.kill()
-                    except Exception:
-                        pass
-        else:
-            for enemy in list(self.enemies):
-                # Plain-list enemies (object instances expected)
-                if getattr(enemy, "health", 0) <= 0:
-                    self.add_score(
-                        getattr(enemy, "max_health", 10)
-                        * ENEMY_SCORE_PER_HEALTH
-                        * self.difficulty_multiplier
-                    )
-                    try:
-                        if (
-                            getattr(enemy, "burn_propagate_on_death", False)
-                            or getattr(enemy, "burn_propagate_hops", 0) > 0
-                        ):
-                            try:
-                                self._propagate_burn(enemy)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                    base_xp_local = 12
-                    try:
-                        base_xp_local = {
-                            "weak": 10,
-                            "normal": 16,
-                            "strong": 25,
-                            "giant": 50,
-                            "angel": 22,
-                        }.get(str(getattr(enemy, "enemy_type", "")), 12)
-                    except Exception:
-                        base_xp_local = 12
-                    self.player_xp += int(
-                        round(base_xp_local * getattr(self, "xp_multiplier", 1.0))
-                    )
-                    if self.player_xp >= self.xp_to_next_level:
-                        self.trigger_level_up()
-                    try:
-                        self.record_enemy_kill()
-                    except Exception:
-                        pass
-                    try:
-                        # Call kill() if implemented, then ensure removal from plain list
-                        if hasattr(enemy, "kill"):
-                            try:
-                                enemy.kill()
-                            except Exception:
-                                pass
-                        try:
-                            # Always attempt to remove from the plain list container
-                            self.enemies.remove(enemy)
-                        except Exception:
-                            pass
-                    except Exception:
-                        pass
+        """Remove dead enemies and award score/XP.
 
-                # Object/sprite enemies stored in a plain list (support for tests)
-                elif hasattr(enemy, "health") and enemy.health <= 0:
-                    try:
-                        self.add_score(
-                            enemy.max_health
-                            * ENEMY_SCORE_PER_HEALTH
-                            * self.difficulty_multiplier
-                        )
-                    except Exception:
-                        pass
-                    type_xp_local = {
-                        "weak": 10,
-                        "normal": 16,
-                        "strong": 25,
-                        "giant": 50,
-                        "angel": 22,
-                    }
-                    base_xp_local = type_xp_local.get(
-                        str(getattr(enemy, "enemy_type", "")), 12
-                    )
-                    try:
-                        self.player_xp += int(
-                            round(base_xp_local * getattr(self, "xp_multiplier", 1.0))
-                        )
-                    except Exception:
-                        pass
-                    if self.player_xp >= self.xp_to_next_level:
-                        self.trigger_level_up()
-                    # Propagate burn if flagged
-                    try:
-                        if (
-                            getattr(enemy, "burn_propagate_on_death", False)
-                            or getattr(enemy, "burn_propagate_hops", 0) > 0
-                        ):
-                            try:
-                                self._propagate_burn(enemy)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                    try:
-                        # If enemy implements kill(), call it for symmetry with Group
-                        enemy.kill()
-                    except Exception:
-                        pass
-                    try:
-                        # remove from the plain list
-                        self.enemies.remove(enemy)
-                        try:
-                            self.record_enemy_kill()
-                        except Exception:
-                            pass
-                    except Exception:
-                        pass
+        Wrapper delegating to DeathSystem. See DeathSystem.remove_dead_enemies()
+        """
+        if self.death_system:
+            return self.death_system.remove_dead_enemies()
 
     def _remove_dead_bosses(self) -> None:
-        """Remove dead bosses and award score/XP. Handles both sprite groups and dict lists."""
-        # Check for dead bosses after update (e.g., from burn damage over time) and remove them
-        if hasattr(self.bosses, "sprites"):
-            for boss in list(self.bosses.sprites()):
-                if hasattr(boss, "health") and boss.health <= 0:
-                    # Boss death handling (similar to enemy death but with different XP multiplier)
-                    # For now, use enemy-like handling; adjust if bosses have special death logic
-                    self.add_score(boss.max_health * 25)  # Bosses give more score
-                    boss_xp_map = {"medium": 80, "big": 150, "final": 400}
-                    boss_base_xp = boss_xp_map.get(
-                        boss.enemy_type.replace("boss_", ""), 100
-                    )
-                    self.player_xp += int(
-                        round(boss_base_xp * getattr(self, "xp_multiplier", 1.0))
-                    )
-                    if self.player_xp >= self.xp_to_next_level:
-                        self.trigger_level_up()
-                    # Propagate burn on boss death if applicable
-                    try:
-                        if (
-                            getattr(boss, "burn_propagate_on_death", False)
-                            or getattr(boss, "burn_propagate_hops", 0) > 0
-                        ):
-                            try:
-                                self._propagate_burn(boss)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
+        """Remove dead bosses and award score/XP.
 
-                    # spawn limbo_final countdown if appropriate
-                    try:
-                        if getattr(self, "debug", False):
-                            print(
-                                "[CORE] death flag check",
-                                boss.enemy_type,
-                                getattr(self, "selected_stage", None),
-                                "started?",
-                                getattr(self, "limbo_final_victory_started", False),
-                            )
-                        if (
-                            getattr(boss, "enemy_type", "") == "boss_limbo"
-                            and getattr(self, "selected_stage", None) == "limbo_final"
-                            and not getattr(self, "limbo_final_victory_started", False)
-                        ):
-                            # begin 5‑second timer
-                            self.limbo_final_victory_timer = int(self.fps * 5)
-                            self.limbo_final_victory_started = True
-                            if getattr(self, "debug", False):
-                                print("[CORE] limbo_final timer started")
-                            try:
-                                self.show_centered_message(
-                                    "BOSS DEFEATED!", 2000, (255, 255, 0)
-                                )
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-
-                    # Spawn health drop for all bosses
-                    try:
-                        et = getattr(boss, "enemy_type", "")
-                        if et.startswith("boss_"):
-                            heal_amt = random.randint(10, 20)
-                            try:
-                                self.spawn_health_drop(boss.x, boss.y, heal_amt)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-
-                    # If a medium (wave) boss dies by any cause, schedule reinforcements
-                    try:
-                        if getattr(boss, "enemy_type", "") == "boss_medium":
-                            # Show the centered HUD message and schedule the reinforcement timer
-                            try:
-                                self.show_centered_message(
-                                    "REINFORCEMENTS INCOMING!", 1800, (255, 204, 0)
-                                )
-                            except Exception:
-                                pass
-                            try:
-                                # Clear any existing reinforcement timer then schedule a new one
-                                pygame.time.set_timer(pygame.USEREVENT + 1, 0)
-                                pygame.time.set_timer(
-                                    pygame.USEREVENT + 1, self.reinforcement_delay_ms
-                                )
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-
-                    boss.kill()  # Remove dead boss
-        else:
-            for boss in list(self.bosses):
-                if isinstance(boss, dict) and boss.get("health", 0) <= 0:
-                    self.add_score(
-                        boss.get("max_health", 100) * 25 * self.difficulty_multiplier
-                    )  # Assuming bosses have higher multiplier
-                    if self.player_xp >= self.xp_to_next_level:
-                        self.trigger_level_up()
-                    # Propagate burn on boss death if applicable
-                    try:
-                        if (
-                            boss.get("burn_propagate_on_death", False)
-                            or boss.get("burn_propagate_hops", 0) > 0
-                        ):
-                            try:
-                                self._propagate_burn(boss)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                    # spawn health drop for all bosses
-                    try:
-                        et = boss.get("enemy_type", "")
-                        if et.startswith("boss_"):
-                            heal_amt = random.randint(10, 20)
-                            try:
-                                self.spawn_health_drop(
-                                    boss.get("x", 0), boss.get("y", 0), heal_amt
-                                )
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                    try:
-                        self.bosses.remove(boss)
-                    except Exception:
-                        pass
+        Wrapper delegating to DeathSystem. See DeathSystem.remove_dead_bosses()
+        """
+        if self.death_system:
+            return self.death_system.remove_dead_bosses()
 
     def _cull_offscreen_projectiles(self) -> None:
         """Remove projectiles that have gone off-screen."""
@@ -4191,6 +3887,28 @@ class Game:
         self.player.update(self.width)
         self.player.x = self.clamp_to_walls(self.player.x)
 
+        # Check for game over BEFORE regen so player doesn't heal from zero HP
+        # This must happen early so regen doesn't revive the player
+        if self.player.health <= 0:
+            if self._handle_blasphemy5_revive():
+                return
+            # During a lightning strike in either Prologo or Limbo Final we don't
+            # immediately enter game over; the end-of-stage screen will be shown
+            # later when the lightning timer completes.  This prevents the early
+            # "GAME OVER" overlay from popping up while the beam/explosion plays.
+            if not (
+                (self.selected_stage == "prologo" and self.prologo_lightning_strike)
+                or (
+                    self.selected_stage == "limbo_final"
+                    and getattr(self, "limbo_final_lightning_strike", False)
+                )
+            ):
+                # Only trigger game over once per run; use flag to prevent re-triggering
+                if not self._game_over_triggered:
+                    self._game_over_triggered = True
+                    self.game_over()
+                return  # Stop all further updates when game over triggers
+
         # VIGOR: periodic regeneration (0.5 HP every 5s per level)
         # BLASPHEMY_2: flat regen independent of VIGOR, now 0.5 HP every 2s per level
         vigor_level = self.permanent_stats.get("vigor", 0)
@@ -4347,26 +4065,6 @@ class Game:
 
         # Update center messages
         self.update_center_messages()
-
-        # Check for game over (and blasphemy_5 one-time revive)
-        if self.player.health <= 0:
-            if self._handle_blasphemy5_revive():
-                return
-            # During a lightning strike in either Prologo or Limbo Final we don't
-            # immediately enter game over; the end-of-stage screen will be shown
-            # later when the lightning timer completes.  This prevents the early
-            # "GAME OVER" overlay from popping up while the beam/explosion plays.
-            if not (
-                (self.selected_stage == "prologo" and self.prologo_lightning_strike)
-                or (
-                    self.selected_stage == "limbo_final"
-                    and getattr(self, "limbo_final_lightning_strike", False)
-                )
-            ):
-                # Only trigger game over once per run; use flag to prevent re-triggering
-                if not self._game_over_triggered:
-                    self._game_over_triggered = True
-                    self.game_over()
 
     def execute_blasphemy5_blink(self) -> None:
         """Execute Blasphemy 5 blink ability: teleport 120px in movement direction.
@@ -4734,39 +4432,10 @@ class Game:
     def spawn_health_drop(self, x: float, y: float, heal: int) -> None:
         """Create a healing bonus that falls from (x,y).
 
-        ``heal`` is the hit point amount restored when the player picks it up.
-        The drop is represented as a simple dict and is processed by
-        ``_update_health_drops``.
-
-        Drops are always spawned within the visible battlefield: if the boss
-        died while still above the top edge we clamp ``y`` to zero so the item
-        is immediately visible.
-
-        A soft click sound is played when the drop is created, provided sounds
-        are enabled.  The call is performed lazily to avoid importing the
-        sound module at the top-level (which would in turn import pygame in
-        environments where it may not be available).
+        Wrapper delegating to DeathSystem. See DeathSystem.spawn_health_drop()
         """
-        # ensure drop starts on-screen
-        if y < 0:
-            y = 0
-        # faster fall and now even smaller
-        drop = {"x": x, "y": y, "vy": 1.5, "heal": heal, "radius": 8}
-        try:
-            self.health_drops.append(drop)
-        except Exception:
-            self.health_drops = [drop]
-
-        # play accompanying sound if enabled
-        if getattr(self, "sounds_enabled", False):
-            try:
-                from src.utils import sound as sound_utils
-
-                sound_utils.suono_click_soft().play()
-            except Exception:
-                # if anything goes wrong we silently ignore, since sound is
-                # cosmetic and may not be available in test environments
-                pass
+        if self.death_system:
+            return self.death_system.spawn_health_drop(x, y, heal)
 
     def show_upgrades(self) -> None:
         """Show level up upgrade selection"""

@@ -91,7 +91,9 @@ def test_orbital_damage_bonus_level3():
     hp_before = e.health
     g.handle_collisions()
     # Level 3: 15 * 1.1 = 16.5 → 16 damage (int)
-    assert e.health == hp_before - 16, f"Expected 16 damage at level 3, got {hp_before - e.health}"
+    assert (
+        e.health == hp_before - 16
+    ), f"Expected 16 damage at level 3, got {hp_before - e.health}"
 
 
 def test_orbital_damage_bonus_level5():
@@ -112,7 +114,9 @@ def test_orbital_damage_bonus_level5():
     hp_before = e.health
     g.handle_collisions()
     # Level 5: 15 * 1.1 = 16 (int), then 16 * 1.1 = 17 (int)
-    assert e.health == hp_before - 17, f"Expected 17 damage at level 5, got {hp_before - e.health}"
+    assert (
+        e.health == hp_before - 17
+    ), f"Expected 17 damage at level 5, got {hp_before - e.health}"
 
 
 def test_orbital_damage_bonus_with_multiple_orbitals():
@@ -137,4 +141,6 @@ def test_orbital_damage_bonus_with_multiple_orbitals():
     hp_before = e.health
     g.handle_collisions()
     # 3 orbitals at level 5: 3 * 17 = 51 damage (17 = int(int(15*1.1)*1.1))
-    assert e.health == hp_before - 51, f"Expected 51 damage (3x17), got {hp_before - e.health}"
+    assert (
+        e.health == hp_before - 51
+    ), f"Expected 51 damage (3x17), got {hp_before - e.health}"

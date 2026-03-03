@@ -12,7 +12,9 @@ from src.game import Game
 def test_game_over_persists_until_keypress():
     # Create game and select a stage so update runs game loop code paths
     game = Game(debug=True)
+    game.permanent_stats["blasphemy_10"] = 0  # Disable revive
     game.select_stage("prologo")
+    game.showing_main_menu = False  # Exit menu to allow gameplay updates
 
     # Simulate player death
     game.player.health = 0
@@ -41,7 +43,9 @@ def test_game_over_persists_until_keypress():
 
 def test_game_over_fade_in():
     game = Game(debug=True)
+    game.permanent_stats["blasphemy_10"] = 0  # Disable revive
     game.select_stage("prologo")
+    game.showing_main_menu = False  # Exit menu to allow gameplay updates
     game.stage_start_countdown = 0
     game.player.health = 0
     game.update()

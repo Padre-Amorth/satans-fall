@@ -69,6 +69,7 @@ def test_purgatory_bg_image_is_masked_to_walls(monkeypatch, tmp_path: Path) -> N
 
     # patch asset manager directly
     from src.assets import manager as am
+
     monkeypatch.setattr(am, "get_image", fake_get_image)
     g = Game()
 
@@ -132,6 +133,7 @@ def test_purgatory_bg_image_drawn_when_available(monkeypatch, tmp_path: Path) ->
 
     # patch the asset manager directly
     from src.assets import manager as am
+
     monkeypatch.setattr(am, "get_image", fake_get_image)
 
     g = Game()
@@ -194,6 +196,7 @@ def test_purgatory_external_and_inner_images(monkeypatch, tmp_path: Path) -> Non
 
     # patch asset manager so draw() sees our fake surfaces
     from src.assets import manager as am
+
     monkeypatch.setattr(am, "get_image", fake_get_image)
 
     g = Game()
@@ -244,6 +247,7 @@ def test_external_image_shown_even_if_battlefield_missing(
         return None
 
     from src.assets import manager as am
+
     monkeypatch.setattr(am, "get_image", fake_get_image)
 
     g = Game()

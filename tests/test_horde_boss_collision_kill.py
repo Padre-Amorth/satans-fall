@@ -115,7 +115,7 @@ def test_full_update_cycle_triggers_victory():
 
     boss = list(g.bosses)[0]
     boss.health = 0
-    print(f"[OK] Boss killed (health=0)")
+    print("[OK] Boss killed (health=0)")
 
     # Run update multiple times — each call includes collision_system internally
     victory_appeared = False

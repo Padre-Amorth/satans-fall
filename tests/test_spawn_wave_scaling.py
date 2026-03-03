@@ -1,5 +1,6 @@
-import pygame
 from unittest.mock import patch
+
+import pygame
 
 from src.game import Game
 
@@ -69,7 +70,9 @@ def test_archer_probability_ratio():
         # ratio should hold exactly
         assert archer_chance == normal_chance * 0.5
         # also ensure sum of probs <=1 before normalization
-        total = strong_chance + normal_chance + angel_chance + winged_chance + archer_chance
+        total = (
+            strong_chance + normal_chance + angel_chance + winged_chance + archer_chance
+        )
         assert total <= 1.0 or total > 1.0
 
 

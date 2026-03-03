@@ -79,12 +79,13 @@ def test_winged_explodes_on_player_contact():
     value specified by the constants in :mod:`src.game_constants`.
     """
     import pygame
-    from src.game import Game
+
     from src.entities.enemy import Enemy
+    from src.game import Game
     from src.game_constants import (
         WINGED_CONTACT_DAMAGE,
-        WINGED_EXPLOSION_RADIUS,
         WINGED_EXPLOSION_DURATION,
+        WINGED_EXPLOSION_RADIUS,
     )
 
     pygame.init()

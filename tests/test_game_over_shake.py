@@ -9,7 +9,9 @@ from src.game import Game
 
 def test_game_over_stops_shaking():
     game = Game(debug=True)
+    game.permanent_stats["blasphemy_10"] = 0  # Disable revive
     game.select_stage("prologo")
+    game.showing_main_menu = False  # Exit menu to allow gameplay updates
 
     # Simulate active screen shake
     game.shake_timer = 30

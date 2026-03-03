@@ -50,6 +50,7 @@ def test_no_floating_damage_text_on_dict_contact():
 # additional regression: contact damage should tick once every two seconds
 # and not apply continuously
 
+
 def test_contact_damage_tick_every_two_seconds():
     """Enemies in continuous contact take a lump every 2 seconds."""
     pygame.init()

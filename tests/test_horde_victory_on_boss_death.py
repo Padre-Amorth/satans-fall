@@ -21,7 +21,7 @@ def test_horde_victory_only_on_boss_death():
     # Set up horde state
     g.limbo_horde_started = True
     g.limbo_horde_active = True
-    g.limbo_horde_initial = 100
+    g.limbo_horde_remaining = 100
     g.limbo_horde_completed = False
     g.limbo_horde_boss_killed = False
     g.limbo_horde_ready_for_victory = False
@@ -31,12 +31,8 @@ def test_horde_victory_only_on_boss_death():
         g.record_enemy_kill()
 
     # Verify victory NOT triggered even with 50 kills (boss not dead)
-    assert (
-        not g.limbo_horde_ready_for_victory
-    ), "Victory triggered before boss death!"
-    assert (
-        not g.limbo_horde_completed
-    ), "Horde marked completed before boss death!"
+    assert not g.limbo_horde_ready_for_victory, "Victory triggered before boss death!"
+    assert not g.limbo_horde_completed, "Horde marked completed before boss death!"
     print("[OK] Victory NOT triggered after 50 enemy kills")
 
     # Simulate boss death (collision_system.py does all this when boss dies)
@@ -46,9 +42,7 @@ def test_horde_victory_only_on_boss_death():
     g.limbo_horde_ready_for_victory = True
 
     # Now victory should be triggered
-    assert (
-        g.limbo_horde_ready_for_victory
-    ), "Victory NOT triggered after boss death!"
+    assert g.limbo_horde_ready_for_victory, "Victory NOT triggered after boss death!"
     assert g.limbo_horde_completed, "Horde not marked completed!"
     print("[OK] Victory triggered immediately on boss death")
 
@@ -67,7 +61,7 @@ def test_boss_death_is_only_condition():
     # Set up horde state as if final enemy is about to die
     g.limbo_horde_started = True
     g.limbo_horde_active = True
-    g.limbo_horde_initial = 1  # Only 1 enemy left (the boss)
+    g.limbo_horde_remaining = 1  # Only 1 enemy left (the boss)
     g.limbo_horde_completed = False
     g.limbo_horde_boss_killed = False  # Boss NOT killed yet
     g.limbo_horde_ready_for_victory = False

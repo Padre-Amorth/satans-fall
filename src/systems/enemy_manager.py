@@ -196,7 +196,7 @@ class EnemyManager:
         # Check 12-second cooldown (except during limbo horde)
         if not getattr(self.game, "limbo_horde_active", False):
             if (
-                self.game.time_elapsed - self.spawn_system.last_giant_spawn_time
+                self.game.time_elapsed - self.game.spawn_system.last_giant_spawn_time
             ) < 12.0:
                 return None  # Cooldown active, don't spawn
 
@@ -229,7 +229,7 @@ class EnemyManager:
         e = self.spawn(x, y, etype, health, speed)
         # Update cooldown timer
         try:
-            self.spawn_system.last_giant_spawn_time = self.game.time_elapsed
+            self.game.spawn_system.last_giant_spawn_time = self.game.time_elapsed
         except Exception:
             pass
         return e

@@ -67,7 +67,8 @@ def test_limbo_horde_triggers_and_completes(stage, horde_time):
     initial_total = sum(
         e.get("count", 0) + e.get("boss_count", 0) for e in base_expected
     )
-    assert g.limbo_horde_initial == initial_total
+    # remaining tracks horde size; verify it matches expected
+    assert g.limbo_horde_remaining == initial_total
     # remaining may have decreased by whatever spawned on the first update call
     # so we don't assert exact equality here
 
@@ -77,8 +78,10 @@ def test_limbo_horde_triggers_and_completes(stage, horde_time):
         g.spawn_system.update_enemy_spawning()
     assert g.limbo_horde_started
     assert g.limbo_horde_active
-    initial = g.limbo_horde_initial
-    assert initial == 79, f"horde size should now be 79 (including boss), got {initial}"
+    remaining = g.limbo_horde_remaining
+    assert (
+        remaining == 79
+    ), f"horde size should now be 79 (including boss), got {remaining}"
 
     # the final burst should have produced the Limbo‑horde boss entity
     bosses = [b for b in getattr(g, "bosses", [])]
@@ -541,14 +544,14 @@ def test_victory_delayed_until_all_enemies_cleared(stage, horde_time):
     g.time_elapsed = horde_time
     for _ in range(int(g.fps * 2)):
         g.spawn_system.update_enemy_spawning()
-    initial = g.limbo_horde_initial
-    assert initial > 0
+    remaining = g.limbo_horde_remaining
+    assert remaining > 0
     assert len(g.enemies) > 0
 
     # pretend the player has killed all but one of the horde, then kill a
     # stray creature to push the count over the threshold.  the real horde
     # enemies remain alive in ``g.enemies``.
-    g.limbo_horde_killed = initial - 1
+    g.limbo_horde_killed = remaining - 1
     stray = Enemy(0, 0)
     g.enemies.add(stray)
     g.record_enemy_kill()  # bump kill count to ``initial``

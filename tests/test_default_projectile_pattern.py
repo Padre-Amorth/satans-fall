@@ -23,11 +23,33 @@ def test_default_projectile_segment():
     assert any(c[:3] in [(255, 255, 255), (200, 255, 255)] for c in colors)
 
     # enemy projectiles from normal enemies should be yellow
-    p2 = Projectile(0, 0, 0, 1, damage=1, radius=5, is_enemy_projectile=True, appearance="enemy_normal")
+    p2 = Projectile(
+        0,
+        0,
+        0,
+        1,
+        damage=1,
+        radius=5,
+        is_enemy_projectile=True,
+        appearance="enemy_normal",
+    )
     colors2 = set(tuple(p2.image.get_at((x, y))) for x in range(w) for y in range(h))
-    assert any(c[:3] == (255, 200, 0) for c in colors2), "Enemy normal projectile should be yellow"
+    assert any(
+        c[:3] == (255, 200, 0) for c in colors2
+    ), "Enemy normal projectile should be yellow"
 
     # only archer appearance uses the segment
-    p3 = Projectile(0, 0, 1, 1, damage=1, radius=5, is_enemy_projectile=True, appearance="archer_segment")
+    p3 = Projectile(
+        0,
+        0,
+        1,
+        1,
+        damage=1,
+        radius=5,
+        is_enemy_projectile=True,
+        appearance="archer_segment",
+    )
     colors3 = set(tuple(p3.image.get_at((x, y))) for x in range(w) for y in range(h))
-    assert any(c[:3] == (200, 255, 255) for c in colors3), "Archer projectile should be light-cyan"
+    assert any(
+        c[:3] == (200, 255, 255) for c in colors3
+    ), "Archer projectile should be light-cyan"

@@ -156,12 +156,12 @@ class Enemy(BaseSprite):
             self.damage = 10
         elif enemy_type == "archer":
             # Archer: slow-moving ranged attacker that stays near top of screen
-            self.width = 30
-            self.height = 30
+            self.width = 40
+            self.height = 40
             self.damage = 10
-            # initialize firing pattern flag like inquisitor but simpler
-            self.archer_fire_single_next = True
-            # track burst state: which arrow in the 3-arrow burst (0=single, 1-3=burst arrows)
+            # initialize firing pattern: cycle 2 singles -> 1 burst -> 2 singles -> 1 burst
+            self.archer_fire_count = 0  # 0-1=single, 2=burst, then reset
+            # track burst state: which arrow in the 3-arrow burst (0=idle, 1-3=burst arrows)
             self.archer_burst_arrow = 0
             # entry phase: move downward into view before settling
             self.archer_entering = True
@@ -2053,13 +2053,15 @@ class Enemy(BaseSprite):
                 game.enemy_projectiles.add(projectile)
                 self.shoot_cooldown: int = random.randint(90, 180)
             elif self.enemy_type == "archer":
-                # Archer fires a single arrow then a 3-arrow burst alternately
+                # Archer fires 2 single arrows, then 1 burst, repeat (2S-1B-2S-1B...)
                 dx = player.x - self.x
                 dy = player.y - self.y
                 base_angle = math.atan2(dy, dx)
                 speed = 200
-                if getattr(self, "archer_fire_single_next", False):
-                    # Single arrow shot
+                fire_count = getattr(self, "archer_fire_count", 0)
+
+                if fire_count in (0, 1):
+                    # Single arrow shot (first or second single)
                     vel_x = math.cos(base_angle) * speed
                     vel_y = math.sin(base_angle) * speed
                     proj = Projectile(
@@ -2073,11 +2075,11 @@ class Enemy(BaseSprite):
                         appearance="archer_segment",
                     )
                     game.enemy_projectiles.add(proj)
-                    # Next cycle will be burst
-                    self.archer_fire_single_next = False
-                    # After single shot, shorter cooldown so burst starts soon
+                    # Move to next single or burst
+                    self.archer_fire_count = fire_count + 1
+                    # After single shot, short cooldown
                     self.shoot_cooldown = random.randint(50, 80)
-                else:
+                elif fire_count == 2:
                     # Burst mode: fire arrows in sequence with delay
                     burst_arrow = getattr(self, "archer_burst_arrow", 0)
                     if burst_arrow == 0:
@@ -2112,9 +2114,9 @@ class Enemy(BaseSprite):
                             self.archer_burst_arrow = burst_arrow + 1
                             self.shoot_cooldown = 12  # delay between burst arrows
                         else:
-                            # Burst complete, switch back to single
+                            # Burst complete, reset cycle (2S-1B-2S-1B...)
                             self.archer_burst_arrow = 0
-                            self.archer_fire_single_next = True
+                            self.archer_fire_count = 0
                             self.shoot_cooldown = random.randint(80, 140)
 
             elif self.enemy_type == "angel":

@@ -1,4 +1,5 @@
 """Tests for Blasphemy 5 Blink ability (spacebar teleport)"""
+
 import pygame
 
 from src.game import Game
@@ -170,7 +171,9 @@ def test_blasphemy5_blink_diagonal_movement():
     g.blasphemy_5_blink_timer = 10
 
     # Should be active for diagonal movement
-    assert g.blasphemy_5_blink_state == 1, "Blink should be active for diagonal movement"
+    assert (
+        g.blasphemy_5_blink_state == 1
+    ), "Blink should be active for diagonal movement"
 
 
 def test_blasphemy5_blink_cooldown_blocks_chaining():

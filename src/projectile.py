@@ -177,11 +177,17 @@ class Projectile(BaseSprite):
         # Special handling for different weapon types
         # first, handle explicitly tagged "enemy_normal" projectiles (yellow balls)
         if getattr(self, "appearance", None) == "enemy_normal":
-            self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+            self.image = pygame.Surface(
+                (self.radius * 2, self.radius * 2), pygame.SRCALPHA
+            )
             try:
-                pygame.draw.circle(self.image, (255, 200, 0), (self.radius, self.radius), self.radius)
+                pygame.draw.circle(
+                    self.image, (255, 200, 0), (self.radius, self.radius), self.radius
+                )
             except Exception:
-                pygame.draw.circle(self.image, (255, 200, 0), (self.radius, self.radius), self.radius)
+                pygame.draw.circle(
+                    self.image, (255, 200, 0), (self.radius, self.radius), self.radius
+                )
             return
 
         # orbital projectiles: light blue circles
@@ -215,7 +221,11 @@ class Projectile(BaseSprite):
 
         # next, draw a generic projectile segment only for player shots
         # but skip if appearance is explicitly set (e.g. storm_statue, ice_statue)
-        if self.weapon_type is None and not self.is_enemy_projectile and getattr(self, "appearance", None) is None:
+        if (
+            self.weapon_type is None
+            and not self.is_enemy_projectile
+            and getattr(self, "appearance", None) is None
+        ):
             w = max(2, self.radius * 2)
             h = max(2, int(self.radius * 0.4))
             self.image = pygame.Surface((w, h), pygame.SRCALPHA)
@@ -862,9 +872,7 @@ class Projectile(BaseSprite):
                 center=(draw_x + self.radius, draw_y + self.radius)
             )
             screen.blit(rotated_image, rotated_rect)
-        elif self.weapon_type is None and (
-            not self.is_enemy_projectile
-        ):
+        elif self.weapon_type is None and (not self.is_enemy_projectile):
             # rotate player segment
             angle = math.degrees(math.atan2(self.vel_y, self.vel_x))
             rotated = pygame.transform.rotate(self.image, -angle)

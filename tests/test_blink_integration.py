@@ -2,6 +2,7 @@
 
 import pygame
 import pytest
+
 from src.game import Game
 
 
@@ -39,7 +40,9 @@ def test_blink_works_in_limbo_gameplay():
 
     # Blink should have happened
     assert g.player.x > old_x, "Player should have blinked to the right"
-    assert g.player.x == pytest.approx(old_x + 120, abs=2), "Blink distance should be ~120px"
+    assert g.player.x == pytest.approx(
+        old_x + 120, abs=2
+    ), "Blink distance should be ~120px"
 
 
 def test_spacebar_ignored_during_pause():
@@ -82,4 +85,6 @@ def test_blink_blocked_during_upgrade_selection():
     complete_blink_animation(g)
 
     # Player should not have blinked
-    assert g.player.x == old_x, "Spacebar should not trigger blink during upgrade selection"
+    assert (
+        g.player.x == old_x
+    ), "Spacebar should not trigger blink during upgrade selection"

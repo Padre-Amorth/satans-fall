@@ -128,10 +128,16 @@ def test_weak_enemy_base_health():
     with patch("random.random", return_value=0.1):
         g.spawn_enemy()
     spawned = next(
-        (en for en in g.enemies if getattr(en, "enemy_type", None) in ("normal", "shielded")),
+        (
+            en
+            for en in g.enemies
+            if getattr(en, "enemy_type", None) in ("normal", "shielded")
+        ),
         None,
     )
-    assert spawned is not None, "Expected either normal or shielded (conversion may occur)"
+    assert (
+        spawned is not None
+    ), "Expected either normal or shielded (conversion may occur)"
     # spawn speed for normal should still originate from balance (shielded uses same)
     from src.balance import ENEMY_BASE_SPEEDS
 

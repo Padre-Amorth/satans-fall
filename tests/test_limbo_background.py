@@ -100,7 +100,10 @@ def test_limbo_external_and_inner_images(monkeypatch, tmp_path: "pathlib.Path") 
 
     def fake_get_image(name, size=None):
         calls.append((name, size))
-        if name in ("limbo_background.png", "limbo_battlefield.png") and size is not None:
+        if (
+            name in ("limbo_background.png", "limbo_battlefield.png")
+            and size is not None
+        ):
             surf = pygame.Surface((int(size[0]), int(size[1])))
             color = (5, 5, 5) if name.endswith("background.png") else (50, 50, 50)
             surf.fill(color)
@@ -109,6 +112,7 @@ def test_limbo_external_and_inner_images(monkeypatch, tmp_path: "pathlib.Path") 
 
     # patch asset manager so draw() pulls from our fake
     from src.assets import manager as am
+
     monkeypatch.setattr(am, "get_image", fake_get_image)
 
     g = Game()
@@ -154,6 +158,7 @@ def test_limbo_external_shown_even_if_battlefield_missing(
         return None
 
     from src.assets import manager as am
+
     monkeypatch.setattr(am, "get_image", fake_get_image)
 
     g = Game()

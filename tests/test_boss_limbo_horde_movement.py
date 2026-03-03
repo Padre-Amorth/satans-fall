@@ -1,16 +1,19 @@
+import math
+
 from src.balance import ENEMY_BASE_SPEEDS
 from src.entities.enemy import Enemy
-import math
 
 
 class DummyGame:
     def __init__(self, width=800, height=600):
         self.width = width
         self.height = height
+
         # minimal projectile container used by boss shooting logic
         class _DummyGroup:
             def add(self, *args, **kwargs):
                 pass
+
         self.enemy_projectiles = _DummyGroup()
 
     def clamp_to_walls(self, x):
@@ -60,8 +63,12 @@ def test_boss_limbo_horde_moves_to_upper_half_and_bounces():
 
     # ensure the speed was doubled correctly (angle 30°)
     # new behaviour: speed is boosted by factor 3 (previously 2)
-    expected_vx = ENEMY_BASE_SPEEDS["boss_limbo_horde"] * 3.0 * math.cos(math.radians(30))
-    assert math.isclose(abs(init_vx), expected_vx, rel_tol=1e-2), "Horizontal speed should match boosted factor-3 value"
+    expected_vx = (
+        ENEMY_BASE_SPEEDS["boss_limbo_horde"] * 3.0 * math.cos(math.radians(30))
+    )
+    assert math.isclose(
+        abs(init_vx), expected_vx, rel_tol=1e-2
+    ), "Horizontal speed should match boosted factor-3 value"
 
     # simulate for a while and ensure there are no sudden teleports
     prev_x, prev_y = boss.x, boss.y

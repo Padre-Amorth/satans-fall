@@ -3526,17 +3526,24 @@ class Game:
                 self.player.move_down()
                 moving = True
 
-            # Update player animation (only for horizontal movement)
-            if moving_horizontal:
-                self.player_is_moving = True
+            # Update player animation
+            # Always increment anim_frame for wobble effect (even during vertical movement)
+            # But only show walk frames when moving horizontally
+            if moving:
                 self.player_anim_timer += 1
                 if self.player_anim_timer >= self.player_anim_speed:
                     self.player_anim_timer = 0
                     self.player_anim_frame = (self.player_anim_frame + 1) % 8
+
+            # Set is_moving flag only for horizontal movement (determines if walk frames show)
+            if moving_horizontal:
+                self.player_is_moving = True
             else:
                 self.player_is_moving = False
-                self.player_anim_frame = 0
-                self.player_anim_timer = 0
+                # Only reset frame when completely still (no movement at all)
+                if not moving:
+                    self.player_anim_frame = 0
+                    self.player_anim_timer = 0
 
     def update_weapon_firing(self) -> None:
         """Handle automatic weapon firing"""

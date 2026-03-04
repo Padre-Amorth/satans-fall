@@ -402,20 +402,21 @@ class Player(BaseSprite):
         draw_x: float | int = self.rect.x + shake_x
         draw_y: float | int = self.rect.y + shake_y
 
-        # Apply bobbing effect if moving
+        # Apply wobble/bobbing effect (continuous idle animation even when not moving)
         bob_offset = 0
         current_image: pygame.Surface = self.image
 
-        if is_moving and self.walk_frames:
-            # Create bobbing effect (up and down movement)
-            bob_cycle: int = anim_frame % 4
-            if bob_cycle == 1:
-                bob_offset = -1
-            elif bob_cycle == 3:
-                bob_offset = 1
-            else:
-                bob_offset = 0
+        # Calculate wobble effect on animation frame
+        # Creates continuous up-down motion in all states
+        bob_cycle: int = anim_frame % 4
+        if bob_cycle == 1:
+            bob_offset = -1  # Up
+        elif bob_cycle == 3:
+            bob_offset = 1   # Down
+        else:
+            bob_offset = 0   # Center
 
+        if is_moving and self.walk_frames:
             # Use walking frames based on direction (2 frames per direction)
             # Frames 0-1 = right direction, frames 2-3 = left (flipped)
             frame_index: int = anim_frame % 2

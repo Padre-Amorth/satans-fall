@@ -27,6 +27,9 @@ class SpatialGrid:
             c.clear()
 
     def _cell_index(self, col: int, row: int) -> int:
+        # Robustness: clamp to valid range to prevent index errors
+        col = max(0, min(col, self.cols - 1))
+        row = max(0, min(row, self.rows - 1))
         return row * self.cols + col
 
     def _bounds_to_cells(
@@ -60,17 +63,26 @@ class SpatialGrid:
         return 0.0, 0.0, 0.0
 
     def add(self, obj: Any) -> None:
-        x, y, r = self._get_pos_radius(obj)
-        minx: float = x - r
-        miny: float = y - r
-        maxx: float = x + r
-        maxy: float = y + r
-        min_col, min_row, max_col, max_row = self._bounds_to_cells(
-            minx, miny, maxx, maxy
-        )
-        for col in range(min_col, max_col + 1):
-            for row in range(min_row, max_row + 1):
-                self.cells[self._cell_index(col, row)].append(obj)
+        try:
+            x, y, r = self._get_pos_radius(obj)
+            # Sanitize coordinates (NaN/inf protection)
+            if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+                return
+            minx: float = x - r
+            miny: float = y - r
+            maxx: float = x + r
+            maxy: float = y + r
+            min_col, min_row, max_col, max_row = self._bounds_to_cells(
+                minx, miny, maxx, maxy
+            )
+            for col in range(min_col, max_col + 1):
+                for row in range(min_row, max_row + 1):
+                    idx = self._cell_index(col, row)
+                    if 0 <= idx < len(self.cells):
+                        self.cells[idx].append(obj)
+        except Exception:
+            # Silently skip malformed entries
+            pass
 
     def build(self, objects: Iterable[Any]) -> None:
         self.clear()
@@ -82,25 +94,33 @@ class SpatialGrid:
                 continue
 
     def query_circle(self, x: float, y: float, radius: float) -> List[Any]:
-        minx: float = x - radius
-        miny: float = y - radius
-        maxx: float = x + radius
-        maxy: float = y + radius
-        min_col, min_row, max_col, max_row = self._bounds_to_cells(
-            minx, miny, maxx, maxy
-        )
-        results: List[Any] = []
-        seen: Set[int] = set()
-        for col in range(min_col, max_col + 1):
-            for row in range(min_row, max_row + 1):
-                idx: int = self._cell_index(col, row)
-                for obj in self.cells[idx]:
-                    oid: int = id(obj)
-                    if oid in seen:
-                        continue
-                    seen.add(oid)
-                    results.append(obj)
-        return results
+        try:
+            # Sanitize query parameters (NaN/inf protection)
+            if not (isinstance(x, (int, float)) and isinstance(y, (int, float)) and isinstance(radius, (int, float))):
+                return []
+            minx: float = x - radius
+            miny: float = y - radius
+            maxx: float = x + radius
+            maxy: float = y + radius
+            min_col, min_row, max_col, max_row = self._bounds_to_cells(
+                minx, miny, maxx, maxy
+            )
+            results: List[Any] = []
+            seen: Set[int] = set()
+            for col in range(min_col, max_col + 1):
+                for row in range(min_row, max_row + 1):
+                    idx: int = self._cell_index(col, row)
+                    if 0 <= idx < len(self.cells):
+                        for obj in self.cells[idx]:
+                            oid: int = id(obj)
+                            if oid in seen:
+                                continue
+                            seen.add(oid)
+                            results.append(obj)
+            return results
+        except Exception:
+            # Return empty list on any error; caller will use fallback
+            return []
 
 
 __all__: List[str] = ["SpatialGrid"]

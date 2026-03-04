@@ -47,7 +47,7 @@ class ParticleSystem:
             filter_fn: Optional callable(particle) -> bool to filter particles to draw
         """
         try:
-            for p in list(particles):
+            for p in particles:
                 try:
                     # Apply optional filter (e.g., distance culling for blasphemy5)
                     if filter_fn and not filter_fn(p):
@@ -293,7 +293,7 @@ class ParticleSystem:
         except Exception:
             return
         try:
-            for ft in list(g.floating_texts):
+            for ft in g.floating_texts:
                 try:
                     font = get_font(ft.font_size)
                     # determine alpha and screen coordinates up front so both outline

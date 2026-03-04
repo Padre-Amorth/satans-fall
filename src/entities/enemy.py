@@ -207,6 +207,7 @@ class Enemy(BaseSprite):
             self.damage = 0  # does not attack
             self.direction: int = random.choice([-1, 1])
             self._wave_time: float = 0.0  # accumulator for vertical oscillation
+            self._rotation_angle: float = 0.0  # vertical axis rotation angle in radians
             self._spawn_y: float = 0.0  # will be set on first update frame
 
         # Make enemies slightly larger by 10 pixels (except final boss keeps canonical size)
@@ -695,26 +696,52 @@ class Enemy(BaseSprite):
         elif self.enemy_type == "pentagram":
             # Five-pointed star (pentagram) in dark red/crimson with gold center
             # Inverted: point downward instead of upward
-            cx = self.width // 2
-            cy = self.height // 2
-            outer_r = min(cx, cy) - 4
-            inner_r = outer_r * 0.4
-            # Calculate star vertices: 5 outer points + 5 inner points, alternating
-            # Inverted: start at 90 degrees (pointing down) instead of -90 (pointing up)
-            points = []
-            for i in range(10):
-                angle = math.radians(90 + i * 36)  # 90 degrees to point downward
-                r = outer_r if i % 2 == 0 else inner_r
-                points.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
-            # Draw outer border (bright red)
-            pygame.draw.polygon(self.image, (220, 60, 60), points)
-            # Fill interior (dark crimson)
-            pygame.draw.polygon(self.image, (150, 15, 15), points, 0)
-            # Outline border (bright red)
-            pygame.draw.polygon(self.image, (220, 60, 60), points, 2)
+            # Rotates continuously on vertical axis (star spins in place)
+
+            # Check if we need to regenerate the base pentagram image
+            # (only regenerate if size changes; rotation is applied via transform)
+            base_size = (self.width, self.height)
+            if not hasattr(self, "_pentagram_base") or getattr(self, "_pentagram_base_size", None) != base_size:
+                # Regenerate base pentagram once (no rotation applied here)
+                base_image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+                base_image.fill((0, 0, 0, 0))
+
+                cx = self.width // 2
+                cy = self.height // 2
+                outer_r = min(cx, cy) - 4
+                inner_r = outer_r * 0.4
+
+                # Calculate star vertices (static, no rotation)
+                points = []
+                for i in range(10):
+                    angle = math.radians(90 + i * 36)
+                    r = outer_r if i % 2 == 0 else inner_r
+                    x = cx + r * math.cos(angle)
+                    y = cy + r * math.sin(angle)
+                    points.append((x, y))
+
+                # Draw outer border (bright red)
+                pygame.draw.polygon(base_image, (220, 60, 60), points)
+                # Fill interior (dark crimson)
+                pygame.draw.polygon(base_image, (150, 15, 15), points, 0)
+                # Outline border (bright red)
+                pygame.draw.polygon(base_image, (220, 60, 60), points, 2)
+
+                self._pentagram_base = base_image
+                self._pentagram_base_size = base_size
+
+            # Apply rotation using cached base image
+            try:
+                # Convert rotation angle to degrees for pygame.transform.rotate
+                rotation_deg = math.degrees(self._rotation_angle) % 360
+                self.image = pygame.transform.rotate(self._pentagram_base, rotation_deg)
+            except Exception:
+                # Fallback to base image if rotation fails
+                self.image = self._pentagram_base.copy()
+
             # Center circle (gold)
             pygame.draw.circle(
-                self.image, (200, 160, 20), (cx, cy), max(1, inner_r // 2)
+                self.image, (200, 160, 20), (cx, cy), max(1, int(inner_r // 2))
             )
 
         else:
@@ -1076,9 +1103,13 @@ class Enemy(BaseSprite):
                     # movement handled; skip other behaviour
                     pass
                 elif self.enemy_type == "pentagram":
-                    # Pentagram: horizontal traversal with vertical oscillation
+                    # Pentagram: horizontal traversal with vertical oscillation and continuous rotation
                     # Accumulate time for wave oscillation
                     self._wave_time += 0.04
+                    # Vertical axis rotation: continuous smooth flip with complete 360° cycles
+                    self._rotation_angle += 0.04  # Controls rotation speed; 0.04 rad/frame ≈ 2.3°/frame (50% slower)
+                    # Reset angle after complete rotation (2π radians = 360°) for consistent cycling
+                    self._rotation_angle %= (2 * math.pi)
                     # Horizontal movement at constant speed
                     self.x += self.direction * self.speed / 60
                     # Vertical oscillation: sine wave ±40px around spawn point
@@ -2484,6 +2515,10 @@ class Enemy(BaseSprite):
 
     def draw(self, screen, shake_x=0, shake_y=0) -> None:
         try:
+            # Regenerate pentagram image every frame to apply rotation
+            if self.enemy_type == "pentagram":
+                self.draw_enemy()
+
             # When the hitbox is shrunken (e.g. boss_limbo with aura), self.rect
             # no longer matches self.image size.  Center the image on (self.x, self.y)
             # directly so the visual doesn't shift relative to the logical position.
@@ -2560,6 +2595,49 @@ class Enemy(BaseSprite):
                         blit_image = pygame.transform.flip(self.image, flip_x, flip_y)
                     except Exception:
                         blit_image = self.image
+            # Rotate pentagram asset on vertical axis with perspective compression
+            elif self.enemy_type == "pentagram":
+                try:
+                    # Calculate perspective scale: cos(angle) shrinks/grows width
+                    # At 0°: cos(0) = 1 (full width)
+                    # At 90°: cos(90°) = 0 (flat line)
+                    # At 180°: cos(180°) = -1 (flipped, full width from other side)
+                    perspective_scale = abs(math.cos(self._rotation_angle))
+
+                    # Apply perspective scaling to width only (vertical axis rotation)
+                    new_width = max(1, int(self.image.get_width() * perspective_scale))
+                    new_height = self.image.get_height()
+
+                    # Scale the image (width changes, height stays same)
+                    if new_width != self.image.get_width():
+                        blit_image = pygame.transform.scale(self.image, (new_width, new_height))
+                    else:
+                        blit_image = self.image
+
+                    # Darken when rotating away (at 90° becomes very dark)
+                    if perspective_scale < 0.8:
+                        # Create a darkened version
+                        darkened = blit_image.copy()
+                        darkness = int(100 * (1 - perspective_scale))  # 0-100 at 90°
+                        dark_surf = pygame.Surface(darkened.get_size())
+                        dark_surf.fill((0, 0, 0))
+                        darkened.blit(dark_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+                        # Reduce alpha slightly based on perspective
+                        alpha = int(255 * (0.5 + perspective_scale * 0.5))  # 127-255
+                        darkened.set_alpha(alpha)
+                        blit_image = darkened
+
+                    # Flip image when rotated more than 90° (showing back side)
+                    if math.cos(self._rotation_angle) < 0:
+                        blit_image = pygame.transform.flip(blit_image, True, False)
+
+                    # Adjust position to keep centered
+                    blit_rect = blit_image.get_rect()
+                    blit_rect.center = (draw_x + self.width // 2, draw_y + self.height // 2)
+                    draw_x = blit_rect.x
+                    draw_y = blit_rect.y
+                except Exception:
+                    blit_image = self.image
 
             screen.blit(blit_image, (draw_x, draw_y))
 

@@ -288,6 +288,10 @@ class PygameUIManager:
         self._bot_vignette = None
         self._vignette_size = None  # Track cached vignette dimensions
 
+        # Cache overlay surface (options menu semi-transparent background)
+        self._options_overlay = None
+        self._options_overlay_size = None  # Track cached overlay dimensions
+
         self._init_fog_particles()
         self._init_limbo_fog_particles()
 
@@ -1873,10 +1877,15 @@ class PygameUIManager:
         if not self.screen or not pygame:
             return
 
-        # Semi-transparent overlay
-        overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))
-        self.screen.blit(overlay, (0, 0))
+        # Semi-transparent overlay (cached, invalidate on window resize)
+        overlay_size = (self.width, self.height)
+        if self._options_overlay_size != overlay_size:
+            # Recreate overlay only if window size changed
+            self._options_overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            self._options_overlay.fill((0, 0, 0, 180))
+            self._options_overlay_size = overlay_size
+
+        self.screen.blit(self._options_overlay, (0, 0))
 
         # Dialog box with gothic dark background
         dialog_w, dialog_h = 520, 320

@@ -678,13 +678,16 @@ class CollisionSystem:
                     if not (is_statue or pierce_attr):
                         px = getattr(projectile, "x", 0)
                         py = getattr(projectile, "y", 0)
-                        hit_enemies.sort(
-                            key=lambda e: (
-                                (g._enemy_pos(e)[0] - px) ** 2
-                                + (g._enemy_pos(e)[1] - py) ** 2
+                        # Optimization: use min() instead of sort to find nearest enemy
+                        if hit_enemies:
+                            nearest = min(
+                                hit_enemies,
+                                key=lambda e: (
+                                    (g._enemy_pos(e)[0] - px) ** 2
+                                    + (g._enemy_pos(e)[1] - py) ** 2
+                                ),
                             )
-                        )
-                        hit_enemies = [hit_enemies[0]]
+                            hit_enemies = [nearest]
                     try:
                         # Debug: hit candidates filtered
                         pass

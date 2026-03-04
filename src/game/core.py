@@ -827,6 +827,7 @@ class Game:
             DEFAULT_PLAYER_ANIM_SPEED  # frames between animation changes (slower)
         )
         self.player_is_moving = False
+        self.player_facing_right = True  # Track horizontal movement direction for walk animation
 
         # Boss system
         # State is proxied to EnemyManager when present via properties
@@ -3504,9 +3505,11 @@ class Game:
             moving = False
             if keys[pygame.K_LEFT] or keys[pygame.K_a]:
                 self.player.velocity_x = -self.player.speed
+                self.player_facing_right = False  # Track direction for walk animation
                 moving = True
             elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
                 self.player.velocity_x = self.player.speed
+                self.player_facing_right = True  # Track direction for walk animation
                 moving = True
             else:
                 self.player.velocity_x = 0

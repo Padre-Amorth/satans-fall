@@ -1881,7 +1881,9 @@ class PygameUIManager:
         overlay_size = (self.width, self.height)
         if self._options_overlay_size != overlay_size:
             # Recreate overlay only if window size changed
-            self._options_overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            self._options_overlay = pygame.Surface(
+                (self.width, self.height), pygame.SRCALPHA
+            )
             self._options_overlay.fill((0, 0, 0, 180))
             self._options_overlay_size = overlay_size
 
@@ -3917,6 +3919,7 @@ class PygameUIManager:
                 shake_y,
                 self.game.player_anim_frame,
                 self.game.player_is_moving,
+                self.game.player_facing_right,
             )
 
         # Draw Blasphemy 5 blink particles (if any)

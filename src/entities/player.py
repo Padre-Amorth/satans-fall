@@ -359,7 +359,7 @@ class Player(BaseSprite):
         except Exception:
             pass
 
-    def draw(self, screen, shake_x=0, shake_y=0, anim_frame=0, is_moving=False) -> None:
+    def draw(self, screen, shake_x=0, shake_y=0, anim_frame=0, is_moving=False, facing_right=True) -> None:
         # Apply shake offset
         draw_x: float | int = self.rect.x + shake_x
         draw_y: float | int = self.rect.y + shake_y
@@ -378,8 +378,12 @@ class Player(BaseSprite):
             else:
                 bob_offset = 0
 
-            # Use walking frames
-            frame_index: int = anim_frame % 8  # 8 frames total (4 normal + 4 flipped)
+            # Use walking frames based on direction
+            # First 4 frames = right direction, frames 4-7 = left (flipped)
+            frame_index: int = anim_frame % 4
+            if not facing_right:
+                frame_index += 4  # Use flipped frames for left movement
+
             if frame_index < len(self.walk_frames):
                 current_image = self.walk_frames[frame_index]
 

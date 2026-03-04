@@ -98,30 +98,24 @@ class Player(BaseSprite):
         self.burn_particles: list = []
 
     def create_walk_frames(self) -> None:
-        """Create walking animation frames by shifting pixels"""
+        """Create walking animation frames by shifting pixels (2 frames per direction)"""
         if self.base_image is None:
             return
 
         width, height = self.base_image.get_size()
 
-        # Create 4 walking frames
-        for frame in range(4):
+        # Create 2 walking frames (reduced from 4 for simpler animation)
+        for frame in range(2):
             frame_surface: pygame.Surface = self.base_image.copy()
             pixels: ndarray = pygame.surfarray.pixels3d(frame_surface)
             alpha_pixels: ndarray = pygame.surfarray.pixels_alpha(frame_surface)
 
-            # Calculate leg movement offsets
+            # Calculate leg movement offsets (simplified to 2 frames)
             if frame == 0:
-                offset_left = 0
-                offset_right = 0
-            elif frame == 1:
                 offset_left = -2  # Left leg forward
                 offset_right = 1
-            elif frame == 2:
-                offset_left = 0
-                offset_right = 0
-            elif frame == 3:
-                offset_left = 1  # Right leg forward
+            else:  # frame == 1
+                offset_left = 1   # Right leg forward
                 offset_right = -2
 
             # Apply pixel shifting to simulate leg movement
@@ -156,18 +150,18 @@ class Player(BaseSprite):
 
             self.walk_frames.append(new_frame)
 
-            # Create flipped version
+            # Create flipped version for left movement
             flipped_frame: pygame.Surface = pygame.transform.flip(
                 new_frame, True, False
             )
             self.walk_frames.append(flipped_frame)
 
     def load_directional_walk_sprites(self) -> bool:
-        """Load custom walk sprites for right/left directions.
+        """Load custom walk sprites for right/left directions (2 frames each).
 
         Looks for sprites in:
-        - walk_right_01.png, walk_right_02.png, etc. (frames 0-3)
-        - walk_left_01.png, walk_left_02.png, etc. (frames 4-7)
+        - walk_right_01.png, walk_right_02.png (frames 0-1)
+        - walk_left_01.png, walk_left_02.png (frames 2-3)
 
         Returns True if successfully loaded, False if sprites not found (fallback to pixel-shift).
         """
@@ -177,8 +171,8 @@ class Player(BaseSprite):
             size = (self.width, self.height)
             self.walk_frames = []
 
-            # Try to load right-direction walk frames
-            for i in range(1, 5):
+            # Try to load right-direction walk frames (2 frames)
+            for i in range(1, 3):
                 sprite_name = f"walk_right_{i:02d}.png"
                 sprite = get_image(sprite_name, size)
                 if sprite is None:
@@ -186,8 +180,8 @@ class Player(BaseSprite):
                     return False
                 self.walk_frames.append(sprite)
 
-            # Try to load left-direction walk frames (flipped versions)
-            for i in range(1, 5):
+            # Try to load left-direction walk frames (2 frames)
+            for i in range(1, 3):
                 sprite_name = f"walk_left_{i:02d}.png"
                 sprite = get_image(sprite_name, size)
                 if sprite is None:
@@ -422,11 +416,11 @@ class Player(BaseSprite):
             else:
                 bob_offset = 0
 
-            # Use walking frames based on direction
-            # First 4 frames = right direction, frames 4-7 = left (flipped)
-            frame_index: int = anim_frame % 4
+            # Use walking frames based on direction (2 frames per direction)
+            # Frames 0-1 = right direction, frames 2-3 = left (flipped)
+            frame_index: int = anim_frame % 2
             if not facing_right:
-                frame_index += 4  # Use flipped frames for left movement
+                frame_index += 2  # Use flipped frames for left movement
 
             if frame_index < len(self.walk_frames):
                 current_image = self.walk_frames[frame_index]

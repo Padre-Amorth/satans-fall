@@ -866,8 +866,8 @@ class CollisionSystem:
                             ex, ey = g._enemy_pos(enemy)
                             dx = ex - px
                             dy = ey - py
-                            distance = math.sqrt(dx * dx + dy * dy)
-                            if distance <= explosion_radius:
+                            dist_sq = dx * dx + dy * dy
+                            if dist_sq <= explosion_radius * explosion_radius:
                                 try:
                                     # Apply damage (route through helper so FIRE_3 / BLASPHEMY_6 apply)
                                     dmg_to_apply = self._player_damage_vs_burning(
@@ -979,8 +979,8 @@ class CollisionSystem:
                             ex, ey = g._enemy_pos(enemy)
                             dx = ex - px
                             dy = ey - py
-                            distance = math.sqrt(dx * dx + dy * dy)
-                            if distance <= explosion_radius:
+                            dist_sq = dx * dx + dy * dy
+                            if dist_sq <= explosion_radius * explosion_radius:
                                 try:
                                     dmg_to_apply = self._player_damage_vs_burning(
                                         projectile,
@@ -1379,8 +1379,8 @@ class CollisionSystem:
                         ex, ey = g._enemy_pos(enemy)
                         dx = ex - px
                         dy = ey - py
-                        distance = math.sqrt(dx * dx + dy * dy)
-                        if distance <= explosion_radius:
+                        dist_sq = dx * dx + dy * dy
+                        if dist_sq <= explosion_radius * explosion_radius:
                             try:
                                 dmg_to_apply = self._player_damage_vs_burning(
                                     projectile, enemy, getattr(projectile, "damage", 0)
@@ -3148,6 +3148,9 @@ class CollisionSystem:
                         300  # Maximum distance for chain lightning (pixels)
                     )
 
+                    # Cache primary position once (optimization: avoid redundant lookups)
+                    px, py = g._enemy_pos(primary_boss)
+
                     # Check other bosses
                     for other_boss in g.bosses.sprites():
                         if other_boss is primary_boss:
@@ -3155,7 +3158,6 @@ class CollisionSystem:
                         if getattr(other_boss, "health", 0) <= 0:
                             continue
                         bx, by = g._enemy_pos(other_boss)
-                        px, py = g._enemy_pos(primary_boss)
                         dist = math.hypot(bx - px, by - py)
                         if dist <= max_chain_distance:
                             others.append((dist, other_boss))
@@ -3165,7 +3167,6 @@ class CollisionSystem:
                         if getattr(other_enemy, "health", 0) <= 0:
                             continue
                         ex, ey = g._enemy_pos(other_enemy)
-                        px, py = g._enemy_pos(primary_boss)
                         dist = math.hypot(ex - px, ey - py)
                         if dist <= max_chain_distance:
                             others.append((dist, other_enemy))
@@ -3173,13 +3174,8 @@ class CollisionSystem:
                     others.sort(key=lambda t: t[0])
                     to_chain = min(len(others), chain - 1)
 
-                    # Store chain lightning effect for visual
-                    chain_points = [
-                        (
-                            g._enemy_pos(primary_boss)[0],
-                            g._enemy_pos(primary_boss)[1],
-                        )
-                    ]
+                    # Store chain lightning effect for visual (use cached position)
+                    chain_points = [(px, py)]
 
                     for i in range(to_chain):
                         targ = others[i][1]
@@ -3191,7 +3187,7 @@ class CollisionSystem:
                             show_floating=False,
                         )  # Increased damage for secondary targets
 
-                        # Add to chain points for visual effect
+                        # Add to chain points for visual effect (cache target position)
                         tx, ty = g._enemy_pos(targ)
                         chain_points.append((tx, ty))
 
@@ -3696,8 +3692,8 @@ class CollisionSystem:
 
                 dx = ex - px
                 dy = ey - py
-                distance = math.sqrt(dx * dx + dy * dy)
-                if distance <= radius:
+                dist_sq = dx * dx + dy * dy
+                if dist_sq <= radius * radius:
                     in_puddle = True
                     max_slow_factor = min(max_slow_factor, slow_factor)
 
@@ -3765,8 +3761,8 @@ class CollisionSystem:
 
                             dx = bx - px
                             dy = by - py
-                            distance = math.sqrt(dx * dx + dy * dy)
-                            if distance <= radius:
+                            dist_sq = dx * dx + dy * dy
+                            if dist_sq <= radius * radius:
                                 in_puddle = True
                                 max_slow_factor = min(max_slow_factor, slow_factor)
 

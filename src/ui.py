@@ -278,8 +278,25 @@ class PygameUIManager:
         self.get_font = get_font
         self.get_text = get_text
 
+        # Load title image
+        self.title_image = self._load_title_image()
+        self._title_image_scaled = None  # Cache for scaled title image
+        self._title_image_scaled_size = None  # Track cached size
+
         self._init_fog_particles()
         self._init_limbo_fog_particles()
+
+    def _load_title_image(self):
+        """Load the title image from assets/title.png. Returns None if not found or error occurs."""
+        if not self.pygame:
+            return None
+        try:
+            from src.assets.manager import get_image
+
+            return get_image("title.png")
+        except Exception:
+            pass
+        return None
 
     def _draw_button(self, rect, bg_normal, bg_hover, border_color, border_width=1):
         hov = rect.collidepoint(self.game.mouse_x, self.game.mouse_y)
@@ -1211,15 +1228,53 @@ class PygameUIManager:
         self.screen.blit(bot_vignette, (0, h - 90))
 
         # ── Title ──────────────────────────────────────────────────────────
-        title_font = self.get_font(72)
-        title_surf = self.get_text("SATAN'S FALL", title_font, (185, 28, 28))
-        tx, ty = self._draw_centered_text(
-            title_surf, w // 2, h // 2 - 195, shake_x, shake_y
-        )
-        self.screen.blit(title_surf, (tx, ty))
+        if self.title_image:
+            # Use external image asset, scale to fit screen width (with caching)
+            title_to_draw = self.title_image
+            img_w, img_h = self.title_image.get_size()
+            # Scale to 90% of screen width to leave margins
+            target_w = int(w * 0.9)
+            scale_ratio = target_w / img_w
+            target_h = int(img_h * scale_ratio)
+            target_size = (target_w, target_h)
+
+            if target_w < img_w:  # Only scale down, never up
+                # Use cached scaled image if size hasn't changed
+                if self._title_image_scaled_size != target_size:
+                    try:
+                        self._title_image_scaled = pygame.transform.scale(
+                            self.title_image, target_size
+                        )
+                        self._title_image_scaled_size = target_size
+                    except Exception:
+                        self._title_image_scaled = self.title_image
+                        self._title_image_scaled_size = None
+                title_to_draw = (
+                    self._title_image_scaled
+                    if self._title_image_scaled
+                    else self.title_image
+                )
+            else:
+                # Window too small, reset cache
+                self._title_image_scaled = None
+                self._title_image_scaled_size = None
+
+            tx, ty = self._draw_centered_text(
+                title_to_draw, w // 2, h // 2 - 195, shake_x, shake_y
+            )
+            self.screen.blit(title_to_draw, (tx, ty))
+            line_y = ty + title_to_draw.get_height() + 12
+        else:
+            # Fallback to text rendering if image not found
+            title_font = self.get_font(72)
+            title_surf = self.get_text("SATAN'S FALL", title_font, (185, 28, 28))
+            tx, ty = self._draw_centered_text(
+                title_surf, w // 2, h // 2 - 195, shake_x, shake_y
+            )
+            self.screen.blit(title_surf, (tx, ty))
+            line_y = ty + title_surf.get_height() + 12
 
         # Ornamental line + diamond under title
-        line_y = ty + title_surf.get_height() + 12
         pygame.draw.line(
             self.screen,
             (110, 28, 28),

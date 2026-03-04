@@ -2288,17 +2288,17 @@ class CollisionSystem:
                 except Exception:
                     proj_px = proj_py = proj_pr = 0
 
-                # Ensure candidates is fresh for the plain-list collision pass
+                # Collect and sort candidates in single pass (optimization: avoid normalization loop)
                 candidates = []
 
-                for enemy in list(g.enemies):
-                    ex, ey = g._enemy_pos(enemy)
-                    er = g._enemy_radius(enemy)
-                    dx = ex - proj_px
-                    dy = ey - proj_py
-                    # precise circle overlap check
-                    d2 = dx * dx + dy * dy
+                for enemy in g.enemies:
                     try:
+                        ex, ey = g._enemy_pos(enemy)
+                        er = g._enemy_radius(enemy)
+                        dx = ex - proj_px
+                        dy = ey - proj_py
+                        # precise circle overlap check (using squared distance)
+                        d2 = dx * dx + dy * dy
                         thresh = (er + proj_pr) * (er + proj_pr)
 
                         if d2 <= thresh:
@@ -2306,25 +2306,12 @@ class CollisionSystem:
                     except Exception:
                         pass
 
-                # Normalize candidate entries to (dist_sq, enemy) tuples so
-                # downstream code can assume a consistent structure.
-                normalized = []
-                for c in candidates:
-                    if isinstance(c, tuple) and len(c) >= 2:
-                        normalized.append((c[0], c[1]))
-                    else:
-                        try:
-                            ex, ey = g._enemy_pos(c)
-                            d2 = (ex - proj_px) ** 2 + (ey - proj_py) ** 2
-                        except Exception:
-                            d2 = 0
-                        normalized.append((d2, c))
-
-                if len(normalized) > 1:
-                    normalized.sort(key=lambda t: t[0])
-                    hit_enemies = [normalized[0][1]]
+                # Sort once and hit only nearest enemy (optimization: single-pass sort)
+                if candidates:
+                    candidates.sort(key=lambda t: t[0])
+                    hit_enemies = [candidates[0][1]]
                 else:
-                    hit_enemies = [n[1] for n in normalized]
+                    hit_enemies = []
 
                 # Process only the nearest overlapping enemy (if any)
                 for enemy in hit_enemies:

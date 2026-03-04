@@ -283,6 +283,11 @@ class PygameUIManager:
         self._title_image_scaled = None  # Cache for scaled title image
         self._title_image_scaled_size = None  # Track cached size
 
+        # Cache vignettes (main menu darkening strips)
+        self._top_vignette = None
+        self._bot_vignette = None
+        self._vignette_size = None  # Track cached vignette dimensions
+
         self._init_fog_particles()
         self._init_limbo_fog_particles()
 
@@ -1219,13 +1224,18 @@ class PygameUIManager:
         # Gothic dark background
         self.screen.fill((5, 3, 8))
 
-        # Top and bottom darkening strips
-        top_vignette = pygame.Surface((w, 110), pygame.SRCALPHA)
-        top_vignette.fill((0, 0, 0, 150))
-        self.screen.blit(top_vignette, (0, 0))
-        bot_vignette = pygame.Surface((w, 90), pygame.SRCALPHA)
-        bot_vignette.fill((0, 0, 0, 130))
-        self.screen.blit(bot_vignette, (0, h - 90))
+        # Top and bottom darkening strips (cached, invalidate on window resize)
+        vignette_size = (w, h)
+        if self._vignette_size != vignette_size:
+            # Recreate vignettes only if window size changed
+            self._top_vignette = pygame.Surface((w, 110), pygame.SRCALPHA)
+            self._top_vignette.fill((0, 0, 0, 150))
+            self._bot_vignette = pygame.Surface((w, 90), pygame.SRCALPHA)
+            self._bot_vignette.fill((0, 0, 0, 130))
+            self._vignette_size = vignette_size
+
+        self.screen.blit(self._top_vignette, (0, 0))
+        self.screen.blit(self._bot_vignette, (0, h - 90))
 
         # ── Title ──────────────────────────────────────────────────────────
         if self.title_image:

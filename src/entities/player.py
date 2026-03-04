@@ -79,7 +79,10 @@ class Player(BaseSprite):
             # Create walking animation frames
             self.walk_frames: list[pygame.Surface] = []
             try:
-                self.create_walk_frames()
+                # Try to load custom directional walk sprites first
+                if not self.load_directional_walk_sprites():
+                    # Fallback to pixel-shifting animation
+                    self.create_walk_frames()
             except Exception as e:
                 logger.warning("Could not create walk animation: %s", e)
                 self.walk_frames = []
@@ -158,6 +161,47 @@ class Player(BaseSprite):
                 new_frame, True, False
             )
             self.walk_frames.append(flipped_frame)
+
+    def load_directional_walk_sprites(self) -> bool:
+        """Load custom walk sprites for right/left directions.
+
+        Looks for sprites in:
+        - walk_right_01.png, walk_right_02.png, etc. (frames 0-3)
+        - walk_left_01.png, walk_left_02.png, etc. (frames 4-7)
+
+        Returns True if successfully loaded, False if sprites not found (fallback to pixel-shift).
+        """
+        try:
+            from src.assets.manager import get_image
+
+            size = (self.width, self.height)
+            self.walk_frames = []
+
+            # Try to load right-direction walk frames
+            for i in range(1, 5):
+                sprite_name = f"walk_right_{i:02d}.png"
+                sprite = get_image(sprite_name, size)
+                if sprite is None:
+                    # Not found, fallback to pixel-shift animation
+                    return False
+                self.walk_frames.append(sprite)
+
+            # Try to load left-direction walk frames (flipped versions)
+            for i in range(1, 5):
+                sprite_name = f"walk_left_{i:02d}.png"
+                sprite = get_image(sprite_name, size)
+                if sprite is None:
+                    # Not found, create flipped versions from right frames
+                    flipped = pygame.transform.flip(self.walk_frames[i - 1], True, False)
+                    self.walk_frames.append(flipped)
+                else:
+                    self.walk_frames.append(sprite)
+
+            logger.info("Loaded custom directional walk sprites (%d frames)", len(self.walk_frames))
+            return True
+        except Exception as e:
+            logger.debug("Could not load custom walk sprites, using fallback: %s", e)
+            return False
 
     def draw_satan(self) -> None:
         """Draw Satan character - bright red demon with horns"""

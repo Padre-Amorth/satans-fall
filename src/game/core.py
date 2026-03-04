@@ -3503,18 +3503,22 @@ class Game:
             )
         ):
             moving = False
+            moving_horizontal = False  # Track if moving left/right (for walk animation)
+
             if keys[pygame.K_LEFT] or keys[pygame.K_a]:
                 self.player.velocity_x = -self.player.speed
                 self.player_facing_right = False  # Track direction for walk animation
                 moving = True
+                moving_horizontal = True
             elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
                 self.player.velocity_x = self.player.speed
                 self.player_facing_right = True  # Track direction for walk animation
                 moving = True
+                moving_horizontal = True
             else:
                 self.player.velocity_x = 0
 
-            # Vertical movement (W / S)
+            # Vertical movement (W / S) - does NOT use walk animation
             if keys[pygame.K_w] or keys[pygame.K_UP]:
                 self.player.move_up()
                 moving = True
@@ -3522,8 +3526,8 @@ class Game:
                 self.player.move_down()
                 moving = True
 
-            # Update player animation
-            if moving:
+            # Update player animation (only for horizontal movement)
+            if moving_horizontal:
                 self.player_is_moving = True
                 self.player_anim_timer += 1
                 if self.player_anim_timer >= self.player_anim_speed:

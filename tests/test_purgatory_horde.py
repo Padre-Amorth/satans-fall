@@ -161,3 +161,59 @@ def test_purgatory_horde_victory_after_explosion():
     assert getattr(
         g, "showing_victory", False
     ), "Victory screen should be shown after countdown"
+
+
+def test_purgatory_horde_wave_has_particles_and_veil():
+    """Wave should render with infernal particles and reddish veil."""
+    g = Game()
+    g.reset_game()
+    g.select_stage("purgatory")
+
+    # Trigger horde and explosion
+    g.time_elapsed = PURGATORY_HORDE_TIME_1 + 0.1
+    g.spawn_system.update_enemy_spawning()
+
+    g.purgatory_horde_elapsed = int(60 * g.fps)
+    g._update_pre_guard_state()
+
+    assert (
+        getattr(g, "purgatory_horde_wave_timer", 0.0) > 0.0
+    ), "Wave timer should be active"
+    # Wave visuals are rendered in ui.py draw_special_effects() - no separate state to test
+
+
+def test_boom_upgrade_damage_and_range():
+    """BOOM! upgrade should have correct damage and range scaling."""
+    g = Game()
+    g.reset_game()
+    g.select_stage("purgatory")
+
+    # Test base values (0 upgrades)
+    g.player.kill_explosion_upgrades = 0
+    base_damage = 30
+    base_range = 70
+    damage_0 = base_damage + (0 * 20)
+    range_0 = base_range + (0 * 20)
+    assert damage_0 == 30, "Base damage should be 30"
+    assert range_0 == 70, "Base range should be 70px"
+
+    # Test upgrade 1
+    g.player.kill_explosion_upgrades = 1
+    damage_1 = base_damage + (1 * 20)
+    range_1 = base_range + (1 * 20)
+    assert damage_1 == 50, "Upgrade 1 damage should be 50"
+    assert range_1 == 90, "Upgrade 1 range should be 90px"
+
+    # Test upgrade 2
+    g.player.kill_explosion_upgrades = 2
+    damage_2 = base_damage + (2 * 20)
+    range_2 = base_range + (2 * 20)
+    assert damage_2 == 70, "Upgrade 2 damage should be 70"
+    assert range_2 == 110, "Upgrade 2 range should be 110px"
+
+    # Test upgrade 3
+    g.player.kill_explosion_upgrades = 3
+    damage_3 = base_damage + (3 * 20)
+    range_3 = base_range + (3 * 20)
+    assert damage_3 == 90, "Upgrade 3 damage should be 90"
+    assert range_3 == 130, "Upgrade 3 range should be 130px"

@@ -127,9 +127,9 @@ class ScoreSystem:
         """Trigger explosion at specified position when 10 kills are reached.
 
         Damage and range scale with upgrade level:
-        - Base damage: 50
-        - Base range: 100px
-        - Per upgrade: +50 damage, +50px range
+        - Base damage: 30
+        - Base range: 70px
+        - Per upgrade: +20 damage, +20px range
 
         Args:
             exp_x: X coordinate for explosion center
@@ -140,10 +140,10 @@ class ScoreSystem:
             upgrades = getattr(player, "kill_explosion_upgrades", 0)
 
             # Calculate damage and range
-            base_damage = 50
-            base_range = 100
-            damage = base_damage + (upgrades * 50)
-            explosion_range = base_range + (upgrades * 50)
+            base_damage = 30
+            base_range = 70
+            damage = base_damage + (upgrades * 20)
+            explosion_range = base_range + (upgrades * 20)
 
             # Damage all enemies in range
             px, py = exp_x, exp_y

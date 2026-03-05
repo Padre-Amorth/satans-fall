@@ -35,6 +35,8 @@ class SpawnSystem:
         self.game = game
         # track rare crusader spawns per wave (starts at zero)
         self.crusader_spawned_this_wave: int = 0
+        # track total spawns in this wave to force crusader after ~30 spawns
+        self.spawns_since_last_crusader: int = 0
         # remember when the last "big" enemy (giant/custode) was created
         # so we can enforce a minimum 12‑second cooldown between spawns during
         # normal play.  Using ``game.time_elapsed`` makes it global across
@@ -411,8 +413,9 @@ class SpawnSystem:
             else:
                 self.game.wave_boss_spawned = False
 
-            # reset crusader counter for new wave
+            # reset crusader counter and spawn tracking for new wave
             self.crusader_spawned_this_wave = 0
+            self.spawns_since_last_crusader = 0
 
             # Reset prologo final boss flags if any (proxy to manager when available)
             # Skip reset for prologo to prevent multiple spawns
@@ -861,12 +864,13 @@ class SpawnSystem:
             ]
         )
         # special 5th phase entries with explicit composition (no boss)
+        # 5a - shielded focus (add 2 crusaders at midpoint)
         schedule.append(
             {
                 "time": 38 * f,
                 "count": 13,
                 "special": True,
-                "custom": {"shielded": 8, "normal": 5},
+                "custom": {"shielded": 8, "normal": 3, "crusader": 2},
             }
         )
         # 5b - first assault with archers
@@ -878,13 +882,13 @@ class SpawnSystem:
                 "custom": {"giant": 3, "shielded": 3, "archer": 2, "normal": 4},
             }
         )
-        # 5c - final assault (7 seconds later, remaining 15 enemies for 100 total)
+        # 5c - final assault (7 seconds later, add 2 crusaders at end)
         schedule.append(
             {
                 "time": 55 * f,
                 "count": 15,
                 "special": True,
-                "custom": {"giant": 5, "shielded": 5, "normal": 5},
+                "custom": {"giant": 5, "shielded": 3, "normal": 5, "crusader": 2},
             }
         )
         # compute total (no bosses in purgatory horde)
@@ -971,7 +975,7 @@ class SpawnSystem:
             rand: float = random.random()
             # Choose health and speed based on type
             # Determine rare spawn chances (crusader is rarer than a giant)
-            crusader_chance = 0.015  # 1.5% to guarantee ~2 per wave in purgatory/hell
+            crusader_chance = 0.015  # 1.5% base chance
             # Determine giant spawn chance, with limbo-specific rules
             giant_chance = 0.05
             if self.game.selected_stage in ("limbo", "limbo_2", "limbo_3"):
@@ -992,9 +996,20 @@ class SpawnSystem:
             # numbered variants like "purgatory1"/"purgatory_1" used in debug
             # runs).  limbo stages must not spawn crusaders.
             allowed = "purgatory" in stage or "hell" in stage
+
+            # Track spawns to force crusader after ~30 spawns if quota not met
+            # This ensures at least 2 crusaders per wave in purgatory/hell
+            force_crusader = (
+                self.spawns_since_last_crusader >= 30
+                and allowed
+                and self.game.wave > 1
+                and self.crusader_spawned_this_wave < 2
+            )
+            self.spawns_since_last_crusader += 1
+
             # no crusaders allowed in wave 1
             if (
-                rand < crusader_chance
+                (rand < crusader_chance or force_crusader)
                 and allowed
                 and self.game.wave > 1
                 and self.crusader_spawned_this_wave < 5
@@ -1002,8 +1017,7 @@ class SpawnSystem:
                 enemy_type = "crusader"
                 health = 200 * self.game.difficulty_multiplier
                 speed = ENEMY_BASE_SPEEDS.get("crusader", 30)
-                # increment counter so no more than five per wave
-                self.crusader_spawned_this_wave += 1
+                # NOTE: counter increment is delayed until after successful spawn
             # prefer giant only if the cooldown allows it (or we're in a
             # limbo horde).  falling into the other branches when the timer
             # blocks gives the normal/strong/etc. behaviour, which is what we
@@ -1018,77 +1032,86 @@ class SpawnSystem:
                     self.last_giant_spawn_time = self.game.time_elapsed
                 except Exception:
                     pass
-            # compute dynamic spawn probabilities that shift with wave count:
-            wave = getattr(self.game, "wave", 0)
-            # base values
-            base_strong = 0.10 if wave < 3 else 0.15
-            base_normal = 0.30
-            base_angel = 0.20
-            base_winged = 0.10 if wave >= 3 else 0.0
-            # adjustments per wave
-            strong_chance = max(base_strong - wave * 0.005, 0.05)  # more rare over time
-            normal_chance = min(base_normal + wave * 0.005, 0.50)  # increases with wave
-            angel_chance = max(base_angel - wave * 0.005, 0.05)  # decreases with wave
-            winged_chance = base_winged
-            if wave >= 3:
-                winged_chance = min(base_winged + (wave - 2) * 0.01, 0.30)
-            # archer chance is always half of normal chance, but only from wave 3 onward in prologo
-            stage = getattr(self.game, "selected_stage", "") or ""
-            if stage == "prologo" and wave < 3:
-                archer_chance = 0.0
             else:
-                archer_chance = normal_chance * 0.5
-            # ensure total doesn't exceed 1.0 by scaling if necessary
-            total = (
-                strong_chance
-                + normal_chance
-                + angel_chance
-                + winged_chance
-                + archer_chance
-            )
-            if total > 1.0:
-                factor = 1.0 / total
-                strong_chance *= factor
-                normal_chance *= factor
-                angel_chance *= factor
-                winged_chance *= factor
-                archer_chance *= factor
-            # now pick based on cumulative thresholds
-            cumulative = strong_chance
-            if rand < cumulative:
-                enemy_type = "strong"
-                health = 70 * self.game.difficulty_multiplier
-                speed = ENEMY_BASE_SPEEDS.get("strong", 60)
-            else:
-                cumulative += normal_chance
-                if rand < cumulative:
-                    enemy_type = "normal"
-                    health = 50 * self.game.difficulty_multiplier  # Doubled from 25
-                    speed = ENEMY_BASE_SPEEDS.get("normal", 75)
+                # compute dynamic spawn probabilities that shift with wave count:
+                wave = getattr(self.game, "wave", 0)
+                # base values
+                base_strong = 0.10 if wave < 3 else 0.15
+                base_normal = 0.30
+                base_angel = 0.20
+                base_winged = 0.10 if wave >= 3 else 0.0
+                # adjustments per wave
+                strong_chance = max(
+                    base_strong - wave * 0.005, 0.05
+                )  # more rare over time
+                normal_chance = min(
+                    base_normal + wave * 0.005, 0.50
+                )  # increases with wave
+                angel_chance = max(
+                    base_angel - wave * 0.005, 0.05
+                )  # decreases with wave
+                winged_chance = base_winged
+                if wave >= 3:
+                    winged_chance = min(base_winged + (wave - 2) * 0.01, 0.30)
+                # archer chance is always half of normal chance, but only from wave 3 onward in prologo
+                stage = getattr(self.game, "selected_stage", "") or ""
+                if stage == "prologo" and wave < 3:
+                    archer_chance = 0.0
                 else:
-                    cumulative += angel_chance
+                    archer_chance = normal_chance * 0.5
+                # ensure total doesn't exceed 1.0 by scaling if necessary
+                total = (
+                    strong_chance
+                    + normal_chance
+                    + angel_chance
+                    + winged_chance
+                    + archer_chance
+                )
+                if total > 1.0:
+                    factor = 1.0 / total
+                    strong_chance *= factor
+                    normal_chance *= factor
+                    angel_chance *= factor
+                    winged_chance *= factor
+                    archer_chance *= factor
+                # now pick based on cumulative thresholds
+                cumulative = strong_chance
+                if rand < cumulative:
+                    enemy_type = "strong"
+                    health = 70 * self.game.difficulty_multiplier
+                    speed = ENEMY_BASE_SPEEDS.get("strong", 60)
+                else:
+                    cumulative += normal_chance
                     if rand < cumulative:
-                        enemy_type = "angel"
-                        health = 40 * self.game.difficulty_multiplier  # Doubled from 20
-                        speed = ENEMY_BASE_SPEEDS.get("angel", 60)
+                        enemy_type = "normal"
+                        health = 50 * self.game.difficulty_multiplier  # Doubled from 25
+                        speed = ENEMY_BASE_SPEEDS.get("normal", 75)
                     else:
-                        cumulative += winged_chance
+                        cumulative += angel_chance
                         if rand < cumulative:
-                            enemy_type = "winged"
-                            health = 30 * self.game.difficulty_multiplier
-                            speed = ENEMY_BASE_SPEEDS.get("winged", 120)
+                            enemy_type = "angel"
+                            health = (
+                                40 * self.game.difficulty_multiplier
+                            )  # Doubled from 20
+                            speed = ENEMY_BASE_SPEEDS.get("angel", 60)
                         else:
-                            cumulative += archer_chance
+                            cumulative += winged_chance
                             if rand < cumulative:
-                                enemy_type = "archer"
-                                # start with normal health; constructor will double it
-                                health = 50 * self.game.difficulty_multiplier
-                                speed = ENEMY_BASE_SPEEDS.get("archer", 40)
+                                enemy_type = "winged"
+                                health = 30 * self.game.difficulty_multiplier
+                                speed = ENEMY_BASE_SPEEDS.get("winged", 120)
                             else:
-                                enemy_type = "weak"
-                                # base HP increased from 30 → 45 as per tuning request
-                                health = 45 * self.game.difficulty_multiplier
-                                speed = ENEMY_BASE_SPEEDS.get("weak", 35)
+                                cumulative += archer_chance
+                                if rand < cumulative:
+                                    enemy_type = "archer"
+                                    # start with normal health; constructor will double it
+                                    health = 50 * self.game.difficulty_multiplier
+                                    speed = ENEMY_BASE_SPEEDS.get("archer", 40)
+                                else:
+                                    enemy_type = "weak"
+                                    # base HP increased from 30 → 45 as per tuning request
+                                    health = 45 * self.game.difficulty_multiplier
+                                    speed = ENEMY_BASE_SPEEDS.get("weak", 35)
 
         # mage override: only after purgatory starts and once timer expires (~15s)
         if (getattr(self.game, "selected_stage", None) or "").startswith(
@@ -1150,27 +1173,42 @@ class SpawnSystem:
             except Exception:
                 pass
         # Use EnemyManager when available (global slowdown handled there)
+        enemy_created_successfully = False
         if self.game.enemy_manager is not None:
             try:
-                self.game.enemy_manager.spawn(x, y, enemy_type, health, speed)
+                enemy = self.game.enemy_manager.spawn(x, y, enemy_type, health, speed)
+                enemy_created_successfully = True
             except Exception:
                 enemy = Enemy(x, y, enemy_type, health, speed)
                 if hasattr(self.game.enemies, "add"):
                     self.game.enemies.add(enemy)
                 else:
                     self.game.enemies.append(enemy)
+                enemy_created_successfully = True
         else:
             enemy = Enemy(x, y, enemy_type, health, speed)
             if hasattr(self.game.enemies, "add"):
                 self.game.enemies.add(enemy)
             else:
                 self.game.enemies.append(enemy)
+            enemy_created_successfully = True
+
         # if caller provided additional appearance override (e.g. inquisitor)
         if forced_type == "inquisitor":
             try:
                 enemy.appearance = "inquisitor"
             except Exception:
                 pass
+
+        # Increment crusader counter AFTER successful spawn
+        if (
+            enemy_created_successfully
+            and enemy_type == "crusader"
+            and forced_type is None
+        ):
+            # This was a randomly selected or forced crusader during normal wave
+            self.crusader_spawned_this_wave += 1
+            self.spawns_since_last_crusader = 0
 
     def _spawn_horde_batch(self, phase: dict) -> None:
         """Internal helper invoked when a horde phase is reached.
@@ -1195,6 +1233,10 @@ class SpawnSystem:
                             self.spawn_enemy(forced_type="shielded")
                         elif etype == "inquisitor":
                             self.spawn_enemy(forced_type="inquisitor")
+                        elif etype == "crusader":
+                            self.spawn_enemy(forced_type="crusader")
+                        elif etype == "archer":
+                            self.spawn_enemy(forced_type="archer")
                         else:
                             # treat remaining as normal
                             self.spawn_enemy()

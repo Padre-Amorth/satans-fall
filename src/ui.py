@@ -4075,13 +4075,15 @@ class PygameUIManager:
                         )
                         # jagged yellow outline resembling skullboom's glow
                         try:
+                            import math as math_module
+
                             num_segments = 10
                             for i in range(num_segments):
                                 angle1 = (
-                                    2 * math.pi * i
+                                    2 * math_module.pi * i
                                 ) / num_segments + random.uniform(-0.2, 0.2)
                                 angle2 = (
-                                    2 * math.pi * (i + 1)
+                                    2 * math_module.pi * (i + 1)
                                 ) / num_segments + random.uniform(-0.2, 0.2)
                                 rvar = current + 3 + random.uniform(-2, 2)
                                 pygame.draw.arc(
@@ -4166,14 +4168,15 @@ class PygameUIManager:
                         pass
                     # draw a few lightning-style rays from center outward
                     try:
+                        import math as math_mod
                         segments = 4
                         for i in range(segments):
-                            angle = random.random() * 2 * math.pi
+                            angle = random.random() * 2 * math_mod.pi
                             length = random.uniform(radius * 0.6, radius)
                             start_x = mx
                             start_y = my
-                            end_x = mx + math.cos(angle) * length
-                            end_y = my + math.sin(angle) * length
+                            end_x = mx + math_mod.cos(angle) * length
+                            end_y = my + math_mod.sin(angle) * length
                             # draw as small jagged polyline
                             points = [(start_x, start_y)]
                             steps = int(length / 10)
@@ -4229,7 +4232,9 @@ class PygameUIManager:
                                 (255, 50, 50, alpha),
                                 (center, center),
                                 current_radius,
-                                max(1, int(3 * (1.0 - wave_timer / 2.0))),  # outer edge width
+                                max(
+                                    1, int(3 * (1.0 - wave_timer / 2.0))
+                                ),  # outer edge width
                             )
                             # Inner bright ring
                             inner_radius = max(1, int(current_radius * 0.85))
@@ -4250,6 +4255,75 @@ class PygameUIManager:
                                     py - current_radius - 2,
                                 ),
                             )
+
+                            # Draw translucent reddish veil between the two halos
+                            mid_radius_inner = int(current_radius * 0.85)
+                            mid_radius_outer = current_radius
+                            veil_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+                            veil_alpha = int(
+                                40 * (1.0 - wave_timer / 2.0)
+                            )  # Subtle transparency
+                            if veil_alpha > 0:
+                                pygame.draw.circle(
+                                    veil_surf,
+                                    (200, 80, 80, veil_alpha),  # Reddish tint
+                                    (center, center),
+                                    mid_radius_outer,
+                                )
+                                pygame.draw.circle(
+                                    veil_surf,
+                                    (200, 80, 80, 0),  # Transparent inner
+                                    (center, center),
+                                    mid_radius_inner,
+                                )
+                            self.screen.blit(
+                                veil_surf,
+                                (
+                                    px - current_radius - 2,
+                                    py - current_radius - 2,
+                                ),
+                            )
+
+                            # Draw infernal fire particles between the two halos
+                            mid_radius_inner = int(current_radius * 0.85)
+                            mid_radius_outer = current_radius
+
+                            # Spawn particles in the ring between inner and outer halo
+                            import math
+
+                            num_particles = max(8, int(current_radius / 40))
+                            for i in range(num_particles):
+                                angle = (
+                                    wave_timer * 3.0 + (i / num_particles) * 2 * math.pi
+                                ) % (2 * math.pi)
+
+                                # Particle position between inner and outer radius
+                                progress = (
+                                    (i + wave_timer * 2) % num_particles / num_particles
+                                )
+                                particle_radius = (
+                                    mid_radius_inner
+                                    + (mid_radius_outer - mid_radius_inner) * progress
+                                )
+
+                                particle_x = px + math.cos(angle) * particle_radius
+                                particle_y = py + math.sin(angle) * particle_radius
+
+                                # Dark red with orange speckles
+                                if i % 3 == 0:
+                                    color = (255, 120, 0, alpha)  # Orange
+                                else:
+                                    color = (180, 20, 20, alpha)  # Dark red
+
+                                particle_size = max(
+                                    4, int(8 * (1.0 - wave_timer / 2.0))
+                                )
+                                pygame.draw.circle(
+                                    self.screen,
+                                    color,
+                                    (int(particle_x), int(particle_y)),
+                                    particle_size,
+                                )
                 except Exception:
                     pass
 

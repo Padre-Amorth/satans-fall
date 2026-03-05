@@ -1,9 +1,9 @@
 {
   "version": 1,
   "name": "Profile 1",
-  "last_played": "2026-03-05T09:26:19",
+  "last_played": "2026-03-05T12:16:52",
   "permanent_stats": {
-    "power": 1,
+    "power": 6,
     "vigor": 2,
     "adrenaline": 1,
     "structure": 1,
@@ -40,9 +40,9 @@
     "ice_6": 1
   },
   "global_progress": {
-    "meta_xp": 2881,
-    "meta_level": 2,
-    "meta_points": 1,
+    "meta_xp": 24272,
+    "meta_level": 6,
+    "meta_points": 0,
     "stages_cleared": {
       "limbo_final": true
     },

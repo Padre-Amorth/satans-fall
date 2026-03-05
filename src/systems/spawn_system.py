@@ -820,13 +820,14 @@ class SpawnSystem:
         """Begin the purgatory horde event as a series of timed bursts.
 
         Similar to limbo horde but without a final boss and without player buff.
-        The horde arrives in five phases with 100 total enemies (no boss):
+        The horde arrives in six phases with 100 total enemies (no boss):
           * 10 enemies immediately
           * 15 more after 5 seconds
           * 15 more after another 5 seconds (10s total)
-          * 30 more after an additional 8 seconds (18s total)
-          * final 30 enemies broken into random sub‑bursts over 5–7‑second window.
-            This portion is heavy on giants/shielded, light on inquisitors.
+          * 20 more in four 5-enemy bursts from 20-33 seconds (heavy composition)
+          * 13 shielded/normal after 38 seconds
+          * 10 enemies at 48 seconds, then final 17 at 55 seconds (7s later).
+            These final two phases are heavy on giants/shielded.
         """
         self.game.purgatory_horde_started = True
         self.game.purgatory_horde_active = True
@@ -862,12 +863,22 @@ class SpawnSystem:
                 "custom": {"shielded": 8, "normal": 5},
             }
         )
+        # 5b - first assault
         schedule.append(
             {
                 "time": 48 * f,
-                "count": 27,  # all regular, no boss (100 total)
+                "count": 10,
                 "special": True,
-                "custom": {"giant": 9, "shielded": 9, "normal": 9},
+                "custom": {"giant": 3, "shielded": 3, "normal": 4},
+            }
+        )
+        # 5c - final assault (7 seconds later, remaining 17 enemies for 100 total)
+        schedule.append(
+            {
+                "time": 55 * f,
+                "count": 17,
+                "special": True,
+                "custom": {"giant": 6, "shielded": 6, "normal": 5},
             }
         )
         # compute total (no bosses in purgatory horde)

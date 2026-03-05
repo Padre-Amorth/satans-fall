@@ -4199,6 +4199,60 @@ class PygameUIManager:
                         pass
             except Exception:
                 pass
+
+            # Draw Purgatory horde malevolent red wave (expands from player)
+            if getattr(self.game, "purgatory_horde_wave_timer", 0.0) > 0.0:
+                try:
+                    wave_timer = getattr(self.game, "purgatory_horde_wave_timer", 0.0)
+                    # Wave expands at 800 pixels/second for 1 second total
+                    max_radius = 800
+                    current_radius = int(wave_timer * max_radius)
+
+                    if current_radius > 0 and self.game.player:
+                        # Get player center position
+                        px = int(self.game.player.x) + shake_x
+                        py = int(self.game.player.y) + shake_y
+
+                        # Calculate alpha: full at start, fades out as it expands
+                        alpha = int(255 * (1.0 - min(1.0, wave_timer)))
+
+                        if alpha > 0:
+                            # Create expanding wave surface with alpha
+                            size = current_radius * 2 + 4
+                            wave_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+                            center = current_radius + 2
+
+                            # Draw multiple rings for wave effect (red, dark red gradient)
+                            # Outer: bright red with transparency
+                            pygame.draw.circle(
+                                wave_surf,
+                                (255, 50, 50, alpha),
+                                (center, center),
+                                current_radius,
+                                max(1, int(3 * (1.0 - wave_timer))),  # outer edge width
+                            )
+                            # Inner bright ring
+                            inner_radius = max(1, int(current_radius * 0.85))
+                            if inner_radius > 0:
+                                pygame.draw.circle(
+                                    wave_surf,
+                                    (255, 100, 100, int(alpha * 0.7)),
+                                    (center, center),
+                                    inner_radius,
+                                    max(1, int(2 * (1.0 - wave_timer))),
+                                )
+
+                            # Blit wave to screen
+                            self.screen.blit(
+                                wave_surf,
+                                (
+                                    px - current_radius - 2,
+                                    py - current_radius - 2,
+                                ),
+                            )
+                except Exception:
+                    pass
+
         self.draw_chain_lightning_effects(shake_x, shake_y)
 
     def draw_lightning_effect(self, shake_x=0, shake_y=0):

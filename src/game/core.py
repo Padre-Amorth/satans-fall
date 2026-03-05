@@ -888,6 +888,12 @@ class Game:
         self.purgatory_horde_remaining: int = 0
         self.purgatory_horde_phase_index: int = 0
         self.purgatory_horde_schedule: list[dict[str, Any]] = []
+        # Purgatory explosion (malevolent wave) triggered after 60s horde duration
+        self.purgatory_horde_wave_timer: float = 0.0  # tracks expansion of red wave
+        self.purgatory_horde_explosion_ready: bool = False  # triggered after 60s
+        self.purgatory_horde_victory_timer: int = (
+            0  # countdown 5s before victory screen
+        )
 
         # victory overlay state
         self.showing_victory: bool = False
@@ -1806,6 +1812,11 @@ class Game:
                     self.draw_floating_texts(shake_x, shake_y)
                 except Exception:
                     pass
+                # Draw special effects (lightning, explosions, waves, etc.)
+                try:
+                    self.draw_special_effects(shake_x, shake_y)
+                except Exception:
+                    pass
 
             # Draw UI
             self.draw_ui(shake_x, shake_y)
@@ -2700,6 +2711,9 @@ class Game:
         self.purgatory_horde_remaining = 0
         self.purgatory_horde_schedule = []
         self.purgatory_horde_phase_index = 0
+        self.purgatory_horde_wave_timer = 0.0
+        self.purgatory_horde_explosion_ready = False
+        self.purgatory_horde_victory_timer = 0
 
         # Reset stage start countdown
         self.stage_start_countdown = 0
@@ -3074,6 +3088,68 @@ class Game:
                     )
                 self.showing_victory = True
                 self.victory_alpha = 0
+
+        # Purgatory horde explosion: triggered after 60 seconds (3600 frames @ 60 fps)
+        # Unlike Limbo, this is time-based not boss-death-based
+        if getattr(self, "purgatory_horde_active", False) and not getattr(
+            self, "purgatory_horde_explosion_ready", False
+        ):
+            # Check if 60 seconds have elapsed since horde started
+            if self.purgatory_horde_elapsed >= 60 * self.fps:
+                # Trigger the explosion wave
+                try:
+                    self.purgatory_horde_explosion_ready = True
+                    self.purgatory_horde_active = False
+                    self.purgatory_horde_completed = True
+                    self.purgatory_horde_wave_timer = 0.0
+                    print(
+                        f"[PURGATORY_HORDE] 60s elapsed! Triggering malevolent wave. "
+                        f"Enemies: {len(self.enemies)}, Bosses: {len(self.bosses)}"
+                    )
+                    # Clear all remaining enemies immediately
+                    try:
+                        self.enemies.empty()
+                        self.bosses.empty()
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
+        # Purgatory wave expansion and victory countdown
+        if getattr(self, "purgatory_horde_explosion_ready", False):
+            # Expand the wave (lasts ~1 second at 800px expansion speed)
+            self.purgatory_horde_wave_timer += 1.0 / self.fps  # delta time in seconds
+            # After 1 second of expansion, start the victory countdown
+            if self.purgatory_horde_wave_timer >= 1.0:
+                # Start 5-second countdown before showing victory
+                if self.purgatory_horde_victory_timer <= 0:
+                    self.purgatory_horde_victory_timer = int(self.fps * 5)
+                    self.purgatory_horde_explosion_ready = False
+                    if getattr(self, "debug", False):
+                        print(
+                            f"[PURGATORY_HORDE] Wave expansion complete! Starting victory countdown: "
+                            f"{self.purgatory_horde_victory_timer} frames"
+                        )
+
+        # Purgatory victory countdown
+        if getattr(self, "purgatory_horde_victory_timer", 0) > 0:
+            self.purgatory_horde_victory_timer -= 1
+            if (
+                getattr(self, "debug", False)
+                and self.purgatory_horde_victory_timer % 30 == 0
+            ):
+                logger.debug(
+                    f"[PURGATORY_HORDE] Victory timer countdown: {self.purgatory_horde_victory_timer} frames remaining"
+                )
+            if self.purgatory_horde_victory_timer <= 0:
+                # Show victory screen
+                if getattr(self, "debug", False):
+                    print(
+                        "[PURGATORY_HORDE] Victory timer expired! Showing victory screen!"
+                    )
+                self.showing_victory = True
+                self.victory_alpha = 0
+
         # Handle limbo final boss countdown separately; when it expires we show
         # the specialized defeat screen rather than the generic overlay.
         if getattr(self, "limbo_final_victory_timer", 0) > 0:

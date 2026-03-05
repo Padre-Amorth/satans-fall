@@ -54,8 +54,12 @@ class SpawnSystem:
         # Block casual giant spawns during active horde (only script-controlled spawns allowed)
         if getattr(self.game, "limbo_horde_active", False):
             return False
+        if getattr(self.game, "purgatory_horde_active", False):
+            return False
         # Block giant spawns after horde completion (waiting for victory)
         if getattr(self.game, "limbo_horde_completed", False):
+            return False
+        if getattr(self.game, "purgatory_horde_completed", False):
             return False
         if getattr(self.game, "showing_victory", False):
             return False
@@ -151,8 +155,10 @@ class SpawnSystem:
         # the limbo-final boss has been killed, or a victory/defeat overlay is showing
         if (
             getattr(self.game, "limbo_horde_completed", False)
+            or getattr(self.game, "purgatory_horde_completed", False)
             or getattr(self.game, "showing_victory", False)
             or getattr(self.game, "limbo_final_victory_timer", 0) > 0
+            or getattr(self.game, "purgatory_horde_victory_timer", 0) > 0
         ):
             return
 

@@ -827,7 +827,9 @@ class Game:
             DEFAULT_PLAYER_ANIM_SPEED  # frames between animation changes (slower)
         )
         self.player_is_moving = False
-        self.player_facing_right = True  # Track horizontal movement direction for walk animation
+        self.player_facing_right = (
+            True  # Track horizontal movement direction for walk animation
+        )
 
         # Boss system
         # State is proxied to EnemyManager when present via properties
@@ -874,6 +876,18 @@ class Game:
         # record initial player dimensions for scaling
         self.satan_growth_orig_width: int | None = None
         self.satan_growth_orig_height: int | None = None
+
+        # Purgatory horde event (for purgatory levels, no boss, no buff)
+        self.purgatory_horde_started: bool = False
+        self.purgatory_horde_timer: int = 0
+        self.purgatory_horde_elapsed: int = 0
+        self.purgatory_horde_active: bool = False
+        self.purgatory_horde_completed: bool = False
+        self.purgatory_horde_initial: int = 0
+        self.purgatory_horde_killed: int = 0
+        self.purgatory_horde_remaining: int = 0
+        self.purgatory_horde_phase_index: int = 0
+        self.purgatory_horde_schedule: list[dict[str, Any]] = []
 
         # victory overlay state
         self.showing_victory: bool = False
@@ -2674,6 +2688,18 @@ class Game:
         self.satan_growth_orig_width = None
         self.satan_growth_orig_height = None
         self.satan_growth_persistent = False
+
+        # Reset purgatory horde tracking
+        self.purgatory_horde_started = False
+        self.purgatory_horde_timer = 0
+        self.purgatory_horde_elapsed = 0
+        self.purgatory_horde_active = False
+        self.purgatory_horde_completed = False
+        self.purgatory_horde_initial = 0
+        self.purgatory_horde_killed = 0
+        self.purgatory_horde_remaining = 0
+        self.purgatory_horde_schedule = []
+        self.purgatory_horde_phase_index = 0
 
         # Reset stage start countdown
         self.stage_start_countdown = 0

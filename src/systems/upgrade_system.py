@@ -124,6 +124,30 @@ class UpgradeSystem:
                     ),
                 },
                 {
+                    "id": "movement_speed",
+                    "name": "Movement Speed +5%",
+                    "description": "Increase movement speed by 5%",
+                    "apply": lambda g=g: (
+                        setattr(g.player, "speed", g.player.speed * 1.05),
+                        setattr(g.player, "base_speed", g.player.base_speed * 1.05),
+                    ),
+                },
+                {
+                    "id": "health_regen",
+                    "name": "Health Regen +1 HP/5s",
+                    "description": "Passive health regeneration of 1 HP every 5 seconds",
+                    "apply": lambda g=g: (
+                        setattr(
+                            g.player,
+                            "regen_per_5s",
+                            getattr(g.player, "regen_per_5s", 0.0) + 1.0,
+                        ),
+                        setattr(
+                            g.player, "regen_timer", getattr(g.player, "regen_timer", 0)
+                        ),
+                    ),
+                },
+                {
                     "id": "xp",
                     "name": "XP +10%",
                     "description": "Increase XP gain by 10%",
@@ -185,10 +209,48 @@ class UpgradeSystem:
                         g.damage_reduction_multiplier * 0.95,
                     ),
                 },
+                {
+                    "id": "shield",
+                    "name": "SHIELD",
+                    "description": "Reduce shield cooldown by 2 seconds (max lvl 5)",
+                    "apply": lambda g=g: setattr(
+                        g.player,
+                        "shield_upgrade_level",
+                        getattr(g.player, "shield_upgrade_level", 0) + 1,
+                    ),
+                },
+                {
+                    "id": "kill_explosion",
+                    "name": "BOOM!",
+                    "description": "Every 10 kills: explosion (+50 dmg, +50px range per upgrade)",
+                    "apply": lambda g=g: (
+                        setattr(g.player, "kill_explosion_enabled", True),
+                        setattr(
+                            g.player,
+                            "kill_explosion_upgrades",
+                            getattr(g.player, "kill_explosion_upgrades", 0) + 1,
+                        ),
+                    ),
+                },
             ]
 
+            # Filter out shield upgrade if already at max level (5) OR not available in this stage
             try:
-                if getattr(g, "selected_stage", None) == "prologo":
+                shield_level = getattr(g.player, "shield_upgrade_level", 0)
+                if shield_level >= 5:
+                    patterns = [p for p in patterns if p.get("id") != "shield"]
+                else:
+                    # Shield only available from Limbo onwards
+                    stage = getattr(g, "selected_stage", None)
+                    if stage == "prologo":
+                        patterns = [p for p in patterns if p.get("id") != "shield"]
+            except Exception:
+                pass
+
+            try:
+                stage = getattr(g, "selected_stage", None)
+                # Projectile Size only available in Hell
+                if not (stage and str(stage).startswith("hell")):
                     patterns = [p for p in patterns if p.get("id") != "projectile_size"]
             except Exception:
                 pass
@@ -203,6 +265,7 @@ class UpgradeSystem:
                     )
                 ):
                     patterns = [p for p in patterns if p.get("id") != "tower_fire_rate"]
+                    patterns = [p for p in patterns if p.get("id") != "kill_explosion"]
             except Exception:
                 pass
 
@@ -841,11 +904,15 @@ class UpgradeSystem:
         if key == "vigor":
             per = 10
             total = per * level
-            # only show heal on second line; the first line shows flat HP bonus
-            # regen string now standardized per tick instead of total per interval
+            # Regeneration scales with level: 0.5 HP per 5s per level
+            regen_per_level = 0.5
+            regen_total = regen_per_level * level
+            regen_str = (
+                f"{regen_total:.1f}" if regen_total % 1 else f"{int(regen_total)}"
+            )
             return (
                 f"+{per:d} HP/level ({total:d} HP total)\n"
-                f"Heal 0.5 HP every 5s/level (0.5 HP/5s)"
+                f"Heal {regen_per_level} HP every 5s/level ({regen_str} HP/5s)"
             )
         if key == "adrenaline":
             per = 5.0
@@ -989,6 +1056,13 @@ class UpgradeSystem:
         if upgrade_id not in self.game.upgrade_levels:
             self.game.upgrade_levels[upgrade_id] = 0
         self.game.upgrade_levels[upgrade_id] += 1
+
+        # Track shield upgrade level for cooldown calculation
+        if upgrade_id == "shield":
+            self.game.player.shield_upgrade_level = self.game.upgrade_levels[upgrade_id]
+            # Enable shield on first upgrade (shield_charges was 0 before)
+            if self.game.player.shield_charges == 0:
+                self.game.player.shield_charges = 1
 
         self.game.awaiting_upgrade = False
         self.game.paused = False

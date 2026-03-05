@@ -1,0 +1,21 @@
+BOOM! Upgrade - Stage Availability Change
+==========================================
+
+CHANGE: BOOM! upgrade is now only available in Purgatory and Hell
+(previously was available in all stages)
+
+REASON: Balance - BOOM! is a powerful upgrade that should only be available
+in mid-to-late game stages.
+
+AFFECTED FILES:
+- src/systems/upgrade_system.py (line 248: added kill_explosion filter)
+- tests/test_boom_upgrade.py (updated to use purgatory stage)
+- tests/test_all_upgrades_availability.py (updated stage expectations)
+
+UPDATED AVAILABILITY:
+Prologo:    9/11 upgrades  (no Tower Fire Rate, no Projectile Size, no BOOM!)
+Limbo:      10/11 upgrades (no Tower Fire Rate, no BOOM!)
+Purgatory:  11/11 upgrades (all available)
+Hell:       11/11 upgrades (all available)
+
+TEST RESULTS: 54/54 tests passing ✅

@@ -96,14 +96,96 @@ class ScoreSystem:
         self.game.save_permanent_stats()
         return True
 
-    def record_enemy_kill(self) -> None:
+    def record_enemy_kill(self, enemy_x: float = None, enemy_y: float = None) -> None:
         """Record a single enemy kill for the current run.
 
         Awards meta-xp. For limbo horde, victory is triggered ONLY by boss death,
         not by enemy kill count (which is unreliable and can be gamed).
+
+        Also handles kill explosion counter for the per-run upgrade.
+
+        Args:
+            enemy_x: X coordinate where enemy died (for explosion positioning)
+            enemy_y: Y coordinate where enemy died (for explosion positioning)
         """
         # Award meta_xp for enemy kills
         try:
             self.award_meta_xp(5)
         except Exception as e:
             logger.exception(f"Failed to award meta_xp: {e}")
+
+        # Handle kill explosion upgrade - increment counter each kill
+        try:
+            if getattr(self.game.player, "kill_explosion_enabled", False):
+                kill_counter = getattr(self.game.player, "kill_counter", 0)
+                kill_counter += 1
+                self.game.player.kill_counter = kill_counter
+        except Exception as e:
+            logger.exception(f"Failed to increment kill counter: {e}")
+
+    def _trigger_kill_explosion(self, exp_x: float, exp_y: float) -> None:
+        """Trigger explosion at specified position when 10 kills are reached.
+
+        Damage and range scale with upgrade level:
+        - Base damage: 50
+        - Base range: 100px
+        - Per upgrade: +50 damage, +50px range
+
+        Args:
+            exp_x: X coordinate for explosion center
+            exp_y: Y coordinate for explosion center
+        """
+        try:
+            player = self.game.player
+            upgrades = getattr(player, "kill_explosion_upgrades", 0)
+
+            # Calculate damage and range
+            base_damage = 50
+            base_range = 100
+            damage = base_damage + (upgrades * 50)
+            explosion_range = base_range + (upgrades * 50)
+
+            # Damage all enemies in range
+            px, py = exp_x, exp_y
+            if hasattr(self.game.enemies, "sprites"):
+                enemies_list = list(self.game.enemies.sprites())
+            else:
+                enemies_list = list(self.game.enemies)
+
+            import math
+
+            for enemy in enemies_list:
+                ex, ey = getattr(enemy, "x", 0), getattr(enemy, "y", 0)
+                dist = math.hypot(ex - px, ey - py)
+                if dist <= explosion_range:
+                    try:
+                        enemy.take_damage(damage)
+                    except Exception:
+                        pass
+
+            # Visual feedback: add explosion effect (similar to skullboom but purple)
+            try:
+                explosion_timer = 15  # Duration of explosion animation
+                # Purple color for kill explosion
+                purple_color = (180, 100, 220)
+                self.game.skullboom_explosions.append(
+                    {
+                        "x": px,
+                        "y": py,
+                        "max_radius": explosion_range,
+                        "timer": explosion_timer,
+                        "max_timer": explosion_timer,
+                        "color": purple_color,
+                    }
+                )
+            except Exception:
+                pass
+
+            # Visual feedback: spawn floating text
+            try:
+                self.game.spawn_floating_text(f"BOOM! +{damage}", int(px), int(py) - 30)
+            except Exception:
+                pass
+
+        except Exception as e:
+            logger.exception(f"Failed to trigger kill explosion: {e}")

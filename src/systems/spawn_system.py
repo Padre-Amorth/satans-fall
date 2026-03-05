@@ -16,6 +16,9 @@ from src.game_constants import (
     LIMBO_HORDE_TIME_1,
     LIMBO_HORDE_TIME_2,
     LIMBO_HORDE_TIME_3,
+    PURGATORY_HORDE_TIME_1,
+    PURGATORY_HORDE_TIME_2,
+    PURGATORY_HORDE_TIME_3,
 )
 from src.projectile import Projectile
 
@@ -102,6 +105,37 @@ class SpawnSystem:
                     )
                 self._start_limbo_horde()
 
+        # check for the purgatory horde trigger (no boss, no buff)
+        if self.game.selected_stage in (
+            "purgatory",
+            "purgatory_2",
+            "purgatory_3",
+        ) and not getattr(self.game, "purgatory_horde_started", False):
+            # Determine horde spawn time based on stage
+            horde_time_threshold = {
+                "purgatory": PURGATORY_HORDE_TIME_1,
+                "purgatory_2": PURGATORY_HORDE_TIME_2,
+                "purgatory_3": PURGATORY_HORDE_TIME_3,
+            }.get(self.game.selected_stage, PURGATORY_HORDE_TIME_1)
+
+            # add debug logging
+            if getattr(self.game, "debug", False):
+                logger.debug(
+                    "[horde-check] stage=%s time_elapsed=%.3f started=%s threshold=%.1f",
+                    self.game.selected_stage,
+                    self.game.time_elapsed,
+                    getattr(self.game, "purgatory_horde_started", False),
+                    horde_time_threshold,
+                )
+            if self.game.time_elapsed >= horde_time_threshold:
+                if getattr(self.game, "debug", False):
+                    logger.debug(
+                        "[spawn_system] triggering purgatory horde at time %s (stage %s)",
+                        self.game.time_elapsed,
+                        self.game.selected_stage,
+                    )
+                self._start_purgatory_horde()
+
         # Pentagram: spawn one-shot at t >= 60s
         if (
             not self.pentagram_spawned
@@ -132,7 +166,7 @@ class SpawnSystem:
             ):
                 self.game.enemy_manager.enemy_spawn_timer -= 1
 
-            # also handle horde phased spawning if active
+            # also handle limbo horde phased spawning if active
             if self.game.limbo_horde_active and self.game.limbo_horde_schedule:
                 # increment elapsed frames
                 self.game.limbo_horde_elapsed += 1
@@ -154,12 +188,33 @@ class SpawnSystem:
                         self._trigger_satan_growth()
                     self.game.limbo_horde_phase_index += 1
 
+            # also handle purgatory horde phased spawning if active
+            if self.game.purgatory_horde_active and self.game.purgatory_horde_schedule:
+                # increment elapsed frames
+                self.game.purgatory_horde_elapsed += 1
+                # process any phases whose trigger time has arrived
+                while (
+                    self.game.purgatory_horde_phase_index
+                    < len(self.game.purgatory_horde_schedule)
+                    and self.game.purgatory_horde_elapsed
+                    >= self.game.purgatory_horde_schedule[
+                        self.game.purgatory_horde_phase_index
+                    ]["time"]
+                ):
+                    phase = self.game.purgatory_horde_schedule[
+                        self.game.purgatory_horde_phase_index
+                    ]
+                    self._spawn_horde_batch(phase)
+                    # no scripted events for purgatory (no growth buff)
+                    self.game.purgatory_horde_phase_index += 1
+
             # During an active horde, normal wave spawning is suspended so
             # that the only arrivals come from our controlled timer.  The
             # wave will be finished artificially when the explosion triggers
             # so there's no need to ever resume this.
             if (
                 not self.game.limbo_horde_active
+                and not self.game.purgatory_horde_active
                 and self.game.enemy_manager.enemy_spawn_timer <= 0
             ):
                 self.spawn_enemy()
@@ -186,7 +241,7 @@ class SpawnSystem:
             ):
                 self.game.enemy_spawn_timer -= 1
 
-            # horde handling without enemy_manager uses the same phased logic
+            # limbo horde handling without enemy_manager uses the same phased logic
             if self.game.limbo_horde_active and self.game.limbo_horde_schedule:
                 self.game.limbo_horde_elapsed += 1
                 while (
@@ -205,7 +260,29 @@ class SpawnSystem:
                         self._trigger_satan_growth()
                     self.game.limbo_horde_phase_index += 1
 
-            if not self.game.limbo_horde_active and self.game.enemy_spawn_timer <= 0:
+            # purgatory horde handling without enemy_manager
+            if self.game.purgatory_horde_active and self.game.purgatory_horde_schedule:
+                self.game.purgatory_horde_elapsed += 1
+                while (
+                    self.game.purgatory_horde_phase_index
+                    < len(self.game.purgatory_horde_schedule)
+                    and self.game.purgatory_horde_elapsed
+                    >= self.game.purgatory_horde_schedule[
+                        self.game.purgatory_horde_phase_index
+                    ]["time"]
+                ):
+                    phase = self.game.purgatory_horde_schedule[
+                        self.game.purgatory_horde_phase_index
+                    ]
+                    self._spawn_horde_batch(phase)
+                    # no scripted events for purgatory
+                    self.game.purgatory_horde_phase_index += 1
+
+            if (
+                not self.game.limbo_horde_active
+                and not self.game.purgatory_horde_active
+                and self.game.enemy_spawn_timer <= 0
+            ):
                 print("[DEBUG] normal wave spawn triggered (no manager)")
                 self.spawn_enemy()
                 next_rate = self.game.enemy_spawn_rate
@@ -736,6 +813,77 @@ class SpawnSystem:
         # remember that the aura should now persist until the stage ends
         try:
             self.game.satan_growth_persistent = True
+        except Exception:
+            pass
+
+    def _start_purgatory_horde(self) -> None:
+        """Begin the purgatory horde event as a series of timed bursts.
+
+        Similar to limbo horde but without a final boss and without player buff.
+        The horde arrives in five phases with 100 total enemies (no boss):
+          * 10 enemies immediately
+          * 15 more after 5 seconds
+          * 15 more after another 5 seconds (10s total)
+          * 30 more after an additional 8 seconds (18s total)
+          * final 30 enemies broken into random sub‑bursts over 5–7‑second window.
+            This portion is heavy on giants/shielded, light on inquisitors.
+        """
+        self.game.purgatory_horde_started = True
+        self.game.purgatory_horde_active = True
+        # build schedule: times are offsets from the moment the horde starts
+        f = self.game.fps
+        # base phases remain unchanged
+        schedule = [
+            {"time": 0, "count": 10},
+            {"time": 5 * f, "count": 15},
+            {"time": 10 * f, "count": 15},
+        ]
+        # revised fourth phase broken into four small bursts with heavy composition
+        heavy_composition = {
+            "special": True,
+            "giant_ratio": 0.6,
+            "shielded_ratio": 0.3,
+            "inquisitor_ratio": 0.1,
+        }
+        schedule.extend(
+            [
+                {"time": 20 * f, "count": 5, **heavy_composition},
+                {"time": 25 * f, "count": 5, **heavy_composition},
+                {"time": 28 * f, "count": 5, **heavy_composition},
+                {"time": 33 * f, "count": 5, **heavy_composition},
+            ]
+        )
+        # special 5th phase entries with explicit composition (no boss)
+        schedule.append(
+            {
+                "time": 38 * f,
+                "count": 13,
+                "special": True,
+                "custom": {"shielded": 8, "normal": 5},
+            }
+        )
+        schedule.append(
+            {
+                "time": 48 * f,
+                "count": 27,  # all regular, no boss (100 total)
+                "special": True,
+                "custom": {"giant": 9, "shielded": 9, "normal": 9},
+            }
+        )
+        # compute total (no bosses in purgatory horde)
+        total = 0
+        for entry in schedule:
+            total += entry.get("count", 0)
+        self.game.purgatory_horde_schedule = schedule
+        self.game.purgatory_horde_initial = total
+        self.game.purgatory_horde_killed = 0
+        self.game.purgatory_horde_remaining = total
+        self.game.purgatory_horde_phase_index = 0
+        self.game.purgatory_horde_timer = 0
+        self.game.purgatory_horde_elapsed = 0
+        # broadcast warning
+        try:
+            self.game.show_centered_message("HORDE APPROACHES!", 2000, (180, 120, 200))
         except Exception:
             pass
 

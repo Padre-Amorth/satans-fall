@@ -53,6 +53,26 @@ class Player(BaseSprite):
         self.slow_timer: int = 0
         self.slow_factor: float = 1.0
 
+        # Health regeneration (per-run upgrade system)
+        self.regen_per_5s: float = 0.0  # HP to regenerate every 5 seconds
+        self.regen_timer: int = 0  # Frame counter for regeneration
+
+        # Shield absorption (per-run upgrade system)
+        self.shield_charges: int = (
+            0  # Number of hits this shield can absorb (0 = disabled until upgrade taken)
+        )
+        self.shield_cooldown_timer: int = 0  # Frames until shield is available again
+        self.shield_upgrade_level: int = (
+            0  # Number of cooldown reductions taken (0 = upgrade never taken)
+        )
+
+        # Kill explosion (per-run upgrade system)
+        self.kill_explosion_enabled: bool = False  # Whether the feature is unlocked
+        self.kill_explosion_upgrades: int = (
+            0  # Number of times upgraded (affects dmg/range)
+        )
+        self.kill_counter: int = 0  # Counter for kills (0-9, resets at 10)
+
         self.base_image: pygame.Surface | None = None
 
         # XP and Level system
@@ -115,7 +135,7 @@ class Player(BaseSprite):
                 offset_left = -2  # Left leg forward
                 offset_right = 1
             else:  # frame == 1
-                offset_left = 1   # Right leg forward
+                offset_left = 1  # Right leg forward
                 offset_right = -2
 
             # Apply pixel shifting to simulate leg movement
@@ -186,12 +206,17 @@ class Player(BaseSprite):
                 sprite = get_image(sprite_name, size)
                 if sprite is None:
                     # Not found, create flipped versions from right frames
-                    flipped = pygame.transform.flip(self.walk_frames[i - 1], True, False)
+                    flipped = pygame.transform.flip(
+                        self.walk_frames[i - 1], True, False
+                    )
                     self.walk_frames.append(flipped)
                 else:
                     self.walk_frames.append(sprite)
 
-            logger.info("Loaded custom directional walk sprites (%d frames)", len(self.walk_frames))
+            logger.info(
+                "Loaded custom directional walk sprites (%d frames)",
+                len(self.walk_frames),
+            )
             return True
         except Exception as e:
             logger.debug("Could not load custom walk sprites, using fallback: %s", e)
@@ -297,6 +322,25 @@ class Player(BaseSprite):
             except Exception:
                 pass
 
+        # Handle health regeneration (5 seconds = 300 frames at 60 FPS)
+        try:
+            regen_amount = getattr(self, "regen_per_5s", 0.0)
+            if regen_amount > 0:
+                self.regen_timer += 1
+                frames_per_5s = 300  # 5 seconds at 60 FPS
+                if self.regen_timer >= frames_per_5s:
+                    self.health = min(self.max_health, self.health + regen_amount)
+                    self.regen_timer = 0
+        except Exception:
+            pass
+
+        # Handle shield cooldown timer
+        try:
+            if getattr(self, "shield_cooldown_timer", 0) > 0:
+                self.shield_cooldown_timer -= 1
+        except Exception:
+            pass
+
         # Update rect
         self.rect.center = (self.x, self.y)
 
@@ -322,7 +366,42 @@ class Player(BaseSprite):
         The flag mirrors ``Enemy.take_damage`` and allows callers to suppress
         numbers for contact damage or other silent effects.  ``Game`` is
         accessed lazily via ``CURRENT_GAME`` to avoid circular imports.
+
+        Shield charges can absorb one hit each (within cooldown window).
         """
+        # Check if shield is available and active
+        shield_charges = getattr(self, "shield_charges", 0)
+        shield_cooldown_timer = getattr(self, "shield_cooldown_timer", 0)
+
+        if shield_charges > 0 and shield_cooldown_timer <= 0:
+            # Shield absorbs this hit
+            # Base cooldown: 20 seconds = 1200 frames at 60 FPS
+            # Reduced by 2 seconds (120 frames) per upgrade level taken
+            shield_level = getattr(self, "shield_upgrade_level", 0)
+            cooldown_frames = 1200 - (120 * shield_level)
+            cooldown_frames = max(120, cooldown_frames)  # minimum 2 seconds
+            self.shield_cooldown_timer = cooldown_frames
+
+            if show_floating:
+                try:
+                    from src.game import CURRENT_GAME
+
+                    if CURRENT_GAME is not None:
+                        x = getattr(self, "x", None) or (
+                            self.rect.centerx
+                            if getattr(self, "rect", None) is not None
+                            else 0
+                        )
+                        y = getattr(self, "y", None) or (
+                            self.rect.centery
+                            if getattr(self, "rect", None) is not None
+                            else 0
+                        )
+                        CURRENT_GAME.spawn_floating_text("SHIELD!", x, y - 20)
+                except Exception:
+                    pass
+            return
+
         actual_damage = damage * self.damage_reduction_multiplier
         self.health = max(0, self.health - actual_damage)
 
@@ -397,7 +476,15 @@ class Player(BaseSprite):
         except Exception:
             pass
 
-    def draw(self, screen, shake_x=0, shake_y=0, anim_frame=0, is_moving=False, facing_right=True) -> None:
+    def draw(
+        self,
+        screen,
+        shake_x=0,
+        shake_y=0,
+        anim_frame=0,
+        is_moving=False,
+        facing_right=True,
+    ) -> None:
         # Apply shake offset
         draw_x: float | int = self.rect.x + shake_x
         draw_y: float | int = self.rect.y + shake_y
@@ -412,9 +499,9 @@ class Player(BaseSprite):
         if bob_cycle == 1:
             bob_offset = -1  # Up
         elif bob_cycle == 3:
-            bob_offset = 1   # Down
+            bob_offset = 1  # Down
         else:
-            bob_offset = 0   # Center
+            bob_offset = 0  # Center
 
         if is_moving and self.walk_frames:
             # Use walking frames based on direction (2 frames per direction)
@@ -426,6 +513,7 @@ class Player(BaseSprite):
             if frame_index < len(self.walk_frames):
                 current_image = self.walk_frames[frame_index]
 
+        # Draw sprite with wobble offset
         screen.blit(current_image, (draw_x, draw_y + bob_offset))
 
         # Draw health bar with shake offset
@@ -442,3 +530,14 @@ class Player(BaseSprite):
         pygame.draw.rect(
             screen, (0, 200, 0), (bar_x, bar_y, bar_width * health_ratio, bar_height)
         )
+
+        # Draw blue shield indicator dot if shield is available and active
+        shield_charges = getattr(self, "shield_charges", 0)
+        shield_cooldown = getattr(self, "shield_cooldown_timer", 0)
+        if shield_charges > 0 and shield_cooldown <= 0:
+            # Shield is available, draw blue dot to the left of health bar
+            shield_dot_x: float | int = bar_x - 8 + shake_x
+            shield_dot_y: float | int = bar_y + bar_height // 2 + shake_y
+            pygame.draw.circle(
+                screen, (0, 150, 255), (int(shield_dot_x), int(shield_dot_y)), 3
+            )

@@ -701,7 +701,10 @@ class Enemy(BaseSprite):
             # Check if we need to regenerate the base pentagram image
             # (only regenerate if size changes; rotation is applied via transform)
             base_size = (self.width, self.height)
-            if not hasattr(self, "_pentagram_base") or getattr(self, "_pentagram_base_size", None) != base_size:
+            if (
+                not hasattr(self, "_pentagram_base")
+                or getattr(self, "_pentagram_base_size", None) != base_size
+            ):
                 # Regenerate base pentagram once (no rotation applied here)
                 base_image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
                 base_image.fill((0, 0, 0, 0))
@@ -1109,7 +1112,7 @@ class Enemy(BaseSprite):
                     # Vertical axis rotation: continuous smooth flip with complete 360° cycles
                     self._rotation_angle += 0.04  # Controls rotation speed; 0.04 rad/frame ≈ 2.3°/frame (50% slower)
                     # Reset angle after complete rotation (2π radians = 360°) for consistent cycling
-                    self._rotation_angle %= (2 * math.pi)
+                    self._rotation_angle %= 2 * math.pi
                     # Horizontal movement at constant speed
                     self.x += self.direction * self.speed / 60
                     # Vertical oscillation: sine wave ±40px around spawn point
@@ -2386,6 +2389,31 @@ class Enemy(BaseSprite):
         except Exception:
             pass
 
+        # Check if kill explosion should trigger (when kill_counter >= 10)
+        # Use a flag to prevent recursive explosions from explosion damage
+        try:
+            from src.game import CURRENT_GAME
+
+            if (
+                CURRENT_GAME is not None
+                and getattr(CURRENT_GAME.player, "kill_explosion_enabled", False)
+                and not getattr(CURRENT_GAME, "_kill_explosion_triggered", False)
+            ):
+                kill_counter = getattr(CURRENT_GAME.player, "kill_counter", 0)
+                if kill_counter >= 10:
+                    # Set flag to prevent recursive explosions
+                    CURRENT_GAME._kill_explosion_triggered = True
+                    try:
+                        CURRENT_GAME.score_system._trigger_kill_explosion(
+                            self.x, self.y
+                        )
+                        CURRENT_GAME.player.kill_counter = 1  # Reset counter
+                    finally:
+                        # Always clear flag after explosion
+                        CURRENT_GAME._kill_explosion_triggered = False
+        except Exception:
+            pass
+
         # If a wave boss (boss_medium) is killed by any damage source, ensure the
         # game's reinforcement sequence is scheduled (message + timer). This covers
         # cases where bosses die outside the projectile-collision path (burn, DOT, etc.).
@@ -2610,7 +2638,9 @@ class Enemy(BaseSprite):
 
                     # Scale the image (width changes, height stays same)
                     if new_width != self.image.get_width():
-                        blit_image = pygame.transform.scale(self.image, (new_width, new_height))
+                        blit_image = pygame.transform.scale(
+                            self.image, (new_width, new_height)
+                        )
                     else:
                         blit_image = self.image
 
@@ -2621,7 +2651,9 @@ class Enemy(BaseSprite):
                         darkness = int(100 * (1 - perspective_scale))  # 0-100 at 90°
                         dark_surf = pygame.Surface(darkened.get_size())
                         dark_surf.fill((0, 0, 0))
-                        darkened.blit(dark_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+                        darkened.blit(
+                            dark_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT
+                        )
                         # Reduce alpha slightly based on perspective
                         alpha = int(255 * (0.5 + perspective_scale * 0.5))  # 127-255
                         darkened.set_alpha(alpha)
@@ -2633,7 +2665,10 @@ class Enemy(BaseSprite):
 
                     # Adjust position to keep centered
                     blit_rect = blit_image.get_rect()
-                    blit_rect.center = (draw_x + self.width // 2, draw_y + self.height // 2)
+                    blit_rect.center = (
+                        draw_x + self.width // 2,
+                        draw_y + self.height // 2,
+                    )
                     draw_x = blit_rect.x
                     draw_y = blit_rect.y
                 except Exception:

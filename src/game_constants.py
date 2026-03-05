@@ -230,13 +230,13 @@ STATUE_ASSET_VERTICAL_OFFSET: int = 80
 # artwork showed the firing nozzle 10px closer to the tower center than the
 # other Limbo stages.  The constant now matches the original 50px value used
 # by earlier versions.
-STATUE_PROJECTILE_OFFSET_X_LIMBO: int = 50
+STATUE_PROJECTILE_OFFSET_X_LIMBO: int = 60
 STATUE_PROJECTILE_OFFSET_X_PURGATORY: int = 10
 STATUE_PROJECTILE_OFFSET_X_HELL: int = 10
 
 # Vertical offset applied to all statue projectiles.  This was previously
 # hard-coded in tests as 10px and did not vary by stage.
-STATUE_PROJECTILE_OFFSET_Y: int = 10
+STATUE_PROJECTILE_OFFSET_Y: int = 60
 
 # Limbo Final timing constants
 LIMBO_FINAL_ACCEL_START_TIME: float = (
@@ -259,6 +259,11 @@ LIMBO_HORDE_DURATION: float = 10.0  # seconds over which the horde spawns
 LIMBO_HORDE_ACCEL_START: float = 7.0  # seconds after start when rate increases
 LIMBO_HORDE_BASE_RATE: float = 5.0  # enemies per second before accel
 LIMBO_HORDE_ACCEL_EXTRA_RATE: float = 10.0  # additional enemies/sec after accel
+
+# Purgatory horde event — tuning by stage variant (no boss, no buff)
+PURGATORY_HORDE_TIME_1: float = 480.0  # purgatory: 8 minutes
+PURGATORY_HORDE_TIME_2: float = 540.0  # purgatory_2: 9 minutes
+PURGATORY_HORDE_TIME_3: float = 600.0  # purgatory_3: 10 minutes
 
 # Universal Y coordinate (screen pixels from top) at which all statue/tower
 # models are anchored, regardless of stage.  Both Limbo pedestals and the
@@ -398,4 +403,7 @@ __all__: list[str] = [
     "BLIZZARD_PARTICLE_S_CURVE_RADIAL",
     "BLIZZARD_PARTICLE_EXPANSION",
     "PROLOGO_OVERLAY_COLOR",
+    "PURGATORY_HORDE_TIME_1",
+    "PURGATORY_HORDE_TIME_2",
+    "PURGATORY_HORDE_TIME_3",
 ]

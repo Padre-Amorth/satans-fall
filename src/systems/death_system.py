@@ -50,6 +50,12 @@ class DeathSystem:
                     if g.player_xp >= g.xp_to_next_level:
                         g.trigger_level_up()
                     try:
+                        enemy_x = getattr(enemy, "x", g.player.x)
+                        enemy_y = getattr(enemy, "y", g.player.y)
+                        g.record_enemy_kill(enemy_x, enemy_y)
+                    except Exception:
+                        pass
+                    try:
                         if (
                             getattr(enemy, "burn_propagate_on_death", False)
                             or getattr(enemy, "burn_propagate_hops", 0) > 0
@@ -100,10 +106,9 @@ class DeathSystem:
                     )
                     if g.player_xp >= g.xp_to_next_level:
                         g.trigger_level_up()
-                    try:
-                        g.record_enemy_kill()
-                    except Exception:
-                        pass
+                    # Capture coordinates BEFORE removal
+                    enemy_x = getattr(enemy, "x", None)
+                    enemy_y = getattr(enemy, "y", None)
                     try:
                         # Call kill() if implemented, then ensure removal from plain list
                         if hasattr(enemy, "kill"):
@@ -116,6 +121,14 @@ class DeathSystem:
                             g.enemies.remove(enemy)
                         except Exception:
                             pass
+                    except Exception:
+                        pass
+                    # Record kill AFTER removal but with captured coordinates
+                    try:
+                        if enemy_x is not None and enemy_y is not None:
+                            g.record_enemy_kill(enemy_x, enemy_y)
+                        else:
+                            g.record_enemy_kill()
                     except Exception:
                         pass
 
@@ -160,6 +173,12 @@ class DeathSystem:
                     except Exception:
                         pass
                     try:
+                        enemy_x = getattr(enemy, "x", g.player.x)
+                        enemy_y = getattr(enemy, "y", g.player.y)
+                        g.record_enemy_kill(enemy_x, enemy_y)
+                    except Exception:
+                        pass
+                    try:
                         # If enemy implements kill(), call it for symmetry with Group
                         enemy.kill()
                     except Exception:
@@ -167,10 +186,6 @@ class DeathSystem:
                     try:
                         # remove from the plain list
                         g.enemies.remove(enemy)
-                        try:
-                            g.record_enemy_kill()
-                        except Exception:
-                            pass
                     except Exception:
                         pass
 

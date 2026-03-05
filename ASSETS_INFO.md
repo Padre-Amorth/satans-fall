@@ -1,6 +1,13 @@
 # Asset Esterni - Guida
 
+## Menu principale - Titolo
+- **File:** `assets/title.png`
+  - Dimensione: 1376x768 pixel
+  - Immagine del titolo "SATAN'S FALL" del menu principale
+  - Se non presente, il gioco userà il rendering testuale come fallback automatico
+  - Implementazione: `src/ui.py` → `_load_title_image()` + `draw_main_menu()`
 
+---
 
 - L'opacità e il colore sono ora configurabili tramite le costanti
   `PURGATORY_OVERLAY_ALPHA` e `PURGATORY_OVERLAY_COLOR` in

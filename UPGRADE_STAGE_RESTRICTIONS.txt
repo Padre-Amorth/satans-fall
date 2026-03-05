@@ -1,0 +1,47 @@
+UPGRADE STAGE AVAILABILITY - FINAL
+==================================
+
+CHANGES MADE:
+1. BOOM! - Only in Purgatory, Hell (previously all stages)
+2. Shield - Only from Limbo onwards (NOT in Prologo)
+3. Projectile Size - Only in Hell (previously from Limbo onwards)
+
+SOURCE CODE CHANGES:
+- src/systems/upgrade_system.py
+  * Line 226-235: Shield filter (exclude Prologo)
+  * Line 233-238: Projectile Size filter (only Hell)
+  * Line 241-251: Tower Fire Rate & BOOM! filter (Purgatory/Hell only)
+
+TEST CHANGES:
+- tests/test_shield_upgrade.py
+  * Added: test_shield_upgrade_not_available_in_prologo()
+  * Total: 13 tests (was 12)
+
+- tests/test_projectile_size_upgrade_availability.py
+  * Updated: test_projectile_size_not_offered_in_early_stages()
+  * Updated: test_projectile_size_available_in_hell()
+  * Total: 2 tests (was 2, but updated)
+
+- tests/test_upgrades_integration.py
+  * Updated: test_projectile_size_and_damage() to use Hell stage
+
+FINAL UPGRADE AVAILABILITY:
+┌─────────┬──────┬──────┬───────────┬──────┐
+│ Upgrade │Proto │Limbo │ Purgatory │ Hell │
+├─────────┼──────┼──────┼───────────┼──────┤
+│ Damage  │  ✓   │  ✓   │     ✓     │  ✓   │
+│ Fire Rt │  ✓   │  ✓   │     ✓     │  ✓   │
+│ Max HP  │  ✓   │  ✓   │     ✓     │  ✓   │
+│ Proj Sz │  ✗   │  ✗   │     ✗     │  ✓   │ <- HELL ONLY
+│ Move Sp │  ✓   │  ✓   │     ✓     │  ✓   │
+│ HP Regen│  ✓   │  ✓   │     ✓     │  ✓   │
+│ XP      │  ✓   │  ✓   │     ✓     │  ✓   │
+│ Twr Fire│  ✗   │  ✗   │     ✓     │  ✓   │
+│ Armor   │  ✓   │  ✓   │     ✓     │  ✓   │
+│ Shield  │  ✗   │  ✓   │     ✓     │  ✓   │ <- LIMBO+
+│ BOOM!   │  ✗   │  ✗   │     ✓     │  ✓   │ <- PURGATORY+
+├─────────┼──────┼──────┼───────────┼──────┤
+│ Total   │ 9/11 │10/11 │    11/11   │11/11 │
+└─────────┴──────┴──────┴───────────┴──────┘
+
+TEST RESULTS: 57/57 tests passing ✅

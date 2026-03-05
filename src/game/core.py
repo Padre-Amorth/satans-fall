@@ -3102,6 +3102,9 @@ class Game:
                     self.purgatory_horde_active = False
                     self.purgatory_horde_completed = True
                     self.purgatory_horde_wave_timer = 0.0
+                    # Trigger screen shake (light intensity, 2 seconds duration)
+                    self.shake_intensity = 4
+                    self.shake_timer = int(2 * self.fps)
                     print(
                         f"[PURGATORY_HORDE] 60s elapsed! Triggering malevolent wave. "
                         f"Enemies: {len(self.enemies)}, Bosses: {len(self.bosses)}"
@@ -3117,10 +3120,10 @@ class Game:
 
         # Purgatory wave expansion and victory countdown
         if getattr(self, "purgatory_horde_explosion_ready", False):
-            # Expand the wave (lasts ~1 second at 800px expansion speed)
+            # Expand the wave (lasts ~2 seconds at 400px expansion speed - half of original 800px)
             self.purgatory_horde_wave_timer += 1.0 / self.fps  # delta time in seconds
-            # After 1 second of expansion, start the victory countdown
-            if self.purgatory_horde_wave_timer >= 1.0:
+            # After 2 seconds of expansion, start the victory countdown
+            if self.purgatory_horde_wave_timer >= 2.0:
                 # Start 5-second countdown before showing victory
                 if self.purgatory_horde_victory_timer <= 0:
                     self.purgatory_horde_victory_timer = int(self.fps * 5)

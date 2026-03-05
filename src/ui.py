@@ -4204,9 +4204,9 @@ class PygameUIManager:
             if getattr(self.game, "purgatory_horde_wave_timer", 0.0) > 0.0:
                 try:
                     wave_timer = getattr(self.game, "purgatory_horde_wave_timer", 0.0)
-                    # Wave expands at 800 pixels/second for 1 second total
+                    # Wave expands at 400 pixels/second for 2 seconds total (halved speed)
                     max_radius = 800
-                    current_radius = int(wave_timer * max_radius)
+                    current_radius = int((wave_timer / 2.0) * max_radius)
 
                     if current_radius > 0 and self.game.player:
                         # Get player center position
@@ -4214,7 +4214,7 @@ class PygameUIManager:
                         py = int(self.game.player.y) + shake_y
 
                         # Calculate alpha: full at start, fades out as it expands
-                        alpha = int(255 * (1.0 - min(1.0, wave_timer)))
+                        alpha = int(255 * (1.0 - min(1.0, wave_timer / 2.0)))
 
                         if alpha > 0:
                             # Create expanding wave surface with alpha
@@ -4229,7 +4229,7 @@ class PygameUIManager:
                                 (255, 50, 50, alpha),
                                 (center, center),
                                 current_radius,
-                                max(1, int(3 * (1.0 - wave_timer))),  # outer edge width
+                                max(1, int(3 * (1.0 - wave_timer / 2.0))),  # outer edge width
                             )
                             # Inner bright ring
                             inner_radius = max(1, int(current_radius * 0.85))
@@ -4239,7 +4239,7 @@ class PygameUIManager:
                                     (255, 100, 100, int(alpha * 0.7)),
                                     (center, center),
                                     inner_radius,
-                                    max(1, int(2 * (1.0 - wave_timer))),
+                                    max(1, int(2 * (1.0 - wave_timer / 2.0))),
                                 )
 
                             # Blit wave to screen

@@ -144,8 +144,8 @@ def test_purgatory_horde_victory_after_explosion():
 
     assert getattr(g, "purgatory_horde_explosion_ready", False), "Should be ready"
 
-    # Simulate wave expansion (1 second)
-    for _ in range(int(g.fps)):
+    # Simulate wave expansion (2 seconds - halved speed)
+    for _ in range(int(2 * g.fps)):
         g._update_pre_guard_state()
 
     # Wave should now be complete and victory countdown should have started

@@ -863,22 +863,22 @@ class SpawnSystem:
                 "custom": {"shielded": 8, "normal": 5},
             }
         )
-        # 5b - first assault
+        # 5b - first assault with archers
         schedule.append(
             {
                 "time": 48 * f,
-                "count": 10,
+                "count": 12,
                 "special": True,
-                "custom": {"giant": 3, "shielded": 3, "normal": 4},
+                "custom": {"giant": 3, "shielded": 3, "archer": 2, "normal": 4},
             }
         )
-        # 5c - final assault (7 seconds later, remaining 17 enemies for 100 total)
+        # 5c - final assault (7 seconds later, remaining 15 enemies for 100 total)
         schedule.append(
             {
                 "time": 55 * f,
-                "count": 17,
+                "count": 15,
                 "special": True,
-                "custom": {"giant": 6, "shielded": 6, "normal": 5},
+                "custom": {"giant": 5, "shielded": 5, "normal": 5},
             }
         )
         # compute total (no bosses in purgatory horde)

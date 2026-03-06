@@ -405,6 +405,11 @@ class SpawnSystem:
         ):
             return
 
+        # If Prologue final boss has spawned, do not advance waves to prevent
+        # escalation during the final boss encounter.
+        if self.game.selected_stage == "prologo" and self.game.prologo_final_boss_spawned:
+            return
+
         if self.game.wave_time >= self.game.wave_duration or frame_boundary_hit:
             self.game.wave += 1
             self.game.wave_time = 0
@@ -491,6 +496,9 @@ class SpawnSystem:
                 from src.balance import LIMBO_SPAWN_RATE_PENALTY
 
                 rate += LIMBO_SPAWN_RATE_PENALTY
+            # apply prologue final boss penalty (20% slower spawn rate)
+            if self.game.selected_stage == "prologo" and self.game.prologo_final_boss_spawned:
+                rate = int(rate * 1.2)  # 20% slower (multiply spawn rate delay by 1.2)
             self.game.enemy_spawn_rate = rate
             if self.game.enemy_manager is not None:
                 self.game.enemy_manager.enemy_spawn_rate = rate
@@ -917,7 +925,8 @@ class SpawnSystem:
         # Count existing normal enemies (exclude all special types)
         if forced_type is None:
             normal_count = sum(
-                1 for e in getattr(self.game, "enemies", [])
+                1
+                for e in getattr(self.game, "enemies", [])
                 if getattr(e, "enemy_type", None) == "normal"
             )
             if normal_count >= 5:
@@ -1434,11 +1443,7 @@ class SpawnSystem:
         speed = ENEMY_BASE_SPEEDS.get("crusader", 30)
         # count explicit spawns toward the wave cap if stage allows
         stage = getattr(self.game, "selected_stage", "") or ""
-        if (
-            stage in PURGATORY_STAGES
-            or stage in HELL_STAGES
-            or stage in LIMBO_STAGES
-        ):
+        if stage in PURGATORY_STAGES or stage in HELL_STAGES or stage in LIMBO_STAGES:
             self.crusader_spawned_this_wave += 1
         enemy: Enemy = Enemy(x, y, enemy_type, health, speed)
         if hasattr(self.game.enemies, "add"):

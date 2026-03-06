@@ -50,7 +50,7 @@ class FloatingText:
                 self.y = self.initial_y - float(self.max_rise_pixels)
                 self.vy = 0.0
 
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # While text is fading (past 60% of life), reduce movement speed smoothly
@@ -63,7 +63,7 @@ class FloatingText:
             else:
                 # normal upward acceleration early on
                 self.vy -= 0.05
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # Fallback behavior
             self.vy -= 0.03
         self.life -= 1
@@ -76,5 +76,5 @@ class FloatingText:
         try:
             # Slower fade due to larger max_life; just map life ratio to alpha
             return max(0, int(255 * (self.life / max(1, self.max_life))))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             return 255

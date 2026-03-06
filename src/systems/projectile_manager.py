@@ -26,7 +26,7 @@ class ProjectileManager:
         for _ in range(initial_pool):
             try:
                 self.pool.append(Projectile(0, 0, 0, 0))
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # In case pygame surfaces can't be created in headless env, ignore
                 break
         self.active: List[Projectile] = []
@@ -97,10 +97,10 @@ class ProjectileManager:
         # Add to game's projectiles container (Group or list)
         try:
             self.game.projectiles.add(p)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             try:
                 self.game.projectiles.append(p)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Track active
@@ -129,18 +129,18 @@ class ProjectileManager:
         try:
             if p in self.active:
                 self.active.remove(p)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Remove from game containers (if present)
         try:
             if hasattr(self.game.projectiles, "remove"):
                 self.game.projectiles.remove(p)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             try:
                 # If list
                 self.game.projectiles.remove(p)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Clean up attributes and return to pool
@@ -158,13 +158,13 @@ class ProjectileManager:
             # Clear transient/stateful fields that must not persist across reuse
             try:
                 p._hit_ids = set()
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             try:
                 p._chain_applied = False
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Sanity checks: pooled projectile must have transient state cleared

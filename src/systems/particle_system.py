@@ -70,9 +70,9 @@ class ParticleSystem:
                         surf,
                         (int(p.x - p.size) + shake_x, int(p.y - p.size) + shake_y),
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def draw_skullboom_particles(self, shake_x: int = 0, shake_y: int = 0) -> None:
@@ -115,7 +115,7 @@ class ParticleSystem:
                     # Outer glow ring - use explosion-specific color when present
                     try:
                         from src.game_constants import FIRE_SPECIAL_EXPLOSION_COLOR
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         FIRE_SPECIAL_EXPLOSION_COLOR = (200, 100, 40)
                     base_col = explosion.get("color", FIRE_SPECIAL_EXPLOSION_COLOR)
                     glow_color = (base_col[0], base_col[1], base_col[2], alpha // 3)
@@ -149,7 +149,7 @@ class ParticleSystem:
                                 part,
                                 (center_x - inner_rad - 2, center_y - inner_rad - 2),
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
                     # if indicator, draw a solid translucent filled circle to mark area
@@ -174,7 +174,7 @@ class ParticleSystem:
                                     center_y - current_radius - 2,
                                 ),
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     for i in range(num_segments):
                         start_angle = i * segment_angle + random.uniform(
@@ -251,7 +251,7 @@ class ParticleSystem:
                                     center_y - display_radius - 5,
                                 ),
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
                     # Draw skullboom particles (orange/brown color)
@@ -280,7 +280,7 @@ class ParticleSystem:
                             <= current_radius
                         ),
                     )
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
     def draw_floating_texts(self, shake_x: int = 0, shake_y: int = 0) -> None:
@@ -290,7 +290,7 @@ class ParticleSystem:
             return
         try:
             from src.assets.text_cache import get_font, get_text
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             return
         try:
             for ft in g.floating_texts:
@@ -320,7 +320,7 @@ class ParticleSystem:
                         outline_surf = get_text(ft.text, font, ft.outline_color).copy()
                         try:
                             outline_surf.set_alpha(alpha)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         # blit around the center pixel
                         for ox_off, oy_off in (
@@ -338,12 +338,12 @@ class ParticleSystem:
                     surf = get_text(ft.text, font, ft.color).copy()
                     try:
                         surf.set_alpha(alpha)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     g.screen.blit(surf, (sx, sy))
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Draw particles
@@ -385,7 +385,7 @@ class ParticleSystem:
                             BLIZZARD_GROWTH_MULTIPLIER,
                             BLIZZARD_MAX_DURATION,
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         BLIZZARD_MAX_DURATION = 1
                         BLIZZARD_GROWTH_MULTIPLIER = 1.0
                     # compute progress of lifetime (0 at spawn, 1 at end) and
@@ -482,7 +482,7 @@ class ParticleSystem:
                 # Draw spiral snowflake particles for blizzard puddles
                 if puddle.get("blizzard"):
                     self._draw_blizzard_spiral_particles(puddle, px, py, radius)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def _draw_blizzard_spiral_particles(
@@ -503,7 +503,7 @@ class ParticleSystem:
                 BLIZZARD_PARTICLE_SPEED,
                 BLIZZARD_PARTICLE_SPIRAL_SPEED,
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             BLIZZARD_PARTICLE_COUNT = 100
             BLIZZARD_PARTICLE_SPEED = 0.5
             BLIZZARD_PARTICLE_SPIRAL_SPEED = 0.03

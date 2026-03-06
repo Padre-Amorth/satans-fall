@@ -68,7 +68,7 @@ class TowerSpecialSystem:
             # chance and colour for occasional violet beams
             self.VOLTAIC_MAYHEM_VIOLET_CHANCE = VOLTAIC_MAYHEM_VIOLET_CHANCE
             self.VOLTAIC_MAYHEM_VIOLET_COLOR = VOLTAIC_MAYHEM_VIOLET_COLOR
-        except Exception:
+        except (ImportError, AttributeError, NameError):
             self.VOLTAIC_MAYHEM_MAX_DURATION = 0
             self.VOLTAIC_MAYHEM_IMPACT_RADIUS = 0
             self.VOLTAIC_MAYHEM_SPEED = 0
@@ -98,7 +98,7 @@ class TowerSpecialSystem:
                     continue
                 if stats.get(f"{tp}_7", 0):
                     return True
-        except Exception:
+        except (AttributeError, KeyError, TypeError):
             pass
         return False
 
@@ -120,7 +120,7 @@ class TowerSpecialSystem:
             if mx is not None and mx >= 0:
                 new_val = max(0, min(mx, new_val))
             self.tower_energy = new_val
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def is_tower_special_ready(self) -> bool:
@@ -129,7 +129,7 @@ class TowerSpecialSystem:
             if not self.special_unlocked():
                 return False
             return self.tower_energy >= self.tower_energy_max
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             return False
 
     def _dist_point_to_segment(
@@ -157,7 +157,7 @@ class TowerSpecialSystem:
         if self.is_tower_special_ready():
             try:
                 self.tower_energy = 0
-            except Exception:
+            except (AttributeError, TypeError):
                 pass
 
             # Collect tower types that are both placed AND have their special unlocked
@@ -179,7 +179,7 @@ class TowerSpecialSystem:
                         FIRE_SPECIAL_CHARGES,
                         FIRE_SPECIAL_DURATION,
                     )
-                except Exception:
+                except (ImportError, ModuleNotFoundError):
                     FIRE_SPECIAL_CHARGES = 0
                     FIRE_SPECIAL_DURATION = 0
                 # grant full charges and schedule the first explosion after the
@@ -191,7 +191,7 @@ class TowerSpecialSystem:
                     from src.game_constants import FIRE_SPECIAL_CLICK_DELAY
 
                     delay = FIRE_SPECIAL_CLICK_DELAY
-                except Exception:
+                except (ImportError, ModuleNotFoundError):
                     delay = 0
                 try:
                     self.pending_fire_clicks.append(
@@ -201,11 +201,11 @@ class TowerSpecialSystem:
                             "y": getattr(self.game, "mouse_y", 0),
                         }
                     )
-                except Exception:
+                except (AttributeError, TypeError):
                     pass
                 try:
                     self.fire_special_charges = max(0, self.fire_special_charges - 1)
-                except Exception:
+                except (AttributeError, TypeError):
                     pass
             # Activate Blizzard if ice tower is placed with ice_7 unlocked
             if "ice" in placed_types:
@@ -215,7 +215,7 @@ class TowerSpecialSystem:
                         BLIZZARD_RADIUS,
                         BLIZZARD_SLOW_FACTOR,
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     BLIZZARD_RADIUS = 0
                     BLIZZARD_MAX_DURATION = 0
                     BLIZZARD_SLOW_FACTOR = 1.0
@@ -240,7 +240,7 @@ class TowerSpecialSystem:
                 # start the beam; it will run while right mouse held or until time runs out
                 try:
                     LOG.info("voltaic branch activated")
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 self.voltaic_active = True
                 # initialize the movable endpoint at the current mouse position so
@@ -254,7 +254,7 @@ class TowerSpecialSystem:
                         from src.game_constants import VOLTAIC_MAYHEM_MAX_DURATION
 
                         dur = VOLTAIC_MAYHEM_MAX_DURATION
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         dur = 0
                 self.voltaic_time_left = dur
 
@@ -276,7 +276,7 @@ class TowerSpecialSystem:
                 FIRE_SPECIAL_RADIUS,
                 FIRE_SPECIAL_WORDS,
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             FIRE_SPECIAL_RADIUS = 0
             FIRE_SPECIAL_DAMAGE = 0
             FIRE_SPECIAL_WORDS = []
@@ -313,7 +313,7 @@ class TowerSpecialSystem:
                 font_size=40,
                 vy=-1.2,
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # normal enemies
@@ -327,15 +327,15 @@ class TowerSpecialSystem:
                 if dx * dx + dy * dy <= FIRE_SPECIAL_RADIUS * FIRE_SPECIAL_RADIUS:
                     try:
                         enemy.health = max(0, enemy.health - FIRE_SPECIAL_DAMAGE)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     try:
                         if getattr(enemy, "burn_timer", 0) <= 0:
                             enemy.burn_timer = 120
                             enemy.burn_damage_per_second = 4.0
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # bosses
         try:
@@ -352,13 +352,13 @@ class TowerSpecialSystem:
                     if dx * dx + dy * dy <= FIRE_SPECIAL_RADIUS * FIRE_SPECIAL_RADIUS:
                         try:
                             boss.health = max(0, boss.health - FIRE_SPECIAL_DAMAGE)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         try:
                             if getattr(boss, "burn_timer", 0) <= 0:
                                 boss.burn_timer = 120
                                 boss.burn_damage_per_second = 4.0
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         try:
                             word = (
@@ -385,16 +385,16 @@ class TowerSpecialSystem:
                                 font_size=40,
                                 vy=-1.2,
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # add visual effect entry (longer duration via constant)
         try:
             from src.game_constants import FIRE_SPECIAL_VISUAL_DURATION
 
             vis = FIRE_SPECIAL_VISUAL_DURATION
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             vis = 8
         try:
             # include color so downstream draw code can use a nicer default and
@@ -409,7 +409,7 @@ class TowerSpecialSystem:
                     "color": FIRE_SPECIAL_EXPLOSION_COLOR,
                 }
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # emit some smoke particles around the explosion
         try:
@@ -422,13 +422,13 @@ class TowerSpecialSystem:
                         "size": random.uniform(4, 10),
                     }
                 )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         try:
             self.fire_special_index = (self.fire_special_index + 1) % (
                 len(FIRE_SPECIAL_WORDS) or 1
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def _update_fire_smoke(self) -> None:
@@ -442,7 +442,7 @@ class TowerSpecialSystem:
                 p["life"] -= 1
                 if p["life"] > 0:
                     alive.append(p)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         self.fire_smoke = alive
 
@@ -481,7 +481,7 @@ class TowerSpecialSystem:
         # move endpoint toward mouse using configured speed (pixels/sec)
         try:
             speed = getattr(self, "VOLTAIC_MAYHEM_SPEED", 0) / float(self.game.fps or 1)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             speed = 0
         # vector from current to target
         dx = mx - hx
@@ -514,7 +514,7 @@ class TowerSpecialSystem:
                 from src.systems.weapon_system import statue_projectile_offsets
 
                 stage_x, stage_y = statue_projectile_offsets(self.game)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # fallback to constants (shouldn't happen)
                 stage = getattr(self.game, "selected_stage", "") or ""
                 if stage.startswith("limbo"):
@@ -546,7 +546,7 @@ class TowerSpecialSystem:
                         beam_effect["color"] = getattr(
                             self, "VOLTAIC_MAYHEM_VIOLET_COLOR", (150, 200, 255)
                         )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 self.game.game_state.chain_lightning_effects.append(beam_effect)
                 # impact circle at endpoint
@@ -561,13 +561,13 @@ class TowerSpecialSystem:
                         "color": (150, 240, 255),
                     }
                 )
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             # damage regular enemies and any bosses along segment
             candidates = []
             try:
                 candidates.extend(list(getattr(self.game, "enemies", [])))
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             try:
                 # bosses may be Group or list
@@ -575,13 +575,13 @@ class TowerSpecialSystem:
                     candidates.extend(self.game.bosses.sprites())
                 elif getattr(self.game, "bosses", None) is not None:
                     candidates.extend(list(self.game.bosses))
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             for enemy in candidates:
                 try:
                     ex, ey = self.game._enemy_pos(enemy)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     continue
                 er = self.game._enemy_radius(enemy)
                 # calculate distance against the current beam endpoint
@@ -590,7 +590,7 @@ class TowerSpecialSystem:
                     try:
                         # silent damage; we'll show aggregated text separately
                         enemy.take_damage(1, show_floating=False)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     # accumulate damage for throttled display
                     try:
@@ -601,16 +601,16 @@ class TowerSpecialSystem:
                             # show a bundled "10" above the enemy
                             try:
                                 self.game.spawn_floating_text("10", ex, ey - 8)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                             self._voltaic_accum[eid] = total - 10
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     # drop the entry if the enemy died to avoid leaks
                     try:
                         if getattr(enemy, "health", 1) <= 0:
                             self._voltaic_accum.pop(eid, None)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
     def use_fire_charge(self) -> bool:
@@ -624,7 +624,7 @@ class TowerSpecialSystem:
             from src.game_constants import FIRE_SPECIAL_CLICK_DELAY
 
             delay = FIRE_SPECIAL_CLICK_DELAY
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             delay = 0
         self.pending_fire_clicks.append(
             {
@@ -645,16 +645,16 @@ class TowerSpecialSystem:
             for p in list(self.pending_fire_clicks):
                 try:
                     p["timer"] -= 1
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 if p.get("timer", 0) <= 0:
                     try:
                         self._spawn_fire_special(p.get("x", 0), p.get("y", 0))
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     try:
                         self.pending_fire_clicks.remove(p)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
         # handle fire-special timer; expire remaining charges after duration
@@ -664,7 +664,7 @@ class TowerSpecialSystem:
                 self.fire_special_charges = 0
                 try:
                     self.fire_special_index = 0
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
         # update fire-explosion visuals
@@ -677,7 +677,7 @@ class TowerSpecialSystem:
             for fx in self.game.game_state.fire_explosions:
                 try:
                     fx["timer"] -= 1
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
         self.update_voltaic_mayhem()

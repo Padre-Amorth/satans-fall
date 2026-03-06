@@ -613,7 +613,7 @@ class GameStateManager:
                 # mirror the value in this state
                 self.score = getattr(self.game, "score", self.score)
                 return
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # fallback to previous behavior (multiplier ignored)
         try:
@@ -625,9 +625,9 @@ class GameStateManager:
                     and getattr(self.game, "score", None) is not None
                 ):
                     self.game.score += amt
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def add_xp(self, xp_amount) -> None:

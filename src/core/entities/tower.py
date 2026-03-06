@@ -103,7 +103,7 @@ class Tower:
             et = getattr(closest, "enemy_type", "")
             if isinstance(et, str) and "boss" in et:
                 inacc = 0.0
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         angle = math.atan2(dy, dx) + random.uniform(-inacc, inacc)
         vel_x = math.cos(angle) * self.projectile_speed
@@ -135,7 +135,7 @@ class Tower:
         base_damage = getattr(self, "_base_damage", self.damage)
         try:
             scale = (self.damage / base_damage) if base_damage else 1.0
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             scale = 1.0
         proj.burn_damage_per_second = base_burn * scale
         return proj
@@ -161,7 +161,7 @@ class Tower:
             et = getattr(closest, "enemy_type", "")
             if isinstance(et, str) and "boss" in et:
                 inacc = 0.0
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         angle = math.atan2(dy, dx) + random.uniform(-inacc, inacc)
         vel_x = math.cos(angle) * self.projectile_speed
@@ -204,7 +204,7 @@ class Tower:
             et = getattr(closest, "enemy_type", "")
             if isinstance(et, str) and "boss" in et:
                 inacc = 0.0
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         angle = math.atan2(dy, dx) + random.uniform(-inacc, inacc)
         vel_x = math.cos(angle) * self.projectile_speed

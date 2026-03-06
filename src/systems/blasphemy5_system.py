@@ -250,13 +250,14 @@ class Blasphemy5System:
 
         Returns True if revive was triggered, False otherwise.
         """
-        if self.game.permanent_stats.get("blasphemy_10", 0) and not self.blasphemy_5_revived:
+        if (
+            self.game.permanent_stats.get("blasphemy_10", 0)
+            and not self.blasphemy_5_revived
+        ):
             try:
                 self.blasphemy_5_revived = True
                 # Heal to 50% max health
-                self.game.player.health = max(
-                    1, int(self.game.player.max_health * 0.5)
-                )
+                self.game.player.health = max(1, int(self.game.player.max_health * 0.5))
 
                 # Create revive explosion
                 try:
@@ -330,12 +331,20 @@ class Blasphemy5System:
                             if dist <= explosion_radius:
                                 try:
                                     enemy.take_damage(dmg_amount, show_floating=False)
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     try:
-                                        enemy.health = max(
-                                            0, enemy.health - dmg_amount
-                                        )
-                                    except Exception:
+                                        enemy.health = max(0, enemy.health - dmg_amount)
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
                                 # Show floating damage
                                 try:
@@ -346,11 +355,16 @@ class Blasphemy5System:
                                         color=(255, 100, 100),
                                         font_size=20,
                                     )
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
                 # Pause and schedule auto-resume
@@ -360,9 +374,9 @@ class Blasphemy5System:
                 # Show revive message
                 try:
                     self.game.show_centered_message("REVIVED", 2000, (200, 80, 80), 64)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 return True
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         return False

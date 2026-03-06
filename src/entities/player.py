@@ -23,7 +23,7 @@ else:
 BaseSprite: type
 try:
     BaseSprite = pygame.sprite.Sprite  # type: ignore
-except Exception:
+except (AttributeError, TypeError, ValueError, KeyError):
     BaseSprite = object
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -284,12 +284,12 @@ class Player(BaseSprite):
             # Divide by FPS
             self.x += vx / 60
             self.y += vy / 60
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # fallback to previous behaviour on any error
             try:
                 self.x += self.velocity_x / 60
                 self.y += self.velocity_y / 60
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Clamp vertical movement if a vertical range has been configured by the
@@ -302,7 +302,7 @@ class Player(BaseSprite):
                 # Keep `y` as float to preserve precise per-frame movement; clamp
                 # against the configured bounds without truncating.
                 self.y = max(float(vmin), min(self.y, float(vmax)))
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Clamp to screen horizontally
@@ -319,7 +319,7 @@ class Player(BaseSprite):
                 if self.slow_timer <= 0 and hasattr(self, "original_speed"):
                     # restore original speed when slow expires
                     self.speed = getattr(self, "original_speed", self.speed)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Handle health regeneration (5 seconds = 300 frames at 60 FPS)
@@ -331,14 +331,14 @@ class Player(BaseSprite):
                 if self.regen_timer >= frames_per_5s:
                     self.health = min(self.max_health, self.health + regen_amount)
                     self.regen_timer = 0
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Handle shield cooldown timer
         try:
             if getattr(self, "shield_cooldown_timer", 0) > 0:
                 self.shield_cooldown_timer -= 1
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Update rect
@@ -352,12 +352,12 @@ class Player(BaseSprite):
                     if not getattr(p, "alive", True):
                         try:
                             self.burn_particles.remove(p)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     try:
                         self.burn_particles.remove(p)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
     def take_damage(self, damage, *, show_floating: bool = True) -> None:
@@ -398,7 +398,7 @@ class Player(BaseSprite):
                             else 0
                         )
                         CURRENT_GAME.spawn_floating_text("SHIELD!", x, y - 20)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             return
 
@@ -426,9 +426,9 @@ class Player(BaseSprite):
                         else 0
                     )
                     CURRENT_GAME.spawn_floating_text(str(int(actual_damage)), x, y)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # silent fail if import or attributes missing
             pass
 
@@ -473,7 +473,7 @@ class Player(BaseSprite):
             old_center = self.rect.center
             self.rect = self.image.get_rect()
             self.rect.center = old_center
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def draw(

@@ -47,10 +47,10 @@ def load_last_profile_slot() -> int | None:
             last_played_str = data.get("last_played", "")
             try:
                 last_played = datetime.fromisoformat(last_played_str)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 last_played = datetime.fromtimestamp(0)
             profiles.append((slot, last_played))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     if not profiles:
@@ -150,7 +150,7 @@ def save_permanent_stats(game: Any) -> None:
         logger.warning("Failed to save permanent stats: %s", e)
         try:
             tmp_path.unlink(missing_ok=True)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
 
@@ -181,7 +181,7 @@ def get_profile_info(slot: int) -> Dict[str, Any]:
             "meta_points": int(gp.get("meta_points", 0)),
             "last_played": data.get("last_played", ""),
         }
-    except Exception:
+    except (AttributeError, TypeError, ValueError, KeyError):
         return {
             "exists": False,
             "name": "",

@@ -35,7 +35,7 @@ def suono_click_soft(volume: float = 0.2) -> pygame.mixer.Sound:
     if not pygame.mixer.get_init():
         try:
             pygame.mixer.init(frequency=sample_rate, size=-16, channels=1)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             return pygame.mixer.Sound(buffer=b"")
 
     # simple cache
@@ -53,7 +53,7 @@ def suono_click_soft(volume: float = 0.2) -> pygame.mixer.Sound:
         audio = np.column_stack((audio, audio))
     try:
         snd = pygame.mixer.Sound(buffer=audio.tobytes())
-    except Exception:
+    except (AttributeError, TypeError, ValueError, KeyError):
         snd = pygame.mixer.Sound(buffer=b"")
 
     _sound_cache[cache_key] = snd
@@ -71,5 +71,5 @@ def play_click_variato() -> None:
     # freq = np.random.randint(550, 650)  # currently unused
     try:
         suono_click_soft().play()
-    except Exception:
+    except (AttributeError, TypeError, ValueError, KeyError):
         pass

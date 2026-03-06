@@ -174,7 +174,7 @@ class WeaponSystem:
             try:
                 # Use centralized helper to compute beast-adjusted damage
                 base_damage = beast_damage(beast_level, base_damage)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # Fallback to old percentage behaviour if helper missing
                 base_damage = int(base_damage * (1 + beast_level * 0.05))
 
@@ -200,7 +200,7 @@ class WeaponSystem:
         if mgr is not None:
             try:
                 mgr.register(projectile)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
     def fire_hellgun(self, aim_x, aim_y) -> None:
@@ -241,7 +241,7 @@ class WeaponSystem:
             if mgr is not None:
                 try:
                     mgr.register(pellet)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
     def fire_spear(self, aim_x, aim_y) -> None:
@@ -276,7 +276,7 @@ class WeaponSystem:
         if mgr is not None:
             try:
                 mgr.register(spear)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
     def fire_demon_strike(self, aim_x, aim_y) -> None:
@@ -337,7 +337,7 @@ class WeaponSystem:
         if mgr is not None:
             try:
                 mgr.register(ball)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
     def fire_flies(self, aim_x, aim_y) -> None:
@@ -374,7 +374,7 @@ class WeaponSystem:
             if mgr is not None:
                 try:
                     mgr.register(flies_proj)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
     def fire_skullboom(self, aim_x, aim_y) -> None:
@@ -405,7 +405,7 @@ class WeaponSystem:
         if mgr is not None:
             try:
                 mgr.register(skull)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
     def fire_tenebrae(self, aim_x, aim_y) -> None:
@@ -444,7 +444,7 @@ class WeaponSystem:
         if mgr is not None:
             try:
                 mgr.register(beam)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
     def _orbital_cooldown_range(self) -> tuple[int, int]:
@@ -499,7 +499,7 @@ class WeaponSystem:
                 else:
                     try:
                         targets.extend(list(self.game.enemies))
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                 # Bosses (may be stored separately)
@@ -508,7 +508,7 @@ class WeaponSystem:
                 else:
                     try:
                         targets.extend(list(self.game.bosses))
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                 if targets:
@@ -571,7 +571,7 @@ class WeaponSystem:
                 if mgr is not None:
                     try:
                         mgr.register(projectile)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                 min_cd, max_cd = self._orbital_cooldown_range()
@@ -613,7 +613,7 @@ class WeaponSystem:
                 return self.game.enemies.sprites()
             try:
                 return list(self.game.enemies)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 return []
 
         def _pos(e):
@@ -641,7 +641,7 @@ class WeaponSystem:
                         else list(self.game.bosses)
                     )
                     enemies_list.extend(boss_list)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             if enemies_list:
                 # Determine offset values for current stage
@@ -664,7 +664,7 @@ class WeaponSystem:
                     # record offset for diagnostics/tests
                     try:
                         proj._statue_offset = (origin_shift, stage_y)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     def _store(p):
@@ -677,9 +677,14 @@ class WeaponSystem:
                                     mgr = self.game.projectile_manager
                                     if mgr is not None:
                                         mgr.register(p)
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             self.game.projectiles.append(p)
 
                     # Support both single Projectile and list of Projectiles
@@ -696,7 +701,7 @@ class WeaponSystem:
                                 sp.source = getattr(p, "source", "statue")
                                 sp.appearance = getattr(p, "appearance", None)
                                 self.game.statue_projectiles.append(sp)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                     else:
                         _store(proj)
@@ -710,7 +715,7 @@ class WeaponSystem:
                             sp.source = getattr(proj, "source", "statue")
                             sp.appearance = getattr(proj, "appearance", None)
                             self.game.statue_projectiles.append(sp)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     # Reset cooldown and flip next side
                     self.game.statue_cooldown = self.game.statue_fire_rate
@@ -729,7 +734,7 @@ class WeaponSystem:
                     else list(self.game.bosses)
                 )
                 enemies_list.extend(boss_list)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         # Collect statue projectiles from the main projectile pool
         statue_projs = []
@@ -738,7 +743,7 @@ class WeaponSystem:
             for p in self.game.projectiles:
                 if getattr(p, "source", None) == "statue":
                     statue_projs.append(p)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             for p in self.game.projectiles:
                 if getattr(p, "source", None) == "statue":
                     statue_projs.append(p)

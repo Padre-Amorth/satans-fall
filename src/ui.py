@@ -121,7 +121,7 @@ class PygameUIManager:
                     and pygame_mod.display.get_init()
                 ):
                     img = img.convert_alpha()
-            except Exception:
+            except (AttributeError, RuntimeError):
                 pass
             self._tinted_image = img
             self._tinted_color = color
@@ -135,12 +135,12 @@ class PygameUIManager:
             if getattr(self, "_tinted_color", None) != color:
                 try:
                     self._apply_tint(color)
-                except Exception:
+                except (AttributeError, RuntimeError):
                     self._tinted_image = self.image
                     self._tinted_color = color
             try:
                 surface.blit(self._tinted_image, (self.x, self.y))
-            except Exception:
+            except (AttributeError, TypeError):
                 surface.blit(self.image, (self.x, self.y))
 
     class LimboFogParticle:
@@ -209,7 +209,7 @@ class PygameUIManager:
                     and pygame_mod.display.get_init()
                 ):
                     img = img.convert_alpha()
-            except Exception:
+            except (AttributeError, RuntimeError):
                 pass
             self._tinted_image = img
             self._tinted_color = color
@@ -233,7 +233,7 @@ class PygameUIManager:
             if getattr(self, "_tinted_color", None) != color:
                 try:
                     self._apply_tint(color)
-                except Exception:
+                except (AttributeError, RuntimeError):
                     self._tinted_image = self.image
                     self._tinted_color = color
 
@@ -252,13 +252,13 @@ class PygameUIManager:
                         img_to_draw.set_alpha(int(255 * 0.7))  # 70% opacity for limbo_1
                     self._cached_draw_image = img_to_draw
                     self._cached_draw_key = cache_key
-                except Exception:
+                except (AttributeError, TypeError):
                     self._cached_draw_image = self.image
                     self._cached_draw_key = cache_key
 
             try:
                 surface.blit(self._cached_draw_image, (self.x, self.y))
-            except Exception:
+            except (AttributeError, TypeError):
                 surface.blit(self.image, (self.x, self.y))
 
     def __init__(self, game) -> None:
@@ -266,7 +266,7 @@ class PygameUIManager:
             import pygame
 
             self.pygame: Any = pygame
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self.pygame = None
         self.game: Any = game
         self.screen: Any | None = getattr(game, "screen", None)
@@ -303,7 +303,7 @@ class PygameUIManager:
             from src.assets.manager import get_image
 
             return get_image("title.png")
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         return None
 
@@ -423,10 +423,10 @@ class PygameUIManager:
             if getattr(pygame, "display", None) and pygame.display.get_init():
                 try:
                     surf = surf.convert_alpha()
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             return surf
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             return None
 
     def _init_fog_particles(self) -> None:
@@ -447,7 +447,7 @@ class PygameUIManager:
                     self._fog_particles.append(PygameUIManager.FogParticle(self, tex))
             else:
                 self._fog_particles = []
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self._fog_particles = []
 
     def _init_limbo_fog_particles(self) -> None:
@@ -476,36 +476,32 @@ class PygameUIManager:
             else:
                 self._limbo_fog_particles_left = []
                 self._limbo_fog_particles_right = []
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self._limbo_fog_particles_left = []
             self._limbo_fog_particles_right = []
 
-    def _update_and_draw_limbo_fog_particles(self) -> None:
-        """Update positions and render LIMBO fog particles."""
+    def _update_and_draw_fog_particles_list(
+        self, attr_name: str, clamp_height: bool = False
+    ) -> None:
+        """Helper to update and render fog particles from an attribute."""
         try:
-            for p in list(getattr(self, "_limbo_fog_particles_left", [])):
+            for p in list(getattr(self, attr_name, [])):
                 p.update()
-                if self.screen and self.pygame:
-                    p.draw(self.screen)
-            for p in list(getattr(self, "_limbo_fog_particles_right", [])):
-                p.update()
-                if self.screen and self.pygame:
-                    p.draw(self.screen)
-        except Exception:
-            pass
-
-    def _update_and_draw_fog_particles(self) -> None:
-        """Update positions and render all fog particles to the screen."""
-        try:
-            for p in list(getattr(self, "_fog_particles", [])):
-                p.update()
-                # clamp bottom edge within top 50% after update
-                if p.y + p.width > self.height * 0.50:
+                if clamp_height and p.y + p.width > self.height * 0.50:
                     p.y = self.height * 0.50 - p.width
                 if self.screen and self.pygame:
                     p.draw(self.screen)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
+
+    def _update_and_draw_limbo_fog_particles(self) -> None:
+        """Update positions and render LIMBO fog particles."""
+        self._update_and_draw_fog_particles_list("_limbo_fog_particles_left")
+        self._update_and_draw_fog_particles_list("_limbo_fog_particles_right")
+
+    def _update_and_draw_fog_particles(self) -> None:
+        """Update positions and render all fog particles to the screen."""
+        self._update_and_draw_fog_particles_list("_fog_particles", clamp_height=True)
 
     def _draw_floor_polygon(self, shake_x=0, shake_y=0) -> None:
         pygame = self.pygame
@@ -612,7 +608,7 @@ class PygameUIManager:
                     pygame.draw.lines(
                         self.screen, (0, 0, 0), False, outer_edge, width=4
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
         if self.game.right_wall_points:
@@ -653,7 +649,7 @@ class PygameUIManager:
                     pygame.draw.lines(
                         self.screen, (0, 0, 0), False, outer_edge, width=4
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
     def _draw_torches(self, shake_x=0, shake_y=0) -> None:
@@ -770,7 +766,7 @@ class PygameUIManager:
 
                         self.screen.blit(building_image, image_rect)
                         asset_loaded = True
-                except (ImportError, pygame.error, AttributeError):
+                except (ImportError, AttributeError):
                     pass  # Fall back to procedural drawing
 
                 # Fallback: procedural drawing if asset not found
@@ -1260,7 +1256,13 @@ class PygameUIManager:
                             self.title_image, target_size
                         )
                         self._title_image_scaled_size = target_size
-                    except Exception:
+                    except (
+                        AttributeError,
+                        TypeError,
+                        ValueError,
+                        KeyError,
+                        pygame.error,
+                    ):
                         self._title_image_scaled = self.title_image
                         self._title_image_scaled_size = None
                 title_to_draw = (
@@ -1460,7 +1462,7 @@ class PygameUIManager:
 
         try:
             self.game._last_drawn_menu = "main_menu"
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         if getattr(self.game, "showing_options", False):
@@ -1751,7 +1753,7 @@ class PygameUIManager:
 
         try:
             self.game._last_drawn_menu = menu_key
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def draw_stage_menu(self, shake_x=0, shake_y=0) -> None:
@@ -1865,7 +1867,7 @@ class PygameUIManager:
 
         try:
             self.game._last_drawn_menu = "stage_main"
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         if getattr(self.game, "showing_options", False):
@@ -1906,7 +1908,7 @@ class PygameUIManager:
         try:
             font = self.get_font(32)
             title = self.get_text("OPTIONS", font, (210, 65, 65))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             font = pygame.font.Font(None, 32)
             title = font.render("OPTIONS", True, (210, 65, 65))
 
@@ -1928,7 +1930,7 @@ class PygameUIManager:
         # Label and toggle helper function
         try:
             font_med = self.get_font(18)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             font_med = pygame.font.Font(None, 18)
 
         def draw_toggle_option(label_text, is_enabled, y_offset):
@@ -2005,7 +2007,7 @@ class PygameUIManager:
         # Buttons for presets (taken from game constants)
         try:
             from src.game_constants import DEFAULT_DISPLAY_PRESETS
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             DEFAULT_DISPLAY_PRESETS = [(1280, 720)]
 
         # Dropdown for resolution presets
@@ -2209,7 +2211,7 @@ class PygameUIManager:
                 is_hovered = name_rect.collidepoint(
                     self.game.mouse_x, self.game.mouse_y
                 )
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 is_hovered = False
             stat_value = self.game.permanent_stats.get(stat["key"], 0)
 
@@ -2336,16 +2338,28 @@ class PygameUIManager:
                         if row_idx == 1:
                             try:
                                 self._blasphemy_bottom_drawn = True
-                            except Exception:
+                            except (
+                                AttributeError,
+                                TypeError,
+                                ValueError,
+                                KeyError,
+                                pygame.error,
+                            ):
                                 pass
-                    except Exception:
+                    except (
+                        AttributeError,
+                        TypeError,
+                        ValueError,
+                        KeyError,
+                        pygame.error,
+                    ):
                         pygame.draw.rect(self.screen, (26, 26, 26), rect)
                 else:
                     pygame.draw.rect(self.screen, (26, 26, 26), rect)
 
                 try:
                     pygame.draw.rect(self.screen, (51, 51, 51), rect, 1)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
                 key = f"blasphemy_{row_idx * 5 + col + 1}"
@@ -2375,7 +2389,7 @@ class PygameUIManager:
                 # Hover/tooltips (defensive)
                 try:
                     mouse_point = (self.game.mouse_x, self.game.mouse_y)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     mouse_point = (0, 0)
 
                 if pygame.Rect(*rect).collidepoint(mouse_point):
@@ -2398,7 +2412,13 @@ class PygameUIManager:
                                 pygame.font.Font(None, 18),
                                 anchor_center=True,
                             )
-                        except Exception:
+                        except (
+                            AttributeError,
+                            TypeError,
+                            ValueError,
+                            KeyError,
+                            pygame.error,
+                        ):
                             pass
                         line_surfs = [
                             font_small.render(line_text, True, (255, 255, 255))
@@ -2480,7 +2500,7 @@ class PygameUIManager:
 
                 try:
                     mouse_point = (self.game.mouse_x, self.game.mouse_y)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     mouse_point = (0, 0)
                 left_hovered = pygame.Rect(*left_rect).collidepoint(mouse_point)
                 right_hovered = pygame.Rect(*right_rect).collidepoint(mouse_point)
@@ -2534,7 +2554,7 @@ class PygameUIManager:
             )
             try:
                 mouse_point = (self.game.mouse_x, self.game.mouse_y)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 mouse_point = (0, 0)
             center_hovered = pygame.Rect(*center_rect).collidepoint(mouse_point)
             if center_hovered:
@@ -2569,27 +2589,27 @@ class PygameUIManager:
                     sen_x = int(start_x)
                     sen_y = int(box_y2 + box_height // 2 + 1)
                     self.screen.set_at((sen_x, sen_y), sen_color)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Defensive: enforce center pixel color when asset present
         if box_asset and self.screen:
             try:
                 center_color = box_asset.get_at((box_width // 2, box_height // 2))
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 center_color = None
             if center_color:
                 try:
                     self.screen.set_at(
                         (int(start_x), int(box_y1 + box_height // 2)), center_color
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 try:
                     self.screen.set_at(
                         (int(start_x), int(box_y2 + box_height // 2)), center_color
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
         # Draw EXIT confirmation prompt if pending
@@ -2717,7 +2737,7 @@ class PygameUIManager:
 
         try:
             self.game._last_drawn_menu = "pause"
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Draw pause confirmation dialog if active (overlay handled by caller)
@@ -2764,7 +2784,7 @@ class PygameUIManager:
                         pc["selection"] = 0
                     elif no_rect.collidepoint(self.game.mouse_x, self.game.mouse_y):
                         pc["selection"] = 1
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
                 sel = pc.get("selection", 0)
@@ -2800,7 +2820,7 @@ class PygameUIManager:
                         no_rect.y + shake_y + (btn_h - no_s.get_height()) // 2,
                     ),
                 )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def draw_player_stats(self, shake_x=0, shake_y=0) -> None:
@@ -3122,27 +3142,18 @@ class PygameUIManager:
 
         try:
             self.game._last_drawn_menu = "player_stats"
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def draw_dead_trees(self, shake_x=0, shake_y=0) -> None:
         # Debugging hook: log when drawing dead trees to help visibility issues
         try:
             if not self.game.is_limbo_stage() or not hasattr(self.game, "dead_trees"):
-                if getattr(self.game, "debug", False):
-                    print("[DEBUG] draw_dead_trees: not in limbo or no dead_trees attr")
                 return
 
             if not self.game.dead_trees:
-                if getattr(self.game, "debug", False):
-                    print("[DEBUG] draw_dead_trees: dead_trees is empty")
                 return
-
-            if getattr(self.game, "debug", False):
-                print(
-                    f"[DEBUG] draw_dead_trees: drawing {len(self.game.dead_trees)} trees"
-                )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         pygame = self.pygame
 
@@ -3295,7 +3306,7 @@ class PygameUIManager:
         try:
             cur = float(getattr(g, "tower_energy", 0))
             mx = float(getattr(g, "tower_energy_max", 0))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             return
         if mx <= 0:
             return
@@ -3358,7 +3369,7 @@ class PygameUIManager:
 
             asset_name = f"statue_{asset_type}.png"
             asset_img = get_image(asset_name)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             asset_img = None
         if asset_img:
             w, h = asset_img.get_size()
@@ -3368,7 +3379,7 @@ class PygameUIManager:
             if x > (getattr(self, "width", 0) / 2):
                 try:
                     asset_img = pygame.transform.flip(asset_img, True, False)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             # bottom-center anchor, with optional vertical offset
             y_pos = adjusted_base_y - h
@@ -3521,8 +3532,6 @@ class PygameUIManager:
         """
         # If we're not in any limbo variant, bail early.
         if not self.game.is_limbo_stage():
-            if getattr(self.game, "debug", False):
-                print("[DEBUG] draw_pedestals: not in limbo")
             return
         # **Limbo Final** should not draw the static statues at all.  The
         # dynamic tower models that appear after the player chooses a tower
@@ -3530,11 +3539,7 @@ class PygameUIManager:
         # overlap (the 'ice statue' complaint).  We also prevent firing while
         # the player is selecting a tower (handled in WeaponSystem).
         if getattr(self.game, "selected_stage", None) == "limbo_final":
-            if getattr(self.game, "debug", False):
-                print("[DEBUG] draw_pedestals: skipped (limbo_final)")
             return
-        if getattr(self.game, "debug", False):
-            print("[DEBUG] draw_pedestals: drawing limbo statues")
 
         # Two statues at the sides of the play area (no pedestals).  X coords
         # are moved inward by 50 pixels vs the original pedestal positions.
@@ -3628,7 +3633,7 @@ class PygameUIManager:
                 )
                 try:
                     fog_surface = fog_surface.convert_alpha()
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 cache.append(fog_surface)
             else:
@@ -3652,7 +3657,7 @@ class PygameUIManager:
                 )
                 try:
                     fog_surface = fog_surface.convert_alpha()
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 cache.append(fog_surface)
             else:
@@ -3680,7 +3685,7 @@ class PygameUIManager:
         # update and render dynamic fog particles (new system)
         try:
             self._update_and_draw_fog_particles()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # draw the screen‑wide fog overlay last so it mutes everything beneath
@@ -3722,7 +3727,7 @@ class PygameUIManager:
                 overlay = pygame.Surface((self.width, self.height))
                 try:
                     overlay = overlay.convert()
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 overlay.fill(color)
                 overlay.set_alpha(alpha)
@@ -3730,7 +3735,7 @@ class PygameUIManager:
                 setattr(self, color_attr, color)
                 setattr(self, alpha_attr, alpha)
             self.screen.blit(getattr(self, cache_attr), (0, 0))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def draw_fog(self, shake_x=0, shake_y=0) -> None:
@@ -3741,7 +3746,7 @@ class PygameUIManager:
         if str(stage).startswith("purgatory"):
             try:
                 self.draw_purgatory_fog(shake_x, shake_y)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             return
 
@@ -3779,7 +3784,7 @@ class PygameUIManager:
         # Update and render LIMBO fog particles (vertical rising from sides)
         try:
             self._update_and_draw_limbo_fog_particles()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Choose overlay color based on limbo variant
@@ -3814,7 +3819,7 @@ class PygameUIManager:
             # to avoid duplicate particle emission/rendering from both UI and Enemy.
             try:
                 enemy.draw(self.screen, shake_x, shake_y)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Draw bosses
@@ -3855,7 +3860,7 @@ class PygameUIManager:
                             (x, y + r // 2),
                             2,
                         )
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # (statues/towers will be drawn later, after special effects, to ensure
@@ -3908,7 +3913,7 @@ class PygameUIManager:
                 aura_x = draw_x - (aura_radius - w // 2)
                 aura_y = draw_y - (aura_radius - h // 2)
                 self.screen.blit(aura, (aura_x, aura_y))
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Draw player (skip if invisible during blink transit)
@@ -3935,9 +3940,9 @@ class PygameUIManager:
                     px = int(p["x"] + shake_x - size)
                     py = int(p["y"] + shake_y - size)
                     self.screen.blit(surf, (px, py))
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Draw player burn particles (if any)
@@ -3957,9 +3962,15 @@ class PygameUIManager:
                             surf,
                             (int(p.x + shake_x - p.size), int(p.y + shake_y - p.size)),
                         )
-                    except Exception:
+                    except (
+                        AttributeError,
+                        TypeError,
+                        ValueError,
+                        KeyError,
+                        pygame.error,
+                    ):
                         pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Draw orbitals
@@ -3983,7 +3994,7 @@ class PygameUIManager:
         try:
             if self.game.special_unlocked():
                 self._draw_tower_energy_bar(shake_x, shake_y)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Always render statues/towers last so they layer above projectiles and
@@ -4011,7 +4022,7 @@ class PygameUIManager:
                         STATUE_BASE_Y + shake_y,
                         getattr(rt, "tower_type", None),
                     )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # Don't break rendering if statue drawing throws
             pass
 
@@ -4019,7 +4030,7 @@ class PygameUIManager:
         # local import ensures pygame is always available inside this method
         try:
             import pygame
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pygame = None
 
         if (
@@ -4099,9 +4110,21 @@ class PygameUIManager:
                                     angle2,
                                     max(1, int(2 * (timer / max_timer))),
                                 )
-                        except Exception:
+                        except (
+                            AttributeError,
+                            TypeError,
+                            ValueError,
+                            KeyError,
+                            pygame.error,
+                        ):
                             pass
-                    except Exception:
+                    except (
+                        AttributeError,
+                        TypeError,
+                        ValueError,
+                        KeyError,
+                        pygame.error,
+                    ):
                         pass
                 # smoke particles (grey, rising)
                 for s in getattr(self.game, "fire_smoke", []):
@@ -4121,7 +4144,13 @@ class PygameUIManager:
                                 int(s.get("y", 0) - size) + shake_y,
                             ),
                         )
-                    except Exception:
+                    except (
+                        AttributeError,
+                        TypeError,
+                        ValueError,
+                        KeyError,
+                        pygame.error,
+                    ):
                         pass
                 if getattr(self.game, "voltaic_active", False):
                     # draw a semitransparent pulsing circle at the beam endpoint (which
@@ -4164,11 +4193,18 @@ class PygameUIManager:
                                 int(my - radius) + shake_y - 4,
                             ),
                         )
-                    except Exception:
+                    except (
+                        AttributeError,
+                        TypeError,
+                        ValueError,
+                        KeyError,
+                        pygame.error,
+                    ):
                         pass
                     # draw a few lightning-style rays from center outward
                     try:
                         import math as math_mod
+
                         segments = 4
                         for i in range(segments):
                             angle = random.random() * 2 * math_mod.pi
@@ -4182,10 +4218,10 @@ class PygameUIManager:
                             steps = int(length / 10)
                             for s in range(1, steps):
                                 frac = s / float(steps)
-                                px = mx + math.cos(angle) * length * frac
-                                py = my + math.sin(angle) * length * frac
+                                px = mx + math_mod.cos(angle) * length * frac
+                                py = my + math_mod.sin(angle) * length * frac
                                 # random offset perpendicular
-                                perp = (-math.sin(angle), math.cos(angle))
+                                perp = (-math_mod.sin(angle), math_mod.cos(angle))
                                 offset = random.uniform(-5, 5)
                                 px += perp[0] * offset
                                 py += perp[1] * offset
@@ -4198,9 +4234,15 @@ class PygameUIManager:
                                 [(int(x), int(y)) for x, y in points],
                                 1,
                             )
-                    except Exception:
+                    except (
+                        AttributeError,
+                        TypeError,
+                        ValueError,
+                        KeyError,
+                        pygame.error,
+                    ):
                         pass
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             # Draw Purgatory horde malevolent red wave (expands from player)
@@ -4324,7 +4366,7 @@ class PygameUIManager:
                                     (int(particle_x), int(particle_y)),
                                     particle_size,
                                 )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
         self.draw_chain_lightning_effects(shake_x, shake_y)
@@ -4453,7 +4495,7 @@ class PygameUIManager:
                         os.path.join("screenshots", f"{suffix}_beam_peak.png"),
                     )
                     self.game._screenshot_taken_peak = True
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             # Explosion / impact at the end point
@@ -4500,7 +4542,7 @@ class PygameUIManager:
                     (beam_x + shake_x, player_y + shake_y),
                     beam_width + 12,
                 )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # Avoid breaking the game if drawing fails
             logger.exception("draw_lightning_effect failed")
 
@@ -4553,7 +4595,13 @@ class PygameUIManager:
                                     int(cy - radius) + shake_y - 4,
                                 ),
                             )
-                        except Exception:
+                        except (
+                            AttributeError,
+                            TypeError,
+                            ValueError,
+                            KeyError,
+                            pygame.error,
+                        ):
                             pass
 
                         # Inner bright core
@@ -4566,7 +4614,13 @@ class PygameUIManager:
                                 (cxs, cys),
                                 max(3, int(radius * 0.15)),
                             )
-                        except Exception:
+                        except (
+                            AttributeError,
+                            TypeError,
+                            ValueError,
+                            KeyError,
+                            pygame.error,
+                        ):
                             pass
 
                         # Irregular radial lightning bolts for emphasis
@@ -4596,7 +4650,13 @@ class PygameUIManager:
                                         radial_points[j + 1],
                                         2,
                                     )
-                        except Exception:
+                        except (
+                            AttributeError,
+                            TypeError,
+                            ValueError,
+                            KeyError,
+                            pygame.error,
+                        ):
                             pass
 
                         # Sparks at destination points (short-lived bright dots)
@@ -4609,9 +4669,21 @@ class PygameUIManager:
                                     (pxs, pys),
                                     4,
                                 )
-                        except Exception:
+                        except (
+                            AttributeError,
+                            TypeError,
+                            ValueError,
+                            KeyError,
+                            pygame.error,
+                        ):
                             pass
-                    except Exception:
+                    except (
+                        AttributeError,
+                        TypeError,
+                        ValueError,
+                        KeyError,
+                        pygame.error,
+                    ):
                         pass
 
                 # Draw jagged lines between consecutive points
@@ -4622,7 +4694,7 @@ class PygameUIManager:
                         color = (color_base[0], color_base[1], color_base[2], alpha)
                     else:
                         color = (150, 200, 255, alpha)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     color = (150, 200, 255, alpha)
 
                 if is_explosion:
@@ -4668,7 +4740,7 @@ class PygameUIManager:
                                 lightning_points[j + 1],
                                 thickness,
                             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             logger.exception("draw_chain_lightning_effects failed")
 
     def _generate_lightning_path(
@@ -4919,7 +4991,7 @@ class PygameUIManager:
                         self.height // 2 - 40 + shake_y,
                     ),
                 )
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 logger.exception("Error drawing center message")
                 # Remove the problematic message
                 if msg in self.game.center_messages:
@@ -4944,7 +5016,7 @@ class PygameUIManager:
             bg.set_alpha(120)
             self.screen.blit(bg, (x - 2, y - 1))
             self.screen.blit(fps_text, (x, y))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def draw_prologo_end(self, shake_x=0, shake_y=0) -> None:
@@ -4995,7 +5067,7 @@ class PygameUIManager:
                     self.game.height // 2 + 20 + shake_y,
                 ),
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def draw_weapon_selection(self, shake_x=0, shake_y=0) -> None:
@@ -5160,7 +5232,7 @@ class PygameUIManager:
                 self.game.screen.blit(
                     desc_surf, (name_x, name_y + name_surf.get_height() + 4)
                 )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def draw_tower_selection(self, shake_x=0, shake_y=0) -> None:
@@ -5270,7 +5342,7 @@ class PygameUIManager:
                 self.game.screen.blit(
                     desc_surf, (name_x, name_y + name_surf.get_height() + 4)
                 )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def draw_upgrade_selection(self, shake_x=0, shake_y=0) -> None:
@@ -5436,7 +5508,7 @@ class PygameUIManager:
                 self.game.screen.blit(
                     desc_surf, (name_x, name_y + name_surf.get_height() + 4)
                 )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def draw_game_over(self, shake_x=0, shake_y=0) -> None:

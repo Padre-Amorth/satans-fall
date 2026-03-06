@@ -22,7 +22,7 @@ class InputHandler:
         """Process all queued pygame events (QUIT, KEYDOWN, MOUSEBUTTONDOWN, VIDEORESIZE, USEREVENT)."""
         try:
             import pygame
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pygame = None
 
         if not pygame:
@@ -70,7 +70,7 @@ class InputHandler:
                         from src.utils import sound as sound_utils
 
                         sound_utils.suono_click_soft().play()
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         # audio is purely cosmetic; fail silently if something
                         # goes wrong (e.g. no mixer in headless tests)
                         pass
@@ -86,13 +86,13 @@ class InputHandler:
                         (self.game.window_width, self.game.window_height),
                         pygame.RESIZABLE,
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 try:
                     self.game.global_progress.setdefault("display", {})[
                         "window_size"
                     ] = [self.game.window_width, self.game.window_height]
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             elif event.type == pygame.USEREVENT + 1:
                 logger.info("[EVENT] USEREVENT+1 (reinforcements) fired")
@@ -120,7 +120,7 @@ class InputHandler:
         """Handle keyboard input based on game state."""
         try:
             import pygame
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pygame = None
 
         if not pygame:
@@ -251,7 +251,7 @@ class InputHandler:
                     self.game.game_state.selected_weapon_index = (
                         self.game.selected_weapon_index
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             elif key == pygame.K_DOWN:
                 self.game.selected_weapon_index = min(
@@ -262,7 +262,7 @@ class InputHandler:
                     self.game.game_state.selected_weapon_index = (
                         self.game.selected_weapon_index
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             elif key == pygame.K_RETURN:
                 self.game.apply_weapon(
@@ -286,7 +286,7 @@ class InputHandler:
                     self.game.game_state.tower_choice_index = (
                         self.game.selected_tower_index
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             elif key == pygame.K_DOWN:
                 self.game.selected_tower_index = min(
@@ -297,7 +297,7 @@ class InputHandler:
                     self.game.game_state.tower_choice_index = (
                         self.game.selected_tower_index
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             elif key == pygame.K_RETURN:
                 self.game.apply_tower(
@@ -312,7 +312,7 @@ class InputHandler:
                 self.game.paused = False
                 try:
                     self.game.game_state.awaiting_tower_choice = False
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
         elif self.game.awaiting_upgrade:
             # Allow selection only via hotkeys 1-3 or direct mouse click. Arrow navigation
@@ -360,7 +360,7 @@ class InputHandler:
         """
         try:
             import pygame
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pygame = None
 
         if not pygame:
@@ -459,7 +459,7 @@ class InputHandler:
                         ):
                             self.game.reroll_upgrade_choices()
                             return
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                 for i in range(len(self.game.upgrade_choices)):
@@ -517,7 +517,7 @@ class InputHandler:
                             self.game.show_damage_numbers = (
                                 not self.game.show_damage_numbers
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         return
                     if pygame.Rect(toggle_x, dy + 104, toggle_w, toggle_h).collidepoint(
@@ -530,7 +530,7 @@ class InputHandler:
                             self.game.global_progress.setdefault("audio", {})[
                                 "enabled"
                             ] = self.game.sounds_enabled
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         return
                     if pygame.Rect(toggle_x, dy + 144, toggle_w, toggle_h).collidepoint(
@@ -539,12 +539,12 @@ class InputHandler:
                         try:
                             dsp = self.game.global_progress.setdefault("display", {})
                             dsp["smooth_scale"] = not dsp.get("smooth_scale", True)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         return
                     try:
                         from src.game_constants import DEFAULT_DISPLAY_PRESETS
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         DEFAULT_DISPLAY_PRESETS = [(1280, 720)]
                     dd_w, dd_h = 140, 28
                     dd_x = dx + 24
@@ -561,7 +561,12 @@ class InputHandler:
                             if pygame.Rect(dd_x, iy, dd_w, item_h).collidepoint(pos):
                                 try:
                                     self.game.set_window_size(pw, ph)
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                                 self.game.options_resolution_dropdown_open = False
                                 return
@@ -677,7 +682,7 @@ class InputHandler:
                             self.game.show_damage_numbers = (
                                 not self.game.show_damage_numbers
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         return
 
@@ -695,7 +700,7 @@ class InputHandler:
                             self.game.global_progress.setdefault("audio", {})[
                                 "enabled"
                             ] = self.game.sounds_enabled
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         return
 
@@ -709,14 +714,14 @@ class InputHandler:
                         try:
                             dsp = self.game.global_progress.setdefault("display", {})
                             dsp["smooth_scale"] = not dsp.get("smooth_scale", True)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         return
 
                     # Resolution presets dropdown
                     try:
                         from src.game_constants import DEFAULT_DISPLAY_PRESETS
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         DEFAULT_DISPLAY_PRESETS = [(1280, 720)]
                     btn_w, btn_h = 140, 28
                     start_x = dx + 24
@@ -744,7 +749,12 @@ class InputHandler:
                             if item_rect.collidepoint(pos):
                                 try:
                                     self.game.set_window_size(pw, ph)
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                                 self.game.options_resolution_dropdown_open = False
                                 return
@@ -1406,24 +1416,24 @@ class InputHandler:
                             self.game.tower_special._voltaic_accum.clear()
                         try:
                             self.game.right_mouse_held = False
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         # feedback so player knows the beam ended early
                         try:
                             self.game.show_centered_message(
                                 "Tower special cancelled", 100, (200, 200, 255), 20
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         return
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
                 # otherwise attempt normal activation
                 try:
                     # mark the property for consistency even though it's not relied on
                     self.game.right_mouse_held = True
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 try:
                     if (
@@ -1434,12 +1444,12 @@ class InputHandler:
                             self.game.show_centered_message(
                                 "Tower special activated!", 100, (255, 255, 255), 24
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     elif self.game.fire_special_charges > 0:
                         # consume next fire charge from the active window
                         self.game.use_fire_charge()
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 return
         except Exception as e:
@@ -1448,7 +1458,7 @@ class InputHandler:
                 self.game.show_centered_message(
                     "An error occurred handling click", 2000, (255, 100, 100)
                 )
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             return
 
@@ -1468,7 +1478,7 @@ class InputHandler:
             if getattr(self.game, "active_profile_slot", None) == slot:
                 try:
                     self.game.save_permanent_stats()
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             else:
                 # Save profile file
@@ -1507,7 +1517,7 @@ class InputHandler:
                         with open(tmp, "w", encoding="utf-8") as f:
                             json.dump(data, f, indent=2)
                         os.replace(tmp, path)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
             # If this was a NEW profile, activate it and reset game memory to clean state
@@ -1544,14 +1554,14 @@ class InputHandler:
                 char = pygame.key.name(key)
                 if len(char) == 1 and len(current) < 20:
                     self.game.profile_name_input = current + char
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
     def _handle_profiles_menu_click(self, pos) -> None:
         """Handle mouse clicks in the profiles selection screen."""
         try:
             import pygame
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             return
         g = self.game
         w, h = g.width, g.height
@@ -1642,16 +1652,16 @@ class InputHandler:
         try:
             g.showing_game_over = False
             g.game_over_alpha = 0
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         try:
             g.shake_timer = 0
             g.shake_intensity = 0
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         try:
             g.paused = False
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def show_stage_menu(self) -> None:
@@ -1677,7 +1687,7 @@ class InputHandler:
             self.game.limbo_horde_completed = False
             self.game.limbo_horde_ready_for_victory = False
             self.game.limbo_horde_victory_timer = 0
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # defensive: in some tests the attributes may not exist
             pass
 
@@ -1698,7 +1708,7 @@ class InputHandler:
 
             # size used by the UI (80x80) — load into cache so first draw can blit it
             _ = get_image("blasphemy_box.png", (80, 80))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # silent fallback — drawing code already handles missing assets
             pass
 
@@ -1711,7 +1721,7 @@ class InputHandler:
         try:
             if hasattr(self.game, "game_state") and self.game.game_state is not None:
                 self.game.game_state.selected_stage = stage
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         self.game.showing_stage_menu = False
         self.game.showing_permanent_upgrades = False
@@ -1884,7 +1894,7 @@ class InputHandler:
                 self.game.selected_weapon_index = (
                     self.game.game_state.weapon_choice_index
                 )
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # Fallback behavior (in case GS isn't available)
                 self.game.awaiting_weapon_choice = True
                 self.game.weapon_choices = self.game.generate_initial_weapon_choices()
@@ -1901,7 +1911,7 @@ class InputHandler:
                     self.game.selected_tower_index = (
                         self.game.game_state.tower_choice_index
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     self.game.awaiting_tower_choice = True
                     self.game.tower_choices = (
                         self.game.game_state.generate_initial_tower_choices()
@@ -1940,7 +1950,7 @@ class InputHandler:
                 self.game.selected_weapon_index = (
                     self.game.game_state.weapon_choice_index
                 )
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 self.game.awaiting_weapon_choice = True
                 self.game.weapon_choices = self.game.generate_initial_weapon_choices()
                 self.game.selected_weapon_index = 0
@@ -1953,7 +1963,7 @@ class InputHandler:
                 )
                 self.game.tower_choices = list(self.game.game_state.tower_choices)
                 self.game.selected_tower_index = self.game.game_state.tower_choice_index
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 self.game.awaiting_tower_choice = True
                 self.game.tower_choices = (
                     self.game.game_state.generate_initial_tower_choices()
@@ -2079,7 +2089,7 @@ class InputHandler:
             self.game.limbo_horde_victory_timer = 0
             self.game.limbo_horde_completed = False
             self.game.limbo_horde_ready_for_victory = False
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         self.game.showing_victory = False
@@ -2098,15 +2108,15 @@ class InputHandler:
         # - starts countdown only if no choice is pending
         try:
             self.game.select_stage(nxt)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # fall back to manual logic in case select_stage is unavailable
             self.game.selected_stage = nxt
             if nxt.startswith("limbo"):
                 try:
                     self.game.generate_dead_trees()
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             try:
                 self.game.reset_run()
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass

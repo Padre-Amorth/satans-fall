@@ -28,12 +28,12 @@ def get_font(
         if not pygame.font.get_init():
             pygame.font.init()
             clear_cache()
-    except Exception:
+    except (AttributeError, TypeError, ValueError, KeyError):
         # If checking init fails for any reason, attempt to init anyway
         try:
             pygame.font.init()
             clear_cache()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     key = (name, size, bold, italic)
@@ -46,12 +46,12 @@ def get_font(
             f = pygame.font.SysFont(name, size)
         f.set_bold(bold)
         f.set_italic(italic)
-    except Exception:
+    except (AttributeError, TypeError, ValueError, KeyError):
         # In headless/test envs Font creation might fail; fall back to pygame.font.Font(None, size)
         # Ensure font module is initialized before fallback attempt
         try:
             pygame.font.init()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         f = pygame.font.Font(None, size)
     _font_cache[key] = f
@@ -66,18 +66,18 @@ def get_text(
         return _text_cache[key]
     try:
         surf = font.render(text, True, color)
-    except Exception:
+    except (AttributeError, TypeError, ValueError, KeyError):
         # If the underlying font object is invalid (e.g., "font module quit since font created"),
         # attempt to recover by reinitializing the font module, clearing caches and recreating a font.
         clear_cache()
         try:
             pygame.font.init()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # Try to determine a reasonable fallback size from the font if possible
         try:
             size = font.get_height()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             size = 24
         fallback_font = get_font(size)
         surf = fallback_font.render(text, True, color)

@@ -235,7 +235,7 @@ class Game:
         # Statue / tower defaults used by Limbo/stage logic and tests
         try:
             self.statue_fire_rate: int = STATUE_FIRE_RATE
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self.statue_fire_rate: int = 1
         self.statue_cooldown: int = 0
         self.statue_next_left: bool = True
@@ -274,7 +274,7 @@ class Game:
             import src.game as _pkg
 
             _pkg.CURRENT_GAME = self
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # Gameplay defaults used by tests and early update paths
         self.stage_start_countdown = 0
@@ -741,7 +741,7 @@ class Game:
         # allow player to access game flags (e.g. growth aura)
         try:
             self.player.game = self
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         self.enemies: Any = pygame.sprite.Group()
         self.projectiles: Any = pygame.sprite.Group()
@@ -814,7 +814,7 @@ class Game:
                 self.enemy_manager.enemy_spawn_rate = self.enemy_spawn_rate
             if hasattr(self, "enemy_spawn_timer"):
                 self.enemy_manager.enemy_spawn_timer = self.enemy_spawn_timer
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self.enemy_manager = None
 
         # Frame counter for animations
@@ -975,7 +975,7 @@ class Game:
         # Apply any persisted display preferences (window size / fullscreen)
         try:
             self.apply_display_prefs()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Apply saved audio preference (migrate from top-level to audio dict)
@@ -986,7 +986,7 @@ class Game:
                 aud["enabled"] = self.global_progress.get("sounds_enabled", True)
             self.sounds_enabled = aud.get("enabled", True)
             aud["enabled"] = self.sounds_enabled
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # fallback to default
             self.sounds_enabled = True
 
@@ -999,25 +999,25 @@ class Game:
         # Initialize WeaponSystem (handles weapon firing and projectile creation)
         try:
             self.weapon_system = WeaponSystem(self)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self.weapon_system = None
 
         # Initialize SpawnSystem (handles enemy spawning and wave progression)
         try:
             self.spawn_system = SpawnSystem(self)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self.spawn_system = None
 
         # Initialize UpgradeSystem (handles weapon upgrades and permanent stats)
         try:
             self.upgrade_system = UpgradeSystem(self)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self.upgrade_system = None
 
         # Initialize InputHandler (handles keyboard and mouse input)
         try:
             self.input_handler = InputHandler(self)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self.input_handler = None
 
         # Initialize TowerSpecialSystem (handles energy bar and fire/blizzard/Voltaic Mayhem specials)
@@ -1025,7 +1025,7 @@ class Game:
             from src.systems.tower_special_system import TowerSpecialSystem
 
             self.tower_special = TowerSpecialSystem(self)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self.tower_special = None
 
         # Initialize Blasphemy5System (handles blink teleport and revive)
@@ -1033,7 +1033,7 @@ class Game:
             from src.systems.blasphemy5_system import Blasphemy5System
 
             self.blasphemy5_system = Blasphemy5System(self)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self.blasphemy5_system = None
 
         # Initialize ScoreSystem (handles meta-progression: XP, levels, points)
@@ -1041,7 +1041,7 @@ class Game:
             from src.systems.score_system import ScoreSystem
 
             self.score_system = ScoreSystem(self)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self.score_system = None
 
         # Initialize DeathSystem (handles enemy/boss death, health drops, XP awards)
@@ -1049,7 +1049,7 @@ class Game:
             from src.systems.death_system import DeathSystem
 
             self.death_system = DeathSystem(self)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self.death_system = None
 
         # Initialize ParticleSystem (handles rendering and updating particle effects)
@@ -1057,7 +1057,7 @@ class Game:
             from src.systems.particle_system import ParticleSystem
 
             self.particle_system = ParticleSystem(self)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self.particle_system = None
 
         # Initialize ProjectileManager (handles pooling/spawn management)
@@ -1065,7 +1065,7 @@ class Game:
             from src.systems.projectile_manager import ProjectileManager
 
             self.projectile_manager = ProjectileManager(self)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             self.projectile_manager = None
 
         # Final debug check to show what ended up in permanent_stats (use logger, not print)
@@ -1073,13 +1073,13 @@ class Game:
             logger.debug(
                 "Final permanent_stats after Game.__init__: %s", self.permanent_stats
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Apply any persisted display preferences (window size / fullscreen)
         try:
             self.apply_display_prefs()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     # Display / fullscreen helpers ------------------------------------------------
@@ -1109,12 +1109,12 @@ class Game:
             self.window_surface = pygame.display.set_mode(
                 (self.window_width, self.window_height), pygame.RESIZABLE
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         try:
             dsp = self.global_progress.setdefault("display", {})
             dsp["window_size"] = [self.window_width, self.window_height]
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def _window_to_virtual(self, pos: tuple[int, int]) -> tuple[int, int]:
@@ -1128,7 +1128,7 @@ class Game:
         """
         try:
             wx, wy = int(pos[0]), int(pos[1])
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             return (0, 0)
         ww = max(1, getattr(self, "window_width", self.width))
         wh = max(1, getattr(self, "window_height", self.height))
@@ -1385,14 +1385,14 @@ class Game:
         # Preload originals for quick subsequent scaling
         try:
             preload_images(asset_files)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # Preloading is best-effort; proceed even if it fails in headless/testing envs
             pass
 
         for asset in asset_files:
             try:
                 self.assets[asset] = get_image(asset)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 self.assets[asset] = None
 
     def generate_walls(self) -> None:
@@ -1508,7 +1508,7 @@ class Game:
             return self.enemies.sprites()
         try:
             return list(self.enemies)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             return []
 
     def _enemy_pos(self, e):
@@ -1802,7 +1802,7 @@ class Game:
                 # Fog must be drawn after world/objects so it tints enemies and player
                 try:
                     self.draw_fog(shake_x, shake_y)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 self.draw_skullboom_particles(shake_x, shake_y)
                 self.draw_ice_particles(shake_x, shake_y)
@@ -1810,12 +1810,12 @@ class Game:
                 # Draw centralized floating texts (damage numbers, etc.)
                 try:
                     self.draw_floating_texts(shake_x, shake_y)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 # Draw special effects (lightning, explosions, waves, etc.)
                 try:
                     self.draw_special_effects(shake_x, shake_y)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
             # Draw UI
@@ -1852,7 +1852,7 @@ class Game:
                         self.screen, (self.window_width, self.window_height)
                     )
                 self.window_surface.blit(scaled, (0, 0))
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # Fallback to direct flip if something goes wrong
                 pass
             pygame.display.flip()
@@ -1967,12 +1967,12 @@ class Game:
                         if existing.color != tuple(color):
                             try:
                                 self.floating_texts.remove(existing)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                         else:
                             # same color/position/text already queued
                             return
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
             ft = FloatingText(
@@ -1986,7 +1986,7 @@ class Game:
                 life=life,
             )
             self.floating_texts.append(ft)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def _floating_text_style_for_projectile(
@@ -2005,7 +2005,7 @@ class Game:
                 ft.update()
                 if ft.alive:
                     alive.append(ft)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         self.floating_texts = alive
 
@@ -2066,7 +2066,7 @@ class Game:
                     and getattr(self.game_state, "score", None) is not None
                 ):
                     self.game_state.score += amt
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             # award meta xp using helper (handles leveling and points)
@@ -2490,7 +2490,7 @@ class Game:
                 self.enemy_spawn_rate += LIMBO_SPAWN_RATE_PENALTY
                 if hasattr(self, "enemy_manager") and self.enemy_manager is not None:
                     self.enemy_manager.enemy_spawn_rate = self.enemy_spawn_rate
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # limbo_final is extra punishing: ramp slopes should be doubled
@@ -2498,7 +2498,7 @@ class Game:
             try:
                 self.spawn_ramp_slope_pre = SPAWN_RAMP_SLOPE_PRE * 2
                 self.spawn_ramp_slope_post = SPAWN_RAMP_SLOPE_POST * 2
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         return result
 
@@ -2659,7 +2659,7 @@ class Game:
             try:
                 self.spawn_system.last_giant_spawn_time = -float("inf")
                 self.spawn_system.pentagram_spawned = False
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         self.big_enemy_timer = 12 * self.fps
         self.big_spawned_this_wave = False
@@ -2841,7 +2841,7 @@ class Game:
         if getattr(self, "active_profile_slot", None) is not None:
             try:
                 self.save_permanent_stats()
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         self.active_profile_slot = slot
         # Reset stats before loading so old data doesn't bleed in
@@ -2863,7 +2863,7 @@ class Game:
         self.global_progress["active_profile_slot"] = slot
         try:
             self.save_permanent_stats()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         logger.info("Selected profile slot %s", slot)
 
@@ -2895,7 +2895,7 @@ class Game:
         if getattr(self, "active_profile_slot", None) is not None:
             try:
                 self.save_permanent_stats()
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         self.reset_run()
         self.selected_stage = None
@@ -2959,7 +2959,7 @@ class Game:
         self.running = False
         try:
             pygame.quit()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def execute_pause_option(self) -> None:
@@ -3018,9 +3018,9 @@ class Game:
                         try:
                             self.enemies.empty()
                             self.bosses.empty()
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
         # If the horde has been defeated we don't immediately show the
@@ -3060,7 +3060,7 @@ class Game:
             if enemies_empty and bosses_empty:
                 try:
                     self.limbo_horde_victory_timer = int(self.fps * 5)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     self.limbo_horde_victory_timer = 0
                 # consume the flag so we don't trigger again
                 self.limbo_horde_ready_for_victory = False
@@ -3113,9 +3113,9 @@ class Game:
                     try:
                         self.enemies.empty()
                         self.bosses.empty()
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
         # Purgatory wave expansion and victory countdown
@@ -3170,7 +3170,7 @@ class Game:
                     print("[LIMBO_FINAL] Countdown expired, triggering defeat")
                 try:
                     self.limbo_final_defeat()
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
         # update victory overlay fade if active
         if getattr(self, "showing_victory", False):
@@ -3242,7 +3242,7 @@ class Game:
             if expired:
                 try:
                     from src.game_constants import BLIZZARD_EXPIRE_DAMAGE
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     BLIZZARD_EXPIRE_DAMAGE = 0
                 for p in expired:
                     # damage normal enemies
@@ -3255,7 +3255,7 @@ class Game:
                                 enemy.health = max(
                                     0, enemy.health - BLIZZARD_EXPIRE_DAMAGE
                                 )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                             # show damage text above enemy
                             try:
@@ -3264,7 +3264,7 @@ class Game:
                                     ex,
                                     ey - self._enemy_radius(enemy) - 8,
                                 )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                     # damage bosses as well
                     if hasattr(self, "bosses") and self.bosses:
@@ -3282,7 +3282,12 @@ class Game:
                                     boss.health = max(
                                         0, boss.health - BLIZZARD_EXPIRE_DAMAGE
                                     )
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                                 try:
                                     self.spawn_floating_text(
@@ -3290,7 +3295,12 @@ class Game:
                                         bx,
                                         by - self._enemy_radius(boss) - 8,
                                     )
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
             self.blizzard_puddles = new_puddles
             for puddle in self.blizzard_puddles:
@@ -3361,13 +3371,13 @@ class Game:
                     # decrement timer when explosion was spawned by revive too
                     try:
                         explosion["timer"] -= 1
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                 # update blasphemy5 particles so they animate during pause
                 try:
                     for p in list(getattr(self, "blasphemy5_particles", [])):
                         p.update()
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             self.update_center_messages()
             return
@@ -3454,7 +3464,7 @@ class Game:
                     targets.extend(
                         list(self.enemies) if hasattr(self.enemies, "__iter__") else []
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 try:
                     # Add bosses (Group or list)
@@ -3462,7 +3472,7 @@ class Game:
                         targets.extend(self.bosses.sprites())
                     elif getattr(self, "bosses", None) is not None:
                         targets.extend(list(self.bosses))
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 proj.update(targets, self.player)
 
@@ -3500,7 +3510,7 @@ class Game:
             except TypeError:
                 try:
                     self.bosses.update()
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
         else:
             for b in list(self.bosses):
@@ -3510,7 +3520,7 @@ class Game:
                     except TypeError:
                         try:
                             b.update(self.player)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
         self._remove_dead_bosses()
@@ -3823,7 +3833,7 @@ class Game:
         if getattr(self, "active_profile_slot", None) is not None:
             try:
                 self.save_permanent_stats()
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Do not schedule an automatic return to menu; require explicit key press
@@ -3885,7 +3895,7 @@ class Game:
         try:
             if self.award_stage_clear("limbo_final"):
                 self.show_centered_message("META POINT GAINED!", 1800, (255, 215, 0))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Stats

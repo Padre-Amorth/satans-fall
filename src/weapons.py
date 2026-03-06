@@ -140,7 +140,7 @@ def shotgun_pellet_damage(level: int, base_player_damage: int) -> int:
         min_d = float(d.get("min_pellet_damage", 20))
         max_d = float(d.get("max_pellet_damage", 30))
         max_level = int(d.get("max_level", 6) or 6)
-    except Exception:
+    except (AttributeError, TypeError, ValueError, KeyError):
         # Fallback: legacy behavior proportional to base player damage
         return int(
             base_player_damage
@@ -159,7 +159,7 @@ def shotgun_pellet_damage(level: int, base_player_damage: int) -> int:
     reference = 30.0
     try:
         scaled = remapped * (float(base_player_damage) / reference)
-    except Exception:
+    except (AttributeError, TypeError, ValueError, KeyError):
         scaled = remapped
     # Use int() truncation to match existing conventions
     return int(scaled)
@@ -243,7 +243,7 @@ def beast_damage(level: int, base_damage: int) -> int:
         min_d = float(d.get("min_damage", 22))
         max_d = float(d.get("max_damage", 45))
         max_level = int(d.get("max_level", 6) or 6)
-    except Exception:
+    except (AttributeError, TypeError, ValueError, KeyError):
         return int(base_damage)
 
     if level <= 0:
@@ -259,7 +259,7 @@ def beast_damage(level: int, base_damage: int) -> int:
     reference = 30.0
     try:
         scaled = desired * (float(base_damage) / reference)
-    except Exception:
+    except (AttributeError, TypeError, ValueError, KeyError):
         scaled = desired
     return int(scaled)
 
@@ -428,7 +428,7 @@ def flies_projectile_count(level: int) -> int:
     for thresh, extra_n in proj_map.items():
         try:
             t = int(thresh)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             t = thresh  # keep original if not coercible
         if level >= t:
             extra += int(extra_n or 0)
@@ -572,7 +572,7 @@ def get_weapon_upgrade_description(weapon: str, level: int) -> str:
                     mult += inc
             if abs(mult - 1.0) > 1e-6:
                 return f"Lv{level}: +{int((mult - 1.0) * 100)}% damage & heal"
-    except Exception:
+    except (AttributeError, TypeError, ValueError, KeyError):
         pass
 
     # As a last-resort, include the weapon name so the UI is less generic

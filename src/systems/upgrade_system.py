@@ -79,7 +79,7 @@ class UpgradeSystem:
                 gs.upgrade_choice_index = getattr(
                     self.game, "selected_upgrade_index", 0
                 )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def generate_upgrade_choices(self):
@@ -244,7 +244,7 @@ class UpgradeSystem:
                     stage = getattr(g, "selected_stage", None)
                     if stage == "prologo":
                         patterns = [p for p in patterns if p.get("id") != "shield"]
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             try:
@@ -252,7 +252,7 @@ class UpgradeSystem:
                 # Projectile Size only available in Hell
                 if not (stage and str(stage).startswith("hell")):
                     patterns = [p for p in patterns if p.get("id") != "projectile_size"]
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             try:
@@ -266,13 +266,13 @@ class UpgradeSystem:
                 ):
                     patterns = [p for p in patterns if p.get("id") != "tower_fire_rate"]
                     patterns = [p for p in patterns if p.get("id") != "kill_explosion"]
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             try:
                 if random.random() > 0.33:
                     patterns = [p for p in patterns if p.get("id") != "xp"]
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             return patterns
@@ -373,7 +373,7 @@ class UpgradeSystem:
                     self.game.game_state.upgrade_choices = list(
                         self.game.upgrade_choices
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 return True
             attempts += 1
@@ -386,7 +386,7 @@ class UpgradeSystem:
         """Delegate to GameStateManager for initial weapon choices."""
         try:
             return self.game.game_state.generate_initial_weapon_choices()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             initial_weapons: List[Dict[str, str]] = [
                 {
                     "id": "shotgun",
@@ -636,7 +636,7 @@ class UpgradeSystem:
             self.game.game_state.weapon_choice_index = 0
             self.game.game_state.player_weapons = self.game.player_weapons.copy()
             self.game.game_state.weapon_levels = self.game.weapon_levels.copy()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         if self.game.is_initial_weapon_choice:
@@ -651,14 +651,14 @@ class UpgradeSystem:
                     self.game.selected_tower_index = (
                         self.game.game_state.tower_choice_index
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     self.game.awaiting_tower_choice = True
                     self.game.tower_choices = self.generate_initial_tower_choices()
                     self.game.selected_tower_index = 0
             else:
                 try:
                     self.game.tower_energy = 0
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     setattr(self.game, "tower_energy", 0)
                 self.game.stage_start_countdown = 3
                 self.game.stage_start_timer = self.game.fps
@@ -729,7 +729,7 @@ class UpgradeSystem:
         self.game.right_tower.visible = True
         try:
             self.game.apply_permanent_stats()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         self.game.awaiting_tower_choice = False
@@ -739,7 +739,7 @@ class UpgradeSystem:
             self.game.game_state.awaiting_tower_choice = False
             self.game.game_state.tower_choices = []
             self.game.game_state.tower_choice_index = 0
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         if self.game.is_initial_tower_choice:
@@ -747,7 +747,7 @@ class UpgradeSystem:
             if not self.game.is_initial_weapon_choice:
                 try:
                     self.game.tower_energy = 0
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     setattr(self.game, "tower_energy", 0)
                 self.game.stage_start_countdown = 3
                 self.game.stage_start_timer = self.game.fps
@@ -801,9 +801,9 @@ class UpgradeSystem:
                 )
                 if getattr(self.game.player, "health", 0) > self.game.player.max_health:
                     self.game.player.health = self.game.player.max_health
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         for prefix in ("fire", "storm", "ice"):
@@ -818,7 +818,7 @@ class UpgradeSystem:
             self.game.statue_fire_rate = max(
                 1, int(round(STATUE_FIRE_RATE / blasphemy8_mult))
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         storm_left_count = (
@@ -1070,5 +1070,5 @@ class UpgradeSystem:
             self.game.game_state.awaiting_upgrade = False
             self.game.game_state.upgrade_choices = []
             self.game.game_state.upgrade_choice_index = 0
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass

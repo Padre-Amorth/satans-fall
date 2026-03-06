@@ -41,7 +41,7 @@ def _load_original(name: str) -> Optional[pygame.Surface]:
                 if fname.lower() == name.lower():
                     path = os.path.join(_ASSETS_DIR, fname)
                     break
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     if name in _original_cache:
@@ -61,7 +61,7 @@ def _load_original(name: str) -> Optional[pygame.Surface]:
         try:
             # convert_alpha may fail in headless environments; fall back to raw surface
             surf = loaded.convert_alpha()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             surf = loaded
         _original_cache[name] = surf
     except Exception as e:

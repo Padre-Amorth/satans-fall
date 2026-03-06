@@ -277,6 +277,10 @@ LIMBO_FINAL_ACCEL_START_TIME: float = 30.0
 # halt all normal enemy spawning this many seconds before the final boss arrival
 LIMBO_FINAL_HALT_BEFORE_BOSS: float = 5.0
 
+# Stage groupings for conditional logic
+LIMBO_STAGES = {"prologo", "limbo", "limbo_2", "limbo_3", "limbo_final"}
+PURGATORY_STAGES = {"purgatory", "purgatory_2", "purgatory_3"}
+HELL_STAGES = {"hell", "hell_2", "hell_3"}
 
 STAGE_SETTINGS: dict[str, dict[str, Any]] = {
     "prologo": {
@@ -375,6 +379,9 @@ __all__: list[str] = [
     "DEFAULT_PLAYER_ANIM_SPEED",
     "DEFAULT_WAVE_DURATION",
     "WALL_THICKNESS",
+    "LIMBO_STAGES",
+    "PURGATORY_STAGES",
+    "HELL_STAGES",
     "STAGE_SETTINGS",
     "DEFAULT_DISPLAY_PRESETS",
     "SELECTION_BOX_WIDTH",

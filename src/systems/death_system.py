@@ -53,7 +53,7 @@ class DeathSystem:
                         enemy_x = getattr(enemy, "x", g.player.x)
                         enemy_y = getattr(enemy, "y", g.player.y)
                         g.record_enemy_kill(enemy_x, enemy_y)
-                    except Exception:
+                    except (AttributeError, TypeError):
                         pass
                     try:
                         if (
@@ -62,13 +62,13 @@ class DeathSystem:
                         ):
                             try:
                                 g._propagate_burn(enemy)
-                            except Exception:
+                            except (AttributeError, TypeError):
                                 pass
-                    except Exception:
+                    except (AttributeError, TypeError):
                         pass
                     try:
                         enemy.kill()
-                    except Exception:
+                    except (AttributeError, TypeError):
                         pass
         else:
             for enemy in list(g.enemies):
@@ -86,9 +86,9 @@ class DeathSystem:
                         ):
                             try:
                                 g._propagate_burn(enemy)
-                            except Exception:
+                            except (AttributeError, TypeError):
                                 pass
-                    except Exception:
+                    except (AttributeError, TypeError):
                         pass
                     base_xp_local = 12
                     try:
@@ -99,7 +99,7 @@ class DeathSystem:
                             "giant": 50,
                             "angel": 22,
                         }.get(str(getattr(enemy, "enemy_type", "")), 12)
-                    except Exception:
+                    except (AttributeError, KeyError, TypeError):
                         base_xp_local = 12
                     g.player_xp += int(
                         round(base_xp_local * getattr(g, "xp_multiplier", 1.0))
@@ -114,14 +114,14 @@ class DeathSystem:
                         if hasattr(enemy, "kill"):
                             try:
                                 enemy.kill()
-                            except Exception:
+                            except (AttributeError, TypeError):
                                 pass
                         try:
                             # Always attempt to remove from the plain list container
                             g.enemies.remove(enemy)
-                        except Exception:
+                        except (ValueError, AttributeError):
                             pass
-                    except Exception:
+                    except (AttributeError, TypeError):
                         pass
                     # Record kill AFTER removal but with captured coordinates
                     try:
@@ -129,7 +129,7 @@ class DeathSystem:
                             g.record_enemy_kill(enemy_x, enemy_y)
                         else:
                             g.record_enemy_kill()
-                    except Exception:
+                    except (AttributeError, TypeError):
                         pass
 
                 # Object/sprite enemies stored in a plain list (support for tests)
@@ -140,7 +140,7 @@ class DeathSystem:
                             * ENEMY_SCORE_PER_HEALTH
                             * g.difficulty_multiplier
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     type_xp_local = {
                         "weak": 10,
@@ -156,7 +156,7 @@ class DeathSystem:
                         g.player_xp += int(
                             round(base_xp_local * getattr(g, "xp_multiplier", 1.0))
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     if g.player_xp >= g.xp_to_next_level:
                         g.trigger_level_up()
@@ -168,25 +168,25 @@ class DeathSystem:
                         ):
                             try:
                                 g._propagate_burn(enemy)
-                            except Exception:
+                            except (AttributeError, TypeError):
                                 pass
-                    except Exception:
+                    except (AttributeError, TypeError):
                         pass
                     try:
                         enemy_x = getattr(enemy, "x", g.player.x)
                         enemy_y = getattr(enemy, "y", g.player.y)
                         g.record_enemy_kill(enemy_x, enemy_y)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     try:
                         # If enemy implements kill(), call it for symmetry with Group
                         enemy.kill()
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     try:
                         # remove from the plain list
                         g.enemies.remove(enemy)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
     def remove_dead_bosses(self) -> None:
@@ -216,9 +216,9 @@ class DeathSystem:
                         ):
                             try:
                                 g._propagate_burn(boss)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     # spawn limbo_final countdown if appropriate
@@ -245,9 +245,9 @@ class DeathSystem:
                                 g.show_centered_message(
                                     "BOSS DEFEATED!", 2000, (255, 255, 0)
                                 )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     # Spawn health drop for all bosses (unless already spawned in take_damage)
@@ -259,9 +259,9 @@ class DeathSystem:
                             heal_amt = random.randint(10, 20)
                             try:
                                 self.spawn_health_drop(boss.x, boss.y, heal_amt)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     # If a medium (wave) boss dies by any cause, schedule reinforcements
@@ -272,7 +272,7 @@ class DeathSystem:
                                 g.show_centered_message(
                                     "REINFORCEMENTS INCOMING!", 1800, (255, 204, 0)
                                 )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                             try:
                                 # Clear any existing reinforcement timer then schedule a new one
@@ -280,9 +280,9 @@ class DeathSystem:
                                 pygame.time.set_timer(
                                     pygame.USEREVENT + 1, g.reinforcement_delay_ms
                                 )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     boss.kill()  # Remove dead boss
@@ -302,13 +302,13 @@ class DeathSystem:
                         ):
                             try:
                                 g._propagate_burn(boss)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     try:
                         g.bosses.remove(boss)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
     def spawn_health_drop(self, x: float, y: float, heal: int) -> None:
@@ -335,7 +335,7 @@ class DeathSystem:
         drop = {"x": x, "y": y, "vy": 1.5, "heal": heal, "radius": 8}
         try:
             g.health_drops.append(drop)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             g.health_drops = [drop]
 
         # play accompanying sound if enabled
@@ -344,7 +344,7 @@ class DeathSystem:
                 from src.utils import sound as sound_utils
 
                 sound_utils.suono_click_soft().play()
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # if anything goes wrong we silently ignore, since sound is
                 # cosmetic and may not be available in test environments
                 pass
@@ -364,7 +364,7 @@ class DeathSystem:
         # of the larger dimension of the player sprite.
         try:
             pr = max(getattr(g.player, "width", 0), getattr(g.player, "height", 0)) / 2
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pr = 0
         for drop in list(g.health_drops):
             # move
@@ -388,10 +388,10 @@ class DeathSystem:
                             drop.get("y", 0),
                             color=(0, 255, 0),
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     continue
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             # keep if still on screen

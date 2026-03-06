@@ -19,7 +19,7 @@ from types import ModuleType
 
 try:
     pygame: ModuleType = importlib.import_module("pygame")
-except Exception:
+except (AttributeError, TypeError, ValueError, KeyError):
     pygame: ModuleType = importlib.import_module("pygame_ce")  # type: ignore
 
 # Explicit runtime base class variable so mypy does not treat it as a type alias
@@ -28,7 +28,7 @@ except Exception:
 BaseSprite: type
 try:
     BaseSprite = pygame.sprite.Sprite  # type: ignore
-except Exception:
+except (AttributeError, TypeError, ValueError, KeyError):
     BaseSprite = object
 
 
@@ -148,7 +148,7 @@ class Projectile(BaseSprite):
             )
             self.draw_projectile()
             self.rect = self.image.get_rect(center=(self.x, self.y))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Runtime invariants after reset: ensure transient state cleared and types preserved
@@ -163,588 +163,569 @@ class Projectile(BaseSprite):
         """Override kill to inform manager for recycling."""
         try:
             super().kill()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         mgr: Any | None = getattr(self, "manager", None)
         if mgr is not None:
             try:
                 mgr.recycle(self)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
-    def draw_projectile(self) -> None:
-        """Draw projectile, try to load image first"""
-        # Special handling for different weapon types
-        # first, handle explicitly tagged "enemy_normal" projectiles (yellow balls)
-        if getattr(self, "appearance", None) == "enemy_normal":
-            self.image = pygame.Surface(
-                (self.radius * 2, self.radius * 2), pygame.SRCALPHA
-            )
-            try:
-                pygame.draw.circle(
-                    self.image, (255, 200, 0), (self.radius, self.radius), self.radius
-                )
-            except Exception:
-                pygame.draw.circle(
-                    self.image, (255, 200, 0), (self.radius, self.radius), self.radius
-                )
-            return
+    def _render_enemy_normal(self) -> None:
+        """Render enemy_normal appearance: yellow ball."""
+        self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+        pygame.draw.circle(
+            self.image, (255, 200, 0), (self.radius, self.radius), self.radius
+        )
 
-        # orbital projectiles: light blue circles
-        if getattr(self, "source", None) == "orbital":
-            self.image = pygame.Surface(
-                (self.radius * 2, self.radius * 2), pygame.SRCALPHA
-            )
-            pygame.draw.circle(
-                self.image, (102, 204, 255), (self.radius, self.radius), self.radius
-            )
-            pygame.draw.circle(
-                self.image,
-                (51, 170, 255),
-                (self.radius, self.radius),
-                self.radius - 1,
-            )
-            return
+    def _render_orbital(self) -> None:
+        """Render orbital: light blue circles."""
+        self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+        pygame.draw.circle(
+            self.image, (102, 204, 255), (self.radius, self.radius), self.radius
+        )
+        pygame.draw.circle(
+            self.image,
+            (51, 170, 255),
+            (self.radius, self.radius),
+            self.radius - 1,
+        )
 
-        # archers use a white/azure segment
-        if getattr(self, "appearance", None) == "archer_segment":
-            w = max(2, self.radius * 2 + 2)
-            h = max(2, int(self.radius * 0.4))
-            self.image = pygame.Surface((w, h), pygame.SRCALPHA)
-            # always azure for enemies (players never use this tag)
-            color = (200, 255, 255)
-            try:
-                pygame.draw.line(self.image, color, (0, h // 2), (w, h // 2), h)
-            except Exception:
-                pygame.draw.rect(self.image, color, (0, 0, w, h))
-            return
+    def _render_archer_segment(self) -> None:
+        """Render archer_segment: white/azure segment."""
+        w = max(2, self.radius * 2 + 2)
+        h = max(2, int(self.radius * 0.4))
+        self.image = pygame.Surface((w, h), pygame.SRCALPHA)
+        color = (200, 255, 255)
+        try:
+            pygame.draw.line(self.image, color, (0, h // 2), (w, h // 2), h)
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pygame.draw.rect(self.image, color, (0, 0, w, h))
 
-        # next, draw a generic projectile segment only for player shots
-        # but skip if appearance is explicitly set (e.g. storm_statue, ice_statue)
-        if (
-            self.weapon_type is None
-            and not self.is_enemy_projectile
-            and getattr(self, "appearance", None) is None
-        ):
-            w = max(2, self.radius * 2)
-            h = max(2, int(self.radius * 0.4))
-            self.image = pygame.Surface((w, h), pygame.SRCALPHA)
-            color = (255, 255, 255)
-            try:
-                pygame.draw.line(self.image, color, (0, h // 2), (w, h // 2), h)
-            except Exception:
-                pygame.draw.rect(self.image, color, (0, 0, w, h))
-            return
-        # spear custom asset support
-        if getattr(self, "appearance", None) == "spear":
-            try:
-                from src.assets.manager import get_image
+    def _render_player_generic(self) -> None:
+        """Render generic player projectile segment."""
+        w = max(2, self.radius * 2)
+        h = max(2, int(self.radius * 0.4))
+        self.image = pygame.Surface((w, h), pygame.SRCALPHA)
+        color = (255, 255, 255)
+        try:
+            pygame.draw.line(self.image, color, (0, h // 2), (w, h // 2), h)
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pygame.draw.rect(self.image, color, (0, 0, w, h))
 
-                asset = get_image(
-                    "spear.png",
-                    (
-                        max(4, int(self.radius * 1.2)),
-                        max(60, self.radius * 10),
-                    ),
-                )
-                if asset is not None:
-                    self.image = asset
-                    self.rect = self.image.get_rect(center=(self.x, self.y))
-                    return
-            except Exception:
+    def _render_spear(self) -> None:
+        """Render spear projectile."""
+        # Try external asset first
+        try:
+            from src.assets.manager import get_image
+
+            asset = get_image(
+                "spear.png",
+                (
+                    max(4, int(self.radius * 1.2)),
+                    max(60, self.radius * 10),
+                ),
+            )
+            if asset is not None:
+                self.image = asset
+                self.rect = self.image.get_rect(center=(self.x, self.y))
+                return
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
+
+        # Fallback: procedural spear
+        length: int = max(60, self.radius * 10)
+        width: int = max(4, int(self.radius * 1.2))
+        self.image = pygame.Surface((width, length), pygame.SRCALPHA)
+        pygame.draw.rect(
+            self.image,
+            (217, 211, 183),
+            (0, 0, width, length - self.radius * 2),
+        )
+        arrowhead_points: list[tuple[int, int]] = [
+            (width // 2, 0),
+            (0, self.radius * 2),
+            (width, self.radius * 2),
+        ]
+        pygame.draw.polygon(self.image, (255, 220, 178), arrowhead_points)
+        pygame.draw.polygon(self.image, (207, 162, 111), arrowhead_points, 1)
+
+    def _render_shotgun(self) -> None:
+        """Render shotgun pellet."""
+        self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+        cx, cy = self.radius, self.radius
+        w = max(1, int(self.radius * 1.2))
+        h = max(1, int(self.radius * 1.8))
+        rect = (cx - w // 2, cy - h // 2, w, h)
+        main_col = (110, 85, 0)
+        inner_col = (200, 150, 40)
+        outline_col = (60, 45, 0)
+        try:
+            pygame.draw.ellipse(self.image, main_col, rect)
+            inner_rect = (
+                rect[0] + max(1, int(w * 0.12)),
+                rect[1] + max(1, int(h * 0.12)),
+                max(1, int(w * 0.76)),
+                max(1, int(h * 0.76)),
+            )
+            pygame.draw.ellipse(self.image, inner_col, inner_rect)
+            pygame.draw.ellipse(self.image, outline_col, rect, 1)
+        except (AttributeError, TypeError, ValueError, KeyError):
+            try:
+                pygame.draw.circle(self.image, (255, 200, 0), (cx, cy), self.radius)
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
-        if self.weapon_type == "spear":
-            # Create spear image: long vertical shaft with arrowhead (lance proporzionata)
-            length: int = max(60, self.radius * 10)  # vertical length
-            width: int = max(4, int(self.radius * 1.2))  # horizontal width
-            self.image = pygame.Surface((width, length), pygame.SRCALPHA)
+    def _render_skullboom(self) -> None:
+        """Render SkullBoom: skull with fuse and fire particles."""
+        self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+        center_x, center_y = self.radius, self.radius
+        skull_color = (240, 240, 240)
+        outline_color = (200, 200, 200)
 
-            # Shaft (tan color) - vertical rectangle
-            pygame.draw.rect(
-                self.image,
-                (217, 211, 183),
-                (0, 0, width, length - self.radius * 2),
-            )
+        # Main skull oval
+        pygame.draw.ellipse(
+            self.image,
+            skull_color,
+            (
+                center_x - self.radius * 0.65,
+                center_y - self.radius * 0.75,
+                self.radius * 1.3,
+                self.radius * 1.5,
+            ),
+        )
 
-            # Arrowhead (light tan) - triangle pointing up
-            arrowhead_points: list[tuple[int, int]] = [
-                (width // 2, 0),  # tip at top
-                (0, self.radius * 2),  # bottom left
-                (width, self.radius * 2),  # bottom right
-            ]
-            pygame.draw.polygon(self.image, (255, 220, 178), arrowhead_points)
+        # Eye sockets
+        eye_y: float = center_y - self.radius * 0.25
+        eye_width: float = self.radius * 0.25
+        eye_height: float = self.radius * 0.22
+        pygame.draw.ellipse(
+            self.image,
+            (0, 0, 0),
+            (center_x - self.radius * 0.35, eye_y, eye_width, eye_height),
+        )
+        pygame.draw.ellipse(
+            self.image,
+            (0, 0, 0),
+            (center_x + self.radius * 0.10, eye_y, eye_width, eye_height),
+        )
 
-            # Outline
-            pygame.draw.polygon(self.image, (207, 162, 111), arrowhead_points, 1)
+        # Nose hole (triangle)
+        nose_points = [
+            (center_x, center_y + self.radius * 0.15),
+            (center_x - self.radius * 0.12, center_y + self.radius * 0.40),
+            (center_x + self.radius * 0.12, center_y + self.radius * 0.40),
+        ]
+        pygame.draw.polygon(self.image, (0, 0, 0), nose_points)
 
-        elif self.weapon_type == "shotgun":
-            # Shotgun pellets: slightly vertically-elongated ovals, darker yellow
-            self.image = pygame.Surface(
-                (self.radius * 2, self.radius * 2), pygame.SRCALPHA
-            )
-            cx, cy = self.radius, self.radius
+        # Jaw/teeth
+        jaw_y: float = center_y + self.radius * 0.5
+        pygame.draw.rect(
+            self.image,
+            skull_color,
+            (
+                center_x - self.radius * 0.3,
+                jaw_y,
+                self.radius * 0.6,
+                self.radius * 0.28,
+            ),
+        )
 
-            # Vertical oval (height > width) so pellets look elongated vertically
-            w = max(1, int(self.radius * 1.2))
-            h = max(1, int(self.radius * 1.8))
-            rect = (cx - w // 2, cy - h // 2, w, h)
-
-            # Even darker palette as requested (keep inner highlight bright enough for visibility)
-            main_col = (110, 85, 0)  # noticeably darker body
-            inner_col = (200, 150, 40)  # dimmer highlight but still bright at center
-            outline_col = (60, 45, 0)  # darker outline
-
-            # Main body (oval)
-            try:
-                pygame.draw.ellipse(self.image, main_col, rect)
-                # Inner highlight (smaller oval)
-                inner_rect = (
-                    rect[0] + max(1, int(w * 0.12)),
-                    rect[1] + max(1, int(h * 0.12)),
-                    max(1, int(w * 0.76)),
-                    max(1, int(h * 0.76)),
-                )
-                pygame.draw.ellipse(self.image, inner_col, inner_rect)
-                # Outline
-                pygame.draw.ellipse(self.image, outline_col, rect, 1)
-            except Exception:
-                # Fallback to simple circle if ellipse drawing fails
-                try:
-                    pygame.draw.circle(self.image, (255, 200, 0), (cx, cy), self.radius)
-                except Exception:
-                    pass
-
-        elif self.weapon_type == "skullboom":
-            # SkullBoom: slightly narrower and more tapered skull (affusolato)
-            self.image = pygame.Surface(
-                (self.radius * 2, self.radius * 2), pygame.SRCALPHA
-            )
-            center_x, center_y = self.radius, self.radius
-
-            # Skull base (white/off-white)
-            skull_color = (240, 240, 240)
-            outline_color = (200, 200, 200)
-
-            # Main skull oval — less wide, a bit taller
-            pygame.draw.ellipse(
-                self.image,
-                skull_color,
-                (
-                    center_x - self.radius * 0.65,
-                    center_y - self.radius * 0.75,
-                    self.radius * 1.3,
-                    self.radius * 1.5,
-                ),
-            )
-
-            # Eye sockets (closer together, slightly smaller)
-            eye_y: float = center_y - self.radius * 0.25
-            eye_width: float = self.radius * 0.25
-            eye_height: float = self.radius * 0.22
-            pygame.draw.ellipse(
+        # Teeth lines
+        for i in range(1, 4):
+            tooth_x: float = center_x - self.radius * 0.3 + (i * self.radius * 0.6 / 4)
+            pygame.draw.line(
                 self.image,
                 (0, 0, 0),
-                (center_x - self.radius * 0.35, eye_y, eye_width, eye_height),
-            )
-            pygame.draw.ellipse(
-                self.image,
-                (0, 0, 0),
-                (center_x + self.radius * 0.10, eye_y, eye_width, eye_height),
-            )
-
-            # Nose hole (black triangle) — lowered slightly
-            nose_points = [
-                (center_x, center_y + self.radius * 0.15),
-                (center_x - self.radius * 0.12, center_y + self.radius * 0.40),
-                (center_x + self.radius * 0.12, center_y + self.radius * 0.40),
-            ]
-            pygame.draw.polygon(self.image, (0, 0, 0), nose_points)
-
-            # Jaw/teeth (narrower and a bit lower)
-            jaw_y: float = center_y + self.radius * 0.5
-            pygame.draw.rect(
-                self.image,
-                skull_color,
-                (
-                    center_x - self.radius * 0.3,
-                    jaw_y,
-                    self.radius * 0.6,
-                    self.radius * 0.28,
-                ),
-            )
-
-            # Teeth lines (adjusted to new jaw width)
-            for i in range(1, 4):
-                tooth_x: float = (
-                    center_x - self.radius * 0.3 + (i * self.radius * 0.6 / 4)
-                )
-                pygame.draw.line(
-                    self.image,
-                    (0, 0, 0),
-                    (tooth_x, jaw_y),
-                    (tooth_x, jaw_y + self.radius * 0.28),
-                    1,
-                )
-
-            # Outline the skull (match the main oval)
-            pygame.draw.ellipse(
-                self.image,
-                outline_color,
-                (
-                    center_x - self.radius * 0.65,
-                    center_y - self.radius * 0.75,
-                    self.radius * 1.3,
-                    self.radius * 1.5,
-                ),
+                (tooth_x, jaw_y),
+                (tooth_x, jaw_y + self.radius * 0.28),
                 1,
             )
 
-            # Fuse (miccia) on top of skull - zigzag line (slightly raised)
-            fuse_start_y: float = center_y - self.radius * 0.85
-            fuse_height: float = self.radius * 0.42
-            fuse_points = []
-            for i in range(8):
-                x: float = center_x + (i - 3.5) * (self.radius * 0.09)
-                y: float = fuse_start_y - i * (fuse_height / 7)
-                # Add some zigzag
-                if i % 2 == 0:
-                    x += self.radius * 0.045
-                else:
-                    x -= self.radius * 0.045
-                fuse_points.append((x, y))
+        # Outline the skull
+        pygame.draw.ellipse(
+            self.image,
+            outline_color,
+            (
+                center_x - self.radius * 0.65,
+                center_y - self.radius * 0.75,
+                self.radius * 1.3,
+                self.radius * 1.5,
+            ),
+            1,
+        )
 
-            if len(fuse_points) > 1:
-                pygame.draw.lines(self.image, (139, 69, 19), False, fuse_points, 2)
+        # Fuse (zigzag line)
+        fuse_start_y: float = center_y - self.radius * 0.85
+        fuse_height: float = self.radius * 0.42
+        fuse_points = []
+        for i in range(8):
+            x: float = center_x + (i - 3.5) * (self.radius * 0.09)
+            y: float = fuse_start_y - i * (fuse_height / 7)
+            if i % 2 == 0:
+                x += self.radius * 0.045
+            else:
+                x -= self.radius * 0.045
+            fuse_points.append((x, y))
 
-            # Small fire particles at the end of the fuse (unchanged)
-            if fuse_points:
-                fire_x, fire_y = fuse_points[-1]
-                # Draw 5 small fire particles for more effect
-                fire_colors: list[tuple[int, int, int]] = [
-                    (255, 100, 0),
-                    (255, 150, 0),
-                    (255, 200, 0),
-                    (255, 120, 0),
-                    (255, 180, 0),
-                ]
-                for i in range(5):
-                    # More varied positioning
-                    offset_x: float = (i - 2) * self.radius * 0.06 + (
-                        i % 3 - 1
-                    ) * self.radius * 0.02
-                    offset_y: float = (
-                        -self.radius * 0.08
-                        + (i % 2) * self.radius * 0.04
-                        + (i // 2) * self.radius * 0.02
-                    )
-                    # Slightly larger particles
-                    particle_size: int = max(1, int(self.radius * 0.10))
-                    pygame.draw.circle(
-                        self.image,
-                        fire_colors[i % len(fire_colors)],
-                        (int(fire_x + offset_x), int(fire_y + offset_y)),
-                        particle_size,
-                    )
+        if len(fuse_points) > 1:
+            pygame.draw.lines(self.image, (139, 69, 19), False, fuse_points, 2)
 
-        elif self.weapon_type == "DemonStrike":
-            # DemonStrike: large black bowling ball with 3 white dots for finger holes that scroll vertically to simulate rotation
-            size = max(12, self.radius * 2 + 12)  # Make it larger
-            self.image = pygame.Surface((size, size), pygame.SRCALPHA)
-            cx, cy = size // 2, size // 2
-            # Main black ball
-            pygame.draw.circle(self.image, (0, 0, 0), (cx, cy), self.radius + 6)
-            # 3 white dots for finger holes, scrolling vertically
-            hole_r = max(1, int(self.radius * 0.15))
-            base_offsets = [
-                (-int(self.radius * 0.4), -int(self.radius * 0.1)),
-                (0, -int(self.radius * 0.3)),
-                (int(self.radius * 0.4), -int(self.radius * 0.1)),
+        # Fire particles at fuse end
+        if fuse_points:
+            fire_x, fire_y = fuse_points[-1]
+            fire_colors: list[tuple[int, int, int]] = [
+                (255, 100, 0),
+                (255, 150, 0),
+                (255, 200, 0),
+                (255, 120, 0),
+                (255, 180, 0),
             ]
-            angle = getattr(self, "rotation_angle", 0.0)
-            for i, (ox, oy) in enumerate(base_offsets):
-                # Scroll vertically with phase shift
-                scroll_y = math.sin(math.radians(angle + i * 120)) * self.radius * 0.3
+            for i in range(5):
+                offset_x: float = (i - 2) * self.radius * 0.06 + (
+                    i % 3 - 1
+                ) * self.radius * 0.02
+                offset_y: float = (
+                    -self.radius * 0.08
+                    + (i % 2) * self.radius * 0.04
+                    + (i // 2) * self.radius * 0.02
+                )
+                particle_size: int = max(1, int(self.radius * 0.10))
                 pygame.draw.circle(
                     self.image,
-                    (255, 255, 255),
-                    (cx + ox, cy + oy + int(scroll_y)),
-                    hole_r,
+                    fire_colors[i % len(fire_colors)],
+                    (int(fire_x + offset_x), int(fire_y + offset_y)),
+                    particle_size,
                 )
-            # Ensure rect matches center
-            self.rect = self.image.get_rect(center=(self.x, self.y))
+
+    def _render_demon_strike(self) -> None:
+        """Render DemonStrike: black bowling ball with scrolling holes."""
+        size = max(12, self.radius * 2 + 12)
+        self.image = pygame.Surface((size, size), pygame.SRCALPHA)
+        cx, cy = size // 2, size // 2
+        pygame.draw.circle(self.image, (0, 0, 0), (cx, cy), self.radius + 6)
+
+        hole_r = max(1, int(self.radius * 0.15))
+        base_offsets = [
+            (-int(self.radius * 0.4), -int(self.radius * 0.1)),
+            (0, -int(self.radius * 0.3)),
+            (int(self.radius * 0.4), -int(self.radius * 0.1)),
+        ]
+        angle = getattr(self, "rotation_angle", 0.0)
+        for i, (ox, oy) in enumerate(base_offsets):
+            scroll_y = math.sin(math.radians(angle + i * 120)) * self.radius * 0.3
+            pygame.draw.circle(
+                self.image,
+                (255, 255, 255),
+                (cx + ox, cy + oy + int(scroll_y)),
+                hole_r,
+            )
+        self.rect = self.image.get_rect(center=(self.x, self.y))
+
+    def _render_appearance_based(self) -> None:
+        """Render projectile by appearance attribute."""
+        appearance = getattr(self, "appearance", None)
+
+        if appearance == "tenebrae":
+            self._render_tenebrae()
+        elif appearance == "beast":
+            self._render_beast()
+        elif appearance == "storm_statue":
+            self._render_storm_statue()
+        elif appearance == "fire_statue":
+            self._render_fire_statue()
+        elif appearance == "ice_statue":
+            self._render_ice_statue()
+        elif appearance == "inquisitor":
+            self._render_inquisitor()
+        elif appearance == "inquisitor_horde":
+            self._render_inquisitor_horde()
         else:
-            # Custom appearance support: Tenebrae arc
-            if getattr(self, "appearance", None) == "tenebrae":
-                # try external asset first
-                try:
-                    from src.assets.manager import get_image
+            self._render_fallback()
 
-                    # allow either bare name or weapon-prefixed filename
-                    asset = get_image(
-                        "tenebrae.png", (self.radius * 3, self.radius * 2)
-                    )
-                    if asset is None:
-                        asset = get_image(
-                            f"weapon_{self.appearance}.png",
-                            (self.radius * 3, self.radius * 2),
-                        )
-                    if asset is not None:
-                        self.image = asset
-                        self.rect = self.image.get_rect(center=(self.x, self.y))
-                        return
-                except Exception:
-                    pass
+    def _render_tenebrae(self) -> None:
+        """Render tenebrae arc."""
+        try:
+            from src.assets.manager import get_image
 
-                # fallback: procedural wide arc
-                width = max(1, int(self.radius * 4))
-                height = max(1, int(self.radius * 2))
-                self.image = pygame.Surface((width, height), pygame.SRCALPHA)
-                try:
-                    # draw arc convex side forward (0..pi) using darker purple
-                    pygame.draw.arc(
-                        self.image,
-                        (100, 0, 100),
-                        (0, 0, width, height),
-                        0,
-                        math.pi,
-                        max(1, int(self.radius / 2)),
-                    )
-                except Exception:
-                    # if arc drawing fails, draw a simple ellipse with dark purple
-                    pygame.draw.ellipse(
-                        self.image, (100, 0, 100), (0, 0, width, height)
-                    )
+            asset = get_image("tenebrae.png", (self.radius * 3, self.radius * 2))
+            if asset is None:
+                asset = get_image(
+                    "weapon_tenebrae.png",
+                    (self.radius * 3, self.radius * 2),
+                )
+            if asset is not None:
+                self.image = asset
                 self.rect = self.image.get_rect(center=(self.x, self.y))
+                return
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
 
-            elif getattr(self, "appearance", None) == "beast":
-                # Beast projectile: single red "6" text
-                self.image = pygame.Surface(
-                    (self.radius * 2, self.radius * 2), pygame.SRCALPHA
-                )
-                try:
-                    font = pygame.font.Font(None, max(8, int(self.radius * 2)))
-                    txt = font.render("6", True, (255, 0, 0))
-                    txt_rect = txt.get_rect(center=(self.radius, self.radius))
-                    self.image.blit(txt, txt_rect)
-                except Exception:
-                    pygame.draw.circle(
-                        self.image,
-                        (255, 0, 0),
-                        (self.radius, self.radius),
-                        self.radius,
-                    )
-            elif getattr(self, "appearance", None) == "storm_statue":
-                # Storm statue projectile: dark blue outer and lighter blue core
-                self.image = pygame.Surface(
-                    (self.radius * 2 + 6, self.radius * 2 + 6), pygame.SRCALPHA
-                )
-                center = (self.radius + 3, self.radius + 3)
-                try:
-                    glow_surf = pygame.Surface(
-                        (self.radius * 2 + 12, self.radius * 2 + 12), pygame.SRCALPHA
-                    )
-                    pygame.draw.circle(
-                        glow_surf,
-                        (40, 70, 180, 80),
-                        (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
-                        self.radius + 5,
-                    )
-                    self.image.blit(
-                        glow_surf,
-                        (
-                            -((glow_surf.get_width() - self.image.get_width()) // 2),
-                            -((glow_surf.get_height() - self.image.get_height()) // 2),
-                        ),
-                    )
-                except Exception:
-                    pass
-                pygame.draw.circle(self.image, (20, 40, 140), center, self.radius)
-                inner_r = max(1, self.radius - 3)
-                pygame.draw.circle(self.image, (100, 150, 255), center, inner_r)
-            elif getattr(self, "appearance", None) == "fire_statue":
-                # Fire statue projectile: larger, yellow core and red outer ring with glow
-                self.image = pygame.Surface(
-                    (self.radius * 2 + 6, self.radius * 2 + 6), pygame.SRCALPHA
-                )
-                center = (self.radius + 3, self.radius + 3)
-                # Glow: translucent orange slightly larger than outer radius
-                try:
-                    glow_surf = pygame.Surface(
-                        (self.radius * 2 + 10, self.radius * 2 + 10), pygame.SRCALPHA
-                    )
-                    pygame.draw.circle(
-                        glow_surf,
-                        (255, 140, 0, 100),
-                        (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
-                        self.radius + 4,
-                    )
-                    self.image.blit(
-                        glow_surf,
-                        (
-                            -((glow_surf.get_width() - self.image.get_width()) // 2),
-                            -((glow_surf.get_height() - self.image.get_height()) // 2),
-                        ),
-                    )
-                except Exception:
-                    pass
-                # Outer red ring
-                pygame.draw.circle(self.image, (200, 30, 30), center, self.radius)
-                # Inner yellow core slightly smaller
-                inner_r = max(1, self.radius - 4)
-                pygame.draw.circle(self.image, (255, 220, 50), center, inner_r)
-            elif getattr(self, "appearance", None) == "ice_statue":
-                # Ice statue projectile: icy blue outer and white core with cold glow
-                self.image = pygame.Surface(
-                    (self.radius * 2 + 6, self.radius * 2 + 6), pygame.SRCALPHA
-                )
-                center = (self.radius + 3, self.radius + 3)
-                # Glow: translucent icy blue slightly larger than outer radius
-                try:
-                    glow_surf = pygame.Surface(
-                        (self.radius * 2 + 10, self.radius * 2 + 10), pygame.SRCALPHA
-                    )
-                    pygame.draw.circle(
-                        glow_surf,
-                        (100, 200, 255, 100),
-                        (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
-                        self.radius + 4,
-                    )
-                    self.image.blit(
-                        glow_surf,
-                        (
-                            -((glow_surf.get_width() - self.image.get_width()) // 2),
-                            -((glow_surf.get_height() - self.image.get_height()) // 2),
-                        ),
-                    )
-                except Exception:
-                    pass
-                # Outer icy blue ring
-                pygame.draw.circle(self.image, (150, 220, 255), center, self.radius)
-                # Inner white core slightly smaller
-                inner_r = max(1, self.radius - 4)
-                pygame.draw.circle(self.image, (255, 255, 255), center, inner_r)
-            elif getattr(self, "appearance", None) == "inquisitor":
-                # Inquisitor projectile: orange glow and core (enemy projectile)
-                self.image = pygame.Surface(
-                    (self.radius * 2 + 8, self.radius * 2 + 8), pygame.SRCALPHA
-                )
-                center = (self.radius + 4, self.radius + 4)
-                try:
-                    glow_surf = pygame.Surface(
-                        (self.radius * 2 + 14, self.radius * 2 + 14), pygame.SRCALPHA
-                    )
-                    pygame.draw.circle(
-                        glow_surf,
-                        (255, 165, 60, 110),
-                        (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
-                        self.radius + 6,
-                    )
-                    self.image.blit(
-                        glow_surf,
-                        (
-                            -((glow_surf.get_width() - self.image.get_width()) // 2),
-                            -((glow_surf.get_height() - self.image.get_height()) // 2),
-                        ),
-                    )
-                except Exception:
-                    pass
-                # Outer darker orange ring
-                pygame.draw.circle(self.image, (220, 100, 20), center, self.radius)
-                # Inner bright orange core
-                inner_r = max(1, self.radius - 3)
-                pygame.draw.circle(self.image, (255, 170, 60), center, inner_r)
-            elif getattr(self, "appearance", None) == "inquisitor_horde":
-                # Horde variant: use greenish palette for visibility
-                self.image = pygame.Surface(
-                    (self.radius * 2 + 8, self.radius * 2 + 8), pygame.SRCALPHA
-                )
-                center = (self.radius + 4, self.radius + 4)
-                try:
-                    glow_surf = pygame.Surface(
-                        (self.radius * 2 + 14, self.radius * 2 + 14), pygame.SRCALPHA
-                    )
-                    pygame.draw.circle(
-                        glow_surf,
-                        (100, 255, 100, 110),
-                        (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
-                        self.radius + 6,
-                    )
-                    self.image.blit(
-                        glow_surf,
-                        (
-                            -((glow_surf.get_width() - self.image.get_width()) // 2),
-                            -((glow_surf.get_height() - self.image.get_height()) // 2),
-                        ),
-                    )
-                except Exception:
-                    pass
-                # Outer darker green ring
-                pygame.draw.circle(self.image, (20, 100, 20), center, self.radius)
-                # Inner bright green core
-                inner_r = max(1, self.radius - 3)
-                pygame.draw.circle(self.image, (60, 255, 60), center, inner_r)
+        width = max(1, int(self.radius * 4))
+        height = max(1, int(self.radius * 2))
+        self.image = pygame.Surface((width, height), pygame.SRCALPHA)
+        try:
+            pygame.draw.arc(
+                self.image,
+                (100, 0, 100),
+                (0, 0, width, height),
+                0,
+                math.pi,
+                max(1, int(self.radius / 2)),
+            )
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pygame.draw.ellipse(self.image, (100, 0, 100), (0, 0, width, height))
+        self.rect = self.image.get_rect(center=(self.x, self.y))
 
-            else:
-                # Regular projectiles or enemy projectiles
-                image_name: str = (
-                    "enemy_projectile.png"
-                    if self.is_enemy_projectile
-                    else "projectile.png"
-                )
-                try:
-                    from src.assets.manager import get_image
+    def _render_beast(self) -> None:
+        """Render beast projectile: red '6' text."""
+        self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+        try:
+            font = pygame.font.Font(None, max(8, int(self.radius * 2)))
+            txt = font.render("6", True, (255, 0, 0))
+            txt_rect = txt.get_rect(center=(self.radius, self.radius))
+            self.image.blit(txt, txt_rect)
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pygame.draw.circle(
+                self.image,
+                (255, 0, 0),
+                (self.radius, self.radius),
+                self.radius,
+            )
 
-                    loaded_image: Surface | None = get_image(
-                        image_name, (self.radius * 2, self.radius * 2)
-                    )
-                    if loaded_image is None:
-                        raise RuntimeError("asset missing")
-                    self.image = loaded_image.copy()
-                except Exception:
-                    # Fallback to drawing - use simple shapes as fallback (log the error for debugging)
-                    # print(f"Warning: projectile image load failed: {e}")  # Uncomment for debugging
-                    if self.is_enemy_projectile:
-                        # Enemy projectile (golden/shiny)
-                        pygame.draw.circle(
-                            self.image,
-                            (255, 215, 0),
-                            (self.radius, self.radius),
-                            self.radius,
-                        )  # Gold outer
-                        pygame.draw.circle(
-                            self.image,
-                            (255, 255, 0),
-                            (self.radius, self.radius),
-                            self.radius - 1,
-                        )  # Bright yellow inner
-                    # Shiny highlight
-                    pygame.draw.circle(
-                        self.image,
-                        (255, 255, 255),
-                        (self.radius - 1, self.radius - 1),
-                        max(1, self.radius // 3),
-                    )
-                else:
-                    # Player projectile - draw as a red "6" as a simple fallback
-                    self.image.fill((0, 0, 0, 0))  # Transparent background
-                    try:
-                        font = pygame.font.Font(None, max(8, int(self.radius * 2)))
-                        text: Surface | Any = font.render(
-                            "6", True, (255, 51, 51)
-                        )  # Red color fallback
-                        text_rect: Rect | Any = text.get_rect(
-                            center=(self.radius, self.radius)
-                        )
-                        self.image.blit(text, text_rect)
-                    except Exception:
-                        # If font isn't available (e.g., headless tests), fall back to simple circle
-                        pygame.draw.circle(
-                            self.image,
-                            (255, 51, 51),
-                            (self.radius, self.radius),
-                            self.radius,
-                        )
+    def _render_statue(
+        self, outer_color: tuple, inner_color: tuple, glow_color: tuple
+    ) -> None:
+        """Helper to render statue projectiles with glow."""
+        self.image = pygame.Surface(
+            (self.radius * 2 + 6, self.radius * 2 + 6), pygame.SRCALPHA
+        )
+        center = (self.radius + 3, self.radius + 3)
+        try:
+            glow_surf = pygame.Surface(
+                (self.radius * 2 + 12, self.radius * 2 + 12), pygame.SRCALPHA
+            )
+            pygame.draw.circle(
+                glow_surf,
+                glow_color,
+                (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
+                self.radius + 5,
+            )
+            self.image.blit(
+                glow_surf,
+                (
+                    -((glow_surf.get_width() - self.image.get_width()) // 2),
+                    -((glow_surf.get_height() - self.image.get_height()) // 2),
+                ),
+            )
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
+        pygame.draw.circle(self.image, outer_color, center, self.radius)
+        inner_r = max(1, self.radius - 3)
+        pygame.draw.circle(self.image, inner_color, center, inner_r)
+
+    def _render_storm_statue(self) -> None:
+        """Render storm statue projectile."""
+        self._render_statue(
+            (20, 40, 140), (100, 150, 255), (40, 70, 180, 80)  # outer  # inner  # glow
+        )
+
+    def _render_fire_statue(self) -> None:
+        """Render fire statue projectile."""
+        self.image = pygame.Surface(
+            (self.radius * 2 + 6, self.radius * 2 + 6), pygame.SRCALPHA
+        )
+        center = (self.radius + 3, self.radius + 3)
+        try:
+            glow_surf = pygame.Surface(
+                (self.radius * 2 + 10, self.radius * 2 + 10), pygame.SRCALPHA
+            )
+            pygame.draw.circle(
+                glow_surf,
+                (255, 140, 0, 100),
+                (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
+                self.radius + 4,
+            )
+            self.image.blit(
+                glow_surf,
+                (
+                    -((glow_surf.get_width() - self.image.get_width()) // 2),
+                    -((glow_surf.get_height() - self.image.get_height()) // 2),
+                ),
+            )
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
+        pygame.draw.circle(self.image, (200, 30, 30), center, self.radius)
+        inner_r = max(1, self.radius - 4)
+        pygame.draw.circle(self.image, (255, 220, 50), center, inner_r)
+
+    def _render_ice_statue(self) -> None:
+        """Render ice statue projectile."""
+        self.image = pygame.Surface(
+            (self.radius * 2 + 6, self.radius * 2 + 6), pygame.SRCALPHA
+        )
+        center = (self.radius + 3, self.radius + 3)
+        try:
+            glow_surf = pygame.Surface(
+                (self.radius * 2 + 10, self.radius * 2 + 10), pygame.SRCALPHA
+            )
+            pygame.draw.circle(
+                glow_surf,
+                (100, 200, 255, 100),
+                (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
+                self.radius + 4,
+            )
+            self.image.blit(
+                glow_surf,
+                (
+                    -((glow_surf.get_width() - self.image.get_width()) // 2),
+                    -((glow_surf.get_height() - self.image.get_height()) // 2),
+                ),
+            )
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
+        pygame.draw.circle(self.image, (150, 220, 255), center, self.radius)
+        inner_r = max(1, self.radius - 4)
+        pygame.draw.circle(self.image, (255, 255, 255), center, inner_r)
+
+    def _render_inquisitor(self) -> None:
+        """Render inquisitor projectile: orange glow."""
+        self.image = pygame.Surface(
+            (self.radius * 2 + 8, self.radius * 2 + 8), pygame.SRCALPHA
+        )
+        center = (self.radius + 4, self.radius + 4)
+        try:
+            glow_surf = pygame.Surface(
+                (self.radius * 2 + 14, self.radius * 2 + 14), pygame.SRCALPHA
+            )
+            pygame.draw.circle(
+                glow_surf,
+                (255, 165, 60, 110),
+                (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
+                self.radius + 6,
+            )
+            self.image.blit(
+                glow_surf,
+                (
+                    -((glow_surf.get_width() - self.image.get_width()) // 2),
+                    -((glow_surf.get_height() - self.image.get_height()) // 2),
+                ),
+            )
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
+        pygame.draw.circle(self.image, (220, 100, 20), center, self.radius)
+        inner_r = max(1, self.radius - 3)
+        pygame.draw.circle(self.image, (255, 170, 60), center, inner_r)
+
+    def _render_inquisitor_horde(self) -> None:
+        """Render inquisitor_horde projectile: green glow."""
+        self.image = pygame.Surface(
+            (self.radius * 2 + 8, self.radius * 2 + 8), pygame.SRCALPHA
+        )
+        center = (self.radius + 4, self.radius + 4)
+        try:
+            glow_surf = pygame.Surface(
+                (self.radius * 2 + 14, self.radius * 2 + 14), pygame.SRCALPHA
+            )
+            pygame.draw.circle(
+                glow_surf,
+                (100, 255, 100, 110),
+                (glow_surf.get_width() // 2, glow_surf.get_height() // 2),
+                self.radius + 6,
+            )
+            self.image.blit(
+                glow_surf,
+                (
+                    -((glow_surf.get_width() - self.image.get_width()) // 2),
+                    -((glow_surf.get_height() - self.image.get_height()) // 2),
+                ),
+            )
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
+        pygame.draw.circle(self.image, (20, 100, 20), center, self.radius)
+        inner_r = max(1, self.radius - 3)
+        pygame.draw.circle(self.image, (60, 255, 60), center, inner_r)
+
+    def _render_fallback(self) -> None:
+        """Fallback rendering for generic/loaded projectiles."""
+        image_name: str = (
+            "enemy_projectile.png" if self.is_enemy_projectile else "projectile.png"
+        )
+        try:
+            from src.assets.manager import get_image
+
+            loaded_image: Surface | None = get_image(
+                image_name, (self.radius * 2, self.radius * 2)
+            )
+            if loaded_image is None:
+                raise RuntimeError("asset missing")
+            self.image = loaded_image.copy()
+        except (AttributeError, TypeError, ValueError, KeyError):
+            if self.is_enemy_projectile:
+                pygame.draw.circle(
+                    self.image,
+                    (255, 215, 0),
+                    (self.radius, self.radius),
+                    self.radius,
+                )
+                pygame.draw.circle(
+                    self.image,
+                    (255, 255, 0),
+                    (self.radius, self.radius),
+                    self.radius - 1,
+                )
+            pygame.draw.circle(
+                self.image,
+                (255, 255, 255),
+                (self.radius - 1, self.radius - 1),
+                max(1, self.radius // 3),
+            )
+
+    def draw_projectile(self) -> None:
+        """Dispatch to appropriate projectile render method."""
+        # Priority 1: Check appearance first
+        appearance = getattr(self, "appearance", None)
+        if appearance == "enemy_normal":
+            self._render_enemy_normal()
+            return
+        if appearance == "archer_segment":
+            self._render_archer_segment()
+            return
+        if appearance == "spear":
+            self._render_spear()
+            return
+
+        # Priority 2: Check source
+        if getattr(self, "source", None) == "orbital":
+            self._render_orbital()
+            return
+
+        # Priority 3: Check weapon_type
+        if self.weapon_type == "spear":
+            self._render_spear()
+            return
+        if self.weapon_type == "shotgun":
+            self._render_shotgun()
+            return
+        if self.weapon_type == "skullboom":
+            self._render_skullboom()
+            return
+        if self.weapon_type == "DemonStrike":
+            self._render_demon_strike()
+            return
+
+        # Priority 4: Generic player projectile (no appearance, no enemy, no weapon)
+        if (
+            self.weapon_type is None
+            and not self.is_enemy_projectile
+            and appearance is None
+        ):
+            self._render_player_generic()
+            return
+
+        # Priority 5: Appearance-based custom renderers
+        self._render_appearance_based()
 
     def update(self) -> None:
         self.x += self.vel_x / 60  # Divide by FPS
@@ -784,9 +765,9 @@ class Projectile(BaseSprite):
                     # update rect to new size, maintain center
                     try:
                         self.rect = self.image.get_rect(center=(self.x, self.y))
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
         # Update rotation for DemonStrike to simulate rolling
@@ -814,10 +795,10 @@ class Projectile(BaseSprite):
                 # Update rect in case size changed
                 try:
                     self.rect = self.image.get_rect(center=(self.x, self.y))
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 self._appearance_cached = current_app
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         draw_x: int | Any = self.rect.x + shake_x
@@ -841,7 +822,7 @@ class Projectile(BaseSprite):
                         (cx, cy),
                         int(self.radius + 6 * pulse),
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 # Outer red ring (bold)
                 pygame.draw.circle(surf, (200, 30, 30), (cx, cy), self.radius)
@@ -856,7 +837,7 @@ class Projectile(BaseSprite):
                     surf,
                     (int(draw_x + self.radius - cx), int(draw_y + self.radius - cy)),
                 )
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # Fallback to static image
                 screen.blit(self.image, (draw_x, draw_y))
             return
@@ -929,9 +910,9 @@ class Projectile(BaseSprite):
                         screen.blit(
                             tsurf, (int(px - tr) + shake_x, int(py - tr) + shake_y)
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             # Draw the ball
             screen.blit(self.image, (draw_x, draw_y))
@@ -963,7 +944,7 @@ class Projectile(BaseSprite):
                     screen.blit(
                         glow_surf, (int(fuse_tip_x - glow_r), int(fuse_tip_y - glow_r))
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
                 # Larger, denser particle cluster (counts scale with radius, capped)
@@ -1001,7 +982,7 @@ class Projectile(BaseSprite):
                             psurf,
                             (int(fuse_tip_x + ox - size), int(fuse_tip_y + oy - size)),
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                 # Two bright upward sparks for extra emphasis
@@ -1032,9 +1013,9 @@ class Projectile(BaseSprite):
                                 int(fuse_tip_y + soy - ssize),
                             ),
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         else:
             screen.blit(self.image, (draw_x, draw_y))
@@ -1100,17 +1081,17 @@ class FliesProjectile(Projectile):
                             alive_flag: Any | bool = getattr(enemy, "health", 0) > 0
                         elif hasattr(enemy, "get"):
                             alive_flag = enemy.get("health", 0) > 0
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         alive_flag = False
 
                     # Fall back to sprite alive() if health check didn't apply
                     if not alive_flag and hasattr(enemy, "alive"):
                         try:
                             alive_flag = bool(enemy.alive())
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 alive_flag = bool(getattr(enemy, "alive"))
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 alive_flag = False
                     if not alive_flag:
                         continue
@@ -1134,7 +1115,7 @@ class FliesProjectile(Projectile):
                         etype = getattr(enemy, "enemy_type", None)
                         if etype is None and hasattr(enemy, "get"):
                             etype = enemy.get("enemy_type")
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         etype = None
 
                     is_boss = isinstance(etype, str) and etype.startswith("boss")

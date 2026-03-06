@@ -96,7 +96,7 @@ class EnemyManager:
         for _ in range(initial_pool):
             try:
                 self.pool.append(Enemy(0, 0))
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 break
 
     def spawn(
@@ -121,7 +121,7 @@ class EnemyManager:
             try:
                 # Reinitialize instance (safe fallback to re-run constructor)
                 e.__init__(x, y, enemy_type, health, speed)  # type: ignore[misc]
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # If re-init fails, create a new instance
                 e = Enemy(x, y, enemy_type, health, speed)
         else:
@@ -134,10 +134,10 @@ class EnemyManager:
         # Add to game container (Group or list)
         try:
             self.game.enemies.add(e)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             try:
                 self.game.enemies.append(e)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         return e
@@ -148,7 +148,7 @@ class EnemyManager:
             self.active.append(e)
         try:
             e.manager = self
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def recycle(self, e: Enemy) -> None:
@@ -156,16 +156,16 @@ class EnemyManager:
         try:
             if e in self.active:
                 self.active.remove(e)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         try:
             if hasattr(self.game.enemies, "remove"):
                 self.game.enemies.remove(e)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             try:
                 self.game.enemies.remove(e)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Reset or hide enemy
@@ -176,13 +176,13 @@ class EnemyManager:
             # Clear particles/temporary state where applicable
             e.burn_particles = []
             e.ice_particles = []
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Add back to pool
         try:
             self.pool.append(e)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def spawn_giant_enemy(self, side: str | None = None) -> Enemy:
@@ -230,7 +230,7 @@ class EnemyManager:
         # Update cooldown timer
         try:
             self.game.spawn_system.last_giant_spawn_time = self.game.time_elapsed
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         return e
 
@@ -287,7 +287,7 @@ class EnemyManager:
                     self.big_enemy_timer = self.big_enemy_fast_interval
                 else:
                     self.big_enemy_timer = 12 * getattr(self.game, "fps", 60)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # Don't propagate spawn errors to game loop
                 pass
 
@@ -333,14 +333,14 @@ class EnemyManager:
 
             try:
                 e = self.spawn(x, y, "normal", health, speed)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 try:
                     e = Enemy(x, y, "normal", health, speed)
                     if hasattr(self.game.enemies, "add"):
                         self.game.enemies.add(e)
                     else:
                         self.game.enemies.append(e)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     return
 
             # Make inquisitor-normal slightly larger (+10px) and give +10 HP
@@ -357,17 +357,17 @@ class EnemyManager:
                         )
                         try:
                             e.base_image = e.image.copy()
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         e.rect = e.image.get_rect(center=(e.x, e.y))
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
                 # Increase HP by 10 (respect max_health semantics)
                 try:
                     e.max_health = getattr(e, "max_health", 0) + 10
                     e.health = min(getattr(e, "health", 0) + 10, e.max_health)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
                 # Mark as inquisitor-normal (controls shooting behavior)
@@ -378,9 +378,9 @@ class EnemyManager:
                     import random
 
                     e.shoot_cooldown = random.randint(100, 140)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             # Give it inquisitor appearance but keep normal behaviour
@@ -398,11 +398,11 @@ class EnemyManager:
                         e.image = img.copy()
                         try:
                             e.base_image = e.image.copy()
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             # Start window timer if not already running
@@ -492,7 +492,7 @@ class EnemyManager:
                     # Call into game to show Prologo defeat
                     try:
                         self.game.prologo_defeat()
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
             if (
                 getattr(self.game, "selected_stage", None) == "limbo_final"
@@ -505,7 +505,7 @@ class EnemyManager:
                 ):
                     try:
                         self.game.limbo_final_defeat()
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
             # Boss regeneration when immortal
@@ -551,9 +551,9 @@ class EnemyManager:
                                 ]
                             try:
                                 self.game.player.health = 0
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                 # limbo final boss behavior (same as prologue but separate flags)
                 if (
@@ -595,11 +595,11 @@ class EnemyManager:
                                 ]
                             try:
                                 self.game.player.health = 0
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # Fail-safe: don't let manager errors break the game loop
             pass
 
@@ -676,12 +676,12 @@ class EnemyManager:
         # simple call is sufficient in all cases.
         try:
             boss.draw_enemy()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # defensive: never crash the spawn process
             pass
         try:
             boss.rect = boss.image.get_rect(center=(boss.x, boss.y))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # shrink boss_limbo collision rect if requested (after rect created)
         if getattr(boss, "_shrink_hitbox", False):
@@ -691,11 +691,11 @@ class EnemyManager:
                 h = int(boss.height * scale)
                 boss.rect = pygame.Rect(0, 0, w, h)
                 boss.rect.center = (int(boss.x), int(boss.y))
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         try:
             boss.base_image = boss.image.copy()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             boss.base_image = None
 
         # Track active
@@ -707,10 +707,10 @@ class EnemyManager:
         # Add to boss group on game
         try:
             self.game.bosses.add(boss)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             try:
                 self.game.bosses.append(boss)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         return boss
 

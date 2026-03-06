@@ -17,13 +17,13 @@ from types import ModuleType
 
 try:
     pygame: ModuleType = importlib.import_module("pygame")
-except Exception:
+except (AttributeError, TypeError, ValueError, KeyError):
     pygame: ModuleType = importlib.import_module("pygame_ce")  # type: ignore
 
 # Ensure a runtime base class reference without assigning to the type name
 try:
     PygameSprite = pygame.sprite.Sprite  # type: ignore
-except Exception:
+except (AttributeError, TypeError, ValueError, KeyError):
     PygameSprite = object
 
 # Use an explicit runtime base variable so mypy does not confuse a TYPE_CHECKING
@@ -31,7 +31,7 @@ except Exception:
 BaseSprite: type
 try:
     BaseSprite = pygame.sprite.Sprite  # type: ignore
-except Exception:
+except (AttributeError, TypeError, ValueError, KeyError):
     BaseSprite = object
 
 # Import Projectile explicitly from src.projectile for stability
@@ -175,7 +175,7 @@ class Enemy(BaseSprite):
 
                 if self.y > ARCHER_VERTICAL_LIMIT:
                     self.y = ARCHER_VERTICAL_LIMIT
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         elif enemy_type == "boss_medium":
             self.width = 60
@@ -333,7 +333,7 @@ class Enemy(BaseSprite):
         # Keep a copy of the base image so we can add temporary effects (glow/shine)
         try:
             self.base_image: Surface | Any = self.image.copy()
-        except Exception:
+        except (AttributeError, pygame.error, RuntimeError):
             self.base_image = None
         # Shine state for final boss phase
         self.shine_phase = 0.0
@@ -414,7 +414,7 @@ class Enemy(BaseSprite):
             if outer_padding > 0:
                 try:
                     self.rect.inflate_ip(-outer_padding * 2, -outer_padding * 2)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             # however, aura should *never* enlarge the collision box beyond the
             # boss's normal dimensions/shrunken hitbox.  if we have a flag set by
@@ -427,9 +427,9 @@ class Enemy(BaseSprite):
                     h = int(self.height * scale)
                     self.rect = pygame.Rect(0, 0, w, h)
                     self.rect.center = (int(self.x), int(self.y))
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Ensure we only record a kill once if kill() called multiple times
@@ -453,14 +453,14 @@ class Enemy(BaseSprite):
                         from game import CURRENT_GAME as _ALT_CURRENT_GAME
 
                         CURRENT_GAME = _ALT_CURRENT_GAME
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 try:
                     from game import CURRENT_GAME as _ALT_CURRENT_GAME
 
                     CURRENT_GAME = _ALT_CURRENT_GAME
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     CURRENT_GAME = None
 
             # If multiple Game instances/modules are present in the test-runner
@@ -478,12 +478,17 @@ class Enemy(BaseSprite):
                                 try:
                                     if self in enemies_container.sprites():
                                         found_here = True
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     found_here = False
                             else:
                                 if self in enemies_container:
                                     found_here = True
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         found_here = False
 
                     # If the current module's CURRENT_GAME doesn't own this enemy,
@@ -498,49 +503,59 @@ class Enemy(BaseSprite):
                                     try:
                                         if self in alt_enemies.sprites():
                                             CURRENT_GAME = _ALT_CURRENT_GAME
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
                                 else:
                                     try:
                                         if self in alt_enemies:
                                             CURRENT_GAME = _ALT_CURRENT_GAME
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             if not getattr(self, "_kill_recorded", False):
                 try:
                     if CURRENT_GAME is not None:
                         CURRENT_GAME.record_enemy_kill()
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 try:
                     self._kill_recorded = True
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # If import failed, still attempt to set the flag to avoid double-records
             try:
                 self._kill_recorded = True
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # Call base kill
         try:
             super().kill()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             try:
                 # defensive: attempt to remove from any groups
                 if hasattr(self, "groups"):
                     for g in list(self.groups()):
                         try:
                             g.remove(self)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
     def draw_enemy(self) -> None:
@@ -579,7 +594,7 @@ class Enemy(BaseSprite):
                         color,
                         (0, 0, self.width, self.height),
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     # if anything goes wrong, fall back to generic demon art
                     self.draw_demon()
             else:
@@ -738,7 +753,7 @@ class Enemy(BaseSprite):
                 # Convert rotation angle to degrees for pygame.transform.rotate
                 rotation_deg = math.degrees(self._rotation_angle) % 360
                 self.image = pygame.transform.rotate(self._pentagram_base, rotation_deg)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # Fallback to base image if rotation fails
                 self.image = self._pentagram_base.copy()
 
@@ -943,7 +958,7 @@ class Enemy(BaseSprite):
                     # visible and the glow radiates outward.
                     try:
                         self._apply_aura(pulse)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     # additionally, during immortal phase we want a bright
@@ -979,7 +994,7 @@ class Enemy(BaseSprite):
                                 (overlay_x, overlay_y),
                                 special_flags=pygame.BLEND_ADD,
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                 else:
                     # Prologue boss entrance: walk down from top to position below cathedral
@@ -1030,7 +1045,7 @@ class Enemy(BaseSprite):
 
                         try:
                             self._apply_aura(pulse)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     # once entrance is complete, resume the normal floating behaviour
                     if hasattr(self, "entrance_complete") and self.entrance_complete:
@@ -1101,7 +1116,7 @@ class Enemy(BaseSprite):
                     if game:
                         try:
                             self.x = game.clamp_to_walls(self.x)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     # movement handled; skip other behaviour
                     pass
@@ -1147,7 +1162,7 @@ class Enemy(BaseSprite):
                             # keep vertical bound
                             if self.y > ARCHER_VERTICAL_LIMIT:
                                 self.y = ARCHER_VERTICAL_LIMIT
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         # Initialize target position if not set
                         if not hasattr(self, "archer_target_x"):
@@ -1161,7 +1176,12 @@ class Enemy(BaseSprite):
                             if game:
                                 try:
                                     self.archer_target_x = game.random_x_between_walls()
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                             self.archer_reposition_timer = random.randint(180, 300)
 
@@ -1179,14 +1199,14 @@ class Enemy(BaseSprite):
                         if game:
                             try:
                                 self.x = game.clamp_to_walls(self.x)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                         # ensure we stay within top region after jitter
                         try:
                             from src.game_constants import ARCHER_VERTICAL_LIMIT
 
                             self.y = min(self.y, ARCHER_VERTICAL_LIMIT)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     pass
                 elif self.enemy_type == "normal" and game is not None:
@@ -1325,7 +1345,7 @@ class Enemy(BaseSprite):
                         # Small x-clamp while descending to avoid wall overlap
                         try:
                             self.x = game.clamp_to_walls(self.x)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             self.x = max(left_limit, min(right_limit, self.x))
                         # Clamp vertically so it never crosses halfway line.
                         # Allow boss_big in the 'descend' entrance phase to remain
@@ -1354,7 +1374,7 @@ class Enemy(BaseSprite):
                         # Keep inside arena walls (clamp final X)
                         try:
                             self.x = game.clamp_to_walls(self.x)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             self.x = max(left_limit, min(right_limit, self.x))
 
                     # Ensure boss never chases the player in Limbo
@@ -1413,7 +1433,7 @@ class Enemy(BaseSprite):
                     # Clamp to arena walls and top-half limit (never cross halfway line)
                     try:
                         self.x = game.clamp_to_walls(self.x)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         # Fallback to previous clamp
                         self.x = max(left_limit, min(right_limit, self.x))
                     self.y = max(top_margin, min(bottom_limit, self.y))
@@ -1446,7 +1466,7 @@ class Enemy(BaseSprite):
                     # clamp to walls/arena bounds
                     try:
                         self.x = game.clamp_to_walls(self.x)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         self.x = max(30, min(game.width - 30, self.x))
                     # keep within vertical margins too
                     self.y = max(10, min(game.height - 30, self.y))
@@ -1481,7 +1501,7 @@ class Enemy(BaseSprite):
                                             "life": random.randint(15, 30),
                                         }
                                     )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         # reset timer for another random 5‑10 second interval
                         fps = getattr(game, "fps", 60)
@@ -1507,8 +1527,9 @@ class Enemy(BaseSprite):
                     # then move toward player like a normal enemy
                     dx = player.x - self.x
                     dy = player.y - self.y
-                    distance: float = math.sqrt(dx * dx + dy * dy)
-                    if distance > 1:
+                    dist_sq = dx * dx + dy * dy
+                    if dist_sq > 1:
+                        distance = math.sqrt(dist_sq)
                         self.x += (dx / distance) * self.speed / 60
                         self.y += (dy / distance) * self.speed / 60
                         self._facing_right = dx > 0
@@ -1583,7 +1604,7 @@ class Enemy(BaseSprite):
                                         "color": (255, 150, 50),
                                     }
                                 )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                             try:
                                 # spawn several burn particles using the same helper class
@@ -1597,7 +1618,12 @@ class Enemy(BaseSprite):
                                             life=random.randint(10, 20),
                                         )
                                         game.skullboom_particles.append(p_burn)
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         # fall back to dict if BurnParticle fails for some reason
                                         try:
                                             game.skullboom_particles.append(
@@ -1609,11 +1635,16 @@ class Enemy(BaseSprite):
                                                     "life": random.randint(10, 20),
                                                 }
                                             )
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             pass
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         self.kill()
 
@@ -1621,10 +1652,11 @@ class Enemy(BaseSprite):
                     # Move towards player (default behaviour for other enemy types)
                     dx = player.x - self.x
                     dy = player.y - self.y
-                    distance: float = math.sqrt(dx * dx + dy * dy)
+                    dist_sq = dx * dx + dy * dy
 
-                    if distance > 1:  # Avoid division by very small numbers
+                    if dist_sq > 1:  # Avoid division by very small numbers
                         # Move towards player
+                        distance = math.sqrt(dist_sq)
                         self.x += (dx / distance) * self.speed / 60
                         self.y += (dy / distance) * self.speed / 60
                         # Track facing direction for sprite flip (giant only)
@@ -1656,10 +1688,10 @@ class Enemy(BaseSprite):
                     try:
                         # Use take_damage so effects like shake are applied
                         self.take_damage(damage)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         try:
                             self.health -= damage
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     # Reset tick timer
                     self.burn_tick_timer = getattr(game, "fps", 60)
@@ -1681,7 +1713,7 @@ class Enemy(BaseSprite):
                             size=random.randint(3, 5),
                         )
                         self.burn_particles.append(p)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
             # Update and cull burn particles (run regardless of burn state)
@@ -1691,10 +1723,10 @@ class Enemy(BaseSprite):
                         p.update()
                         if not p.alive:
                             self.burn_particles.remove(p)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         try:
                             self.burn_particles.remove(p)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
             # Update and cull ice particles
@@ -1704,10 +1736,10 @@ class Enemy(BaseSprite):
                         p.update()
                         if not p.alive:
                             self.ice_particles.remove(p)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         try:
                             self.ice_particles.remove(p)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
             # Update shield_particles (dict-based, used by mage shield-cast targets)
@@ -1720,7 +1752,7 @@ class Enemy(BaseSprite):
                         p["life"] -= 1
                         if p["life"] > 0:
                             alive.append(p)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                 self.shield_particles = alive
 
@@ -1797,7 +1829,7 @@ class Enemy(BaseSprite):
                             ddy = ty - nearest_y
                             exp_r = 50
                             inside = ddx * ddx + ddy * ddy <= exp_r * exp_r
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             # fallback to old center-based check
                             dx = player.x - tx
                             dy = player.y - ty
@@ -1805,7 +1837,7 @@ class Enemy(BaseSprite):
                         if inside:
                             try:
                                 player.take_damage(25)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                         logger.debug(
                             "Limbo boss area attack exploded at %.1f,%.1f",
@@ -1838,8 +1870,8 @@ class Enemy(BaseSprite):
                         # Triple spread shot
                         dx = player.x - self.x
                         dy = player.y - self.y
-                        distance: float = math.sqrt(dx * dx + dy * dy)
-                        if distance > 0:
+                        dist_sq = dx * dx + dy * dy
+                        if dist_sq > 0:
                             speed = 360
                             base_angle: float = math.atan2(dy, dx)
                             # Use a slightly narrower spread between the three projectiles
@@ -1888,10 +1920,11 @@ class Enemy(BaseSprite):
                         # distinct from the Prologo final boss and slows its rate.
                         dx = player.x - self.x
                         dy = player.y - self.y
-                        distance: float = math.sqrt(dx * dx + dy * dy)
-                        if distance > 0:
+                        dist_sq = dx * dx + dy * dy
+                        if dist_sq > 0:
                             # increase speed again for an even more threatening orb
                             speed = 340
+                            distance = math.sqrt(dist_sq)
                             vel_x = (dx / distance) * speed
                             vel_y = (dy / distance) * speed
                         else:
@@ -1911,15 +1944,15 @@ class Enemy(BaseSprite):
                         # fixed 3-second cooldown between big spheres
                         try:
                             self.pattern_timer = int(3 * game.fps)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             # fallback if game or fps missing
                             self.pattern_timer = 180
                     elif self.big_shot_cooldown <= 0:
                         # Inquisitor-style triple spread with slow effect
                         dx = player.x - self.x
                         dy = player.y - self.y
-                        distance: float = math.sqrt(dx * dx + dy * dy)
-                        if distance > 0:
+                        dist_sq = dx * dx + dy * dy
+                        if dist_sq > 0:
                             # slightly boost speed versus standard inquisitor speed
                             speed = 300
                             base_angle: float = math.atan2(dy, dx)
@@ -1984,8 +2017,8 @@ class Enemy(BaseSprite):
                     if self.big_shot_cooldown <= 0:
                         dx = player.x - self.x
                         dy = player.y - self.y
-                        distance: float = math.sqrt(dx * dx + dy * dy)
-                        if distance > 0:
+                        dist_sq = dx * dx + dy * dy
+                        if dist_sq > 0:
                             speed = 300
                             base_angle: float = math.atan2(dy, dx)
                             offset = 0.25 + math.radians(1)
@@ -2030,9 +2063,10 @@ class Enemy(BaseSprite):
             ):
                 dx = player.x - self.x
                 dy = player.y - self.y
-                distance: float = math.sqrt(dx * dx + dy * dy)
-                if distance > 0:
+                dist_sq = dx * dx + dy * dy
+                if dist_sq > 0:
                     speed = 260
+                    distance = math.sqrt(dist_sq)
                     vel_x = (dx / distance) * speed
                     vel_y = (dy / distance) * speed
                 else:
@@ -2057,15 +2091,16 @@ class Enemy(BaseSprite):
                 # Keep same fire-rate as boss inquisitor
                 try:
                     self.shoot_cooldown = random.randint(100, 140)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     self.shoot_cooldown = 120
             elif self.enemy_type == "normal":
                 # Single aimed shot
                 dx = player.x - self.x
                 dy = player.y - self.y
-                distance: float = math.sqrt(dx * dx + dy * dy)
-                if distance > 0:
+                dist_sq = dx * dx + dy * dy
+                if dist_sq > 0:
                     speed = 220
+                    distance = math.sqrt(dist_sq)
                     vel_x = (dx / distance) * speed
                     vel_y = (dy / distance) * speed
                 else:
@@ -2157,9 +2192,10 @@ class Enemy(BaseSprite):
                 # Single aimed shot (same as normal but maybe different stats)
                 dx = player.x - self.x
                 dy = player.y - self.y
-                distance: float = math.sqrt(dx * dx + dy * dy)
-                if distance > 0:
+                dist_sq = dx * dx + dy * dy
+                if dist_sq > 0:
                     speed = 220
+                    distance = math.sqrt(dist_sq)
                     vel_x = (dx / distance) * speed
                     vel_y = (dy / distance) * speed
                 else:
@@ -2182,9 +2218,10 @@ class Enemy(BaseSprite):
                 # Heavy single projectile
                 dx = player.x - self.x
                 dy = player.y - self.y
-                distance: float = math.sqrt(dx * dx + dy * dy)
-                if distance > 0:
+                dist_sq = dx * dx + dy * dy
+                if dist_sq > 0:
                     speed = 300
+                    distance = math.sqrt(dist_sq)
                     vel_x = (dx / distance) * speed
                     vel_y = (dy / distance) * speed
                 else:
@@ -2270,9 +2307,10 @@ class Enemy(BaseSprite):
                 # Single aimed shot for final boss
                 dx = player.x - self.x
                 dy = player.y - self.y
-                distance: float = math.sqrt(dx * dx + dy * dy)
-                if distance > 0:
+                dist_sq = dx * dx + dy * dy
+                if dist_sq > 0:
                     speed = 180
+                    distance = math.sqrt(dist_sq)
                     vel_x = (dx / distance) * speed
                     vel_y = (dy / distance) * speed
                 else:
@@ -2308,7 +2346,7 @@ class Enemy(BaseSprite):
                 damage,
                 getattr(self, "health", None),
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # Debug: log take_damage call (caller info included)
         try:
@@ -2316,7 +2354,7 @@ class Enemy(BaseSprite):
             try:
                 f = inspect.stack()[1]
                 caller = f"{f.filename}:{f.lineno} in {f.function}"
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             logger.debug(
                 "Enemy.take_damage called -> self=%s dmg=%s health_before=%s caller=%s",
@@ -2325,7 +2363,7 @@ class Enemy(BaseSprite):
                 getattr(self, "health", None),
                 caller,
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # Crusader cycles between vulnerable and invulnerable.  If the current
         # state is invulnerable we quietly drop the damage.
@@ -2334,7 +2372,7 @@ class Enemy(BaseSprite):
         ):
             try:
                 logger.debug("Crusader.take_damage ignored because invulnerable")
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             return
 
@@ -2348,14 +2386,14 @@ class Enemy(BaseSprite):
             from src.game import CURRENT_GAME as _cg
 
             CURRENT_GAME = _cg
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         if CURRENT_GAME is None:
             try:
                 from src.game.core import CURRENT_GAME as _cg
 
                 CURRENT_GAME = _cg
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         if CURRENT_GAME is not None:
@@ -2386,7 +2424,7 @@ class Enemy(BaseSprite):
                 self,
                 getattr(self, "health", None),
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # Check if kill explosion should trigger (when kill_counter >= 10)
@@ -2411,7 +2449,7 @@ class Enemy(BaseSprite):
                     finally:
                         # Always clear flag after explosion
                         CURRENT_GAME._kill_explosion_triggered = False
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # If a wave boss (boss_medium) is killed by any damage source, ensure the
@@ -2431,7 +2469,7 @@ class Enemy(BaseSprite):
                         CURRENT_GAME.show_centered_message(
                             "REINFORCEMENTS INCOMING!", 1800, (255, 204, 0)
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     try:
                         import pygame
@@ -2440,7 +2478,7 @@ class Enemy(BaseSprite):
                         pygame.time.set_timer(
                             pygame.USEREVENT + 1, CURRENT_GAME.reinforcement_delay_ms
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                 # spawn health drop for any qualifying boss once
                 # Uses health_drop_spawned flag to prevent duplication with DeathSystem
@@ -2455,11 +2493,11 @@ class Enemy(BaseSprite):
                             try:
                                 CURRENT_GAME.spawn_health_drop(self.x, self.y, heal_amt)
                                 self.health_drop_spawned = True
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # If this is the Prologo final boss and the damage reduced it to <=10% of
         # max health, begin the immortal/regeneration phase and clamp HP to 10%.
@@ -2479,7 +2517,7 @@ class Enemy(BaseSprite):
                             if getattr(self, "health", 0) <= threshold:
                                 CURRENT_GAME.prologo_final_boss_immortal = True
                                 self.health = int(threshold)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                 # limbo_final boss check
                 if getattr(self, "enemy_type", "") == "boss_limbo":
@@ -2489,16 +2527,16 @@ class Enemy(BaseSprite):
                             if getattr(self, "health", 0) <= threshold:
                                 CURRENT_GAME.limbo_final_boss_immortal = True
                                 self.health = int(threshold)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         try:
             caller = "unknown"
             try:
                 f = inspect.stack()[1]
                 caller = f"{f.filename}:{f.lineno} in {f.function}"
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             logger.debug(
                 "Enemy.take_damage finished -> self=%s health_after=%s caller=%s",
@@ -2506,7 +2544,7 @@ class Enemy(BaseSprite):
                 getattr(self, "health", None),
                 caller,
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         self.shake_timer = 10
         # Try to show floating damage number via centralized game instance (unless suppressed)
@@ -2514,10 +2552,10 @@ class Enemy(BaseSprite):
             return
         try:
             dmg = int(damage)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             try:
                 dmg = int(round(float(damage)))
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 dmg = damage
         try:
             # Lazy import CURRENT_GAME to avoid circular imports at module load
@@ -2536,9 +2574,9 @@ class Enemy(BaseSprite):
                         getattr(self, "y", 0) - getattr(self, "height", 0) // 2 - 8
                     )
                     CURRENT_GAME.spawn_floating_text(str(dmg), x, pos_y)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def draw(self, screen, shake_x=0, shake_y=0) -> None:
@@ -2606,7 +2644,7 @@ class Enemy(BaseSprite):
                     # light blue with some transparency
                     pygame.draw.circle(aura_surf, (100, 150, 255, 100), (r, r), r)
                     screen.blit(aura_surf, (cx - r + shake_x, cy - r + shake_y))
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
             # Flip giant/custode sprite based on movement direction + walking oscillation
@@ -2621,7 +2659,7 @@ class Enemy(BaseSprite):
                 if flip_x or flip_y:
                     try:
                         blit_image = pygame.transform.flip(self.image, flip_x, flip_y)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         blit_image = self.image
             # Rotate pentagram asset on vertical axis with perspective compression
             elif self.enemy_type == "pentagram":
@@ -2648,7 +2686,6 @@ class Enemy(BaseSprite):
                     if perspective_scale < 0.8:
                         # Create a darkened version
                         darkened = blit_image.copy()
-                        darkness = int(100 * (1 - perspective_scale))  # 0-100 at 90°
                         dark_surf = pygame.Surface(darkened.get_size())
                         dark_surf.fill((0, 0, 0))
                         darkened.blit(
@@ -2671,7 +2708,7 @@ class Enemy(BaseSprite):
                     )
                     draw_x = blit_rect.x
                     draw_y = blit_rect.y
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     blit_image = self.image
 
             screen.blit(blit_image, (draw_x, draw_y))
@@ -2733,9 +2770,9 @@ class Enemy(BaseSprite):
                         # clear when expired
                         try:
                             delattr(self, "shield_beam")
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
             # Draw burn status indicator (flame + optional text) if enemy is burning
@@ -2757,7 +2794,7 @@ class Enemy(BaseSprite):
                             screen.blit(
                                 surf, (int(bp.x - bp.size), int(bp.y - bp.size))
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
                 # Draw ice particles
@@ -2777,7 +2814,7 @@ class Enemy(BaseSprite):
                             screen.blit(
                                 surf, (int(ip.x - ip.size), int(ip.y - ip.size))
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
                 # Burn status: particles are drawn above; legacy flame/text removed (particles retained)

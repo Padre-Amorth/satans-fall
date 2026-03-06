@@ -37,7 +37,7 @@ class ScoreSystem:
 
             lvl = self.game.global_progress.get("meta_level", 1)
             return int(META_XP_BASE * (META_XP_GROWTH ** (lvl - 1)))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # fallback reasonable constant
             return 1000
 
@@ -91,7 +91,7 @@ class ScoreSystem:
             xp_reward = int(self.get_meta_xp_to_next_level() * 0.1)
             if xp_reward > 0:
                 self.award_meta_xp(xp_reward)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         self.game.save_permanent_stats()
         return True
@@ -160,7 +160,7 @@ class ScoreSystem:
                 if dist <= explosion_range:
                     try:
                         enemy.take_damage(damage)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
             # Visual feedback: add explosion effect (similar to skullboom but purple)
@@ -178,13 +178,13 @@ class ScoreSystem:
                         "color": purple_color,
                     }
                 )
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             # Visual feedback: spawn floating text
             try:
                 self.game.spawn_floating_text(f"BOOM! +{damage}", int(px), int(py) - 30)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         except Exception as e:

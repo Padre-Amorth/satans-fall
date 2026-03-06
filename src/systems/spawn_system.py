@@ -291,7 +291,6 @@ class SpawnSystem:
                 and not self.game.purgatory_horde_active
                 and self.game.enemy_spawn_timer <= 0
             ):
-                print("[DEBUG] normal wave spawn triggered (no manager)")
                 self.spawn_enemy()
                 next_rate = self.game.enemy_spawn_rate
                 if self.game.selected_stage == "prologo":
@@ -315,7 +314,7 @@ class SpawnSystem:
             if self.game.enemy_manager is not None:
                 try:
                     self.game.enemy_manager.update_big_enemy_timer()
-                except Exception:
+                except (AttributeError, TypeError):
                     # Fallback to legacy behavior
                     self.game.big_enemy_timer -= 1
                     if (
@@ -334,7 +333,7 @@ class SpawnSystem:
                 # Also allow EnemyManager to occasionally spawn non-boss inquisitors in Purgatory
                 try:
                     self.game.enemy_manager.update_inquisitor_spawns()
-                except Exception:
+                except (AttributeError, TypeError):
                     pass
             else:
                 self.game.big_enemy_timer -= 1
@@ -408,7 +407,7 @@ class SpawnSystem:
             if self.game.enemy_manager is not None:
                 try:
                     self.game.enemy_manager.wave_boss_spawned = False
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     self.game.wave_boss_spawned = False
             else:
                 self.game.wave_boss_spawned = False
@@ -427,7 +426,7 @@ class SpawnSystem:
                         self.game.enemy_manager.prologo_final_boss_immortal = False
                         self.game.enemy_manager.prologo_lightning_timer = 0
                         self.game.enemy_manager.prologo_lightning_strike = False
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         self.game.prologo_final_boss_spawned = False
                         self.game.prologo_final_boss_defeated = False
                         self.game.prologo_final_boss_immortal = False
@@ -450,13 +449,13 @@ class SpawnSystem:
                     self.game.limbo_horde_active = False
                     # Reset giant spawn cooldown when horde ends so the 12-second rule applies again
                     self.last_giant_spawn_time = self.game.time_elapsed
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             # Keep big spawn flag in manager if available
             if self.game.enemy_manager is not None:
                 try:
                     self.game.enemy_manager.big_spawned_this_wave = False
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     self.game.big_spawned_this_wave = False
             else:
                 self.game.big_spawned_this_wave = False
@@ -513,7 +512,7 @@ class SpawnSystem:
             if self.game.enemy_manager is not None:
                 try:
                     self.game.enemy_manager.update_wave_boss(self.game.wave_time)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     # Fallback to legacy behavior
                     if not self.game.wave_boss_spawned and self.game.wave_time >= 38:
                         if not (
@@ -581,7 +580,7 @@ class SpawnSystem:
             try:
                 self.game.enemy_manager.update_prologo_events()
                 return
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # Fallback to legacy behavior below
                 pass
 
@@ -589,7 +588,7 @@ class SpawnSystem:
         if self.game.enemy_manager is not None:
             try:
                 self.game.enemy_manager.update_prologo_events()
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # fallback to legacy behavior
                 if (
                     self.game.selected_stage == "prologo"
@@ -615,7 +614,7 @@ class SpawnSystem:
                     self.spawn_boss("limbo")
                     try:
                         self.game.limbo_final_boss_spawned = True
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         setattr(self.game, "limbo_final_boss_spawned", True)
         else:
             if (
@@ -640,7 +639,7 @@ class SpawnSystem:
                     self.spawn_boss("limbo")
                     try:
                         self.game.limbo_final_boss_spawned = True
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         setattr(self.game, "limbo_final_boss_spawned", True)
 
         # Lightning strike when immortal boss reaches full health
@@ -731,7 +730,7 @@ class SpawnSystem:
         # boss has not appeared yet
         try:
             self.game.limbo_horde_boss_spawned = False
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # build schedule: times are offsets from the moment the horde starts
         f = self.game.fps
@@ -794,7 +793,7 @@ class SpawnSystem:
         # broadcast warning
         try:
             self.game.show_centered_message("HORDE SWARMS!", 2000, (255, 100, 0))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def _trigger_satan_growth(self) -> None:
@@ -817,12 +816,12 @@ class SpawnSystem:
             self.game.player.max_health *= 2
             self.game.player.health *= 2
             self.game.player.fire_rate_multiplier *= 1.5
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # remember that the aura should now persist until the stage ends
         try:
             self.game.satan_growth_persistent = True
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def _start_purgatory_horde(self) -> None:
@@ -905,7 +904,7 @@ class SpawnSystem:
         # broadcast warning
         try:
             self.game.show_centered_message("HORDE APPROACHES!", 2000, (180, 120, 200))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def spawn_enemy(self, forced_type: str | None = None) -> None:
@@ -918,14 +917,14 @@ class SpawnSystem:
         try:
             jitter = random.randint(-20, 20)
             x = self.game.clamp_to_walls(x + jitter)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         # also give a little vertical offset to avoid perfect stacking when
         # multiple creatures spawn in the same frame; keep them just off-screen
         y = -20
         try:
             y += random.randint(0, 5)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
         # if caller specified a forced type we bypass the random selection logic
@@ -940,7 +939,7 @@ class SpawnSystem:
                 # influence the cooldown window afterwards
                 try:
                     self.last_giant_spawn_time = self.game.time_elapsed
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             elif enemy_type == "crusader":
                 health = 200 * self.game.difficulty_multiplier
@@ -1030,7 +1029,7 @@ class SpawnSystem:
                 # record spawn time so subsequent rolls honor the cooldown
                 try:
                     self.last_giant_spawn_time = self.game.time_elapsed
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             else:
                 # compute dynamic spawn probabilities that shift with wave count:
@@ -1141,7 +1140,7 @@ class SpawnSystem:
                                 self.game.mage_last_spawn_frame = getattr(
                                     self.game, "frame_count", 0
                                 )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     else:
                         # if already two mages, do nothing; wait until one is gone
@@ -1170,7 +1169,7 @@ class SpawnSystem:
                 shield_prob = min(0.50 + wave * 0.02, 0.90)
                 if random.random() < shield_prob:
                     enemy_type = "shielded"
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         # Use EnemyManager when available (global slowdown handled there)
         enemy_created_successfully = False
@@ -1178,7 +1177,7 @@ class SpawnSystem:
             try:
                 enemy = self.game.enemy_manager.spawn(x, y, enemy_type, health, speed)
                 enemy_created_successfully = True
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 enemy = Enemy(x, y, enemy_type, health, speed)
                 if hasattr(self.game.enemies, "add"):
                     self.game.enemies.add(enemy)
@@ -1197,7 +1196,7 @@ class SpawnSystem:
         if forced_type == "inquisitor":
             try:
                 enemy.appearance = "inquisitor"
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Increment crusader counter AFTER successful spawn
@@ -1250,12 +1249,11 @@ class SpawnSystem:
                             self.game.spawn_boss("limbo_horde")
                             try:
                                 self.game.limbo_horde_boss_spawned = True
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                         else:
                             self.game.spawn_boss("big")
-                    except Exception:
-                        print("[DEBUG] boss spawn failed, fallback giant")
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         self.spawn_enemy(forced_type="giant")
                 return
             # Determine how many bosses this phase should include; default 0
@@ -1299,12 +1297,11 @@ class SpawnSystem:
                         self.game.spawn_boss("limbo_horde")
                         try:
                             self.game.limbo_horde_boss_spawned = True
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     else:
                         self.game.spawn_boss("big")
-                except Exception:
-                    print("[DEBUG] boss spawn failed, fallback giant")
+                except (AttributeError, TypeError, ValueError, KeyError):
                     self.spawn_enemy(forced_type="giant")
 
     def spawn_enemy_projectiles(self) -> None:
@@ -1361,7 +1358,7 @@ class SpawnSystem:
             try:
                 self.game.enemy_manager.spawn_giant_enemy()
                 return
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Fallback to original behavior
@@ -1401,7 +1398,7 @@ class SpawnSystem:
             try:
                 self.game.enemy_manager.spawn_crusader_enemy()
                 return
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Fallback behaviour mirrors spawn_giant_enemy but always uses crusader type
@@ -1448,7 +1445,7 @@ class SpawnSystem:
             try:
                 self.game.enemy_manager.spawn_giant_enemy()
                 return
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # bail out if the cooldown currently forbids another big spawn
@@ -1475,7 +1472,7 @@ class SpawnSystem:
         # record spawn time so further attempts respect the cooldown
         try:
             self.last_giant_spawn_time = self.game.time_elapsed
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def _spawn_pentagram(self) -> None:
@@ -1621,7 +1618,7 @@ class SpawnSystem:
             try:
                 self.game.enemy_manager.spawn_boss(boss_type)
                 return
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Legacy fallback – only a limited set of types was ever supported

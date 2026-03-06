@@ -80,7 +80,7 @@ class SpatialGrid:
                     idx = self._cell_index(col, row)
                     if 0 <= idx < len(self.cells):
                         self.cells[idx].append(obj)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # Silently skip malformed entries
             pass
 
@@ -89,14 +89,18 @@ class SpatialGrid:
         for obj in objects:
             try:
                 self.add(obj)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # Ignore malformed entries
                 continue
 
     def query_circle(self, x: float, y: float, radius: float) -> List[Any]:
         try:
             # Sanitize query parameters (NaN/inf protection)
-            if not (isinstance(x, (int, float)) and isinstance(y, (int, float)) and isinstance(radius, (int, float))):
+            if not (
+                isinstance(x, (int, float))
+                and isinstance(y, (int, float))
+                and isinstance(radius, (int, float))
+            ):
                 return []
             minx: float = x - radius
             miny: float = y - radius
@@ -118,7 +122,7 @@ class SpatialGrid:
                             seen.add(oid)
                             results.append(obj)
             return results
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # Return empty list on any error; caller will use fallback
             return []
 

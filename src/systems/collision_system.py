@@ -82,7 +82,7 @@ class CollisionSystem:
                     enemy.original_speed = getattr(enemy, "speed", 0)
                 # update speed regardless of whether we extended or applied
                 enemy.speed = enemy.original_speed * getattr(enemy, "slow_factor", 1.0)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             # swallow errors so collision handling remains robust
             pass
 
@@ -103,9 +103,9 @@ class CollisionSystem:
             amt = getattr(self.game, "tower_energy_per_hit", 0) * hits
             try:
                 self.game.charge_tower_energy(amt)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def _projectile_radius(self, proj: Any) -> int:
@@ -117,13 +117,13 @@ class CollisionSystem:
         if r is not None:
             try:
                 return int(r)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         rect = getattr(proj, "rect", None)
         if rect is not None:
             try:
                 return int(rect.width // 2)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         return 5
 
@@ -142,11 +142,11 @@ class CollisionSystem:
         if getattr(g, "permanent_stats", None) and g.permanent_stats.get("fire_2", 0):
             try:
                 burn_duration = int(burn_duration * 2)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             try:
                 burn_dps = burn_dps * 2
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         return {
             "effect": effect,
@@ -171,7 +171,7 @@ class CollisionSystem:
             try:
                 if hasattr(projectile, "rect"):
                     projectile.rect.center = (int(px), int(py))
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             pr = self._projectile_radius(projectile)
             sg = getattr(g, "spatial_grid", None)
@@ -201,9 +201,9 @@ class CollisionSystem:
                             dy = ey - py
                             if dx * dx + dy * dy <= (pr + er) * (pr + er):
                                 hit_enemies.append(enemy)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError):
                         hit_enemies = []
-        except Exception:
+        except (AttributeError, TypeError, KeyError):
             hit_enemies = []
         return hit_enemies
 
@@ -221,9 +221,9 @@ class CollisionSystem:
                 )
             try:
                 g.spatial_grid.build(enemies_iter)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 g.spatial_grid = None
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             g.spatial_grid = None
 
     def _remove_offscreen_projectiles(self) -> None:
@@ -239,7 +239,7 @@ class CollisionSystem:
                 try:
                     if getattr(p, "y", None) is not None and p.y < 0:
                         p.kill()
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
         else:
             projs = [
@@ -268,7 +268,7 @@ class CollisionSystem:
                                 enemy.original_speed = getattr(enemy, "speed", 0)
                             enemy.speed = enemy.original_speed * slow_factor
                             enemy.slow_factor = slow_factor
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         # ignore per-enemy errors when applying puddle slow
                         pass
                 # Bosses
@@ -286,9 +286,9 @@ class CollisionSystem:
                                     boss.original_speed = getattr(boss, "speed", 0)
                                 boss.speed = boss.original_speed * slow_factor
                                 boss.slow_factor = slow_factor
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
     def _propagate_burn(self, source_enemy):
@@ -312,7 +312,7 @@ class CollisionSystem:
                 dps = float(getattr(source_enemy, "burn_propagate_dps", 0))
                 duration = int(getattr(source_enemy, "burn_propagate_duration", 0))
                 source_hops = int(getattr(source_enemy, "burn_propagate_hops", 0))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             return
 
         if radius <= 0 or dps <= 0 or duration <= 0:
@@ -351,7 +351,7 @@ class CollisionSystem:
                             g.spawn_floating_text(
                                 "burn", ex, ey - other.get("radius", 12) - 8
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                 else:
                     # sprite-based enemy objects
@@ -372,7 +372,7 @@ class CollisionSystem:
                                     other.burn_propagate_radius = radius
                                     other.burn_propagate_dps = dps
                                     other.burn_propagate_duration = duration
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                         try:
                             g.spawn_floating_text(
@@ -380,7 +380,7 @@ class CollisionSystem:
                                 other.x,
                                 other.y - getattr(other, "radius", 12) - 8,
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         # Visual: orange chain from source -> target
                         try:
@@ -393,7 +393,7 @@ class CollisionSystem:
                                     "color": (255, 140, 0),
                                 }
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
         # Also consider boss sprites separately (they're stored in g.bosses).
         # Bosses are sprite-based; apply the same propagation logic as above.
@@ -429,7 +429,12 @@ class CollisionSystem:
                                         other.burn_propagate_radius = radius
                                         other.burn_propagate_dps = dps
                                         other.burn_propagate_duration = duration
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                             try:
                                 g.spawn_floating_text(
@@ -437,7 +442,7 @@ class CollisionSystem:
                                     other.x,
                                     other.y - getattr(other, "radius", 12) - 8,
                                 )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                             # Visual: small orange chain effect boss <- source
                             try:
@@ -448,9 +453,9 @@ class CollisionSystem:
                                         "color": (255, 140, 0),
                                     }
                                 )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
     def _floating_text_style_for_projectile(
@@ -470,7 +475,7 @@ class CollisionSystem:
             if is_crit:
                 # Red and slightly larger
                 return ((255, 50, 50), max(12, base_font_size + 2))
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         return (base_color, base_font_size)
 
@@ -493,7 +498,7 @@ class CollisionSystem:
                     projectile["_was_critical"] = False
                 else:
                     setattr(projectile, "_was_critical", False)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             # Only consider non-enemy projectiles.  Statues are normally
@@ -523,7 +528,7 @@ class CollisionSystem:
                 if is_player_proj and g.permanent_stats.get("fire_3", 0):
                     if getattr(enemy, "burn_timer", 0) > 0:
                         return int(round(base_damage * 1.25))
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             # Critical hit mechanic:
@@ -560,12 +565,12 @@ class CollisionSystem:
                                 projectile["_was_critical"] = True
                             else:
                                 setattr(projectile, "_was_critical", True)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         return int(round(base_damage * 1.5))
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass
         return base_damage
 
@@ -587,10 +592,10 @@ class CollisionSystem:
             # Build grid from current enemy positions
             try:
                 g.spatial_grid.build(enemies_iter)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 # If building fails, fall back to not using the grid
                 g.spatial_grid = None
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             g.spatial_grid = None
 
         # Projectiles hit enemies
@@ -603,7 +608,7 @@ class CollisionSystem:
                     getattr(projectile, "effect", None),
                     getattr(projectile, "rect", None),
                 )
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             primary_target = None
             # Projectile metadata (object-only canonical representation)
@@ -618,11 +623,11 @@ class CollisionSystem:
             ):
                 try:
                     burn_duration = int(burn_duration * 2)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 try:
                     burn_dps = burn_dps * 2
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             # Flag to indicate we've processed this projectile via the spatial-grid branch
             processed_projectile = False
@@ -691,9 +696,9 @@ class CollisionSystem:
                     try:
                         # Debug: hit candidates filtered
                         pass
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
             # ICE projectile: if it hit any enemy, ensure ICE3 first-hit flag is set
@@ -745,13 +750,23 @@ class CollisionSystem:
                                         id(enemy),
                                         getattr(projectile, "_hit_ids", None),
                                     )
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                                 enemy.take_damage(dmg_to_apply, show_floating=False)
                                 # ICE3 piercing also counts as tower hits
                                 try:
                                     self._maybe_charge_tower(projectile)
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                                 try:
                                     LOG.debug(
@@ -760,7 +775,12 @@ class CollisionSystem:
                                         id(enemy),
                                         getattr(projectile, "_hit_ids", None),
                                     )
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                             # Apply slow effect (object-style / dict) for ICE3 hits.
                             slow_duration = getattr(projectile, "slow_duration", 120)
@@ -788,11 +808,16 @@ class CollisionSystem:
                                         projectile["_was_critical"] = False
                                     else:
                                         setattr(projectile, "_was_critical", False)
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
                     # Ensure _hit_ids includes hit_enemy_ids so the subsequent explosion
@@ -829,7 +854,7 @@ class CollisionSystem:
                                     size=size,
                                 )
                                 g.ice_particles.append(p_ice)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
 
                         # Create ice puddle at impact point
@@ -850,7 +875,7 @@ class CollisionSystem:
                         # Mark projectile so explosion/puddle happen only once
                         try:
                             setattr(projectile, "has_exploded", True)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
                         # Damage and slow all enemies within explosion radius
@@ -889,7 +914,12 @@ class CollisionSystem:
                                         # charge energy for each successful hit
                                         try:
                                             self._maybe_charge_tower(projectile)
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             pass
 
                                     # Apply slow effect (object or dict) for explosion-area
@@ -920,11 +950,26 @@ class CollisionSystem:
                                         )
                                         try:
                                             setattr(projectile, "_was_critical", False)
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             pass
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                     # If explosion was not applicable (no ICE1), fall through to normal processing
                     continue  # Skip normal processing
@@ -945,7 +990,7 @@ class CollisionSystem:
                             px + offset_x, py + offset_y, vx, vy, life=life, size=size
                         )
                         g.ice_particles.append(p_ice_local)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     # If projectile has ICE1 / explosion_radius, create puddle + area damage
@@ -1003,7 +1048,12 @@ class CollisionSystem:
                                         # charge energy on each enemy hit by explosion
                                         try:
                                             self._maybe_charge_tower(projectile)
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             pass
 
                                     # Apply slow effect
@@ -1033,29 +1083,44 @@ class CollisionSystem:
                                         )
                                         try:
                                             setattr(projectile, "_was_critical", False)
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             pass
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
 
                         # Mark projectile exploded so we don't create multiple puddles
                         try:
                             setattr(projectile, "has_exploded", True)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 projectile["_has_exploded"] = True
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
 
                         # Remove projectile after area effect so ICE1 does NOT pierce
                         try:
                             projectile.kill()
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 g.projectiles.remove(projectile)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
 
                         processed_projectile = True
@@ -1067,7 +1132,7 @@ class CollisionSystem:
                         dmg_to_apply = self._player_damage_vs_burning(
                             projectile, primary, getattr(projectile, "damage", 0)
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         dmg_to_apply = getattr(projectile, "damage", 0)
 
                     try:
@@ -1075,13 +1140,13 @@ class CollisionSystem:
                             primary.take_damage(dmg_to_apply, show_floating=False)
                             try:
                                 self._maybe_charge_tower(projectile)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                         else:
                             primary["health"] = max(
                                 0, primary.get("health", 0) - dmg_to_apply
                             )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     # Apply slow to the primary target (use helper to handle dict/object)
@@ -1092,7 +1157,7 @@ class CollisionSystem:
                         self._apply_slow_effect(
                             primary, slow_duration, slow_factor, extend=True
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     # Floating text
@@ -1111,7 +1176,7 @@ class CollisionSystem:
                             color=final_color,
                             font_size=final_font,
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     # Record hit and remove projectile (single-hit behaviour)
@@ -1120,10 +1185,10 @@ class CollisionSystem:
                     projectile._hit_ids.add(id(primary))
                     try:
                         projectile.kill()
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         try:
                             g.projectiles.remove(projectile)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     processed_projectile = True
                     continue  # Skip normal processing
@@ -1132,14 +1197,14 @@ class CollisionSystem:
                 try:
                     # Debug logging removed
                     pass
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 if primary_target is None:
                     primary_target = enemy
                     try:
                         # Debug logging removed
                         pass
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                 # Avoid multiple hits on the same enemy by this projectile
@@ -1164,9 +1229,9 @@ class CollisionSystem:
                             and etype in getattr(projectile, "_hit_boss_types", set())
                         ):
                             continue
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     hit_ids = None
 
                 # Special handling for Flies weapon
@@ -1178,18 +1243,18 @@ class CollisionSystem:
                         dmg_to_apply = self._player_damage_vs_burning(
                             projectile, enemy, getattr(projectile, "damage", 0)
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         dmg_to_apply = getattr(projectile, "damage", 0)
 
                     if hasattr(enemy, "take_damage"):
                         try:
                             enemy.take_damage(dmg_to_apply, show_floating=False)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 enemy.health = max(
                                     0, getattr(enemy, "health", 0) - dmg_to_apply
                                 )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                 # Special handling for Tenebrae weapon: decaying beam
                 elif getattr(projectile, "weapon_type", None) == "tenebrae":
@@ -1199,24 +1264,24 @@ class CollisionSystem:
                         base_p = getattr(projectile, "base_player_damage", None)
                         hits = getattr(projectile, "targets_hit", 0)
                         dmg_to_apply = tenebrae_damage(lvl, base_p, hits)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         dmg_to_apply = getattr(projectile, "damage", 0)
 
                     # increment hit counter for next collision
                     try:
                         projectile.targets_hit = hits + 1
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     if hasattr(enemy, "take_damage"):
                         try:
                             enemy.take_damage(dmg_to_apply, show_floating=False)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 enemy.health = max(
                                     0, getattr(enemy, "health", 0) - dmg_to_apply
                                 )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                                 pass
 
@@ -1226,7 +1291,7 @@ class CollisionSystem:
                             enemy.health = max(
                                 0, getattr(enemy, "health", 0) - int(dmg_to_apply)
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     try:
                         ex, ey = g._enemy_pos(enemy)
@@ -1244,7 +1309,7 @@ class CollisionSystem:
                                 )
                                 else (255, 255, 255)
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             color = (255, 255, 255)
                         (
                             final_color,
@@ -1264,9 +1329,9 @@ class CollisionSystem:
                                 projectile["_was_critical"] = False
                             else:
                                 setattr(projectile, "_was_critical", False)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     # Apply drain effect (secondary periodic damage/heal)
@@ -1279,7 +1344,7 @@ class CollisionSystem:
                             enemy.drain_damage = projectile.damage
                             enemy.drain_heal = projectile.heal_amount
                             enemy.drain_source = projectile  # To track
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
                     # Record this hit so the same projectile won't process the same enemy again
@@ -1287,7 +1352,7 @@ class CollisionSystem:
                         if not hasattr(projectile, "_hit_ids"):
                             projectile._hit_ids = set()
                         projectile._hit_ids.add(id(enemy))
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     # Mark as processed so we don't run the later plain-list / fallback
@@ -1298,10 +1363,10 @@ class CollisionSystem:
                     continue
                     try:
                         projectile.kill()  # Remove projectile after attaching
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         try:
                             g.projectiles.remove(projectile)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     break  # Only attach to one enemy
                 elif getattr(projectile, "weapon_type", None) == "skullboom":
@@ -1352,7 +1417,7 @@ class CollisionSystem:
                                 size=size,
                             )
                             g.skullboom_particles.append(p_burn)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
                     # Create explosion area effect
@@ -1414,7 +1479,12 @@ class CollisionSystem:
                                             )
                                             else (255, 255, 255)
                                         )
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         color = (255, 255, 255)
                                     (
                                         final_color,
@@ -1434,20 +1504,30 @@ class CollisionSystem:
                                             projectile["_was_critical"] = False
                                         else:
                                             setattr(projectile, "_was_critical", False)
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
 
                     # Remove projectile after explosion
                     try:
                         projectile.kill()
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         try:
                             g.projectiles.remove(projectile)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     processed_projectile = True
                     break  # Stop processing hits for this projectile
@@ -1457,7 +1537,7 @@ class CollisionSystem:
                         try:
                             # Normal hit on target
                             ex, ey = g._enemy_pos(enemy)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         # Apply possible FIRE tier-3 player bonus vs burning enemies
                         dmg_to_apply = self._player_damage_vs_burning(
@@ -1466,7 +1546,7 @@ class CollisionSystem:
                         enemy.take_damage(dmg_to_apply, show_floating=False)
                         try:
                             self._maybe_charge_tower(projectile)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         try:
                             ex, ey = g._enemy_pos(enemy)
@@ -1490,7 +1570,7 @@ class CollisionSystem:
                                     )
                                     else (255, 255, 255)
                                 )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 color = (255, 255, 255)
                             try:
                                 ex, ey = g._enemy_pos(enemy)
@@ -1503,7 +1583,12 @@ class CollisionSystem:
                                 try:
                                     # display the actual damage applied (including crit bonus)
                                     display_text = str(dmg_to_apply)
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     display_text = str(dmg_to_apply)
                                 g.spawn_floating_text(
                                     display_text,
@@ -1517,11 +1602,16 @@ class CollisionSystem:
                                         projectile["_was_critical"] = False
                                     else:
                                         setattr(projectile, "_was_critical", False)
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         # Storm-statue projectiles should be removed on first contact (apply chain immediately)
                         if getattr(projectile, "appearance", None) == "storm_statue":
@@ -1583,20 +1673,45 @@ class CollisionSystem:
                                                     color=final_color,
                                                     font_size=final_font,
                                                 )
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
                                             try:
                                                 self._maybe_charge_tower(projectile)
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             try:
                                                 targ.health -= projectile.damage * 1.5
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
                                             try:
                                                 self._maybe_charge_tower(projectile)
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
                                         tx, ty = g._enemy_pos(targ)
                                         chain_points.append((tx, ty))
@@ -1609,7 +1724,12 @@ class CollisionSystem:
                                                     * ENEMY_SCORE_PER_HEALTH
                                                     * g.difficulty_multiplier
                                                 )
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
                                             try:
                                                 type_xp_local = {
@@ -1635,7 +1755,12 @@ class CollisionSystem:
                                                 )
                                                 if g.player_xp >= g.xp_to_next_level:
                                                     g.trigger_level_up()
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
                                             try:
                                                 if (
@@ -1651,9 +1776,19 @@ class CollisionSystem:
                                                 ):
                                                     try:
                                                         self._propagate_burn(targ)
-                                                    except Exception:
+                                                    except (
+                                                        AttributeError,
+                                                        TypeError,
+                                                        ValueError,
+                                                        KeyError,
+                                                    ):
                                                         pass
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
 
                                             # storm_2: create lightning explosion on chain-kill
@@ -1688,7 +1823,12 @@ class CollisionSystem:
                                                             ex, ey = g._enemy_pos(
                                                                 ex_target
                                                             )
-                                                        except Exception:
+                                                        except (
+                                                            AttributeError,
+                                                            TypeError,
+                                                            ValueError,
+                                                            KeyError,
+                                                        ):
                                                             continue
                                                         dist = math.hypot(
                                                             ex - cx, ey - cy
@@ -1698,7 +1838,12 @@ class CollisionSystem:
                                                                 ex_target.take_damage(
                                                                     explosion_dmg
                                                                 )
-                                                            except Exception:
+                                                            except (
+                                                                AttributeError,
+                                                                TypeError,
+                                                                ValueError,
+                                                                KeyError,
+                                                            ):
                                                                 if isinstance(
                                                                     ex_target, dict
                                                                 ):
@@ -1730,38 +1875,68 @@ class CollisionSystem:
                                                                     "radius": explosion_radius,
                                                                 }
                                                             )
-                                                        except Exception:
+                                                        except (
+                                                            AttributeError,
+                                                            TypeError,
+                                                            ValueError,
+                                                            KeyError,
+                                                        ):
                                                             pass
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
 
                                             try:
                                                 try:
                                                     g.record_enemy_kill()
-                                                except Exception:
+                                                except (
+                                                    AttributeError,
+                                                    TypeError,
+                                                    ValueError,
+                                                    KeyError,
+                                                ):
                                                     pass
                                                 targ.kill()
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 try:
                                                     g.enemies.remove(targ)
-                                                except Exception:
+                                                except (
+                                                    AttributeError,
+                                                    TypeError,
+                                                    ValueError,
+                                                    KeyError,
+                                                ):
                                                     pass
                                     if len(chain_points) > 1:
                                         g.game_state.chain_lightning_effects.append(
                                             {"points": chain_points, "timer": 8}
                                         )
                                     projectile._chain_applied = True
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
 
                             try:
                                 projectile.kill()
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 try:
                                     g.projectiles.remove(projectile)
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                 # Record this hit so projectile won't hit the same enemy again
@@ -1784,9 +1959,9 @@ class CollisionSystem:
                                 if not hasattr(projectile, "_hit_boss_types"):
                                     projectile._hit_boss_types = set()
                                 projectile._hit_boss_types.add(etype)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
                 # Apply slow effect if projectile has it (Ice towers)
@@ -1828,9 +2003,9 @@ class CollisionSystem:
                                     enemy.burn_propagate_dps = burn_dps
                                     enemy.burn_propagate_duration = burn_duration
                                     enemy.burn_propagate_hops = 2
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                 # Handle projectile piercing / kill (object-style only)
@@ -1852,12 +2027,12 @@ class CollisionSystem:
                     if p_pierce_count <= 0:
                         try:
                             projectile.kill()
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 g.projectiles.remove(projectile)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                 else:
                     # Default: remove / kill projectile after a hit
@@ -1865,11 +2040,11 @@ class CollisionSystem:
                         if isinstance(projectile, dict):
                             try:
                                 g.projectiles.remove(projectile)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                         else:
                             projectile.kill()
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                     # Death handling for object-based enemies
@@ -1904,9 +2079,14 @@ class CollisionSystem:
                                 ):
                                     try:
                                         self._propagate_burn(enemy)
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                             enemy.kill()  # Remove dead enemy
                         break
@@ -1914,14 +2094,14 @@ class CollisionSystem:
                 try:
                     # Debug logging removed
                     pass
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 # Chain hits: storm projectiles can hit additional distinct enemies
                 if primary_target is not None:
                     try:
                         # Debug logging removed
                         pass
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     chain = getattr(projectile, "chain_targets", 0)
                     if (
@@ -1957,7 +2137,7 @@ class CollisionSystem:
                                 chain,
                                 [o[1] for o in others],
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
                         # Store chain lightning effect for visual
@@ -1975,7 +2155,12 @@ class CollisionSystem:
                                 try:
                                     # Chain: apply damage to secondary target
                                     pass
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                                 targ.take_damage(
                                     projectile.damage * 1.5, show_floating=False
@@ -1984,23 +2169,43 @@ class CollisionSystem:
                                 try:
                                     # Chain: damage applied
                                     pass
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 try:
                                     try:
                                         # Chain: apply damage to secondary target
                                         pass
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
                                     targ.health -= projectile.damage * 1.5
                                     damaged = True
                                     try:
                                         # Chain: damage applied
                                         pass
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
 
                             # Record that this projectile hit the chained target so it won't be hit again
@@ -2015,9 +2220,14 @@ class CollisionSystem:
                                         id(targ),
                                         getattr(projectile, "_hit_ids", None),
                                     )
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
 
                             # Debug log if damage wasn't applied
@@ -2026,7 +2236,7 @@ class CollisionSystem:
                                     LOG.debug(
                                         "Storm chain: failed to damage target %s", targ
                                     )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
 
                             # Add to chain points for visual effect
@@ -2065,9 +2275,19 @@ class CollisionSystem:
                                     ):
                                         try:
                                             self._propagate_burn(targ)
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             pass
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
 
                                 # If storm_2 permanent is active, chained-target kills create a
@@ -2077,7 +2297,12 @@ class CollisionSystem:
                                         # Capture center before removing target
                                         try:
                                             cx, cy = g._enemy_pos(targ)
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             cx, cy = 0, 0
                                         explosion_radius = 120  # pixels
                                         # Explosion damage scales with the projectile's base damage
@@ -2085,7 +2310,12 @@ class CollisionSystem:
                                             explosion_dmg = getattr(
                                                 projectile, "damage", 0
                                             )
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             explosion_dmg = 0
 
                                         # Gather targets (enemies + bosses)
@@ -2107,7 +2337,12 @@ class CollisionSystem:
                                                 continue
                                             try:
                                                 ex, ey = g._enemy_pos(ex_target)
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 continue
                                             dx = ex - cx
                                             dy = ey - cy
@@ -2119,7 +2354,12 @@ class CollisionSystem:
                                                         explosion_dmg,
                                                         show_floating=False,
                                                     )
-                                                except Exception:
+                                                except (
+                                                    AttributeError,
+                                                    TypeError,
+                                                    ValueError,
+                                                    KeyError,
+                                                ):
                                                     if isinstance(ex_target, dict):
                                                         ex_target["health"] = max(
                                                             0,
@@ -2140,21 +2380,46 @@ class CollisionSystem:
                                                         "radius": explosion_radius,
                                                     }
                                                 )
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
 
                                 try:
                                     try:
                                         g.record_enemy_kill()
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
                                     targ.kill()
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     try:
                                         g.enemies.remove(targ)
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
 
                         # Add chain lightning effect to game state
@@ -2162,12 +2427,12 @@ class CollisionSystem:
                             try:
                                 # Debug logging removed
                                 pass
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                             try:
                                 # Diagnostic: health snapshot
                                 pass
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                             g.game_state.chain_lightning_effects.append(
                                 {
@@ -2211,13 +2476,23 @@ class CollisionSystem:
                                             bd_local = tenebrae_damage(
                                                 lvl, base_p, hits
                                             )
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             bd_local = getattr(projectile, "damage", 0)
                                         # increment hit count so subsequent collisions
                                         # will decay appropriately
                                         try:
                                             projectile.targets_hit = hits + 1
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             pass
                                     else:
                                         bd_local = self._player_damage_vs_burning(
@@ -2227,7 +2502,12 @@ class CollisionSystem:
                                         )
                                     # boss damage should show numbers; let take_damage use default
                                     boss.take_damage(bd_local)
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
 
                                 # Apply projectile effects to boss (burn/slow)
@@ -2248,7 +2528,12 @@ class CollisionSystem:
                                             boss.burn_tick_timer = getattr(
                                                 self, "fps", 60
                                             )
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
 
                                 # Record that this projectile has hit this boss/type so
@@ -2262,16 +2547,31 @@ class CollisionSystem:
                                     projectile._hit_boss_types.add(
                                         getattr(boss, "enemy_type", "")
                                     )
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
 
                                 # Remove projectile after hitting a boss (default)
                                 try:
                                     projectile.kill()
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     try:
                                         g.projectiles.remove(projectile)
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
                                 # Mark as processed so we don't run the later boss-collision
                                 # branch again for the same projectile in this frame.
@@ -2288,7 +2588,7 @@ class CollisionSystem:
                             else 0
                         ),
                     )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     proj_px = proj_py = proj_pr = 0
 
                 # Collect and sort candidates in single pass (optimization: avoid normalization loop)
@@ -2306,7 +2606,7 @@ class CollisionSystem:
 
                         if d2 <= thresh:
                             candidates.append((d2, enemy))
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                 # Sort once and hit only nearest enemy (optimization: single-pass sort)
@@ -2335,7 +2635,7 @@ class CollisionSystem:
                         hit_ids = projectile._hit_ids
                         if id(enemy) in hit_ids:
                             continue
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         hit_ids = None
                     # object-style enemy (removed dict-compat)
                     dmg_to_apply = self._player_damage_vs_burning(
@@ -2343,12 +2643,12 @@ class CollisionSystem:
                     )
                     try:
                         enemy.take_damage(dmg_to_apply, show_floating=False)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         try:
                             enemy.health = max(
                                 0, getattr(enemy, "health", 0) - dmg_to_apply
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
                     # Record this hit so projectile won't hit the same enemy again
@@ -2365,10 +2665,10 @@ class CollisionSystem:
                                 id(enemy),
                                 getattr(projectile, "_hit_ids", None),
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
                         # Apply slow (object-style)
@@ -2420,18 +2720,33 @@ class CollisionSystem:
                             if p_pierce_count <= 0:
                                 try:
                                     projectile.kill()
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     try:
                                         g.projectiles.remove(projectile)
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
                         else:
                             try:
                                 projectile.kill()
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 try:
                                     g.projectiles.remove(projectile)
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
 
                         # Death handling for enemies (object-style)
@@ -2464,9 +2779,14 @@ class CollisionSystem:
                                 ):
                                     try:
                                         self._propagate_burn(enemy)
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                             try:
                                 g.enemies.remove(enemy)
@@ -2504,7 +2824,12 @@ class CollisionSystem:
                                 try:
                                     # dict chain: before damage
                                     pass
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                                 eff = self._player_damage_vs_burning(
                                     projectile, targ, p_damage
@@ -2513,14 +2838,24 @@ class CollisionSystem:
                                 try:
                                     # dict chain: after damage
                                     pass
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                                 # Record this hit to prevent further hits from the same projectile
                                 try:
                                     if not hasattr(projectile, "_hit_ids"):
                                         projectile._hit_ids = set()
                                     projectile._hit_ids.add(id(targ))
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                                 tx, ty = g._enemy_pos(targ)
                                 chain_points.append((tx, ty))
@@ -2546,13 +2881,28 @@ class CollisionSystem:
                                         ):
                                             try:
                                                 self._propagate_burn(targ)
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
                                     try:
                                         g.enemies.remove(targ)
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
                             if len(chain_points) > 1:
                                 g.game_state.chain_lightning_effects.append(
@@ -2612,18 +2962,33 @@ class CollisionSystem:
                                                         projectile, "_hit_ids", None
                                                     ),
                                                 )
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
                                             try:
                                                 targ.take_damage(
                                                     eff * 2, show_floating=False
                                                 )
                                                 damaged = True
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 try:
                                                     targ.health -= eff * 2
                                                     damaged = True
-                                                except Exception:
+                                                except (
+                                                    AttributeError,
+                                                    TypeError,
+                                                    ValueError,
+                                                    KeyError,
+                                                ):
                                                     pass
                                             try:
                                                 LOG.debug(
@@ -2634,15 +2999,30 @@ class CollisionSystem:
                                                         projectile, "_hit_ids", None
                                                     ),
                                                 )
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             try:
                                                 eff = self._player_damage_vs_burning(
                                                     projectile, targ, p_damage
                                                 )
                                                 targ.health -= eff * 2
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
                                         tx, ty = g._enemy_pos(targ)
                                         chain_points.append((tx, ty))
@@ -2654,17 +3034,27 @@ class CollisionSystem:
 
                                     try:
                                         projectile.kill()
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         try:
                                             g.projectiles.remove(projectile)
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             pass
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 enemy.health -= self._player_damage_vs_burning(
                                     projectile, enemy, p_damage
                                 )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
 
                         # Record this hit so projectile won't hit the same enemy again
@@ -2674,7 +3064,7 @@ class CollisionSystem:
                                     projectile._hit_ids = set()
                                 hit_ids = projectile._hit_ids
                             hit_ids.add(id(enemy))
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
                         # Apply slow effect if projectile has it (Ice towers)
@@ -2712,18 +3102,33 @@ class CollisionSystem:
                             if p_pierce_count <= 0:
                                 try:
                                     projectile.kill()
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     try:
                                         g.projectiles.remove(projectile)
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
                         else:
                             try:
                                 projectile.kill()
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 try:
                                     g.projectiles.remove(projectile)
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                             else:
                                 projectile.kill()
@@ -2766,13 +3171,18 @@ class CollisionSystem:
                                             getattr(enemy, "burn_propagate_hops", 0),
                                         )
                                         self._propagate_burn(enemy)
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                         try:
                             g.record_enemy_kill()
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         # Chain hits: storm projectiles can hit additional distinct enemies
                         if isinstance(projectile, dict):
@@ -2839,10 +3249,20 @@ class CollisionSystem:
                                         try:
                                             try:
                                                 g.record_enemy_kill()
-                                            except Exception:
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 pass
                                             g.enemies.remove(targ)
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             pass
                                 else:
                                     try:
@@ -2853,7 +3273,12 @@ class CollisionSystem:
                                             eff * 2,
                                             show_floating=False,
                                         )  # Increased damage for secondary targets
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         try:
                                             eff = self._player_damage_vs_burning(
                                                 projectile, targ, p_damage
@@ -2861,7 +3286,12 @@ class CollisionSystem:
                                             targ.health -= (
                                                 eff * 2
                                             )  # Increased damage for secondary targets
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             pass
                                     if getattr(targ, "health", 0) <= 0:
                                         g.add_score(
@@ -2889,7 +3319,12 @@ class CollisionSystem:
                                             g.trigger_level_up()
                                         try:
                                             g.record_enemy_kill()
-                                        except Exception:
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
                                             pass
                                         targ.kill()
 
@@ -2918,7 +3353,7 @@ class CollisionSystem:
                     getattr(projectile, "effect", None),
                     len(hit_bosses),
                 )
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             for boss in hit_bosses:
                 # Skip if this projectile already hit this exact boss instance
@@ -2938,7 +3373,7 @@ class CollisionSystem:
                         getattr(boss, "enemy_type", "") in hit_boss_types_local
                     ):
                         continue
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
                 if boss.enemy_type == "boss_final" and g.selected_stage == "prologo":
@@ -2987,7 +3422,7 @@ class CollisionSystem:
                                 getattr(projectile, "slow_duration", 120),
                                 getattr(projectile, "slow_factor", 0.5),
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     if getattr(projectile, "effect", None) == "burn":
                         # Only apply burn if not already burning
@@ -3006,12 +3441,12 @@ class CollisionSystem:
                                     boss.burn_propagate_dps = burn_dps
                                     boss.burn_propagate_duration = burn_duration
                                     boss.burn_propagate_hops = 2
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                     elif getattr(projectile, "effect", None) == "slow":
                         # another slow branch, use helper
                         self._apply_slow_effect(boss, slow_duration, slow_factor)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
                 # Fallback: ensure slow from projectiles is applied to bosses even if
@@ -3026,7 +3461,7 @@ class CollisionSystem:
                             getattr(projectile, "slow_duration", 120),
                             getattr(projectile, "slow_factor", 0.5),
                         )
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 # Record that this projectile has hit this boss/type so it won't hit again
                 try:
@@ -3036,7 +3471,7 @@ class CollisionSystem:
                     if not hasattr(projectile, "_hit_boss_types"):
                         projectile._hit_boss_types = set()
                     projectile._hit_boss_types.add(getattr(boss, "enemy_type", ""))
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
                 # Handle projectile piercing for bosses too
@@ -3065,12 +3500,12 @@ class CollisionSystem:
                             g.show_centered_message(
                                 "HORDE DEFEATED!", 2000, (255, 255, 0)
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         # Stop spawning more waves
                         try:
                             g.wave_time = g.wave_duration
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         # Don't call .empty() here; let game.update() handle the cleanup
                         # This ensures the boss death is properly detected
@@ -3096,14 +3531,14 @@ class CollisionSystem:
                     # record boss kill like a normal enemy (awards meta XP)
                     try:
                         g.record_enemy_kill()
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     # give a small amount of meta XP for boss kills so the
                     # external progress bar advances mid-run; use 10% of
                     # boss_base_xp (rounded)
                     try:
                         g.award_meta_xp(int(boss_base_xp * 0.1))
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     # Health drop spawning is handled by DeathSystem
                     # Don't kill boss_limbo_horde here — game.update()
@@ -3206,7 +3641,12 @@ class CollisionSystem:
                                 targ.kill()
                                 try:
                                     g.record_enemy_kill()
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                             else:
                                 # Regular enemy death handling
@@ -3233,7 +3673,12 @@ class CollisionSystem:
                                 targ.kill()
                                 try:
                                     g.record_enemy_kill()
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
 
                     # Add chain lightning effect to game state
@@ -3266,7 +3711,7 @@ class CollisionSystem:
                             if not hasattr(g.player, "original_speed"):
                                 g.player.original_speed = g.player.speed
                             g.player.speed = g.player.speed * g.player.slow_factor
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
             # Trigger screen & player shake
@@ -3288,7 +3733,7 @@ class CollisionSystem:
                             WINGED_EXPLOSION_DURATION,
                             WINGED_EXPLOSION_RADIUS,
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         WINGED_EXPLOSION_RADIUS = 30
                         WINGED_EXPLOSION_DURATION = 6
                         WINGED_EXPLOSION_COLOR = (255, 120, 0)
@@ -3299,7 +3744,7 @@ class CollisionSystem:
                             g.player.take_damage(
                                 WINGED_CONTACT_DAMAGE, show_floating=False
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     try:
                         g.game_state.fire_explosions.append(
@@ -3312,15 +3757,15 @@ class CollisionSystem:
                                 "color": WINGED_EXPLOSION_COLOR,
                             }
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     # remove the enemy immediately
                     try:
                         enemy.kill()
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         try:
                             g.enemies.remove(enemy)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     # skip the normal contact handling
                     continue
@@ -3346,7 +3791,7 @@ class CollisionSystem:
                     if enemy.contact_timer <= 0:
                         enemy.take_damage(4, show_floating=False)
                         enemy.contact_timer = int(g.fps * 2)
-                except Exception:
+                except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 if g.frame_count % 10 == 0:
                     # Shorter, weaker shake for contact (burn particles disabled)
@@ -3374,7 +3819,7 @@ class CollisionSystem:
                                 WINGED_EXPLOSION_DURATION,
                                 WINGED_EXPLOSION_RADIUS,
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             WINGED_EXPLOSION_RADIUS = 30
                             WINGED_EXPLOSION_DURATION = 6
                             WINGED_EXPLOSION_COLOR = (255, 120, 0)
@@ -3385,7 +3830,7 @@ class CollisionSystem:
                                 g.player.take_damage(
                                     WINGED_CONTACT_DAMAGE, show_floating=False
                                 )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         try:
                             g.game_state.fire_explosions.append(
@@ -3398,12 +3843,12 @@ class CollisionSystem:
                                     "color": WINGED_EXPLOSION_COLOR,
                                 }
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         # attempt to remove object-style enemy
                         try:
                             g.enemies.remove(enemy)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         continue
 
@@ -3422,13 +3867,13 @@ class CollisionSystem:
                         if enemy.contact_timer <= 0:
                             enemy.take_damage(4, show_floating=False)
                             enemy.contact_timer = int(g.fps * 2)
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         # Best-effort fallback: apply tiny constant damage
                         try:
                             enemy.health = max(
                                 0, getattr(enemy, "health", 0) - (2.0 / g.fps)
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     if g.frame_count % 10 == 0:
                         # Shorter, weaker shake for contact (burn particles disabled)
@@ -3464,7 +3909,7 @@ class CollisionSystem:
                         g.spawn_floating_text(
                             str(int(damage)), ex, ey - g._enemy_radius(enemy) - 8
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     g.player.health = min(g.player.max_health, g.player.health + heal)
                 if enemy.drain_timer <= 0:
@@ -3488,19 +3933,19 @@ class CollisionSystem:
                         heal = getattr(enemy, "drain_heal", 1)
                         try:
                             enemy.take_damage(damage)
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 enemy.health = max(
                                     0, getattr(enemy, "health", 0) - damage
                                 )
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                         try:
                             ex, ey = g._enemy_pos(enemy)
                             g.spawn_floating_text(
                                 str(int(damage)), ex, ey - g._enemy_radius(enemy) - 8
                             )
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         g.player.health = min(
                             g.player.max_health, g.player.health + heal
@@ -3515,7 +3960,12 @@ class CollisionSystem:
                             if hasattr(enemy, attr):
                                 try:
                                     delattr(enemy, attr)
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
 
         # Update slow timers for all enemies
@@ -3605,7 +4055,7 @@ class CollisionSystem:
                     # record as an enemy kill (increments meta XP by 1)
                     try:
                         g.record_enemy_kill()
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     # also give the small boss XP bonus that the normal branch
                     # would have granted (10% of the base value); keep this
@@ -3620,7 +4070,7 @@ class CollisionSystem:
                             boss.enemy_type.replace("boss_", ""), 100
                         )
                         g.award_meta_xp(int(boss_base_xp * 0.1))
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     # Spawn health drop when boss dies
                     # Health drop spawning is handled by DeathSystem
@@ -3629,13 +4079,13 @@ class CollisionSystem:
                     if getattr(boss, "enemy_type", "") != "boss_limbo_horde":
                         try:
                             boss.kill()
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 if hasattr(g.bosses, "remove"):
                                     g.bosses.remove(boss)
-                            except Exception:
+                            except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
         # Check for level up
@@ -3668,7 +4118,7 @@ class CollisionSystem:
                             BLIZZARD_GROWTH_MULTIPLIER,
                             BLIZZARD_MAX_DURATION,
                         )
-                    except Exception:
+                    except (AttributeError, TypeError, ValueError, KeyError):
                         BLIZZARD_MAX_DURATION = 1
                         BLIZZARD_GROWTH_MULTIPLIER = 1.0
                     growth = 1 - (puddle.get("timer", 0) / BLIZZARD_MAX_DURATION)
@@ -3710,7 +4160,7 @@ class CollisionSystem:
                         enemy.speed = getattr(enemy, "original_speed", enemy.speed)
                         try:
                             del enemy.original_speed
-                        except Exception:
+                        except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     enemy.slow_factor = 1.0
 
@@ -3735,7 +4185,12 @@ class CollisionSystem:
                                         BLIZZARD_GROWTH_MULTIPLIER,
                                         BLIZZARD_MAX_DURATION,
                                     )
-                                except Exception:
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     BLIZZARD_MAX_DURATION = 1
                                     BLIZZARD_GROWTH_MULTIPLIER = 1.0
                                 growth = 1 - (
@@ -3783,6 +4238,11 @@ class CollisionSystem:
                                     )
                                     try:
                                         del boss.original_speed
-                                    except Exception:
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
                                 boss.slow_factor = 1.0

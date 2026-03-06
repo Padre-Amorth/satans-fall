@@ -1138,7 +1138,8 @@ class PygameUIManager:
                     else:  # Side churches
                         self._draw_church_procedural(pygame, base_x, base_y)
 
-                # OLD CODE BELOW (REMOVE AFTER VERIFICATION)
+    def _draw_battlefield_crosses(self, shake_x: int = 0, shake_y: int = 0) -> None:
+        """Draw battlefield crosses at bottom sides of Prologo stage."""
         pygame = self.pygame
         if (
             self.game.selected_stage == "prologo"

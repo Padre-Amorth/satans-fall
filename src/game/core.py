@@ -40,6 +40,7 @@ from src.game_constants import (
     DEFAULT_PLAYER_ANIM_SPEED,
     DEFAULT_WAVE_DURATION,
     DEFAULT_WIDTH,
+    LIMBO_STAGES,
     STAGE_SETTINGS,
     WALL_THICKNESS,
 )

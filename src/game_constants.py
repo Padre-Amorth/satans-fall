@@ -278,7 +278,8 @@ LIMBO_FINAL_ACCEL_START_TIME: float = 30.0
 LIMBO_FINAL_HALT_BEFORE_BOSS: float = 5.0
 
 # Stage groupings for conditional logic
-LIMBO_STAGES = {"prologo", "limbo", "limbo_2", "limbo_3", "limbo_final"}
+PROLOGO_STAGES = {"prologo"}
+LIMBO_STAGES = {"limbo", "limbo_2", "limbo_3", "limbo_final"}
 PURGATORY_STAGES = {"purgatory", "purgatory_2", "purgatory_3"}
 HELL_STAGES = {"hell", "hell_2", "hell_3"}
 
@@ -379,6 +380,7 @@ __all__: list[str] = [
     "DEFAULT_PLAYER_ANIM_SPEED",
     "DEFAULT_WAVE_DURATION",
     "WALL_THICKNESS",
+    "PROLOGO_STAGES",
     "LIMBO_STAGES",
     "PURGATORY_STAGES",
     "HELL_STAGES",

@@ -3,6 +3,8 @@
 import logging
 from typing import TYPE_CHECKING
 
+from src.game_constants import LIMBO_STAGES
+
 if TYPE_CHECKING:
     from src.game import Game
 
@@ -406,9 +408,6 @@ class InputHandler:
             ):
                 # Upgrade selection — layout constants must match draw_upgrade_selection
                 from src.game_constants import (
-    LIMBO_STAGES,
-    PURGATORY_STAGES,
-    HELL_STAGES,
                     SELECTION_BOX_HEIGHT,
                     SELECTION_BOX_SPACING,
                     SELECTION_BOX_WIDTH,

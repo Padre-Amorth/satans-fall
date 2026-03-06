@@ -6,6 +6,7 @@ import math
 import random
 from typing import TYPE_CHECKING, Any
 
+from src.game_constants import LIMBO_STAGES, PURGATORY_STAGES, HELL_STAGES
 from src.projectile import FliesProjectile, Projectile
 from src.weapons import (
     DemonStrike_cooldown,

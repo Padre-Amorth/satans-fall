@@ -7,6 +7,7 @@ from typing import Any, Literal
 from src.assets.manager import get_image
 from src.game_constants import (
     HELL_STAGES,
+    LIMBO_STAGES,
     PURGATORY_STAGES,
     SELECTION_BOX_HEIGHT,
     SELECTION_BOX_SPACING,

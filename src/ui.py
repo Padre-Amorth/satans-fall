@@ -706,6 +706,365 @@ class PygameUIManager:
                     self.screen, (255, 200, 0), (int(torch_x + 8), int(torch_y - 20)), 8
                 )
 
+    def _draw_cathedral_procedural(self, pygame, base_x: int, base_y: int) -> None:
+        """Draw cathedral procedural pixel art (Prologo stage)."""
+        if not self.screen or not pygame:
+            return
+
+        cathedral_y = base_y + 50
+
+        # Cathedral foundation/base (dark stone)
+        foundation_color = (60, 45, 35)
+        pygame.draw.rect(
+            self.screen,
+            foundation_color,
+            (base_x - 42, cathedral_y + 40, 84, 12),
+        )
+
+        # Main cathedral body (rectangular base) - light stone
+        stone_color = (140, 120, 100)
+        pygame.draw.rect(self.screen, stone_color, (base_x - 35, cathedral_y, 70, 50))
+
+        # Central entrance doors (large, ornate)
+        door_color = (80, 60, 45)
+        pygame.draw.rect(
+            self.screen,
+            door_color,
+            (base_x - 12, cathedral_y + 25, 24, 25),
+        )
+
+        # Door frame/details (gold accents)
+        gold_color = (180, 150, 50)
+        pygame.draw.rect(
+            self.screen,
+            gold_color,
+            (base_x - 14, cathedral_y + 23, 28, 3),  # Top frame
+        )
+        pygame.draw.rect(
+            self.screen,
+            gold_color,
+            (base_x - 14, cathedral_y + 47, 28, 3),  # Bottom frame
+        )
+        pygame.draw.rect(
+            self.screen,
+            gold_color,
+            (base_x - 14, cathedral_y + 23, 3, 27),  # Left frame
+        )
+        pygame.draw.rect(
+            self.screen,
+            gold_color,
+            (base_x + 11, cathedral_y + 23, 3, 27),  # Right frame
+        )
+
+        # Rose window above entrance (stained glass)
+        rose_window_color = (100, 150, 200)
+        pygame.draw.circle(
+            self.screen,
+            rose_window_color,
+            (base_x, cathedral_y + 15),
+            8,
+        )
+
+        # Side windows (stained glass)
+        window_color = (120, 160, 210)
+        # Left side windows
+        pygame.draw.rect(
+            self.screen,
+            window_color,
+            (base_x - 28, cathedral_y + 12, 8, 12),
+        )
+        pygame.draw.rect(
+            self.screen,
+            window_color,
+            (base_x - 28, cathedral_y + 28, 8, 12),
+        )
+        # Right side windows
+        pygame.draw.rect(
+            self.screen,
+            window_color,
+            (base_x + 20, cathedral_y + 12, 8, 12),
+        )
+        pygame.draw.rect(
+            self.screen,
+            window_color,
+            (base_x + 20, cathedral_y + 28, 8, 12),
+        )
+
+        # Window frames (stone)
+        frame_color = (100, 85, 70)
+        # Left frames
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x - 29, cathedral_y + 11, 10, 1),
+        )
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x - 29, cathedral_y + 24, 10, 1),
+        )
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x - 29, cathedral_y + 11, 1, 14),
+        )
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x - 20, cathedral_y + 11, 1, 14),
+        )
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x - 29, cathedral_y + 39, 10, 1),
+        )
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x - 29, cathedral_y + 27, 1, 14),
+        )
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x - 20, cathedral_y + 27, 1, 14),
+        )
+        # Right frames
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x + 19, cathedral_y + 11, 10, 1),
+        )
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x + 19, cathedral_y + 24, 10, 1),
+        )
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x + 19, cathedral_y + 11, 1, 14),
+        )
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x + 28, cathedral_y + 11, 1, 14),
+        )
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x + 19, cathedral_y + 39, 10, 1),
+        )
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x + 19, cathedral_y + 27, 1, 14),
+        )
+        pygame.draw.rect(
+            self.screen,
+            frame_color,
+            (base_x + 28, cathedral_y + 27, 1, 14),
+        )
+
+        # Cathedral roof (triangular) - dark tile
+        roof_color = (70, 55, 45)
+        roof_points = [
+            (base_x - 40, cathedral_y),  # Left base
+            (base_x, cathedral_y - 30),  # Top peak
+            (base_x + 40, cathedral_y),  # Right base
+        ]
+        pygame.draw.polygon(self.screen, roof_color, roof_points)
+
+        # Roof ridge details
+        ridge_color = (90, 75, 60)
+        pygame.draw.line(
+            self.screen,
+            ridge_color,
+            (base_x - 35, cathedral_y - 5),
+            (base_x + 35, cathedral_y - 5),
+            2,
+        )
+
+        # Central spire - stone
+        pygame.draw.rect(
+            self.screen,
+            stone_color,
+            (base_x - 5, cathedral_y - 55, 10, 25),
+        )
+
+        # Spire cross (large gold cross)
+        pygame.draw.rect(
+            self.screen,
+            gold_color,
+            (base_x - 3, cathedral_y - 57, 6, 10),  # Vertical
+        )
+        pygame.draw.rect(
+            self.screen,
+            gold_color,
+            (base_x - 6, cathedral_y - 54, 12, 4),  # Horizontal
+        )
+
+        # Side towers (larger than before)
+        tower_color = (130, 110, 90)
+        # Left tower
+        pygame.draw.rect(
+            self.screen,
+            tower_color,
+            (base_x - 50, cathedral_y - 15, 15, 35),
+        )
+        # Left tower roof
+        pygame.draw.polygon(
+            self.screen,
+            roof_color,
+            [
+                (base_x - 52, cathedral_y - 15),
+                (base_x - 42, cathedral_y - 25),
+                (base_x - 35, cathedral_y - 15),
+            ],
+        )
+        # Left tower spire
+        pygame.draw.rect(
+            self.screen,
+            tower_color,
+            (base_x - 45, cathedral_y - 35, 5, 10),
+        )
+
+        # Right tower
+        pygame.draw.rect(
+            self.screen,
+            tower_color,
+            (base_x + 35, cathedral_y - 15, 15, 35),
+        )
+        # Right tower roof
+        pygame.draw.polygon(
+            self.screen,
+            roof_color,
+            [
+                (base_x + 35, cathedral_y - 15),
+                (base_x + 42, cathedral_y - 25),
+                (base_x + 47, cathedral_y - 15),
+            ],
+        )
+        # Right tower spire
+        pygame.draw.rect(
+            self.screen,
+            tower_color,
+            (base_x + 40, cathedral_y - 35, 5, 10),
+        )
+
+        # Tower windows
+        pygame.draw.rect(
+            self.screen,
+            window_color,
+            (base_x - 47, cathedral_y - 5, 4, 6),  # Left tower window
+        )
+        pygame.draw.rect(
+            self.screen,
+            window_color,
+            (base_x + 39, cathedral_y - 5, 4, 6),  # Right tower window
+        )
+
+    def _draw_church_procedural(self, pygame, base_x: int, base_y: int) -> None:
+        """Draw church procedural pixel art (Prologo stage)."""
+        if not self.screen or not pygame:
+            return
+
+        church_y = base_y + 50
+
+        # Main church body (rectangular base) - stone color
+        stone_color = (120, 100, 80)  # Brownish stone
+        pygame.draw.rect(self.screen, stone_color, (base_x - 20, church_y, 40, 28))
+
+        # Church foundation/base (darker stone)
+        foundation_color = (80, 60, 50)
+        pygame.draw.rect(
+            self.screen,
+            foundation_color,
+            (base_x - 22, church_y + 25, 44, 8),
+        )
+
+        # Central door (darker rectangle)
+        door_color = (60, 40, 30)
+        pygame.draw.rect(self.screen, door_color, (base_x - 6, church_y + 12, 12, 16))
+
+        # Door frame/details
+        pygame.draw.rect(
+            self.screen,
+            (100, 80, 60),
+            (base_x - 7, church_y + 11, 14, 2),  # Top frame
+        )
+        pygame.draw.rect(
+            self.screen,
+            (100, 80, 60),
+            (base_x - 7, church_y + 27, 14, 2),  # Bottom frame
+        )
+
+        # Side windows
+        window_color = (150, 180, 200)  # Light blue stained glass
+        # Left window
+        pygame.draw.rect(self.screen, window_color, (base_x - 16, church_y + 8, 6, 8))
+        # Right window
+        pygame.draw.rect(self.screen, window_color, (base_x + 10, church_y + 8, 6, 8))
+
+        # Window frames (stone)
+        pygame.draw.rect(
+            self.screen,
+            stone_color,
+            (base_x - 17, church_y + 7, 8, 1),  # Left top
+        )
+        pygame.draw.rect(
+            self.screen,
+            stone_color,
+            (base_x - 17, church_y + 16, 8, 1),  # Left bottom
+        )
+        pygame.draw.rect(
+            self.screen,
+            stone_color,
+            (base_x + 9, church_y + 7, 8, 1),  # Right top
+        )
+        pygame.draw.rect(
+            self.screen,
+            stone_color,
+            (base_x + 9, church_y + 16, 8, 1),  # Right bottom
+        )
+
+        # Church roof (triangular) - darker tile color
+        roof_color = (80, 60, 50)
+        roof_points = [
+            (base_x - 24, church_y),  # Left base
+            (base_x, church_y - 16),  # Top peak
+            (base_x + 24, church_y),  # Right base
+        ]
+        pygame.draw.polygon(self.screen, roof_color, roof_points)
+
+        # Roof ridge detail
+        ridge_color = (100, 80, 60)
+        pygame.draw.line(
+            self.screen,
+            ridge_color,
+            (base_x - 20, church_y - 2),
+            (base_x + 20, church_y - 2),
+            2,
+        )
+
+        # Central spire - stone color
+        pygame.draw.rect(self.screen, stone_color, (base_x - 2, church_y - 28, 4, 12))
+
+        # Spire cross (gold color)
+        cross_color = (200, 180, 50)
+        pygame.draw.rect(
+            self.screen,
+            cross_color,
+            (base_x - 1, church_y - 30, 2, 6),  # Vertical
+        )
+        pygame.draw.rect(
+            self.screen,
+            cross_color,
+            (base_x - 2, church_y - 28, 4, 2),  # Horizontal
+        )
+
+        # Small bell tower windows
+        pygame.draw.rect(self.screen, window_color, (base_x - 1, church_y - 22, 2, 3))
+
     def _draw_buildings(self, shake_x=0, shake_y=0) -> None:
         pygame = self.pygame
         settings = self.game.stage_settings[self.game.selected_stage]
@@ -774,373 +1133,11 @@ class PygameUIManager:
                 # Fallback: procedural drawing if asset not found
                 if not asset_loaded:
                     if i == 1:  # Center cathedral - larger
-                        # Adjust Y position (lower by 20 pixels)
-                        cathedral_y = base_y + 50
+                        self._draw_cathedral_procedural(pygame, base_x, base_y)
+                    else:  # Side churches
+                        self._draw_church_procedural(pygame, base_x, base_y)
 
-                        # Cathedral foundation/base (dark stone)
-                        foundation_color = (60, 45, 35)
-                        pygame.draw.rect(
-                            self.screen,
-                            foundation_color,
-                            (base_x - 42, cathedral_y + 40, 84, 12),
-                        )
-
-                        # Main cathedral body (rectangular base) - light stone
-                        stone_color = (140, 120, 100)
-                        pygame.draw.rect(
-                            self.screen, stone_color, (base_x - 35, cathedral_y, 70, 50)
-                        )
-
-                        # Central entrance doors (large, ornate)
-                        door_color = (80, 60, 45)
-                        pygame.draw.rect(
-                            self.screen,
-                            door_color,
-                            (base_x - 12, cathedral_y + 25, 24, 25),
-                        )
-
-                        # Door frame/details (gold accents)
-                        gold_color = (180, 150, 50)
-                        pygame.draw.rect(
-                            self.screen,
-                            gold_color,
-                            (base_x - 14, cathedral_y + 23, 28, 3),  # Top frame
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            gold_color,
-                            (base_x - 14, cathedral_y + 47, 28, 3),  # Bottom frame
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            gold_color,
-                            (base_x - 14, cathedral_y + 23, 3, 27),  # Left frame
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            gold_color,
-                            (base_x + 11, cathedral_y + 23, 3, 27),  # Right frame
-                        )
-
-                        # Rose window above entrance (stained glass)
-                        rose_window_color = (100, 150, 200)
-                        pygame.draw.circle(
-                            self.screen,
-                            rose_window_color,
-                            (base_x, cathedral_y + 15),
-                            8,
-                        )
-
-                        # Side windows (stained glass)
-                        window_color = (120, 160, 210)
-                        # Left side windows
-                        pygame.draw.rect(
-                            self.screen,
-                            window_color,
-                            (base_x - 28, cathedral_y + 12, 8, 12),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            window_color,
-                            (base_x - 28, cathedral_y + 28, 8, 12),
-                        )
-                        # Right side windows
-                        pygame.draw.rect(
-                            self.screen,
-                            window_color,
-                            (base_x + 20, cathedral_y + 12, 8, 12),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            window_color,
-                            (base_x + 20, cathedral_y + 28, 8, 12),
-                        )
-
-                        # Window frames (stone)
-                        frame_color = (100, 85, 70)
-                        # Left frames
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x - 29, cathedral_y + 11, 10, 1),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x - 29, cathedral_y + 24, 10, 1),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x - 29, cathedral_y + 11, 1, 14),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x - 20, cathedral_y + 11, 1, 14),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x - 29, cathedral_y + 39, 10, 1),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x - 29, cathedral_y + 27, 1, 14),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x - 20, cathedral_y + 27, 1, 14),
-                        )
-                        # Right frames
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x + 19, cathedral_y + 11, 10, 1),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x + 19, cathedral_y + 24, 10, 1),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x + 19, cathedral_y + 11, 1, 14),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x + 28, cathedral_y + 11, 1, 14),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x + 19, cathedral_y + 39, 10, 1),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x + 19, cathedral_y + 27, 1, 14),
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            frame_color,
-                            (base_x + 28, cathedral_y + 27, 1, 14),
-                        )
-
-                        # Cathedral roof (triangular) - dark tile
-                        roof_color = (70, 55, 45)
-                        roof_points = [
-                            (base_x - 40, cathedral_y),  # Left base
-                            (base_x, cathedral_y - 30),  # Top peak
-                            (base_x + 40, cathedral_y),  # Right base
-                        ]
-                        pygame.draw.polygon(self.screen, roof_color, roof_points)
-
-                        # Roof ridge details
-                        ridge_color = (90, 75, 60)
-                        pygame.draw.line(
-                            self.screen,
-                            ridge_color,
-                            (base_x - 35, cathedral_y - 5),
-                            (base_x + 35, cathedral_y - 5),
-                            2,
-                        )
-
-                        # Central spire - stone
-                        pygame.draw.rect(
-                            self.screen,
-                            stone_color,
-                            (base_x - 5, cathedral_y - 55, 10, 25),
-                        )
-
-                        # Spire cross (large gold cross)
-                        pygame.draw.rect(
-                            self.screen,
-                            gold_color,
-                            (base_x - 3, cathedral_y - 57, 6, 10),  # Vertical
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            gold_color,
-                            (base_x - 6, cathedral_y - 54, 12, 4),  # Horizontal
-                        )
-
-                        # Side towers (larger than before)
-                        tower_color = (130, 110, 90)
-                        # Left tower
-                        pygame.draw.rect(
-                            self.screen,
-                            tower_color,
-                            (base_x - 50, cathedral_y - 15, 15, 35),
-                        )
-                        # Left tower roof
-                        pygame.draw.polygon(
-                            self.screen,
-                            roof_color,
-                            [
-                                (base_x - 52, cathedral_y - 15),
-                                (base_x - 42, cathedral_y - 25),
-                                (base_x - 35, cathedral_y - 15),
-                            ],
-                        )
-                        # Left tower spire
-                        pygame.draw.rect(
-                            self.screen,
-                            tower_color,
-                            (base_x - 45, cathedral_y - 35, 5, 10),
-                        )
-
-                        # Right tower
-                        pygame.draw.rect(
-                            self.screen,
-                            tower_color,
-                            (base_x + 35, cathedral_y - 15, 15, 35),
-                        )
-                        # Right tower roof
-                        pygame.draw.polygon(
-                            self.screen,
-                            roof_color,
-                            [
-                                (base_x + 35, cathedral_y - 15),
-                                (base_x + 42, cathedral_y - 25),
-                                (base_x + 47, cathedral_y - 15),
-                            ],
-                        )
-                        # Right tower spire
-                        pygame.draw.rect(
-                            self.screen,
-                            tower_color,
-                            (base_x + 40, cathedral_y - 35, 5, 10),
-                        )
-
-                        # Tower windows
-                        pygame.draw.rect(
-                            self.screen,
-                            window_color,
-                            (base_x - 47, cathedral_y - 5, 4, 6),  # Left tower window
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            window_color,
-                            (base_x + 39, cathedral_y - 5, 4, 6),  # Right tower window
-                        )
-
-                    else:  # Side churches - smaller
-                        # Adjust Y position (lower by 20 pixels)
-                        church_y = base_y + 50
-
-                        # Main church body (rectangular base) - stone color
-                        stone_color = (120, 100, 80)  # Brownish stone
-                        pygame.draw.rect(
-                            self.screen, stone_color, (base_x - 20, church_y, 40, 28)
-                        )
-
-                        # Church foundation/base (darker stone)
-                        foundation_color = (80, 60, 50)
-                        pygame.draw.rect(
-                            self.screen,
-                            foundation_color,
-                            (base_x - 22, church_y + 25, 44, 8),
-                        )
-
-                        # Central door (darker rectangle)
-                        door_color = (60, 40, 30)
-                        pygame.draw.rect(
-                            self.screen, door_color, (base_x - 6, church_y + 12, 12, 16)
-                        )
-
-                        # Door frame/details
-                        pygame.draw.rect(
-                            self.screen,
-                            (100, 80, 60),
-                            (base_x - 7, church_y + 11, 14, 2),  # Top frame
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            (100, 80, 60),
-                            (base_x - 7, church_y + 27, 14, 2),  # Bottom frame
-                        )
-
-                        # Side windows
-                        window_color = (150, 180, 200)  # Light blue stained glass
-                        # Left window
-                        pygame.draw.rect(
-                            self.screen, window_color, (base_x - 16, church_y + 8, 6, 8)
-                        )
-                        # Right window
-                        pygame.draw.rect(
-                            self.screen, window_color, (base_x + 10, church_y + 8, 6, 8)
-                        )
-
-                        # Window frames (stone)
-                        pygame.draw.rect(
-                            self.screen,
-                            stone_color,
-                            (base_x - 17, church_y + 7, 8, 1),  # Left top
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            stone_color,
-                            (base_x - 17, church_y + 16, 8, 1),  # Left bottom
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            stone_color,
-                            (base_x + 9, church_y + 7, 8, 1),  # Right top
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            stone_color,
-                            (base_x + 9, church_y + 16, 8, 1),  # Right bottom
-                        )
-
-                        # Church roof (triangular) - darker tile color
-                        roof_color = (80, 60, 50)
-                        roof_points = [
-                            (base_x - 24, church_y),  # Left base
-                            (base_x, church_y - 16),  # Top peak
-                            (base_x + 24, church_y),  # Right base
-                        ]
-                        pygame.draw.polygon(self.screen, roof_color, roof_points)
-
-                        # Roof ridge detail
-                        ridge_color = (100, 80, 60)
-                        pygame.draw.line(
-                            self.screen,
-                            ridge_color,
-                            (base_x - 20, church_y - 2),
-                            (base_x + 20, church_y - 2),
-                            2,
-                        )
-
-                        # Central spire - stone color
-                        pygame.draw.rect(
-                            self.screen, stone_color, (base_x - 2, church_y - 28, 4, 12)
-                        )
-
-                        # Spire cross (gold color)
-                        cross_color = (200, 180, 50)
-                        pygame.draw.rect(
-                            self.screen,
-                            cross_color,
-                            (base_x - 1, church_y - 30, 2, 6),  # Vertical
-                        )
-                        pygame.draw.rect(
-                            self.screen,
-                            cross_color,
-                            (base_x - 2, church_y - 28, 4, 2),  # Horizontal
-                        )
-
-                        # Small bell tower windows
-                        pygame.draw.rect(
-                            self.screen, window_color, (base_x - 1, church_y - 22, 2, 3)
-                        )
-
-    def _draw_battlefield_crosses(self, shake_x=0, shake_y=0) -> None:
+                # OLD CODE BELOW (REMOVE AFTER VERIFICATION)
         pygame = self.pygame
         if (
             self.game.selected_stage == "prologo"

@@ -10,15 +10,18 @@ from typing import TYPE_CHECKING, Any, Dict, List
 from src.balance import ENEMY_BASE_SPEEDS
 from src.entities.enemy import Enemy
 from src.game_constants import (
+    HELL_STAGES,
     LIMBO_FINAL_ACCEL_START_TIME,
     LIMBO_FINAL_HALT_BEFORE_BOSS,
     LIMBO_HORDE_TIME,
     LIMBO_HORDE_TIME_1,
     LIMBO_HORDE_TIME_2,
     LIMBO_HORDE_TIME_3,
+    LIMBO_STAGES,
     PURGATORY_HORDE_TIME_1,
     PURGATORY_HORDE_TIME_2,
     PURGATORY_HORDE_TIME_3,
+    PURGATORY_STAGES,
 )
 from src.projectile import Projectile
 

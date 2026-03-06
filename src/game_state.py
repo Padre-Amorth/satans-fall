@@ -11,6 +11,7 @@ from src.balance import (
     XP_BASE,
     XP_GROWTH,
 )
+from src.game_constants import HELL_STAGES, LIMBO_STAGES, PURGATORY_STAGES
 from src.weapons import (
     WEAPON_DEFS,
     get_orbital_count,

@@ -18,6 +18,7 @@ import pygame
 
 from src.balance import ENEMY_BASE_SPEEDS
 from src.entities.enemy import Enemy
+from src.game_constants import HELL_STAGES
 
 logger = logging.getLogger(__name__)
 

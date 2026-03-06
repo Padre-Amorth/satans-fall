@@ -7,6 +7,8 @@ import math
 import random
 from typing import TYPE_CHECKING, Dict, List
 
+from src.game_constants import HELL_STAGES, LIMBO_STAGES, PURGATORY_STAGES
+
 if TYPE_CHECKING:
     from src.game import Game
 
@@ -55,9 +57,6 @@ class TowerSpecialSystem:
         # copy constants for convenience (mirrors what _init_game_state did)
         try:
             from src.game_constants import (
-    LIMBO_STAGES,
-    PURGATORY_STAGES,
-    HELL_STAGES,
                 VOLTAIC_MAYHEM_IMPACT_RADIUS,
                 VOLTAIC_MAYHEM_MAX_DURATION,
                 VOLTAIC_MAYHEM_SPEED,

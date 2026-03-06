@@ -55,6 +55,9 @@ class TowerSpecialSystem:
         # copy constants for convenience (mirrors what _init_game_state did)
         try:
             from src.game_constants import (
+    LIMBO_STAGES,
+    PURGATORY_STAGES,
+    HELL_STAGES,
                 VOLTAIC_MAYHEM_IMPACT_RADIUS,
                 VOLTAIC_MAYHEM_MAX_DURATION,
                 VOLTAIC_MAYHEM_SPEED,
@@ -517,11 +520,11 @@ class TowerSpecialSystem:
             except (AttributeError, TypeError, ValueError, KeyError):
                 # fallback to constants (shouldn't happen)
                 stage = getattr(self.game, "selected_stage", "") or ""
-                if stage.startswith("limbo"):
+                if stage in LIMBO_STAGES:
                     stage_x = game_constants.STATUE_PROJECTILE_OFFSET_X_LIMBO
-                elif stage.startswith("purgatory"):
+                elif stage in PURGATORY_STAGES:
                     stage_x = game_constants.STATUE_PROJECTILE_OFFSET_X_PURGATORY
-                elif stage.startswith("hell"):
+                elif stage in HELL_STAGES:
                     stage_x = game_constants.STATUE_PROJECTILE_OFFSET_X_HELL
                 else:
                     stage_x = 0

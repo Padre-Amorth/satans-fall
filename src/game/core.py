@@ -1408,7 +1408,7 @@ class Game:
             # Default width per-stage (may be overridden for stage-specific behavior)
             if self.is_limbo_stage():
                 width_at_y = 680 - (progress * 280)
-            elif self.selected_stage and str(self.selected_stage).startswith("hell"):
+            elif self.selected_stage and str(self.selected_stage) in HELL_STAGES:
                 # HELL: make walls totally vertical — narrowed by 50px per side (100px total)
                 width_at_y = 620.0  # 720 - 100 (50px per side)
             elif self.selected_stage and str(self.selected_stage).startswith(
@@ -1423,7 +1423,7 @@ class Game:
                 width_at_y = 560 - (progress * 240)
 
             # Irregularity creates small horizontal wobble; disable for HELL to keep walls vertical
-            if self.selected_stage and str(self.selected_stage).startswith("hell"):
+            if self.selected_stage and str(self.selected_stage) in HELL_STAGES:
                 irregularity = 0.0
             else:
                 irregularity = math.sin(y / 80) * 5 + math.cos(y / 60) * 3
@@ -1488,7 +1488,7 @@ class Game:
     def is_limbo_stage(self) -> bool:
         """Return True if the currently selected stage is any variant of Limbo."""
         return bool(
-            self.selected_stage and str(self.selected_stage).startswith("limbo")
+            self.selected_stage and str(self.selected_stage) in LIMBO_STAGES
         )
 
     def is_purgatory_stage(self) -> bool:
@@ -1498,7 +1498,7 @@ class Game:
         to the wall polygon in the same way as prologue/limbo.
         """
         return bool(
-            self.selected_stage and str(self.selected_stage).startswith("purgatory")
+            self.selected_stage and str(self.selected_stage) in PURGATORY_STAGES
         )
 
     # --- Helpers for test compatibility ---

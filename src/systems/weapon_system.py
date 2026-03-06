@@ -43,16 +43,16 @@ def statue_projectile_offsets(game: "Game") -> tuple[float, float]:
     from src import game_constants
 
     stage = getattr(game, "selected_stage", "") or ""
-    if stage.startswith("limbo"):
+    if stage in LIMBO_STAGES:
         # Limbo Final projectiles originate further from centre than
         # regular Limbo statues.  Total outward shift is currently 35px,
         # so subtract that amount from the limbo constant (50) giving 15px.
         stage_x = game_constants.STATUE_PROJECTILE_OFFSET_X_LIMBO
         if stage == "limbo_final":
             stage_x -= 35
-    elif stage.startswith("purgatory"):
+    elif stage in PURGATORY_STAGES:
         stage_x = game_constants.STATUE_PROJECTILE_OFFSET_X_PURGATORY
-    elif stage.startswith("hell"):
+    elif stage in HELL_STAGES:
         stage_x = game_constants.STATUE_PROJECTILE_OFFSET_X_HELL
     else:
         stage_x = 0

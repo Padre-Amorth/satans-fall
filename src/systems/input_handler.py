@@ -406,6 +406,9 @@ class InputHandler:
             ):
                 # Upgrade selection — layout constants must match draw_upgrade_selection
                 from src.game_constants import (
+    LIMBO_STAGES,
+    PURGATORY_STAGES,
+    HELL_STAGES,
                     SELECTION_BOX_HEIGHT,
                     SELECTION_BOX_SPACING,
                     SELECTION_BOX_WIDTH,
@@ -1739,7 +1742,7 @@ class InputHandler:
             self.game.buildings = []  # No buildings in limbo
 
         # Generate stage-specific features
-        if str(stage).startswith("limbo"):
+        if str(stage) in LIMBO_STAGES:
             self.game.generate_dead_trees()
             # Configure statue/tower types per Limbo level
             if stage == "limbo":
@@ -1876,7 +1879,7 @@ class InputHandler:
             self.game.weapon_levels = {"beast": 1}
             self.game.game_state.player_weapons = ["beast"]
             self.game.game_state.weapon_levels = {"beast": 1}
-        elif str(stage).startswith("limbo"):
+        elif str(stage) in LIMBO_STAGES:
             # For Limbo we always do an initial weapon choice.  The final Limbo
             # level also requires the player to select a tower type, mirroring
             # the behaviour of the Purgatory stages.
@@ -2111,7 +2114,7 @@ class InputHandler:
         except (AttributeError, TypeError, ValueError, KeyError):
             # fall back to manual logic in case select_stage is unavailable
             self.game.selected_stage = nxt
-            if nxt.startswith("limbo"):
+            if nxt in LIMBO_STAGES:
                 try:
                     self.game.generate_dead_trees()
                 except (AttributeError, TypeError, ValueError, KeyError):

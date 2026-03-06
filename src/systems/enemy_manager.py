@@ -217,7 +217,7 @@ class EnemyManager:
 
         # Determine enemy type: hell stage uses custode instead of giant
         stage = getattr(self.game, "selected_stage", "") or ""
-        if stage.startswith("hell"):
+        if stage in HELL_STAGES:
             etype = "custode"
         else:
             etype = "giant"

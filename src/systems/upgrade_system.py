@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 from src.balance import PLAYER_BASE_HEALTH, XP_BASE, XP_GROWTH
 from src.core.entities.tower import Tower
-from src.game_constants import WALL_THICKNESS
+from src.game_constants import WALL_THICKNESS, LIMBO_STAGES, PURGATORY_STAGES, HELL_STAGES
 from src.weapons import (
     WEAPON_DEFS,
     get_orbital_count,
@@ -250,7 +250,7 @@ class UpgradeSystem:
             try:
                 stage = getattr(g, "selected_stage", None)
                 # Projectile Size only available in Hell
-                if not (stage and str(stage).startswith("hell")):
+                if not (stage and str(stage) in HELL_STAGES):
                     patterns = [p for p in patterns if p.get("id") != "projectile_size"]
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
@@ -260,8 +260,8 @@ class UpgradeSystem:
                 if not (
                     stage
                     and (
-                        str(stage).startswith("purgatory")
-                        or str(stage).startswith("hell")
+                        str(stage) in PURGATORY_STAGES
+                        or str(stage) in HELL_STAGES
                     )
                 ):
                     patterns = [p for p in patterns if p.get("id") != "tower_fire_rate"]
@@ -451,7 +451,7 @@ class UpgradeSystem:
                 if af == "hell":
                     return bool(
                         self.game.selected_stage
-                        and str(self.game.selected_stage).startswith("hell")
+                        and str(self.game.selected_stage) in HELL_STAGES
                     )
                 return True
 
@@ -537,7 +537,7 @@ class UpgradeSystem:
                 if af == "hell":
                     if not (
                         self.game.selected_stage
-                        and str(self.game.selected_stage).startswith("hell")
+                        and str(self.game.selected_stage) in HELL_STAGES
                     ):
                         continue
             available_weapons.append(w)

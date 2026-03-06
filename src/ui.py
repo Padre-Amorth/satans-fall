@@ -6,6 +6,9 @@ from typing import Any, Literal
 
 from src.assets.manager import get_image
 from src.game_constants import (
+    LIMBO_STAGES,
+    PURGATORY_STAGES,
+    HELL_STAGES,
     SELECTION_BOX_HEIGHT,
     SELECTION_BOX_SPACING,
     SELECTION_BOX_WIDTH,
@@ -553,7 +556,7 @@ class PygameUIManager:
         settings = self.game.stage_settings[self.game.selected_stage]
         wall_color = settings["wall_color"]
 
-        is_hell_stage = getattr(self.game, "selected_stage", "").startswith("hell")
+        is_hell_stage = getattr(self.game, "selected_stage", "") in HELL_STAGES
         is_prologo = getattr(self.game, "selected_stage", "") == "prologo"
         is_limbo_stage = self.game.is_limbo_stage()
         render_wall_thickness = (
@@ -3675,7 +3678,7 @@ class PygameUIManager:
         themselves still exist but are no longer invoked.
         """
         stage = getattr(self.game, "selected_stage", None)
-        if not (stage and str(stage).startswith("purgatory")):
+        if not (stage and str(stage) in PURGATORY_STAGES):
             return
         if not self.screen:
             return
@@ -3743,14 +3746,14 @@ class PygameUIManager:
         if not stage or not self.screen:
             return
 
-        if str(stage).startswith("purgatory"):
+        if str(stage) in PURGATORY_STAGES:
             try:
                 self.draw_purgatory_fog(shake_x, shake_y)
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
             return
 
-        if str(stage).startswith("hell"):
+        if str(stage) in HELL_STAGES:
             from src.game_constants import HELL_OVERLAY_ALPHA, HELL_OVERLAY_COLOR
 
             self._draw_stage_overlay(

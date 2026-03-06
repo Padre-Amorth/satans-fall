@@ -28,7 +28,7 @@ class GameStateManager:
         # Wave management
         self.wave = 0
         self.wave_time = 0
-        from src.game_constants import DEFAULT_WAVE_DURATION
+        from src.game_constants import DEFAULT_WAVE_DURATION, LIMBO_STAGES, PURGATORY_STAGES, HELL_STAGES
 
         # duration of each wave in seconds; pulled from constants for
         # consistency so tuning only needs to change one value.
@@ -422,7 +422,7 @@ class GameStateManager:
                     # only allow in HELL stages (not purgatory)
                     if not (
                         self.selected_stage
-                        and str(self.selected_stage).startswith("hell")
+                        and str(self.selected_stage) in HELL_STAGES
                     ):
                         continue
             filtered.append(w)

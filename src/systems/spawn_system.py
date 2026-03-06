@@ -945,7 +945,7 @@ class SpawnSystem:
                 health = 200 * self.game.difficulty_multiplier
                 speed = ENEMY_BASE_SPEEDS.get("crusader", 30)
                 stage = getattr(self.game, "selected_stage", "") or ""
-                if stage.startswith("purgatory") or stage.startswith("hell"):
+                if stage in PURGATORY_STAGES or stage in HELL_STAGES:
                     self.crusader_spawned_this_wave += 1
             elif enemy_type == "inquisitor":
                 # inquisitor is just a normal enemy with a special appearance
@@ -1245,7 +1245,7 @@ class SpawnSystem:
                 stage = getattr(self.game, "selected_stage", "") or ""
                 for _ in range(phase.get("boss_count", 0)):
                     try:
-                        if stage.startswith("limbo"):
+                        if stage in LIMBO_STAGES:
                             self.game.spawn_boss("limbo_horde")
                             try:
                                 self.game.limbo_horde_boss_spawned = True
@@ -1291,7 +1291,7 @@ class SpawnSystem:
             stage = getattr(self.game, "selected_stage", "") or ""
             for _ in range(boss_count):
                 try:
-                    if stage.startswith("limbo"):
+                    if stage in LIMBO_STAGES:
                         # spawn a specialised horde boss type so it can have a
                         # unique asset separate from the final-stage boss.
                         self.game.spawn_boss("limbo_horde")
@@ -1376,7 +1376,7 @@ class SpawnSystem:
 
         # Choose type based on current stage: Hell replaces giants with custodes
         stage = getattr(self.game, "selected_stage", "") or ""
-        if stage.startswith("hell"):
+        if stage in HELL_STAGES:
             enemy_type = "custode"
         else:
             enemy_type = "giant"
@@ -1420,9 +1420,9 @@ class SpawnSystem:
         # count explicit spawns toward the wave cap if stage allows
         stage = getattr(self.game, "selected_stage", "") or ""
         if (
-            stage.startswith("purgatory")
-            or stage.startswith("hell")
-            or stage.startswith("limbo")
+            stage in PURGATORY_STAGES
+            or stage in HELL_STAGES
+            or stage in LIMBO_STAGES
         ):
             self.crusader_spawned_this_wave += 1
         enemy: Enemy = Enemy(x, y, enemy_type, health, speed)
@@ -1457,7 +1457,7 @@ class SpawnSystem:
 
         # choose type based on stage like spawn_giant_enemy
         stage = getattr(self.game, "selected_stage", "") or ""
-        if stage.startswith("hell"):
+        if stage in HELL_STAGES:
             enemy_type = "custode"
         else:
             enemy_type = "giant"

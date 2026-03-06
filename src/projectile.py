@@ -441,6 +441,8 @@ class Projectile(BaseSprite):
             self._render_inquisitor()
         elif appearance == "inquisitor_horde":
             self._render_inquisitor_horde()
+        elif appearance == "enemy_default" or appearance is None:
+            self._render_fallback()
         else:
             self._render_fallback()
 
@@ -658,23 +660,26 @@ class Projectile(BaseSprite):
             loaded_image: Surface | None = get_image(
                 image_name, (self.radius * 2, self.radius * 2)
             )
-            if loaded_image is None:
-                raise RuntimeError("asset missing")
-            self.image = loaded_image.copy()
+            if loaded_image is not None:
+                self.image = loaded_image.copy()
+                return
         except (AttributeError, TypeError, ValueError, KeyError):
-            if self.is_enemy_projectile:
-                pygame.draw.circle(
-                    self.image,
-                    (255, 215, 0),
-                    (self.radius, self.radius),
-                    self.radius,
-                )
-                pygame.draw.circle(
-                    self.image,
-                    (255, 255, 0),
-                    (self.radius, self.radius),
-                    self.radius - 1,
-                )
+            pass
+
+        # Fallback: draw programmatically
+        if self.is_enemy_projectile:
+            pygame.draw.circle(
+                self.image,
+                (255, 215, 0),
+                (self.radius, self.radius),
+                self.radius,
+            )
+            pygame.draw.circle(
+                self.image,
+                (255, 255, 0),
+                (self.radius, self.radius),
+                self.radius - 1,
+            )
             pygame.draw.circle(
                 self.image,
                 (255, 255, 255),

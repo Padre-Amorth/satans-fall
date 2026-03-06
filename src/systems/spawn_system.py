@@ -157,13 +157,15 @@ class SpawnSystem:
 
         # Use manager timers if manager exists
         # block any further spawning once the horde has been completed,
-        # the limbo-final boss has been killed, or a victory/defeat overlay is showing
+        # the limbo-final boss has been killed, a victory/defeat overlay is showing,
+        # or the prologue final boss has been defeated
         if (
             getattr(self.game, "limbo_horde_completed", False)
             or getattr(self.game, "purgatory_horde_completed", False)
             or getattr(self.game, "showing_victory", False)
             or getattr(self.game, "limbo_final_victory_timer", 0) > 0
             or getattr(self.game, "purgatory_horde_victory_timer", 0) > 0
+            or getattr(self.game, "prologo_final_boss_defeated", False)
         ):
             return
 
@@ -911,6 +913,16 @@ class SpawnSystem:
             pass
 
     def spawn_enemy(self, forced_type: str | None = None) -> None:
+        # Limit normal enemies to max 5 on screen at any time
+        # Count existing normal enemies (exclude all special types)
+        if forced_type is None:
+            normal_count = sum(
+                1 for e in getattr(self.game, "enemies", [])
+                if getattr(e, "enemy_type", None) == "normal"
+            )
+            if normal_count >= 5:
+                return  # Skip spawn if already at limit
+
         # Spawn from top of screen (pick X uniformly between the walls)
         x = self.game.random_x_between_walls()
         # apply a small random horizontal jitter so consecutive spawns don't
@@ -1055,9 +1067,9 @@ class SpawnSystem:
                 winged_chance = base_winged
                 if wave >= 3:
                     winged_chance = min(base_winged + (wave - 2) * 0.01, 0.30)
-                # archer chance is always half of normal chance, but only from wave 3 onward in prologo
+                # archer chance is always half of normal chance, but never in prologo
                 stage = getattr(self.game, "selected_stage", "") or ""
-                if stage == "prologo" and wave < 3:
+                if stage == "prologo":
                     archer_chance = 0.0
                 else:
                     archer_chance = normal_chance * 0.5

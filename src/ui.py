@@ -4705,7 +4705,7 @@ class PygameUIManager:
                         os.path.join("screenshots", f"{suffix}_beam_peak.png"),
                     )
                     self.game._screenshot_taken_peak = True
-            except (AttributeError, TypeError, ValueError, KeyError):
+            except (AttributeError, TypeError, ValueError, KeyError, PermissionError, OSError):
                 pass
 
             # Explosion / impact at the end point

@@ -495,7 +495,7 @@ class Enemy(BaseSprite):
                     # try the alternate top-level `game` module (if available).
                     if not found_here:
                         try:
-                            from game import CURRENT_GAME as _ALT_CURRENT_GAME
+                            from src.game import CURRENT_GAME as _ALT_CURRENT_GAME
 
                             alt_enemies = getattr(_ALT_CURRENT_GAME, "enemies", None)
                             if alt_enemies is not None:
@@ -1272,6 +1272,7 @@ class Enemy(BaseSprite):
                     # In limbo we stop in the mid-screen, but in prologo we hold
                     # near the ceiling so the boss never approaches the player.
                     if stage == "prologo":
+                        top_margin = 90  # lower starting position for prologue
                         bottom_limit = top_margin + 120  # small vertical window
                     else:
                         bottom_limit = int(game.height / 2) - 40  # vertical stop line
@@ -1290,7 +1291,8 @@ class Enemy(BaseSprite):
                                 max(top_margin + 10, bottom_limit - 150)
                             )
                         self.hover_center_x = float(self.x)
-                        self.hover_phase = random.uniform(0.0, math.pi * 2)
+                        # Start at phase 0 (sine = 0) so the first oscillation begins at center position, not a jump
+                        self.hover_phase = 0.0
                         # amplitude/frequency tuning varies only by limbo stage
                         base_amp = 120.0
                         if stage == "limbo_2":
@@ -2714,10 +2716,10 @@ class Enemy(BaseSprite):
             screen.blit(blit_image, (draw_x, draw_y))
 
             # Draw health bar with shake offset
-            bar_width = 25
-            bar_height = 3
+            bar_width = 40 if self.enemy_type == "boss_medium" else 25
+            bar_height = 4 if self.enemy_type == "boss_medium" else 3
             bar_x: int | Any = self.rect.centerx - bar_width // 2 + shake_x
-            bar_y: int | Any = self.rect.top - 5 + shake_y
+            bar_y: int | Any = self.rect.top - 12 + shake_y
 
             if self.shake_timer > 0:
                 bar_x += random.randint(-1, 1)

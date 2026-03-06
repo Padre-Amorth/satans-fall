@@ -614,7 +614,7 @@ class EnemyManager:
             "final",
             "big",
         ]:
-            y = -150  # Start higher for walking entrance
+            y = -160  # Start higher for walking entrance
         else:
             y = -50
 

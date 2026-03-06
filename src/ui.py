@@ -6,9 +6,8 @@ from typing import Any, Literal
 
 from src.assets.manager import get_image
 from src.game_constants import (
-    LIMBO_STAGES,
-    PURGATORY_STAGES,
     HELL_STAGES,
+    PURGATORY_STAGES,
     SELECTION_BOX_HEIGHT,
     SELECTION_BOX_SPACING,
     SELECTION_BOX_WIDTH,
@@ -2133,15 +2132,30 @@ class PygameUIManager:
         if not self.screen or not pygame:
             return
 
-        font_large = pygame.font.Font(None, 36)
-        font_medium = pygame.font.Font(None, 24)
-        font_small = pygame.font.Font(None, 18)
-
         left_x = self.width // 2 - 420
+
+        # Draw title
+        font_large = pygame.font.Font(None, 36)
         title = font_large.render("PERMANENT UPGRADES", True, (255, 255, 0))
         self.screen.blit(
             title, (self.width // 2 - title.get_width() // 2 + shake_x, 40 + shake_y)
         )
+
+        separator_y = self._draw_header_xp(left_x, shake_x, shake_y)
+        self._draw_permanent_stats(left_x, shake_x, shake_y)
+        blasphemy_data = self._draw_blasphemies(left_x, separator_y, shake_x, shake_y)
+        self._draw_skill_trees(left_x, separator_y, shake_x, shake_y)
+        self._draw_instructions_and_sentinel(left_x, blasphemy_data, shake_x, shake_y)
+        self._draw_exit_confirmation_dialog(pygame, shake_x, shake_y)
+
+    def _draw_header_xp(self, left_x: int, shake_x: int, shake_y: int) -> int:
+        """Draw level, points, and XP bar. Return separator_y position for other sections."""
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return 320
+
+        font_medium = pygame.font.Font(None, 24)
+        font_small = pygame.font.Font(None, 18)
 
         # subtitle was removed per design; we no longer render any text above the
         # XP bar.  (Previously it said "Upgrade your demonic powers".)
@@ -2198,7 +2212,17 @@ class PygameUIManager:
             (bar_x + bar_w + 58 + shake_x, bar_y - 2 + shake_y),
         )
 
-        # POWER / VIGOR / ADRENALINE / STRUCTURE stats
+        return 320
+
+    def _draw_permanent_stats(self, left_x: int, shake_x: int, shake_y: int) -> None:
+        """Draw POWER/VIGOR/ADRENALINE/STRUCTURE stat bars with hover effects."""
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return
+
+        font_medium = pygame.font.Font(None, 24)
+        font_small = pygame.font.Font(None, 18)
+
         rendered_names = [
             font_medium.render(s["name"], True, s["color"]) for s in _STAT_CONFIGS
         ]
@@ -2304,9 +2328,21 @@ class PygameUIManager:
                     (bar_x + shake_x, bar_y + shake_y, fill_w, bar_height),
                 )
 
-        separator_y = 320
+    def _draw_blasphemies(
+        self, left_x: int, separator_y: int, shake_x: int, shake_y: int
+    ) -> dict:
+        """Draw blasphemy boxes with roman numerals and tooltips.
 
-        # Blasphemies header + layout
+        Returns dict with data needed for instructions/sentinel rendering.
+        """
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return
+
+        font_medium = pygame.font.Font(None, 24)
+        font_large = pygame.font.Font(None, 36)
+        font_small = pygame.font.Font(None, 18)
+
         blasp_text = font_medium.render("BLASPHEMIES", True, (136, 136, 136))
         self.screen.blit(blasp_text, (left_x + shake_x, separator_y + 30 + shake_y))
 
@@ -2346,7 +2382,7 @@ class PygameUIManager:
                                 TypeError,
                                 ValueError,
                                 KeyError,
-                                pygame.error,
+                                RuntimeError,
                             ):
                                 pass
                     except (
@@ -2354,7 +2390,7 @@ class PygameUIManager:
                         TypeError,
                         ValueError,
                         KeyError,
-                        pygame.error,
+                        RuntimeError,
                     ):
                         pygame.draw.rect(self.screen, (26, 26, 26), rect)
                 else:
@@ -2368,7 +2404,7 @@ class PygameUIManager:
                 key = f"blasphemy_{row_idx * 5 + col + 1}"
                 lvl = self.game.permanent_stats.get(key, 0)
 
-                # Render roman numerals for blasphemies that show level text (include single-level slots 5 & 10)
+                # Render roman numerals for blasphemies that show level text
                 if lvl and key in (
                     "blasphemy_1",
                     "blasphemy_2",
@@ -2389,7 +2425,7 @@ class PygameUIManager:
                         sy = y + box_height // 2 - lvl_surf.get_height() // 2 + shake_y
                         self.screen.blit(lvl_surf, (sx, sy))
 
-                # Hover/tooltips (defensive)
+                # Hover/tooltips
                 try:
                     mouse_point = (self.game.mouse_x, self.game.mouse_y)
                 except (AttributeError, TypeError, ValueError, KeyError):
@@ -2400,13 +2436,11 @@ class PygameUIManager:
                     lines = [
                         s.strip() for s in (effect_text or "").split(";") if s.strip()
                     ]
-                    # Always show tooltip for all blasphemy upgrades when hovered
                     if lines:
                         if lvl:
                             lines.insert(0, f"Level: {lvl}")
                         tip_x = bx
                         tip_y = box_y2 + box_height + 12 + shake_y
-                        padding_x, padding_y = 8, 6
                         try:
                             self.game._draw_tooltip(
                                 lines,
@@ -2420,13 +2454,14 @@ class PygameUIManager:
                             TypeError,
                             ValueError,
                             KeyError,
-                            pygame.error,
+                            RuntimeError,
                         ):
                             pass
                         line_surfs = [
                             font_small.render(line_text, True, (255, 255, 255))
                             for line_text in lines
                         ]
+                        padding_x, padding_y = 8, 6
                         width = max(s.get_width() for s in line_surfs) + padding_x * 2
                         height = (
                             sum(s.get_height() for s in line_surfs)
@@ -2444,6 +2479,15 @@ class PygameUIManager:
                         for s in line_surfs:
                             self.screen.blit(s, (tx + padding_x, cur_y))
                             cur_y += s.get_height() + 4
+
+        return {
+            "box_asset": box_asset,
+            "start_x": start_x,
+            "box_y1": box_y1,
+            "box_y2": box_y2,
+            "box_width": box_width,
+            "box_height": box_height,
+        }
 
         # Skill trees (FIRE, STORM, ICE)
         tree_box_w = 50
@@ -2576,6 +2620,156 @@ class PygameUIManager:
                         anchor_center=True,
                     )
 
+    def _draw_skill_trees(
+        self, left_x: int, separator_y: int, shake_x: int, shake_y: int
+    ) -> None:
+        """Draw FIRE/STORM/ICE skill trees with hover effects and tooltips."""
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return
+
+        font_small = pygame.font.Font(None, 18)
+
+        tree_box_w = 50
+        tree_box_h = 36
+        tree_v_spacing = 46
+        tree_col_spacing = 120
+        tree_base_x: int = left_x + 680
+        tree_top_y: int = separator_y - 150
+
+        for col, (label, key_prefix, color) in enumerate(_TREE_TYPES):
+            col_x = tree_base_x + col * tree_col_spacing
+            lbl_surf = font_small.render(label, True, color)
+            self.screen.blit(
+                lbl_surf,
+                (
+                    col_x - lbl_surf.get_width() // 2 + shake_x,
+                    tree_top_y - 28 + shake_y,
+                ),
+            )
+
+            inner_col_offset = tree_box_w // 2 + 1
+            left_col_x = col_x - inner_col_offset
+            right_col_x = col_x + inner_col_offset
+            for row in range(3):
+                y = tree_top_y + row * tree_v_spacing
+                left_rect = (
+                    left_col_x - tree_box_w // 2 + shake_x,
+                    y + shake_y,
+                    tree_box_w,
+                    tree_box_h,
+                )
+                right_rect = (
+                    right_col_x - tree_box_w // 2 + shake_x,
+                    y + shake_y,
+                    tree_box_w,
+                    tree_box_h,
+                )
+
+                left_active = bool(
+                    self.game.permanent_stats.get(f"{key_prefix}_{row + 1}", 0)
+                )
+                right_active = bool(
+                    self.game.permanent_stats.get(f"{key_prefix}_{4 + row}", 0)
+                )
+                left_bg = color if left_active else (26, 26, 26)
+                right_bg = color if right_active else (26, 26, 26)
+                left_border = (
+                    tuple(min(255, c + 20) for c in color)
+                    if left_active
+                    else (51, 51, 51)
+                )
+                right_border = (
+                    tuple(min(255, c + 20) for c in color)
+                    if right_active
+                    else (51, 51, 51)
+                )
+
+                try:
+                    mouse_point = (self.game.mouse_x, self.game.mouse_y)
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    mouse_point = (0, 0)
+                left_hovered = pygame.Rect(*left_rect).collidepoint(mouse_point)
+                right_hovered = pygame.Rect(*right_rect).collidepoint(mouse_point)
+                if left_hovered:
+                    left_border = (255, 224, 20)
+                    left_bg = tuple(min(255, v + 30) for v in left_bg)
+                if right_hovered:
+                    right_border = (255, 224, 20)
+                    right_bg = tuple(min(255, v + 30) for v in right_bg)
+
+                pygame.draw.rect(self.screen, left_bg, left_rect)
+                pygame.draw.rect(self.screen, left_border, left_rect, 1)
+                pygame.draw.rect(self.screen, right_bg, right_rect)
+                pygame.draw.rect(self.screen, right_border, right_rect, 1)
+
+                if left_hovered:
+                    tooltip_lines = self.game._skill_tooltip_lines(key_prefix, row + 1)
+                    if tooltip_lines:
+                        self.game._draw_tooltip(
+                            tooltip_lines,
+                            col_x,
+                            tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y,
+                            pygame.font.Font(None, 18),
+                            anchor_center=True,
+                        )
+                if right_hovered:
+                    tooltip_lines = self.game._skill_tooltip_lines(key_prefix, 4 + row)
+                    if tooltip_lines:
+                        self.game._draw_tooltip(
+                            tooltip_lines,
+                            col_x,
+                            tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y,
+                            pygame.font.Font(None, 18),
+                            anchor_center=True,
+                        )
+
+            center_y = tree_top_y + 3 * tree_v_spacing
+            center_key = f"{key_prefix}_7"
+            center_active = bool(self.game.permanent_stats.get(center_key, 0))
+            center_bg = color if center_active else (26, 26, 26)
+            center_border = (
+                tuple(min(255, c + 20) for c in color)
+                if center_active
+                else (51, 51, 51)
+            )
+            center_rect = (
+                col_x - tree_box_w // 2 + shake_x,
+                center_y + shake_y,
+                tree_box_w,
+                tree_box_h,
+            )
+            try:
+                mouse_point = (self.game.mouse_x, self.game.mouse_y)
+            except (AttributeError, TypeError, ValueError, KeyError):
+                mouse_point = (0, 0)
+            center_hovered = pygame.Rect(*center_rect).collidepoint(mouse_point)
+            if center_hovered:
+                center_border = (255, 224, 20)
+                center_bg = tuple(min(255, v + 30) for v in center_bg)
+            pygame.draw.rect(self.screen, center_bg, center_rect)
+            pygame.draw.rect(self.screen, center_border, center_rect, 1)
+            if center_hovered:
+                tooltip_lines = self.game._skill_tooltip_lines(key_prefix, 7)
+                if tooltip_lines:
+                    self.game._draw_tooltip(
+                        tooltip_lines,
+                        col_x,
+                        tree_top_y + 3 * tree_v_spacing + tree_box_h + 12 + shake_y,
+                        pygame.font.Font(None, 18),
+                        anchor_center=True,
+                    )
+
+    def _draw_instructions_and_sentinel(
+        self, left_x: int, blasphemy_data: dict, shake_x: int, shake_y: int
+    ) -> None:
+        """Draw instructions text and blasphemy test sentinel."""
+        pygame = self.pygame
+        if not self.screen or not pygame:
+            return
+
+        font_medium = pygame.font.Font(None, 24)
+
         # Instructions
         instructions = font_medium.render(
             "Left click to upgrade | Right click to downgrade | ESC to return",
@@ -2584,7 +2778,15 @@ class PygameUIManager:
         )
         self.screen.blit(instructions, (left_x + shake_x, self.height - 50 + shake_y))
 
-        # Sentinel for tests (asset already drawn inside the box loop above roman numerals)
+        # Extract blasphemy data
+        box_asset = blasphemy_data.get("box_asset")
+        start_x = blasphemy_data.get("start_x")
+        box_y1 = blasphemy_data.get("box_y1")
+        box_y2 = blasphemy_data.get("box_y2")
+        box_width = blasphemy_data.get("box_width")
+        box_height = blasphemy_data.get("box_height")
+
+        # Sentinel for tests
         if box_asset and self.screen:
             try:
                 if getattr(self.game, "_test_blasphemy_sentinel", False):
@@ -2615,7 +2817,13 @@ class PygameUIManager:
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
-        # Draw EXIT confirmation prompt if pending
+    def _draw_exit_confirmation_dialog(
+        self, pygame, shake_x: int, shake_y: int
+    ) -> None:
+        """Draw EXIT confirmation dialog if pending."""
+        if not self.screen or not pygame:
+            return
+
         if getattr(self.game, "exit_confirm_pending", False):
             # Semi-transparent overlay
             overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)

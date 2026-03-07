@@ -7,6 +7,7 @@ def test_enemy_drain_spawns_text():
     # Prepare game for update loop
     g.selected_stage = "prologo"
     g.showing_stage_menu = False
+    g.showing_main_menu = False
 
     e = Enemy(100, 100)
     g.enemies.add(e)
@@ -26,6 +27,7 @@ def test_dict_burn_spawns_text():
     g = Game(debug=True)
     g.selected_stage = "prologo"
     g.showing_stage_menu = False
+    g.showing_main_menu = False
 
     from src.entities.enemy import Enemy
 

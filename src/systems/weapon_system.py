@@ -225,8 +225,8 @@ class WeaponSystem:
             base_player = int(self.game.player_damage * self.game.damage_multiplier)
             base_damage = shotgun_pellet_damage(slevel, base_player)
             base_radius = int(5 * self.game.projectile_size_multiplier * 1.0)
-            # Increase pellet collision/visual radius by +2 px as requested
-            base_radius = max(1, base_radius + 2)
+            # Reduce pellet collision radius for more challenging gameplay
+            base_radius = max(1, base_radius - 1)
 
             pellet: Projectile = Projectile(
                 self.game.player.x,

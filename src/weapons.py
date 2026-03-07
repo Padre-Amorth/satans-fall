@@ -113,7 +113,7 @@ WEAPON_DEFS["shotgun"].update(
         "pellet_level_step": 2,
         "pellet_increase": 1,
         # a slightly wider spread ensures pellets start a bit farther apart
-        "spread_deg": 15,
+        "spread_deg": 22,
         "damage_mult": 0.55,  # legacy multiplier (kept for compatibility)
         "base_cd": 1.5,
         "cd_reduction_per_pair": 0.15,

@@ -1490,9 +1490,7 @@ class Game:
 
     def is_limbo_stage(self) -> bool:
         """Return True if the currently selected stage is any variant of Limbo."""
-        return bool(
-            self.selected_stage and str(self.selected_stage) in LIMBO_STAGES
-        )
+        return bool(self.selected_stage and str(self.selected_stage) in LIMBO_STAGES)
 
     def is_purgatory_stage(self) -> bool:
         """Return True if the currently selected stage is any variant of Purgatory.
@@ -2612,10 +2610,21 @@ class Game:
         if self.blasphemy5_system is not None:
             self.blasphemy5_system.reset()
 
-        # Reset player
+        # Reset player position and per-run upgrades
         self.player.x = self.width // 2
         self.player.y = self.height - 80
         self.player.health = self.player.max_health
+        # Per-run upgrade attributes — must be reset so they don't carry over between runs
+        self.player.shield_charges = 0
+        self.player.shield_upgrade_level = 0
+        self.player.shield_cooldown_timer = 0
+        self.player.kill_explosion_enabled = False
+        self.player.kill_explosion_upgrades = 0
+        self.player.kill_counter = 0
+        self.player.regen_per_5s = 0.0
+        self.player.regen_timer = 0
+        self.player.base_speed = 220.0  # restore original before apply_permanent_stats re-applies blasphemy_7
+        self.player.speed = 220.0
 
         # Reset game over flag so it can be triggered again in this run
         self._game_over_triggered = False
@@ -2624,6 +2633,7 @@ class Game:
         self.enemies_killed_this_run = 0
 
         # Reset multipliers (base values; perma upgrades applied by apply_permanent_stats)
+        self.player_damage = PLAYER_BASE_DAMAGE
         self.damage_multiplier = 1.0
         self.fire_rate_multiplier = 1.0
         self.projectile_size_multiplier = 1.0
@@ -2780,6 +2790,12 @@ class Game:
             "max_health": 0,
             "projectile_size": 0,
             "armor": 0,
+            "shield": 0,
+            "kill_explosion": 0,
+            "movement_speed": 0,
+            "health_regen": 0,
+            "xp": 0,
+            "tower_fire_rate": 0,
         }
 
         self.paused = False

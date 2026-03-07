@@ -120,8 +120,8 @@ WEAPON_DEFS["shotgun"].update(
         "min_cd": 0.4,
         "base_radius": 5,
         # New configurable absolute pellet damage targets (used for linear remap)
-        "min_pellet_damage": 20,  # Lv1 target damage per pellet
-        "max_pellet_damage": 30,  # Lv6 target damage per pellet
+        "min_pellet_damage": 18,  # Lv1 target damage per pellet
+        "max_pellet_damage": 28,  # Lv6 target damage per pellet
     }
 )
 

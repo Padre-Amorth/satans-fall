@@ -51,7 +51,7 @@ WEAPON_DEFS: Dict[str, Dict] = {
         "description": "Fires homing projectiles that latch onto enemies and heal the player",
         "icon": "weapon_flies.png",
         "max_level": 6,
-        "available_from": "limbo",  # Not available in Prologo; available from Limbo onwards
+        "required_meta_level": 5,  # Unlocked at Satan Level 5
         "upgrade_descriptions": {
             1: "Lv1: Fires 2 homing fly projectiles that heal the player",
             2: "Lv2: +10% damage & heal",
@@ -288,6 +288,7 @@ WEAPON_DEFS["tenebrae"] = {
         "Arc of shadows that pierces enemies, " "losing power with each hit"
     ),
     "max_level": 6,
+    "required_meta_level": 10,  # Unlocked at Satan Level 10
     "upgrade_descriptions": {
         1: "Lv1: Base damage 25, -20% per enemy hit",
         2: "Lv2: +5 base damage, reduced cooldown",
@@ -307,7 +308,6 @@ WEAPON_DEFS["tenebrae"] = {
     "cd_reduction_per_level": 0.15,
     "min_cd": 0.4,
     "speed": 400,  # relativamente lento
-    "available_from": "hell",  # only obtainable starting in HELL stages
 }
 
 

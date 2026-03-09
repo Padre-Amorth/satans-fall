@@ -405,6 +405,14 @@ class GameStateManager:
         for w in defs:
             wid = w.get("id")
             wdef = WEAPON_DEFS.get(wid, {})
+
+            # Check meta-level requirement first
+            required_ml = wdef.get("required_meta_level")
+            if required_ml:
+                current_ml = self.game.global_progress.get("meta_level", 1)
+                if current_ml < required_ml:
+                    continue
+
             available_from = wdef.get("available_from")
             if available_from:
                 af = str(available_from).lower()

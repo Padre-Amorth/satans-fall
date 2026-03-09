@@ -433,6 +433,16 @@ class UpgradeSystem:
 
             def _is_available_for_stage(wid: str) -> bool:
                 wdef = WEAPON_DEFS.get(wid, {})
+
+                # Check meta-level requirement first
+                required_ml = wdef.get("required_meta_level")
+                if required_ml:
+                    current_ml = getattr(self.game, "global_progress", {}).get(
+                        "meta_level", 1
+                    )
+                    if current_ml < required_ml:
+                        return False
+
                 available_from = wdef.get("available_from")
                 if not available_from:
                     return True
@@ -518,6 +528,14 @@ class UpgradeSystem:
             if wid in self.game.player_weapons:
                 continue
             wdef = WEAPON_DEFS.get(wid, {})
+
+            # Check meta-level requirement first
+            required_ml = wdef.get("required_meta_level")
+            if required_ml:
+                current_ml = self.game.global_progress.get("meta_level", 1)
+                if current_ml < required_ml:
+                    continue
+
             available_from = wdef.get("available_from")
             if available_from:
                 af = str(available_from).lower()

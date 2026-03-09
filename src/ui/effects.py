@@ -852,7 +852,7 @@ class UIEffectsRenderer:
 
         font = self.ui.get_font(24)
         small_font = self.ui.get_font(18)
-        tiny_font = self.ui.get_font(14)
+        tiny_font = self.ui.get_font(16)  # Slightly larger for right panel
 
         # ═══════ LEFT PANEL (POINTS, TIMER, WAVE) ═══════
         left_x = 10
@@ -862,24 +862,31 @@ class UIEffectsRenderer:
         accent_color = (255, 215, 0)  # Bright gold
 
         # Score
-        score_text = self.ui.get_text("Score", small_font, header_color)
-        self.ui.screen.blit(score_text, (left_x + shake_x, left_y + shake_y))
-        score_val = self.ui.get_text(f"{int(self.game.score)}", font, accent_color)
-        self.ui.screen.blit(score_val, (left_x + shake_x, left_y + 22 + shake_y))
+        score_label = self.ui.get_text("Score: ", small_font, header_color)
+        score_val = self.ui.get_text(f"{int(self.game.score)}", small_font, accent_color)
+        self.ui.screen.blit(score_label, (left_x + shake_x, left_y + shake_y))
+        self.ui.screen.blit(
+            score_val,
+            (left_x + score_label.get_width() + shake_x, left_y + shake_y),
+        )
 
         # Wave
-        wave_text = self.ui.get_text("Wave", small_font, header_color)
-        self.ui.screen.blit(wave_text, (left_x + shake_x, left_y + 52 + shake_y))
-        wave_val = self.ui.get_text(f"{self.game.wave}", font, text_color)
-        self.ui.screen.blit(wave_val, (left_x + shake_x, left_y + 74 + shake_y))
+        wave_label = self.ui.get_text("Wave: ", small_font, header_color)
+        wave_val = self.ui.get_text(f"{self.game.wave}", small_font, text_color)
+        self.ui.screen.blit(wave_label, (left_x + shake_x, left_y + 28 + shake_y))
+        self.ui.screen.blit(
+            wave_val, (left_x + wave_label.get_width() + shake_x, left_y + 28 + shake_y)
+        )
 
         # Time
         minutes = int(self.game.time_elapsed // 60)
         seconds = int(self.game.time_elapsed % 60)
-        time_label = self.ui.get_text("Time", small_font, header_color)
-        self.ui.screen.blit(time_label, (left_x + shake_x, left_y + 104 + shake_y))
-        time_val = self.ui.get_text(f"{minutes}:{seconds:02d}", font, text_color)
-        self.ui.screen.blit(time_val, (left_x + shake_x, left_y + 126 + shake_y))
+        time_label = self.ui.get_text("Time: ", small_font, header_color)
+        time_val = self.ui.get_text(f"{minutes}:{seconds:02d}", small_font, text_color)
+        self.ui.screen.blit(time_label, (left_x + shake_x, left_y + 56 + shake_y))
+        self.ui.screen.blit(
+            time_val, (left_x + time_label.get_width() + shake_x, left_y + 56 + shake_y)
+        )
 
         # ═══════ RIGHT PANEL (HP, EXP, LEVEL, WEAPONS) ═══════
         right_x = self.ui.width - 230

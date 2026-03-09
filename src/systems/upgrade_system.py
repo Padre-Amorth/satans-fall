@@ -238,15 +238,15 @@ class UpgradeSystem:
                 },
             ]
 
-            # Filter out shield upgrade if already at max level (5) OR not available in this stage
+            # Filter out shield upgrade if already at max level (5) OR Satan level < 5
             try:
                 shield_level = getattr(g.player, "shield_upgrade_level", 0)
                 if shield_level >= 5:
                     patterns = [p for p in patterns if p.get("id") != "shield"]
                 else:
-                    # Shield only available from Limbo onwards
-                    stage = getattr(g, "selected_stage", None)
-                    if stage == "prologo":
+                    # Shield only available from Satan Level 5 onwards (all stages)
+                    meta_level = g.global_progress.get("meta_level", 1)
+                    if meta_level < 5:
                         patterns = [p for p in patterns if p.get("id") != "shield"]
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
@@ -260,12 +260,16 @@ class UpgradeSystem:
                 pass
 
             try:
+                meta_level = g.global_progress.get("meta_level", 1)
+                # Tower Fire Rate requires Purgatory+ stages (no meta level requirement)
                 stage = getattr(g, "selected_stage", None)
                 if not (
                     stage
                     and (str(stage) in PURGATORY_STAGES or str(stage) in HELL_STAGES)
                 ):
                     patterns = [p for p in patterns if p.get("id") != "tower_fire_rate"]
+                # BOOM! requires Satan Level 10 (all stages)
+                if meta_level < 10:
                     patterns = [p for p in patterns if p.get("id") != "kill_explosion"]
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass

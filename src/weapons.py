@@ -51,7 +51,7 @@ WEAPON_DEFS: Dict[str, Dict] = {
         "description": "Fires homing projectiles that latch onto enemies and heal the player",
         "icon": "weapon_flies.png",
         "max_level": 6,
-        "required_meta_level": 5,  # Unlocked at Satan Level 5
+        "required_meta_level": 6,  # Unlocked at Satan Level 6
         "upgrade_descriptions": {
             1: "Lv1: Fires 2 homing fly projectiles that heal the player",
             2: "Lv2: +10% damage & heal",
@@ -80,6 +80,7 @@ WEAPON_DEFS: Dict[str, Dict] = {
         "description": "Launches explosive skulls that detonate on enemy contact, dealing area damage",
         "icon": "weapon_skullboom.png",
         "max_level": 6,
+        "required_meta_level": 3,  # Unlocked at Satan Level 3
         "upgrade_descriptions": {
             1: "Lv1: Launches explosive skulls",
             2: "Lv2: +10% damage and reduced cooldown",
@@ -94,7 +95,7 @@ WEAPON_DEFS: Dict[str, Dict] = {
         "description": "A rolling bowling ball — travels vertically, pierces enemies and slows them",
         "icon": "weapon_demonstrike.png",
         "max_level": 6,
-        "available_from": "purgatory",  # only available from Purgatory stages onwards
+        "required_meta_level": 9,  # Unlocked at Satan Level 9
         "upgrade_descriptions": {
             1: "Lv1: Fires a piercing rolling ball that slows enemies (50% for 2s)",
             2: "Lv2: +10 base damage",
@@ -288,7 +289,7 @@ WEAPON_DEFS["tenebrae"] = {
         "Arc of shadows that pierces enemies, " "losing power with each hit"
     ),
     "max_level": 6,
-    "required_meta_level": 10,  # Unlocked at Satan Level 10
+    "required_meta_level": 12,  # Unlocked at Satan Level 12
     "upgrade_descriptions": {
         1: "Lv1: Base damage 25, -20% per enemy hit",
         2: "Lv2: +5 base damage, reduced cooldown",

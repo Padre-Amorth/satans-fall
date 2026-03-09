@@ -168,6 +168,8 @@ class Game:
         self.showing_stage_menu = False
         self.showing_permanent_upgrades = False
         self.showing_prologo_end = False
+        self.showing_unlock_overlay = False
+        self.unlock_overlay_alpha = 0.0
         # Submenu flags (Limbo / Purgatory / Hell) — ensure they exist on construction
         self.showing_limbo_menu = False
         self.showing_purgatory_menu = False
@@ -224,6 +226,7 @@ class Game:
         self.global_progress.setdefault("meta_level", 1)
         self.global_progress.setdefault("meta_points", 0)
         self.global_progress.setdefault("stages_cleared", {})
+        self.global_progress.setdefault("pending_unlock_notifications", [])
         self.projectile_manager: "ProjectileManager | None" = None
 
         # Centralized floating text pool for damage numbers and feedback (world coords)
@@ -2165,6 +2168,10 @@ class Game:
         """Wrapper: delegate main menu drawing to UI manager."""
         if hasattr(self, "ui") and hasattr(self.ui, "draw_main_menu"):
             self.ui.draw_main_menu(shake_x, shake_y)
+        # Draw unlock overlay if showing
+        if getattr(self, "showing_unlock_overlay", False):
+            if hasattr(self, "ui") and hasattr(self.ui, "effects"):
+                self.ui.effects.draw_unlock_overlay(shake_x, shake_y)
         return None
 
     def draw_profiles_menu(self, shake_x=0, shake_y=0) -> None:
@@ -2926,6 +2933,13 @@ class Game:
         # Reset game over overlay so it doesn't persist when returning to menu
         self.showing_game_over = False
         self.game_over_alpha = 0
+        # Check if there are pending unlock notifications from the last run
+        if self.global_progress.get("pending_unlock_notifications"):
+            self.showing_unlock_overlay = True
+            self.unlock_overlay_alpha = 0.0
+        else:
+            self.showing_unlock_overlay = False
+            self.unlock_overlay_alpha = 0.0
 
     def toggle_pause(self) -> None:
         return self.input_handler.toggle_pause() if self.input_handler else None

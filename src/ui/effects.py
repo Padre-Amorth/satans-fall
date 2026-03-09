@@ -1643,3 +1643,82 @@ class UIEffectsRenderer:
             )
         except Exception as e:
             logger.exception("Error drawing victory screen: %s", e)
+
+    def draw_unlock_overlay(self, shake_x=0, shake_y=0):
+        """Draw overlay showing newly unlocked weapons and upgrades from this run."""
+        try:
+            import pygame
+
+            notifications = self.game.global_progress.get(
+                "pending_unlock_notifications", []
+            )
+            if not notifications:
+                return
+
+            # Fade-in alpha
+            self.game.unlock_overlay_alpha = min(
+                255.0, self.game.unlock_overlay_alpha + 8.0
+            )
+            alpha = int(self.game.unlock_overlay_alpha)
+
+            # Sfondo semi-trasparente viola scuro
+            overlay = pygame.Surface(
+                (self.game.width, self.game.height), pygame.SRCALPHA
+            )
+            overlay.fill((30, 10, 40, min(200, alpha)))
+            self.game.screen.blit(overlay, (shake_x, shake_y))
+
+            cx = self.game.width // 2 + shake_x
+            y = 140 + shake_y
+
+            # Titolo: SATAN LEVEL X
+            level = notifications[0]["level"]
+            title_surf = self.ui.get_text(
+                f"SATAN LEVEL {level}", self.ui.get_font(52), (255, 215, 0)
+            )
+            title_surf.set_alpha(alpha)
+            self.game.screen.blit(
+                title_surf, (cx - title_surf.get_width() // 2, y)
+            )
+
+            y += 70
+            sub_surf = self.ui.get_text(
+                "NEW UNLOCKS", self.ui.get_font(28), (200, 160, 240)
+            )
+            sub_surf.set_alpha(alpha)
+            self.game.screen.blit(
+                sub_surf, (cx - sub_surf.get_width() // 2, y)
+            )
+
+            y += 60
+            for notif in notifications:
+                kind_color = (
+                    (255, 180, 50)
+                    if notif["kind"] == "WEAPON"
+                    else (100, 220, 255)
+                )
+                kind_label = (
+                    "WEAPON" if notif["kind"] == "WEAPON" else "UPGRADE"
+                )
+                line = f"[{kind_label}]  {notif['name']}"
+                surf = self.ui.get_text(line, self.ui.get_font(34), kind_color)
+                surf.set_alpha(alpha)
+                self.game.screen.blit(surf, (cx - surf.get_width() // 2, y))
+                y += 50
+
+            # Prompt in basso
+            prompt = self.ui.get_text(
+                "PRESS ENTER TO CONTINUE",
+                self.ui.get_font(22),
+                (160, 160, 160),
+            )
+            prompt.set_alpha(alpha)
+            self.game.screen.blit(
+                prompt,
+                (
+                    cx - prompt.get_width() // 2,
+                    self.game.height - 80 + shake_y,
+                ),
+            )
+        except Exception as e:
+            logger.exception("Error drawing unlock overlay: %s", e)

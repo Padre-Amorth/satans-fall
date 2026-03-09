@@ -128,6 +128,17 @@ class InputHandler:
         if not pygame:
             return
 
+        # If unlock overlay is showing, dismiss it on any confirmation key
+        if getattr(self.game, "showing_unlock_overlay", False):
+            if key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_ESCAPE):
+                self.game.showing_unlock_overlay = False
+                self.game.global_progress["pending_unlock_notifications"] = []
+                try:
+                    self.game.save_permanent_stats()
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+            return
+
         # If a pause confirmation dialog is active, it takes absolute precedence
         if getattr(self.game, "pause_confirmation", None):
             # Toggle selection (0 = Yes, 1 = No)

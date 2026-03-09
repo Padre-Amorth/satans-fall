@@ -67,6 +67,26 @@ class ScoreSystem:
         if leveled_up:
             self.game.save_permanent_stats()
 
+            # Populate unlock notifications for this level-up
+            new_level = self.game.global_progress.get("meta_level", 1)
+            _LEVEL_UNLOCKS = {
+                3: [("WEAPON", "SkullBoom")],
+                5: [("UPGRADE", "Shield")],
+                6: [("WEAPON", "Flies")],
+                9: [("WEAPON", "DemonStrike")],
+                10: [("UPGRADE", "BOOM!")],
+                12: [("WEAPON", "Tenebrae")],
+            }
+            unlocks = _LEVEL_UNLOCKS.get(new_level, [])
+            if unlocks:
+                pending = self.game.global_progress.setdefault(
+                    "pending_unlock_notifications", []
+                )
+                for kind, name in unlocks:
+                    pending.append(
+                        {"level": new_level, "kind": kind, "name": name}
+                    )
+
     def award_stage_clear(self, stage: str) -> bool:
         """Award the one-time completion reward for a stage.
 

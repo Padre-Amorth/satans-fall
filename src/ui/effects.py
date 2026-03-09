@@ -852,169 +852,174 @@ class UIEffectsRenderer:
 
         font = self.ui.get_font(24)
         small_font = self.ui.get_font(18)
+        tiny_font = self.ui.get_font(14)
+
+        # ═══════ LEFT PANEL (POINTS, TIMER, WAVE) ═══════
+        left_x = 10
+        left_y = 10
+        panel_width = 220
+        panel_height = 110
+        border_color = (80, 80, 80)
+        bg_color = (20, 20, 20)
+        header_color = (220, 180, 40)  # Gold (matches menu)
+        text_color = (200, 200, 200)  # Light gray
+        accent_color = (255, 215, 0)  # Bright gold
+
+        # Left panel background with border
+        pygame.draw.rect(
+            self.ui.screen,
+            bg_color,
+            (left_x + shake_x, left_y + shake_y, panel_width, panel_height),
+        )
+        pygame.draw.rect(
+            self.ui.screen,
+            border_color,
+            (left_x + shake_x, left_y + shake_y, panel_width, panel_height),
+            2,
+        )
 
         # Score
-        score_text = self.ui.get_text(
-            f"Score: {int(self.game.score)}", font, (255, 255, 0)
-        )
-        self.ui.screen.blit(score_text, (10 + shake_x, 10 + shake_y))
+        score_text = self.ui.get_text("Score", small_font, header_color)
+        self.ui.screen.blit(score_text, (left_x + 8 + shake_x, left_y + 6 + shake_y))
+        score_val = self.ui.get_text(f"{int(self.game.score)}", font, accent_color)
+        self.ui.screen.blit(score_val, (left_x + 130 + shake_x, left_y + 4 + shake_y))
 
         # Wave
-        wave_text = self.ui.get_text(f"Wave: {self.game.wave}", font, (255, 100, 100))
-        self.ui.screen.blit(wave_text, (10 + shake_x, 40 + shake_y))
+        wave_text = self.ui.get_text("Wave", small_font, header_color)
+        self.ui.screen.blit(wave_text, (left_x + 8 + shake_x, left_y + 32 + shake_y))
+        wave_val = self.ui.get_text(f"{self.game.wave}", font, text_color)
+        self.ui.screen.blit(wave_val, (left_x + 140 + shake_x, left_y + 30 + shake_y))
 
         # Time
         minutes = int(self.game.time_elapsed // 60)
         seconds = int(self.game.time_elapsed % 60)
-        time_text = self.ui.get_text(
-            f"Time: {minutes}:{seconds:02d}", font, (100, 200, 255)
-        )
-        self.ui.screen.blit(time_text, (10 + shake_x, 70 + shake_y))
+        time_label = self.ui.get_text("Time", small_font, header_color)
+        self.ui.screen.blit(time_label, (left_x + 8 + shake_x, left_y + 58 + shake_y))
+        time_val = self.ui.get_text(f"{minutes}:{seconds:02d}", font, text_color)
+        self.ui.screen.blit(time_val, (left_x + 110 + shake_x, left_y + 56 + shake_y))
 
-        # Health bar
-        bar_width = 200
-        bar_height = 20
-        bar_x: int = self.ui.width - bar_width - 10
-        bar_y = 10
+        # ═══════ RIGHT PANEL (HP, EXP, LEVEL, WEAPONS) ═══════
+        right_x = self.ui.width - 230
+        right_y = 10
+        panel_width = 220
+        panel_height = 220
+        border_color = (80, 80, 80)
+        bg_color = (20, 20, 20)
+        header_color = (220, 180, 40)  # Gold (matches menu)
+        text_color = (200, 200, 200)  # Light gray
+        accent_color = (255, 215, 0)  # Bright gold
 
-        # Background
+        # Right panel background with border
         pygame.draw.rect(
             self.ui.screen,
-            (100, 100, 100),
-            (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height),
+            bg_color,
+            (right_x + shake_x, right_y + shake_y, panel_width, panel_height),
         )
-        # Health
+        pygame.draw.rect(
+            self.ui.screen,
+            border_color,
+            (right_x + shake_x, right_y + shake_y, panel_width, panel_height),
+            2,
+        )
+
+        # Health section
+        hp_label = self.ui.get_text("Health", tiny_font, header_color)
+        self.ui.screen.blit(hp_label, (right_x + 8 + shake_x, right_y + 6 + shake_y))
+
         health_ratio: float = self.game.player.health / self.game.player.max_health
-        health_color: (
-            tuple[Literal[20], Literal[80], Literal[20]]
-            | tuple[Literal[255], Literal[255], Literal[0]]
-            | tuple[Literal[255], Literal[0], Literal[0]]
-        ) = (
-            (20, 80, 20)
-            if health_ratio > 0.5
-            else (255, 255, 0) if health_ratio > 0.25 else (255, 0, 0)
-        )
-        pygame.draw.rect(
-            self.ui.screen,
-            health_color,
-            (bar_x + shake_x, bar_y + shake_y, bar_width * health_ratio, bar_height),
-        )
-        # Border
-        pygame.draw.rect(
-            self.ui.screen,
-            (255, 255, 255),
-            (bar_x + shake_x, bar_y + shake_y, bar_width, bar_height),
-            2,
+        health_bar_color = (
+            (220, 80, 80)
+            if health_ratio < 0.3
+            else (200, 200, 80) if health_ratio < 0.6 else (80, 180, 80)
         )
 
-        # Health text
-        health_text = self.ui.get_text(
+        bar_w, bar_h = 200, 8
+        bar_bx = right_x + 8 + shake_x
+        bar_by = right_y + 22 + shake_y
+        pygame.draw.rect(self.ui.screen, (35, 35, 35), (bar_bx, bar_by, bar_w, bar_h))
+        pygame.draw.rect(
+            self.ui.screen,
+            health_bar_color,
+            (bar_bx, bar_by, int(bar_w * health_ratio), bar_h),
+        )
+        pygame.draw.rect(
+            self.ui.screen, border_color, (bar_bx, bar_by, bar_w, bar_h), 1
+        )
+
+        hp_text = self.ui.get_text(
             f"{int(self.game.player.health)}/{int(self.game.player.max_health)}",
-            small_font,
-            (255, 255, 255),
+            tiny_font,
+            text_color,
         )
-        self.ui.screen.blit(
-            health_text,
-            (
-                bar_x + bar_width // 2 - health_text.get_width() // 2 + shake_x,
-                bar_y + bar_height // 2 - health_text.get_height() // 2 + shake_y,
-            ),
-        )
+        self.ui.screen.blit(hp_text, (right_x + 8 + shake_x, right_y + 32 + shake_y))
 
-        # XP bar
-        xp_bar_y = 40
-        pygame.draw.rect(
-            self.ui.screen,
-            (100, 100, 100),
-            (bar_x + shake_x, xp_bar_y + shake_y, bar_width, bar_height),
-        )
+        # XP section
+        xp_label = self.ui.get_text("Experience", tiny_font, header_color)
+        self.ui.screen.blit(xp_label, (right_x + 8 + shake_x, right_y + 50 + shake_y))
+
         xp_ratio: float = self.game.player_xp / max(1, self.game.xp_to_next_level)
-        # XP bar in darker purple
+        xp_bar_by = right_y + 66 + shake_y
         pygame.draw.rect(
-            self.ui.screen,
-            (120, 34, 160),
-            (bar_x + shake_x, xp_bar_y + shake_y, bar_width * xp_ratio, bar_height),
+            self.ui.screen, (35, 35, 35), (bar_bx, xp_bar_by, bar_w, bar_h)
         )
         pygame.draw.rect(
             self.ui.screen,
-            (255, 255, 255),
-            (bar_x + shake_x, xp_bar_y + shake_y, bar_width, bar_height),
-            2,
+            (140, 100, 200),
+            (bar_bx, xp_bar_by, int(bar_w * xp_ratio), bar_h),
+        )
+        pygame.draw.rect(
+            self.ui.screen, border_color, (bar_bx, xp_bar_by, bar_w, bar_h), 1
         )
 
-        # XP text
         xp_text = self.ui.get_text(
             f"{int(self.game.player_xp)}/{int(self.game.xp_to_next_level)}",
-            small_font,
-            (255, 255, 255),
+            tiny_font,
+            text_color,
         )
-        self.ui.screen.blit(
-            xp_text,
-            (
-                bar_x + bar_width // 2 - xp_text.get_width() // 2 + shake_x,
-                xp_bar_y + bar_height // 2 - xp_text.get_height() // 2 + shake_y,
-            ),
-        )
+        self.ui.screen.blit(xp_text, (right_x + 8 + shake_x, right_y + 76 + shake_y))
 
         # Level
         level_text = self.ui.get_text(
-            f"Level {self.game.player_level}", font, (255, 215, 0)
+            f"Level {self.game.player_level}", small_font, accent_color
         )
         self.ui.screen.blit(
             level_text,
-            (
-                bar_x + bar_width // 2 - level_text.get_width() // 2 + shake_x,
-                xp_bar_y + bar_height + 5 + shake_y,
-            ),
+            (right_x + 8 + shake_x, right_y + 92 + shake_y),
         )
 
-        # Weapon HUD - show extra weapons with levels
-        hud_x: int = self.ui.width - 10
-        hud_y: int = xp_bar_y + bar_height + 35
-        box_w = 170
-        box_h = 20
+        # Weapons section (inside right panel)
+        weapon_label = self.ui.get_text("Weapons", tiny_font, header_color)
+        self.ui.screen.blit(
+            weapon_label, (right_x + 8 + shake_x, right_y + 112 + shake_y)
+        )
 
         # Extra weapons
         if hasattr(self.game, "player_weapons") and self.game.player_weapons:
+            weapon_y = right_y + 130
             for i, wid in enumerate(self.game.player_weapons):
+                if i >= 2:  # Show max 2 weapons in right panel
+                    break
                 lvl: int = self.game.weapon_levels.get(wid, 0)
                 display_name: str = _WEAPON_HUD_NAMES.get(wid, wid.capitalize())
-                display_text: str = f"{display_name} Lv{lvl}"
 
-                y: int = hud_y + i * 22
-
-                # Background box
-                pygame.draw.rect(
-                    self.ui.screen,
-                    (22, 22, 22),
-                    (hud_x - box_w + shake_x, y - 10 + shake_y, box_w, box_h),
+                weapon_name = self.ui.get_text(display_name, tiny_font, text_color)
+                weapon_level = self.ui.get_text(
+                    f"Lv{lvl}{'*' if lvl >= getattr(self.game, 'max_weapon_level', 6) else ''}",
+                    tiny_font,
+                    accent_color,
                 )
-                pygame.draw.rect(
-                    self.ui.screen,
-                    (68, 68, 68),
-                    (hud_x - box_w + shake_x, y - 10 + shake_y, box_w, box_h),
-                    1,
-                )
-
-                weapon_text = small_font.render(display_text, True, (200, 200, 200))
                 self.ui.screen.blit(
-                    weapon_text,
-                    (
-                        hud_x - box_w // 2 - weapon_text.get_width() // 2 + shake_x,
-                        y - 8 + shake_y,
-                    ),
+                    weapon_name, (right_x + 8 + shake_x, weapon_y + i * 20 + shake_y)
                 )
-
-                # If at max level, add MAX indicator
-                if lvl >= getattr(self.game, "max_weapon_level", 6):
-                    max_text = small_font.render("MAX", True, (255, 215, 0))
-                    self.ui.screen.blit(
-                        max_text,
-                        (
-                            hud_x - 12 - max_text.get_width() // 2 + shake_x,
-                            y - 8 + shake_y,
-                        ),
-                    )
+                self.ui.screen.blit(
+                    weapon_level,
+                    (right_x + 160 + shake_x, weapon_y + i * 20 + shake_y),
+                )
+        else:
+            no_wpn = self.ui.get_text("None", tiny_font, (100, 100, 100))
+            self.ui.screen.blit(
+                no_wpn, (right_x + 8 + shake_x, right_y + 130 + shake_y)
+            )
 
         # Draw center messages
         if hasattr(self, "draw_center_messages"):
@@ -1582,7 +1587,7 @@ class UIEffectsRenderer:
             overlay = pygame.Surface(
                 (self.game.width, self.game.height), pygame.SRCALPHA
             )
-            overlay.fill((40, 20, 45, int(self.game.game_over_alpha)))
+            overlay.fill((30, 30, 30, int(self.game.game_over_alpha)))
             self.game.screen.blit(overlay, (0, 0))
 
             # Title (fade text by setting per-surface alpha)
@@ -1646,7 +1651,7 @@ class UIEffectsRenderer:
             overlay = pygame.Surface(
                 (self.game.width, self.game.height), pygame.SRCALPHA
             )
-            overlay.fill((40, 20, 45, int(self.game.victory_alpha)))
+            overlay.fill((30, 30, 30, int(self.game.victory_alpha)))
             self.game.screen.blit(overlay, (0, 0))
 
             title_surf = self.ui.get_text(

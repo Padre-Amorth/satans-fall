@@ -1,21 +1,21 @@
 {
   "version": 1,
   "name": "Profile 1",
-  "last_played": "2026-03-07T21:41:26",
+  "last_played": "2026-03-09T13:38:54",
   "permanent_stats": {
-    "power": 0,
-    "vigor": 2,
+    "power": 2,
+    "vigor": 3,
     "adrenaline": 1,
     "structure": 1,
-    "blasphemy_1": 2,
+    "blasphemy_1": 0,
     "blasphemy_2": 0,
     "blasphemy_3": 0,
     "blasphemy_4": 0,
-    "blasphemy_5": 1,
+    "blasphemy_5": 0,
     "blasphemy_10": 0,
     "blasphemy_9": 0,
-    "blasphemy_8": 3,
-    "blasphemy_7": 1,
+    "blasphemy_8": 0,
+    "blasphemy_7": 0,
     "blasphemy_6": 0,
     "ice_1": 1,
     "ice_2": 1,
@@ -40,16 +40,16 @@
     "ice_6": 1
   },
   "global_progress": {
-    "meta_xp": 50,
-    "meta_level": 1,
-    "meta_points": 1,
+    "meta_xp": 10262,
+    "meta_level": 3,
+    "meta_points": 0,
     "stages_cleared": {
       "limbo_final": true
     },
     "display": {
       "window_size": [
-        1419,
-        779
+        2048,
+        1081
       ],
       "smooth_scale": false
     },

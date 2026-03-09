@@ -995,29 +995,6 @@ class UIGameRenderer:
         # ── RIGHT COLUMN ─────────────────────────────────────────────────────────
         y = top_y
 
-        # — Weapons —
-        y = _draw_section_header("Weapons", right_x, y)
-        weapons = list(self.game.player_weapons)
-        if weapons:
-            for wid in weapons:
-                lvl = self.game.weapon_levels.get(wid, 0)
-                name = WEAPON_DEFS.get(wid, {}).get("name", _clean(wid))
-                name_surf = self.ui.get_text(name, font_body, COLOR_VALUE)
-                lv_surf = self.ui.get_text(f"Lv {lvl}", font_small, COLOR_GREEN)
-                self.ui.screen.blit(name_surf, (right_x + shake_x, y + shake_y))
-                self.ui.screen.blit(
-                    lv_surf,
-                    (right_x + name_surf.get_width() + 10 + shake_x, y + 4 + shake_y),
-                )
-                y += line_h
-        else:
-            self.ui.screen.blit(
-                self.ui.get_text("None", font_body, COLOR_HINT),
-                (right_x + shake_x, y + shake_y),
-            )
-            y += line_h
-        y += 14
-
         # — Permanent Upgrades (Power/Vigor/Adrenaline/Structure, arabic numbers) —
         PERM_LABEL = {
             "power": "Power",
@@ -1067,6 +1044,30 @@ class UIGameRenderer:
                         1,
                     )
                 y += lab_surf.get_height() + pip_h + 7 + 4
+
+        y += 14
+
+        # — Weapons —
+        y = _draw_section_header("Weapons", right_x, y)
+        weapons = list(self.game.player_weapons)
+        if weapons:
+            for wid in weapons:
+                lvl = self.game.weapon_levels.get(wid, 0)
+                name = WEAPON_DEFS.get(wid, {}).get("name", _clean(wid))
+                name_surf = self.ui.get_text(name, font_body, COLOR_VALUE)
+                lv_surf = self.ui.get_text(f"Lv {lvl}", font_small, COLOR_GREEN)
+                self.ui.screen.blit(name_surf, (right_x + shake_x, y + shake_y))
+                self.ui.screen.blit(
+                    lv_surf,
+                    (right_x + name_surf.get_width() + 10 + shake_x, y + 4 + shake_y),
+                )
+                y += line_h
+        else:
+            self.ui.screen.blit(
+                self.ui.get_text("None", font_body, COLOR_HINT),
+                (right_x + shake_x, y + shake_y),
+            )
+            y += line_h
 
         # ── Close hint ───────────────────────────────────────────────────────────
         inst = self.ui.get_text("Tab / ESC  to close", font_small, COLOR_HINT)

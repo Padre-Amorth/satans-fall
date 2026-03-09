@@ -407,7 +407,10 @@ class SpawnSystem:
 
         # If Prologue final boss has spawned, do not advance waves to prevent
         # escalation during the final boss encounter.
-        if self.game.selected_stage == "prologo" and self.game.prologo_final_boss_spawned:
+        if (
+            self.game.selected_stage == "prologo"
+            and self.game.prologo_final_boss_spawned
+        ):
             return
 
         if self.game.wave_time >= self.game.wave_duration or frame_boundary_hit:
@@ -497,7 +500,10 @@ class SpawnSystem:
 
                 rate += LIMBO_SPAWN_RATE_PENALTY
             # apply prologue final boss penalty (20% slower spawn rate)
-            if self.game.selected_stage == "prologo" and self.game.prologo_final_boss_spawned:
+            if (
+                self.game.selected_stage == "prologo"
+                and self.game.prologo_final_boss_spawned
+            ):
                 rate = int(rate * 1.2)  # 20% slower (multiply spawn rate delay by 1.2)
             self.game.enemy_spawn_rate = rate
             if self.game.enemy_manager is not None:

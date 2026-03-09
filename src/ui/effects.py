@@ -850,7 +850,6 @@ class UIEffectsRenderer:
         if not self.ui.screen or not pygame:
             return
 
-        font = self.ui.get_font(24)
         small_font = self.ui.get_font(18)
         tiny_font = self.ui.get_font(16)  # Slightly larger for right panel
 
@@ -863,7 +862,9 @@ class UIEffectsRenderer:
 
         # Score
         score_label = self.ui.get_text("Score: ", small_font, header_color)
-        score_val = self.ui.get_text(f"{int(self.game.score)}", small_font, accent_color)
+        score_val = self.ui.get_text(
+            f"{int(self.game.score)}", small_font, accent_color
+        )
         self.ui.screen.blit(score_label, (left_x + shake_x, left_y + shake_y))
         self.ui.screen.blit(
             score_val,
@@ -903,7 +904,7 @@ class UIEffectsRenderer:
         health_bar_color = (
             (220, 80, 80)
             if health_ratio < 0.3
-            else (200, 200, 80) if health_ratio < 0.6 else (80, 180, 80)
+            else (200, 200, 80) if health_ratio < 0.6 else (34, 139, 87)
         )
 
         bar_w, bar_h = 200, 8
@@ -954,39 +955,32 @@ class UIEffectsRenderer:
             (right_x + shake_x, right_y + 80 + shake_y),
         )
 
-        # Weapons section
-        weapon_label = self.ui.get_text("Weapons", tiny_font, header_color)
-        self.ui.screen.blit(
-            weapon_label, (right_x + shake_x, right_y + 104 + shake_y)
-        )
-
-        # Extra weapons
+        # Weapons section (no header, just weapon names with level numbers)
         if hasattr(self.game, "player_weapons") and self.game.player_weapons:
-            weapon_y = right_y + 118
+            weapon_y = right_y + 104
+            level_font = self.ui.get_font(18)
             for i, wid in enumerate(self.game.player_weapons):
-                if i >= 2:  # Show max 2 weapons in right panel
+                if i >= 3:  # Show max 3 weapons in right panel
                     break
                 lvl: int = self.game.weapon_levels.get(wid, 0)
                 display_name: str = _WEAPON_HUD_NAMES.get(wid, wid.capitalize())
 
                 weapon_name = self.ui.get_text(display_name, tiny_font, text_color)
                 weapon_level = self.ui.get_text(
-                    f"Lv{lvl}{'*' if lvl >= getattr(self.game, 'max_weapon_level', 6) else ''}",
-                    tiny_font,
+                    f"{lvl}{'*' if lvl >= getattr(self.game, 'max_weapon_level', 6) else ''}",
+                    level_font,
                     accent_color,
                 )
                 self.ui.screen.blit(
-                    weapon_name, (right_x + shake_x, weapon_y + i * 16 + shake_y)
+                    weapon_name, (right_x + 30 + shake_x, weapon_y + i * 16 + shake_y)
                 )
                 self.ui.screen.blit(
                     weapon_level,
-                    (right_x + 130 + shake_x, weapon_y + i * 16 + shake_y),
+                    (right_x + 165 + shake_x, weapon_y + i * 16 + shake_y),
                 )
         else:
             no_wpn = self.ui.get_text("None", tiny_font, (100, 100, 100))
-            self.ui.screen.blit(
-                no_wpn, (right_x + shake_x, right_y + 118 + shake_y)
-            )
+            self.ui.screen.blit(no_wpn, (right_x + shake_x, right_y + 104 + shake_y))
 
         # Draw center messages
         if hasattr(self, "draw_center_messages"):

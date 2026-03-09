@@ -11,7 +11,7 @@ from src.balance import (
     XP_BASE,
     XP_GROWTH,
 )
-from src.game_constants import HELL_STAGES, LIMBO_STAGES, PURGATORY_STAGES
+from src.game_constants import HELL_STAGES
 from src.weapons import (
     WEAPON_DEFS,
     get_orbital_count,
@@ -29,7 +29,9 @@ class GameStateManager:
         # Wave management
         self.wave = 0
         self.wave_time = 0
-        from src.game_constants import DEFAULT_WAVE_DURATION, LIMBO_STAGES, PURGATORY_STAGES, HELL_STAGES
+        from src.game_constants import (
+            DEFAULT_WAVE_DURATION,
+        )
 
         # duration of each wave in seconds; pulled from constants for
         # consistency so tuning only needs to change one value.
@@ -422,8 +424,7 @@ class GameStateManager:
                 elif af == "hell":
                     # only allow in HELL stages (not purgatory)
                     if not (
-                        self.selected_stage
-                        and str(self.selected_stage) in HELL_STAGES
+                        self.selected_stage and str(self.selected_stage) in HELL_STAGES
                     ):
                         continue
             filtered.append(w)

@@ -1,6 +1,6 @@
 """HordeState dataclass for managing Limbo and Purgatory horde event state."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

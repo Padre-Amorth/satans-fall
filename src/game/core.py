@@ -2743,7 +2743,6 @@ class Game:
         # Reset alternating statue cooldown and ensure left fires first
         self.statue_cooldown = 0
         self.statue_next_left = True
-        self.is_initial_weapon_choice = False
 
         # Reset player stats (keep permanent upgrades)
         self.player.xp = 0

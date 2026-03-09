@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 from src.balance import PLAYER_BASE_HEALTH, XP_BASE, XP_GROWTH
 from src.core.entities.tower import Tower
-from src.game_constants import WALL_THICKNESS, LIMBO_STAGES, PURGATORY_STAGES, HELL_STAGES
+from src.game_constants import (
+    HELL_STAGES,
+    PURGATORY_STAGES,
+    WALL_THICKNESS,
+)
 from src.weapons import (
     WEAPON_DEFS,
     get_orbital_count,
@@ -259,10 +263,7 @@ class UpgradeSystem:
                 stage = getattr(g, "selected_stage", None)
                 if not (
                     stage
-                    and (
-                        str(stage) in PURGATORY_STAGES
-                        or str(stage) in HELL_STAGES
-                    )
+                    and (str(stage) in PURGATORY_STAGES or str(stage) in HELL_STAGES)
                 ):
                     patterns = [p for p in patterns if p.get("id") != "tower_fire_rate"]
                     patterns = [p for p in patterns if p.get("id") != "kill_explosion"]

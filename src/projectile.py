@@ -255,8 +255,8 @@ class Projectile(BaseSprite):
         """Render shotgun pellet."""
         self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
         cx, cy = self.radius, self.radius
-        w = max(1, int(self.radius * 1.2))
-        h = max(1, int(self.radius * 1.8))
+        w = max(1, int(self.radius * 1.25))
+        h = max(1, int(self.radius * 2.0))
         rect = (cx - w // 2, cy - h // 2, w, h)
         main_col = (110, 85, 0)
         inner_col = (200, 150, 40)

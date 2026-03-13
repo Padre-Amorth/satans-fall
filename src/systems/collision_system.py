@@ -514,7 +514,7 @@ class CollisionSystem:
                 "IMMUNE",
                 ex,
                 ey - g._enemy_radius(enemy) - 8,
-                color=(200, 200, 200),
+                color=(255, 100, 100),
                 font_size=14,
             )
         except (AttributeError, TypeError, ValueError, KeyError):

@@ -1381,6 +1381,21 @@ class CollisionSystem:
                                     pass
                             else:
                                 self._show_immune_text(enemy)
+
+                    # Apply drain effect (secondary periodic damage/heal) only if shield can be damaged
+                    if self._elemental_shield_can_damage(enemy, projectile):
+                        if (
+                            not hasattr(enemy, "drain_timer")
+                            or getattr(enemy, "drain_timer", 0) <= 0
+                        ):
+                            try:
+                                enemy.drain_timer = 4 * 60  # 4 seconds
+                                enemy.drain_damage = getattr(projectile, "damage", 1)
+                                enemy.drain_heal = getattr(projectile, "heal_amount", 0)
+                                enemy.drain_source = projectile  # To track
+                            except (AttributeError, TypeError, ValueError, KeyError):
+                                pass
+
                 # Special handling for Tenebrae weapon: decaying beam
                 elif getattr(projectile, "weapon_type", None) == "tenebrae":
                     # compute damage based on how many targets have been hit so far
@@ -1547,20 +1562,6 @@ class CollisionSystem:
                                     KeyError,
                                 ):
                                     pass
-                            except (AttributeError, TypeError, ValueError, KeyError):
-                                pass
-
-                    # Apply drain effect (secondary periodic damage/heal) only if shield can be damaged
-                    if self._elemental_shield_can_damage(enemy, projectile):
-                        if (
-                            not hasattr(enemy, "drain_timer")
-                            or getattr(enemy, "drain_timer", 0) <= 0
-                        ):
-                            try:
-                                enemy.drain_timer = 4 * 60  # 4 seconds
-                                enemy.drain_damage = projectile.damage
-                                enemy.drain_heal = projectile.heal_amount
-                                enemy.drain_source = projectile  # To track
                             except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
 

@@ -355,10 +355,15 @@ class GameStateManager:
                 )
                 next_level = self.weapon_levels.get(weapon, 0) + 1
                 description = get_weapon_upgrade_description(weapon, next_level)
+                # Show "FINAL FORM - Name" for level 7, otherwise "Name Upgrade"
+                if next_level == 7:
+                    name_text = f"FINAL FORM - {display_name}"
+                else:
+                    name_text = f"{display_name} Upgrade"
                 choices.append(
                     {
                         "id": f"{weapon}_upgrade",
-                        "name": f"{display_name} Upgrade",
+                        "name": name_text,
                         "description": description,
                     }
                 )

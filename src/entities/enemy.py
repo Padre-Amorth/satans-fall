@@ -2102,8 +2102,8 @@ class Enemy(BaseSprite):
 
                 # Emit particles while burning
                 try:
-                    # spawn 2-4 small particles per frame (increased visibility)
-                    for _ in range(random.randint(2, 4)):
+                    # spawn 1-3 small particles per frame
+                    for _ in range(random.randint(1, 3)):
                         px = self.x + random.uniform(-8, 8)
                         py = self.y - 8 + random.uniform(-4, 4)
                         vx = random.uniform(-15, 15)

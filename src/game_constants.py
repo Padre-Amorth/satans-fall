@@ -240,9 +240,11 @@ STATUE_PROJECTILE_OFFSET_X_LIMBO: int = 60
 STATUE_PROJECTILE_OFFSET_X_PURGATORY: int = 10
 STATUE_PROJECTILE_OFFSET_X_HELL: int = 10
 
-# Vertical offset applied to all statue projectiles.  This was previously
-# hard-coded in tests as 10px and did not vary by stage.
+# Vertical offset applied to statue projectiles.  Purgatory and Hell towers
+# fire 30px higher than the default (smaller Y = higher on screen).
 STATUE_PROJECTILE_OFFSET_Y: int = 60
+STATUE_PROJECTILE_OFFSET_Y_PURGATORY: int = 10
+STATUE_PROJECTILE_OFFSET_Y_HELL: int = 10
 
 # Limbo Final timing constants
 LIMBO_FINAL_ACCEL_START_TIME: float = (

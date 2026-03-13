@@ -51,13 +51,16 @@ def statue_projectile_offsets(game: "Game") -> tuple[float, float]:
         stage_x = game_constants.STATUE_PROJECTILE_OFFSET_X_LIMBO
         if stage == "limbo_final":
             stage_x -= 35
+        stage_y = game_constants.STATUE_PROJECTILE_OFFSET_Y
     elif stage in PURGATORY_STAGES:
         stage_x = game_constants.STATUE_PROJECTILE_OFFSET_X_PURGATORY
+        stage_y = game_constants.STATUE_PROJECTILE_OFFSET_Y_PURGATORY
     elif stage in HELL_STAGES:
         stage_x = game_constants.STATUE_PROJECTILE_OFFSET_X_HELL
+        stage_y = game_constants.STATUE_PROJECTILE_OFFSET_Y_HELL
     else:
         stage_x = 0
-    stage_y = game_constants.STATUE_PROJECTILE_OFFSET_Y
+        stage_y = game_constants.STATUE_PROJECTILE_OFFSET_Y
     return stage_x, stage_y
 
 
@@ -237,7 +240,7 @@ class WeaponSystem:
                 damage=base_damage,
                 radius=base_radius,
                 weapon_type="shotgun",
-                weapon_level=shotgun_level,
+                weapon_level=slevel,
             )
             self.game.projectiles.add(pellet)
             mgr = self.game.projectile_manager

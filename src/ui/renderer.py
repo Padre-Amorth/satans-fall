@@ -979,6 +979,7 @@ class UIGameRenderer:
         COLOR_HINT = (100, 100, 100)
         COLOR_GREEN = (100, 180, 100)
         COLOR_RED = (200, 60, 60)
+        COLOR_DARK_RED = (220, 100, 100)
 
         def _clean(key: str) -> str:
             return key.replace("_", " ").title()
@@ -1255,13 +1256,15 @@ class UIGameRenderer:
             for wid in weapons:
                 lvl = self.game.weapon_levels.get(wid, 0)
                 name = WEAPON_DEFS.get(wid, {}).get("name", _clean(wid))
-                name_surf = self.ui.get_text(name, font_body, COLOR_VALUE)
-                lv_surf = self.ui.get_text(f"Lv {lvl}", font_small, COLOR_GREEN)
-                self.ui.screen.blit(name_surf, (right_x + shake_x, y + shake_y))
-                self.ui.screen.blit(
-                    lv_surf,
-                    (right_x + name_surf.get_width() + 10 + shake_x, y + 4 + shake_y),
-                )
+                # Display FINAL FORM - Name for level 7, otherwise Name Lv N
+                if lvl == 7:
+                    display_text = f"FINAL FORM - {name}"
+                    text_color = COLOR_DARK_RED
+                else:
+                    display_text = f"{name} Lv {lvl}"
+                    text_color = COLOR_VALUE
+                text_surf = self.ui.get_text(display_text, font_body, text_color)
+                self.ui.screen.blit(text_surf, (right_x + shake_x, y + shake_y))
                 y += line_h
         else:
             self.ui.screen.blit(

@@ -16,7 +16,7 @@ WEAPON_DEFS: Dict[str, Dict] = {
             4: "Lv4: +1 pellet (now 6)",
             5: "Lv5: +10% pellet damage",
             6: "Lv6: Larger spread and high damage",
-            7: "Lv7 [FINAL FORM]: 7 pellets at peak power",
+            7: "FINAL FORM: 7 pellets at peak power",
         },
     },
     "orbital": {
@@ -31,7 +31,7 @@ WEAPON_DEFS: Dict[str, Dict] = {
             4: "Lv4: +1 orbital",
             5: "Lv5: +10% orbital damage",
             6: "Lv6: +1 orbital",
-            7: "Lv7 [FINAL FORM]: 7 orbitals at maximum fire rate",
+            7: "FINAL FORM: 7 orbitals at maximum fire rate",
         },
     },
     "spear": {
@@ -46,7 +46,7 @@ WEAPON_DEFS: Dict[str, Dict] = {
             4: "Lv4: +2 base damage",
             5: "Lv5: +2 base damage",
             6: "Lv6: +2 base damage",
-            7: "Lv7 [FINAL FORM]: Minimum cooldown — maximum pierce velocity",
+            7: "FINAL FORM: Minimum cooldown — maximum pierce velocity",
         },
     },
     "Flies": {
@@ -62,7 +62,7 @@ WEAPON_DEFS: Dict[str, Dict] = {
             4: "Lv4: +10% damage & heal",
             5: "Lv5: +1 projectile",
             6: "Lv6: +20% damage & heal",
-            7: "Lv7 [FINAL FORM]: 5 flies at peak damage and healing",
+            7: "FINAL FORM: 5 flies at peak damage and healing",
         },
     },
     "beast": {
@@ -79,7 +79,7 @@ WEAPON_DEFS: Dict[str, Dict] = {
             4: "Lv4: +5% damage and faster burst rate",
             5: "Lv5: +5% damage and faster burst rate",
             6: "Lv6: +5% damage and maximum burst rate",
-            7: "Lv7 [FINAL FORM]: Maximum demonic power unleashed",
+            7: "FINAL FORM: Maximum demonic power unleashed",
         },
     },
     "skullboom": {
@@ -95,7 +95,7 @@ WEAPON_DEFS: Dict[str, Dict] = {
             4: "Lv4: +10% damage and reduced cooldown",
             5: "Lv5: +10% explosion radius",
             6: "Lv6: +10% damage and reduced cooldown",
-            7: "Lv7 [FINAL FORM]: Cataclysmic explosion at peak speed",
+            7: "FINAL FORM: Cataclysmic explosion at peak speed",
         },
     },
     "DemonStrike": {
@@ -111,7 +111,7 @@ WEAPON_DEFS: Dict[str, Dict] = {
             4: "Lv4: +10 base damage",
             5: "Lv5: +10 base damage",
             6: "Lv6: +10 base damage",
-            7: "Lv7 [FINAL FORM]: Maximum impact speed and power",
+            7: "FINAL FORM: Maximum impact speed and power",
         },
     },
 }
@@ -308,7 +308,7 @@ WEAPON_DEFS["tenebrae"] = {
         4: "Lv4: +5 base damage, reduced cooldown",
         5: "Lv5: -2% decay per target",
         6: "Lv6: Max base damage, minimal decay and cooldown",
-        7: "Lv7 [FINAL FORM]: Maximum shadow power, near-zero decay",
+        7: "FINAL FORM: Maximum shadow power, near-zero decay",
     },
     # parametri usati dalle funzioni sottostanti
     "base_damage": 25,  # tarato più basso

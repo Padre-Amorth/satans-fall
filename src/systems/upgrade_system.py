@@ -298,9 +298,13 @@ class UpgradeSystem:
                         "beast": "The number of the beast",
                     }
                     weapon_name: str = weapon_names.get(weapon_id, weapon_id.title())
-                    upgrade_name: str = f"{weapon_name} Lv.{current_level + 1}"
+                    next_level = current_level + 1
+                    if next_level == max_level:
+                        upgrade_name: str = f"FINAL FORM - {weapon_name}"
+                    else:
+                        upgrade_name: str = f"{weapon_name} Lv.{next_level}"
                     upgrade_desc: str = get_weapon_upgrade_description(
-                        weapon_id, current_level + 1
+                        weapon_id, next_level
                     )
                     upgrade_entry = {
                         "id": f"{weapon_id}_upgrade",
@@ -598,9 +602,13 @@ class UpgradeSystem:
                 weapon_name: str = WEAPON_DEFS.get(weapon_id, {}).get(
                     "name", weapon_id.title()
                 )
-                upgrade_name: str = f"{weapon_name} Lv.{current_level + 1}"
+                next_level = current_level + 1
+                if next_level == max_level:
+                    upgrade_name: str = f"FINAL FORM - {weapon_name}"
+                else:
+                    upgrade_name: str = f"{weapon_name} Lv.{next_level}"
                 upgrade_desc: str = get_weapon_upgrade_description(
-                    weapon_id, current_level + 1
+                    weapon_id, next_level
                 )
 
                 weapon_upgrades.append(

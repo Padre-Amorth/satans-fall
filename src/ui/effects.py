@@ -15,7 +15,6 @@ from src.game_constants import (
     WEAPON_ICON_SIZE,
 )
 from src.ui.constants import _WEAPON_HUD_NAMES
-from src.weapons import WEAPON_DEFS
 
 if TYPE_CHECKING:
     from src.game.core import Game
@@ -959,25 +958,23 @@ class UIEffectsRenderer:
         # Weapons section (no header, just weapon names with level numbers)
         if hasattr(self.game, "player_weapons") and self.game.player_weapons:
             weapon_y = right_y + 104
-            level_font = self.ui.get_font(18)
+            dark_red = (220, 100, 100)
             for i, wid in enumerate(self.game.player_weapons):
                 if i >= 3:  # Show max 3 weapons in right panel
                     break
                 lvl: int = self.game.weapon_levels.get(wid, 0)
                 display_name: str = _WEAPON_HUD_NAMES.get(wid, wid.capitalize())
 
-                weapon_name = self.ui.get_text(display_name, tiny_font, text_color)
-                weapon_level = self.ui.get_text(
-                    f"{lvl}{'*' if lvl >= WEAPON_DEFS.get(wid, {}).get('max_level', 7) else ''}",
-                    level_font,
-                    accent_color,
-                )
+                # Display FINAL FORM - Name for level 7, otherwise Name Lv N
+                if lvl == 7:
+                    full_text = f"FINAL FORM - {display_name}"
+                    text_color_to_use = dark_red
+                else:
+                    full_text = f"{display_name} Lv {lvl}"
+                    text_color_to_use = text_color
+                weapon_text = self.ui.get_text(full_text, tiny_font, text_color_to_use)
                 self.ui.screen.blit(
-                    weapon_name, (right_x + 30 + shake_x, weapon_y + i * 16 + shake_y)
-                )
-                self.ui.screen.blit(
-                    weapon_level,
-                    (right_x + 165 + shake_x, weapon_y + i * 16 + shake_y),
+                    weapon_text, (right_x + 25 + shake_x, weapon_y + i * 16 + shake_y)
                 )
         else:
             no_wpn = self.ui.get_text("None", tiny_font, (100, 100, 100))

@@ -1942,28 +1942,29 @@ class CollisionSystem:
                                                 targ,
                                                 projectile.damage * 1.5,
                                             )
-                                            if self._elemental_shield_can_damage(
-                                                targ, projectile
-                                            ):
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
+                                            dmg_chain = projectile.damage * 1.5
+
+                                        if self._elemental_shield_can_damage(
+                                            targ, projectile
+                                        ):
+                                            try:
                                                 targ.take_damage(
                                                     dmg_chain, show_floating=False
                                                 )
-                                                # show damage number using computed value
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
                                                 try:
-                                                    ex, ey = g._enemy_pos(targ)
-                                                    (
-                                                        final_color,
-                                                        final_font,
-                                                    ) = self._floating_text_style_for_projectile(
-                                                        projectile, (255, 255, 255), 20
-                                                    )
-                                                    g.spawn_floating_text(
-                                                        str(int(dmg_chain)),
-                                                        ex,
-                                                        ey - g._enemy_radius(targ) - 8,
-                                                        color=final_color,
-                                                        font_size=final_font,
-                                                    )
+                                                    targ.health -= dmg_chain
                                                 except (
                                                     AttributeError,
                                                     TypeError,
@@ -1971,10 +1972,22 @@ class CollisionSystem:
                                                     KeyError,
                                                 ):
                                                     pass
-                                            else:
-                                                self._show_immune_text(targ)
+                                            # show damage number using computed value
                                             try:
-                                                self._maybe_charge_tower(projectile)
+                                                ex, ey = g._enemy_pos(targ)
+                                                (
+                                                    final_color,
+                                                    final_font,
+                                                ) = self._floating_text_style_for_projectile(
+                                                    projectile, (255, 255, 255), 20
+                                                )
+                                                g.spawn_floating_text(
+                                                    str(int(dmg_chain)),
+                                                    ex,
+                                                    ey - g._enemy_radius(targ) - 8,
+                                                    color=final_color,
+                                                    font_size=final_font,
+                                                )
                                             except (
                                                 AttributeError,
                                                 TypeError,
@@ -1982,30 +1995,17 @@ class CollisionSystem:
                                                 KeyError,
                                             ):
                                                 pass
+                                        else:
+                                            self._show_immune_text(targ)
+                                        try:
+                                            self._maybe_charge_tower(projectile)
                                         except (
                                             AttributeError,
                                             TypeError,
                                             ValueError,
                                             KeyError,
                                         ):
-                                            try:
-                                                targ.health -= projectile.damage * 1.5
-                                            except (
-                                                AttributeError,
-                                                TypeError,
-                                                ValueError,
-                                                KeyError,
-                                            ):
-                                                pass
-                                            try:
-                                                self._maybe_charge_tower(projectile)
-                                            except (
-                                                AttributeError,
-                                                TypeError,
-                                                ValueError,
-                                                KeyError,
-                                            ):
-                                                pass
+                                            pass
                                         tx, ty = g._enemy_pos(targ)
                                         chain_points.append((tx, ty))
 
@@ -2127,7 +2127,9 @@ class CollisionSystem:
                                                             ex - cx, ey - cy
                                                         )
                                                         if dist <= explosion_radius:
-                                                            if self._elemental_shield_can_damage(ex_target, projectile):
+                                                            if self._elemental_shield_can_damage(
+                                                                ex_target, projectile
+                                                            ):
                                                                 try:
                                                                     ex_target.take_damage(
                                                                         explosion_dmg
@@ -2146,12 +2148,15 @@ class CollisionSystem:
                                                                         ] = max(
                                                                             0,
                                                                             ex_target.get(
-                                                                                "health", 0
+                                                                                "health",
+                                                                                0,
                                                                             )
                                                                             - explosion_dmg,
                                                                         )
                                                             else:
-                                                                self._show_immune_text(ex_target)
+                                                                self._show_immune_text(
+                                                                    ex_target
+                                                                )
                                                             explosion_points.append(
                                                                 (ex, ey)
                                                             )
@@ -2456,6 +2461,7 @@ class CollisionSystem:
                             if not self._elemental_shield_can_damage(targ, projectile):
                                 self._show_immune_text(targ)
                             else:
+                                # Immunity check passed — safe to apply damage
                                 try:
                                     try:
                                         # Chain: apply damage to secondary target
@@ -2481,7 +2487,13 @@ class CollisionSystem:
                                         KeyError,
                                     ):
                                         pass
-                                except (AttributeError, TypeError, ValueError, KeyError):
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
+                                    # Fallback to direct health subtraction (immunity already checked)
                                     try:
                                         targ.health -= projectile.damage * 1.5
                                         damaged = True
@@ -2634,7 +2646,9 @@ class CollisionSystem:
                                             distance = math.hypot(dx, dy)
                                             if distance <= explosion_radius:
                                                 # Apply damage to nearby enemy
-                                                if self._elemental_shield_can_damage(ex_target, projectile):
+                                                if self._elemental_shield_can_damage(
+                                                    ex_target, projectile
+                                                ):
                                                     try:
                                                         ex_target.take_damage(
                                                             explosion_dmg,
@@ -2649,7 +2663,9 @@ class CollisionSystem:
                                                         if isinstance(ex_target, dict):
                                                             ex_target["health"] = max(
                                                                 0,
-                                                                ex_target.get("health", 0)
+                                                                ex_target.get(
+                                                                    "health", 0
+                                                                )
                                                                 - explosion_dmg,
                                                             )
                                                 else:
@@ -3345,7 +3361,9 @@ class CollisionSystem:
                                     to_chain = min(len(others), chain - 1)
                                     for i in range(to_chain):
                                         targ = others[i][1]
-                                        if self._elemental_shield_can_damage(targ, projectile):
+                                        if self._elemental_shield_can_damage(
+                                            targ, projectile
+                                        ):
                                             try:
                                                 eff = self._player_damage_vs_burning(
                                                     projectile, targ, p_damage
@@ -3410,8 +3428,10 @@ class CollisionSystem:
                                                 KeyError,
                                             ):
                                                 try:
-                                                    eff = self._player_damage_vs_burning(
-                                                        projectile, targ, p_damage
+                                                    eff = (
+                                                        self._player_damage_vs_burning(
+                                                            projectile, targ, p_damage
+                                                        )
                                                     )
                                                     targ.health -= eff * 2
                                                 except (
@@ -3433,12 +3453,21 @@ class CollisionSystem:
                             else:
                                 self._show_immune_text(enemy)
                         except (AttributeError, TypeError, ValueError, KeyError):
-                            try:
-                                enemy.health -= self._player_damage_vs_burning(
-                                    projectile, enemy, p_damage
-                                )
-                            except (AttributeError, TypeError, ValueError, KeyError):
-                                pass
+                            # Fallback: only apply direct damage if immunity check would have passed
+                            if self._elemental_shield_can_damage(enemy, projectile):
+                                try:
+                                    enemy.health -= self._player_damage_vs_burning(
+                                        projectile, enemy, p_damage
+                                    )
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
+                                    pass
+                            else:
+                                self._show_immune_text(enemy)
 
                         # Record this hit so projectile won't hit the same enemy again
                         try:
@@ -3654,7 +3683,9 @@ class CollisionSystem:
                                         ):
                                             pass
                                 else:
-                                    if self._elemental_shield_can_damage(targ, projectile):
+                                    if self._elemental_shield_can_damage(
+                                        targ, projectile
+                                    ):
                                         try:
                                             eff = self._player_damage_vs_burning(
                                                 projectile, targ, p_damage
@@ -4478,9 +4509,16 @@ class CollisionSystem:
                                 try:
                                     ex, ey = g._enemy_pos(enemy)
                                     g.spawn_floating_text(
-                                        str(int(damage)), ex, ey - g._enemy_radius(enemy) - 8
+                                        str(int(damage)),
+                                        ex,
+                                        ey - g._enemy_radius(enemy) - 8,
                                     )
-                                except (AttributeError, TypeError, ValueError, KeyError):
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                             else:
                                 self._show_immune_text(enemy)

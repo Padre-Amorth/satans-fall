@@ -229,7 +229,11 @@ class Projectile(BaseSprite):
             pygame.draw.rect(self.image, color, (0, 0, w, h))
 
     def _render_spear(self) -> None:
-        """Render spear projectile."""
+        """Render spear projectile. Final Form (Lv7) is larger."""
+        weapon_level = getattr(self, "weapon_level", 0)
+        # Increase size multiplier at Final Form
+        size_mult = 1.3 if weapon_level >= 7 else 1.2
+
         # Try external asset first
         try:
             from src.assets.manager import get_image
@@ -237,7 +241,7 @@ class Projectile(BaseSprite):
             asset = get_image(
                 "spear.png",
                 (
-                    max(4, int(self.radius * 1.2)),
+                    max(4, int(self.radius * size_mult)),
                     max(60, self.radius * 10),
                 ),
             )
@@ -250,7 +254,7 @@ class Projectile(BaseSprite):
 
         # Fallback: procedural spear
         length: int = max(60, self.radius * 10)
-        width: int = max(4, int(self.radius * 1.2))
+        width: int = max(4, int(self.radius * size_mult))
         self.image = pygame.Surface((width, length), pygame.SRCALPHA)
         pygame.draw.rect(
             self.image,
@@ -266,22 +270,41 @@ class Projectile(BaseSprite):
         pygame.draw.polygon(self.image, (207, 162, 111), arrowhead_points, 1)
 
     def _render_shotgun(self) -> None:
-        """Render shotgun pellet. Final Form (Lv7) has white-yellow glow."""
-        self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
-        cx, cy = self.radius, self.radius
+        """Render shotgun pellet. Final Form (Lv7) is larger, orange, and trembles."""
+        import random
 
-        # Add Final Form glow at Lv7
-        if getattr(self, "weapon_level", 0) >= 7:
-            pygame.draw.circle(
-                self.image, (255, 255, 150, 80), (cx, cy), self.radius + 3
-            )
+        weapon_level = getattr(self, "weapon_level", 0)
+        is_final_form = weapon_level >= 7
 
-        w = max(1, int(self.radius * 1.25))
-        h = max(1, int(self.radius * 2.0))
-        rect = (cx - w // 2, cy - h // 2, w, h)
-        main_col = (110, 85, 0)
-        inner_col = (200, 150, 40)
-        outline_col = (60, 45, 0)
+        # Larger surface for Final Form (1px bigger)
+        surface_size = self.radius * 2 + (2 if is_final_form else 0)
+        self.image = pygame.Surface((surface_size, surface_size), pygame.SRCALPHA)
+        cx = surface_size // 2
+        cy = surface_size // 2
+
+        if is_final_form:
+            # At Final Form: orange color with slight trembling effect
+            main_col = (255, 140, 0)  # Orange
+            inner_col = (255, 180, 80)  # Lighter orange
+            outline_col = (200, 100, 0)  # Darker orange
+            w = max(1, int((self.radius + 1) * 1.25))
+            h = max(1, int((self.radius + 1) * 2.0))
+        else:
+            # Normal colors
+            main_col = (110, 85, 0)
+            inner_col = (200, 150, 40)
+            outline_col = (60, 45, 0)
+            w = max(1, int(self.radius * 1.25))
+            h = max(1, int(self.radius * 2.0))
+
+        # Apply trembling effect only at Final Form
+        if is_final_form:
+            tremor_x = random.uniform(-1, 1)
+            tremor_y = random.uniform(-1, 1)
+        else:
+            tremor_x = tremor_y = 0
+
+        rect = (cx - w // 2 + tremor_x, cy - h // 2 + tremor_y, w, h)
         try:
             pygame.draw.ellipse(self.image, main_col, rect)
             inner_rect = (
@@ -294,7 +317,12 @@ class Projectile(BaseSprite):
             pygame.draw.ellipse(self.image, outline_col, rect, 1)
         except (AttributeError, TypeError, ValueError, KeyError):
             try:
-                pygame.draw.circle(self.image, (255, 200, 0), (cx, cy), self.radius)
+                pygame.draw.circle(
+                    self.image,
+                    (255, 200, 0) if not is_final_form else (255, 140, 0),
+                    (cx, cy),
+                    self.radius,
+                )
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
 
@@ -502,29 +530,42 @@ class Projectile(BaseSprite):
         self.rect = self.image.get_rect(center=(self.x, self.y))
 
     def _render_beast(self) -> None:
-        """Render beast projectile: red '6' text. Final Form (Lv7) adds golden glow."""
-        self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+        """Render beast projectile: red '6' text. Final Form (Lv7) adds orange outline and is 1px larger."""
         weapon_level = getattr(self, "weapon_level", 0)
+        is_final_form = weapon_level >= 7
 
-        # Add golden glow at Lv7 Final Form
-        if weapon_level >= 7:
-            pygame.draw.circle(
-                self.image,
-                (255, 200, 50, 100),
-                (self.radius, self.radius),
-                self.radius + 3,
-            )
+        self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+        center_x = self.radius
+        center_y = self.radius
 
         try:
-            font = pygame.font.Font(None, max(8, int(self.radius * 2)))
+            # 1px larger font only at Final Form
+            font_size = (
+                int(self.radius * 2 + 2) if is_final_form else int(self.radius * 2)
+            )
+            font = pygame.font.Font(None, max(8, font_size))
+
+            if is_final_form:
+                # Draw orange outline first (offset in 8 directions) - only for Final Form
+                outline_color = (255, 140, 0)
+                txt_outline = font.render("6", True, outline_color)
+                for dx in [-1, 0, 1]:
+                    for dy in [-1, 0, 1]:
+                        if dx != 0 or dy != 0:
+                            txt_rect = txt_outline.get_rect(
+                                center=(center_x + dx, center_y + dy)
+                            )
+                            self.image.blit(txt_outline, txt_rect)
+
+            # Draw red number on top
             txt = font.render("6", True, (255, 0, 0))
-            txt_rect = txt.get_rect(center=(self.radius, self.radius))
+            txt_rect = txt.get_rect(center=(center_x, center_y))
             self.image.blit(txt, txt_rect)
         except (AttributeError, TypeError, ValueError, KeyError):
             pygame.draw.circle(
                 self.image,
                 (255, 0, 0),
-                (self.radius, self.radius),
+                (center_x, center_y),
                 self.radius,
             )
 
@@ -1060,10 +1101,10 @@ class Projectile(BaseSprite):
 
 class FliesProjectile(Projectile):
     def __init__(self, x, y, vel_x, vel_y, damage=10, heal_amount=2, level=1) -> None:
-        # Slightly larger projectiles at max weapon level (level 6)
+        # Slightly larger projectiles at Final Form (level 7)
         base_radius = 6
-        if level >= 6:
-            base_radius += 2  # +2 pixels when fully upgraded
+        if level >= 7:
+            base_radius += 2  # +2 pixels at Final Form
         super().__init__(
             x, y, vel_x, vel_y, damage=damage, radius=base_radius, weapon_type="Flies"
         )

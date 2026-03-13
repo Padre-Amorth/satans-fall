@@ -1363,6 +1363,8 @@ class CollisionSystem:
                         try:
                             if self._elemental_shield_can_damage(enemy, projectile):
                                 enemy.take_damage(dmg_to_apply, show_floating=False)
+                            else:
+                                self._show_immune_text(enemy)
                         except (AttributeError, TypeError, ValueError, KeyError):
                             # Fallback: manually apply damage only if immunity check passed
                             if self._elemental_shield_can_damage(enemy, projectile):
@@ -1377,6 +1379,8 @@ class CollisionSystem:
                                     KeyError,
                                 ):
                                     pass
+                            else:
+                                self._show_immune_text(enemy)
                 # Special handling for Tenebrae weapon: decaying beam
                 elif getattr(projectile, "weapon_type", None) == "tenebrae":
                     # compute damage based on how many targets have been hit so far
@@ -2123,28 +2127,31 @@ class CollisionSystem:
                                                             ex - cx, ey - cy
                                                         )
                                                         if dist <= explosion_radius:
-                                                            try:
-                                                                ex_target.take_damage(
-                                                                    explosion_dmg
-                                                                )
-                                                            except (
-                                                                AttributeError,
-                                                                TypeError,
-                                                                ValueError,
-                                                                KeyError,
-                                                            ):
-                                                                if isinstance(
-                                                                    ex_target, dict
-                                                                ):
-                                                                    ex_target[
-                                                                        "health"
-                                                                    ] = max(
-                                                                        0,
-                                                                        ex_target.get(
-                                                                            "health", 0
-                                                                        )
-                                                                        - explosion_dmg,
+                                                            if self._elemental_shield_can_damage(ex_target, projectile):
+                                                                try:
+                                                                    ex_target.take_damage(
+                                                                        explosion_dmg
                                                                     )
+                                                                except (
+                                                                    AttributeError,
+                                                                    TypeError,
+                                                                    ValueError,
+                                                                    KeyError,
+                                                                ):
+                                                                    if isinstance(
+                                                                        ex_target, dict
+                                                                    ):
+                                                                        ex_target[
+                                                                            "health"
+                                                                        ] = max(
+                                                                            0,
+                                                                            ex_target.get(
+                                                                                "health", 0
+                                                                            )
+                                                                            - explosion_dmg,
+                                                                        )
+                                                            else:
+                                                                self._show_immune_text(ex_target)
                                                             explosion_points.append(
                                                                 (ex, ey)
                                                             )
@@ -2446,32 +2453,9 @@ class CollisionSystem:
                         for _, targ in others[:to_chain]:
                             # Apply damage to chained targets (prefer take_damage)
                             damaged = False
-                            try:
-                                try:
-                                    # Chain: apply damage to secondary target
-                                    pass
-                                except (
-                                    AttributeError,
-                                    TypeError,
-                                    ValueError,
-                                    KeyError,
-                                ):
-                                    pass
-                                targ.take_damage(
-                                    projectile.damage * 1.5, show_floating=False
-                                )
-                                damaged = True
-                                try:
-                                    # Chain: damage applied
-                                    pass
-                                except (
-                                    AttributeError,
-                                    TypeError,
-                                    ValueError,
-                                    KeyError,
-                                ):
-                                    pass
-                            except (AttributeError, TypeError, ValueError, KeyError):
+                            if not self._elemental_shield_can_damage(targ, projectile):
+                                self._show_immune_text(targ)
+                            else:
                                 try:
                                     try:
                                         # Chain: apply damage to secondary target
@@ -2483,7 +2467,9 @@ class CollisionSystem:
                                         KeyError,
                                     ):
                                         pass
-                                    targ.health -= projectile.damage * 1.5
+                                    targ.take_damage(
+                                        projectile.damage * 1.5, show_floating=False
+                                    )
                                     damaged = True
                                     try:
                                         # Chain: damage applied
@@ -2495,13 +2481,17 @@ class CollisionSystem:
                                         KeyError,
                                     ):
                                         pass
-                                except (
-                                    AttributeError,
-                                    TypeError,
-                                    ValueError,
-                                    KeyError,
-                                ):
-                                    pass
+                                except (AttributeError, TypeError, ValueError, KeyError):
+                                    try:
+                                        targ.health -= projectile.damage * 1.5
+                                        damaged = True
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
+                                        pass
 
                             # Record that this projectile hit the chained target so it won't be hit again
                             try:
@@ -2644,23 +2634,26 @@ class CollisionSystem:
                                             distance = math.hypot(dx, dy)
                                             if distance <= explosion_radius:
                                                 # Apply damage to nearby enemy
-                                                try:
-                                                    ex_target.take_damage(
-                                                        explosion_dmg,
-                                                        show_floating=False,
-                                                    )
-                                                except (
-                                                    AttributeError,
-                                                    TypeError,
-                                                    ValueError,
-                                                    KeyError,
-                                                ):
-                                                    if isinstance(ex_target, dict):
-                                                        ex_target["health"] = max(
-                                                            0,
-                                                            ex_target.get("health", 0)
-                                                            - explosion_dmg,
+                                                if self._elemental_shield_can_damage(ex_target, projectile):
+                                                    try:
+                                                        ex_target.take_damage(
+                                                            explosion_dmg,
+                                                            show_floating=False,
                                                         )
+                                                    except (
+                                                        AttributeError,
+                                                        TypeError,
+                                                        ValueError,
+                                                        KeyError,
+                                                    ):
+                                                        if isinstance(ex_target, dict):
+                                                            ex_target["health"] = max(
+                                                                0,
+                                                                ex_target.get("health", 0)
+                                                                - explosion_dmg,
+                                                            )
+                                                else:
+                                                    self._show_immune_text(ex_target)
                                                 explosion_points.append((ex, ey))
 
                                         # Add short chain/lightning visuals from the killed enemy to affected neighbours
@@ -3030,6 +3023,8 @@ class CollisionSystem:
                     try:
                         if self._elemental_shield_can_damage(enemy, projectile):
                             enemy.take_damage(dmg_to_apply, show_floating=False)
+                        else:
+                            self._show_immune_text(enemy)
                     except (AttributeError, TypeError, ValueError, KeyError):
                         # Fallback: manually apply damage only if immunity check passed
                         if self._elemental_shield_can_damage(enemy, projectile):
@@ -3039,6 +3034,8 @@ class CollisionSystem:
                                 )
                             except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
+                        else:
+                            self._show_immune_text(enemy)
 
                     # Record this hit so projectile won't hit the same enemy again
                     try:
@@ -3348,40 +3345,20 @@ class CollisionSystem:
                                     to_chain = min(len(others), chain - 1)
                                     for i in range(to_chain):
                                         targ = others[i][1]
-                                        try:
-                                            eff = self._player_damage_vs_burning(
-                                                projectile, targ, p_damage
-                                            )
+                                        if self._elemental_shield_can_damage(targ, projectile):
                                             try:
-                                                LOG.debug(
-                                                    "handle_collisions chain: proj_id=%s targ_id=%s pre_hit_ids=%s",
-                                                    id(projectile),
-                                                    id(targ),
-                                                    getattr(
-                                                        projectile, "_hit_ids", None
-                                                    ),
+                                                eff = self._player_damage_vs_burning(
+                                                    projectile, targ, p_damage
                                                 )
-                                            except (
-                                                AttributeError,
-                                                TypeError,
-                                                ValueError,
-                                                KeyError,
-                                            ):
-                                                pass
-                                            try:
-                                                targ.take_damage(
-                                                    eff * 2, show_floating=False
-                                                )
-                                                damaged = True
-                                            except (
-                                                AttributeError,
-                                                TypeError,
-                                                ValueError,
-                                                KeyError,
-                                            ):
                                                 try:
-                                                    targ.health -= eff * 2
-                                                    damaged = True
+                                                    LOG.debug(
+                                                        "handle_collisions chain: proj_id=%s targ_id=%s pre_hit_ids=%s",
+                                                        id(projectile),
+                                                        id(targ),
+                                                        getattr(
+                                                            projectile, "_hit_ids", None
+                                                        ),
+                                                    )
                                                 except (
                                                     AttributeError,
                                                     TypeError,
@@ -3389,40 +3366,63 @@ class CollisionSystem:
                                                     KeyError,
                                                 ):
                                                     pass
-                                            try:
-                                                LOG.debug(
-                                                    "handle_collisions chain-done: proj_id=%s targ_id=%s post_hit_ids=%s",
-                                                    id(projectile),
-                                                    id(targ),
-                                                    getattr(
-                                                        projectile, "_hit_ids", None
-                                                    ),
-                                                )
+                                                try:
+                                                    targ.take_damage(
+                                                        eff * 2, show_floating=False
+                                                    )
+                                                    damaged = True
+                                                except (
+                                                    AttributeError,
+                                                    TypeError,
+                                                    ValueError,
+                                                    KeyError,
+                                                ):
+                                                    try:
+                                                        targ.health -= eff * 2
+                                                        damaged = True
+                                                    except (
+                                                        AttributeError,
+                                                        TypeError,
+                                                        ValueError,
+                                                        KeyError,
+                                                    ):
+                                                        pass
+                                                try:
+                                                    LOG.debug(
+                                                        "handle_collisions chain-done: proj_id=%s targ_id=%s post_hit_ids=%s",
+                                                        id(projectile),
+                                                        id(targ),
+                                                        getattr(
+                                                            projectile, "_hit_ids", None
+                                                        ),
+                                                    )
+                                                except (
+                                                    AttributeError,
+                                                    TypeError,
+                                                    ValueError,
+                                                    KeyError,
+                                                ):
+                                                    pass
                                             except (
                                                 AttributeError,
                                                 TypeError,
                                                 ValueError,
                                                 KeyError,
                                             ):
-                                                pass
-                                        except (
-                                            AttributeError,
-                                            TypeError,
-                                            ValueError,
-                                            KeyError,
-                                        ):
-                                            try:
-                                                eff = self._player_damage_vs_burning(
-                                                    projectile, targ, p_damage
-                                                )
-                                                targ.health -= eff * 2
-                                            except (
-                                                AttributeError,
-                                                TypeError,
-                                                ValueError,
-                                                KeyError,
-                                            ):
-                                                pass
+                                                try:
+                                                    eff = self._player_damage_vs_burning(
+                                                        projectile, targ, p_damage
+                                                    )
+                                                    targ.health -= eff * 2
+                                                except (
+                                                    AttributeError,
+                                                    TypeError,
+                                                    ValueError,
+                                                    KeyError,
+                                                ):
+                                                    pass
+                                        else:
+                                            self._show_immune_text(targ)
                                         tx, ty = g._enemy_pos(targ)
                                         chain_points.append((tx, ty))
                                     if len(chain_points) > 1:
@@ -3430,24 +3430,8 @@ class CollisionSystem:
                                             {"points": chain_points, "timer": 8}
                                         )
                                     projectile._chain_applied = True
-
-                                    try:
-                                        projectile.kill()
-                                    except (
-                                        AttributeError,
-                                        TypeError,
-                                        ValueError,
-                                        KeyError,
-                                    ):
-                                        try:
-                                            g.projectiles.remove(projectile)
-                                        except (
-                                            AttributeError,
-                                            TypeError,
-                                            ValueError,
-                                            KeyError,
-                                        ):
-                                            pass
+                            else:
+                                self._show_immune_text(enemy)
                         except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 enemy.health -= self._player_damage_vs_burning(
@@ -3670,26 +3654,14 @@ class CollisionSystem:
                                         ):
                                             pass
                                 else:
-                                    try:
-                                        eff = self._player_damage_vs_burning(
-                                            projectile, targ, p_damage
-                                        )
-                                        targ.take_damage(
-                                            eff * 2,
-                                            show_floating=False,
-                                        )  # Increased damage for secondary targets
-                                    except (
-                                        AttributeError,
-                                        TypeError,
-                                        ValueError,
-                                        KeyError,
-                                    ):
+                                    if self._elemental_shield_can_damage(targ, projectile):
                                         try:
                                             eff = self._player_damage_vs_burning(
                                                 projectile, targ, p_damage
                                             )
-                                            targ.health -= (
-                                                eff * 2
+                                            targ.take_damage(
+                                                eff * 2,
+                                                show_floating=False,
                                             )  # Increased damage for secondary targets
                                         except (
                                             AttributeError,
@@ -3697,7 +3669,22 @@ class CollisionSystem:
                                             ValueError,
                                             KeyError,
                                         ):
-                                            pass
+                                            try:
+                                                eff = self._player_damage_vs_burning(
+                                                    projectile, targ, p_damage
+                                                )
+                                                targ.health -= (
+                                                    eff * 2
+                                                )  # Increased damage for secondary targets
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
+                                                pass
+                                    else:
+                                        self._show_immune_text(targ)
                                     if getattr(targ, "health", 0) <= 0:
                                         g.add_score(
                                             targ.max_health
@@ -4109,10 +4096,13 @@ class CollisionSystem:
                         eff = self._player_damage_vs_burning(
                             projectile, targ, getattr(projectile, "damage", 0)
                         )
-                        targ.take_damage(
-                            eff * 2,
-                            show_floating=False,
-                        )  # Increased damage for secondary targets
+                        if self._elemental_shield_can_damage(targ, projectile):
+                            targ.take_damage(
+                                eff * 2,
+                                show_floating=False,
+                            )  # Increased damage for secondary targets
+                        else:
+                            self._show_immune_text(targ)
 
                         # Add to chain points for visual effect (cache target position)
                         tx, ty = g._enemy_pos(targ)
@@ -4300,6 +4290,8 @@ class CollisionSystem:
                         )
                         if not _eshield_active:
                             enemy.take_damage(4, show_floating=False)
+                        else:
+                            self._show_immune_text(enemy)
                         enemy.contact_timer = int(g.fps * 2)
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
@@ -4317,6 +4309,8 @@ class CollisionSystem:
                     ) in ("pentagram_fire", "pentagram_storm", "pentagram_ice")
                     if not _eshield_active2:
                         enemy.take_damage(reflected, show_floating=False)
+                    else:
+                        self._show_immune_text(enemy)
         else:
             for enemy in list(g.enemies):
                 ex, ey = g._enemy_pos(enemy)
@@ -4388,6 +4382,8 @@ class CollisionSystem:
                             )
                             if not _eshield_active3:
                                 enemy.take_damage(4, show_floating=False)
+                            else:
+                                self._show_immune_text(enemy)
                             enemy.contact_timer = int(g.fps * 2)
                     except (AttributeError, TypeError, ValueError, KeyError):
                         # Best-effort fallback: apply tiny constant damage
@@ -4415,6 +4411,8 @@ class CollisionSystem:
                         )
                         if not _eshield_active4:
                             enemy.take_damage(reflected, show_floating=False)
+                        else:
+                            self._show_immune_text(enemy)
         # Bosses hit player
         hit_bosses = pygame.sprite.spritecollide(g.player, g.bosses, False)
         for boss in hit_bosses:
@@ -4437,14 +4435,16 @@ class CollisionSystem:
                     ) in ("pentagram_fire", "pentagram_storm", "pentagram_ice")
                     if not _eshield_flies:
                         enemy.take_damage(damage)
-                    # spawn centralized floating text for drain tick
-                    try:
-                        ex, ey = g._enemy_pos(enemy)
-                        g.spawn_floating_text(
-                            str(int(damage)), ex, ey - g._enemy_radius(enemy) - 8
-                        )
-                    except (AttributeError, TypeError, ValueError, KeyError):
-                        pass
+                        # spawn centralized floating text for drain tick
+                        try:
+                            ex, ey = g._enemy_pos(enemy)
+                            g.spawn_floating_text(
+                                str(int(damage)), ex, ey - g._enemy_radius(enemy) - 8
+                            )
+                        except (AttributeError, TypeError, ValueError, KeyError):
+                            pass
+                    else:
+                        self._show_immune_text(enemy)
                     g.player.health = min(g.player.max_health, g.player.health + heal)
                 if enemy.drain_timer <= 0:
                     # Remove drain attributes
@@ -4475,6 +4475,15 @@ class CollisionSystem:
                             )
                             if not _eshield_flies2:
                                 enemy.take_damage(damage)
+                                try:
+                                    ex, ey = g._enemy_pos(enemy)
+                                    g.spawn_floating_text(
+                                        str(int(damage)), ex, ey - g._enemy_radius(enemy) - 8
+                                    )
+                                except (AttributeError, TypeError, ValueError, KeyError):
+                                    pass
+                            else:
+                                self._show_immune_text(enemy)
                         except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 enemy.health = max(
@@ -4482,13 +4491,6 @@ class CollisionSystem:
                                 )
                             except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                        try:
-                            ex, ey = g._enemy_pos(enemy)
-                            g.spawn_floating_text(
-                                str(int(damage)), ex, ey - g._enemy_radius(enemy) - 8
-                            )
-                        except (AttributeError, TypeError, ValueError, KeyError):
-                            pass
                         g.player.health = min(
                             g.player.max_health, g.player.health + heal
                         )
@@ -4572,6 +4574,8 @@ class CollisionSystem:
                             )
                             if not _eshield_orb:
                                 enemy.take_damage(orbital_damage)
+                            else:
+                                self._show_immune_text(enemy)
                             hits.add(eid)
                     else:
                         # enemy has moved away, allow future re-hits

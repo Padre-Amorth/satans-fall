@@ -510,17 +510,12 @@ class CollisionSystem:
         try:
             g = self.game
             ex, ey = g._enemy_pos(enemy)
-            g.floating_texts.append(
-                {
-                    "text": "IMMUNE",
-                    "x": ex,
-                    "y": ey - 30,
-                    "vx": 0,
-                    "vy": -2,
-                    "lifetime": 30,
-                    "color": (200, 200, 200),
-                    "size": 14,
-                }
+            g.spawn_floating_text(
+                "IMMUNE",
+                ex,
+                ey - g._enemy_radius(enemy) - 8,
+                color=(200, 200, 200),
+                font_size=14,
             )
         except (AttributeError, TypeError, ValueError, KeyError):
             pass

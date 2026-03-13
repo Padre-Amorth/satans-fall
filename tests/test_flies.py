@@ -5,10 +5,10 @@ from src.projectile import FliesProjectile
 
 
 def test_flies_radius_max_level():
-    # level 6 projectiles should be slightly larger than lower-level ones
+    # level 7 projectiles should be slightly larger than lower-level ones
     low = FliesProjectile(0, 0, 0, 0, damage=5, heal_amount=2, level=1)
-    high = FliesProjectile(0, 0, 0, 0, damage=5, heal_amount=2, level=6)
-    assert high.radius > low.radius, "Max-level flies should have larger radius"
+    high = FliesProjectile(0, 0, 0, 0, damage=5, heal_amount=2, level=7)
+    assert high.radius > low.radius, "Max-level (7) flies should have larger radius"
 
 
 def test_flies_targets_boss():

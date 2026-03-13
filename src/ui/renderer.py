@@ -2174,12 +2174,12 @@ class UIGameRenderer:
             ox = orb.get("x", self.game.player.x)
             oy = orb.get("y", self.game.player.y)
             ox_s, oy_s = self.ui._apply_shake(ox, oy, shake_x, shake_y)
-            pygame.draw.circle(self.ui.screen, (176, 240, 255), (ox_s, oy_s), 6)
+            pygame.draw.circle(self.ui.screen, (176, 240, 255), (ox_s, oy_s), 5)
             pygame.draw.circle(
                 self.ui.screen,
                 (224, 248, 255),
                 (ox_s, oy_s),
-                10,
+                9,
                 1,
             )
 

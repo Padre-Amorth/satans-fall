@@ -330,3 +330,40 @@ def test_elemental_pentagram_shield_blocks_wrong_tower_damage():
         enemy, storm_projectile
     )
     assert can_damage_storm, "Storm projectile SHOULD damage storm shield"
+
+
+def test_elemental_pentagram_shield_blocks_burn_effect():
+    """Verify pentagram_fire shield blocks burn effect from non-fire towers."""
+    from src.entities.enemy import Enemy
+    from src.projectile import Projectile
+    from src.systems.collision_system import CollisionSystem
+
+    # Create pentagram_fire with shield
+    enemy = Enemy(500.0, 300.0, "pentagram_fire", 300.0, 50.0)
+    assert enemy.shield_hp == 500
+
+    # Fire projectile with burn effect (should work)
+    fire_proj = Projectile(100, 100, 1, 0, damage=50)
+    fire_proj.tower_type = "fire"
+    fire_proj.effect = "burn"
+
+    can_apply_burn = CollisionSystem._elemental_shield_can_damage(enemy, fire_proj)
+    assert can_apply_burn, "Fire burn should damage pentagram_fire shield"
+
+    # Ice projectile with slow effect (should NOT work)
+    ice_proj = Projectile(100, 100, 1, 0, damage=50)
+    ice_proj.tower_type = "ice"
+    ice_proj.effect = "slow"
+
+    can_apply_slow = CollisionSystem._elemental_shield_can_damage(enemy, ice_proj)
+    assert not can_apply_slow, "Ice slow should NOT affect pentagram_fire shield"
+
+    # Storm projectile with any effect (should NOT work on pentagram_fire)
+    storm_proj = Projectile(100, 100, 1, 0, damage=50)
+    storm_proj.tower_type = "storm"
+    storm_proj.effect = "burn"
+
+    can_apply_storm_burn = CollisionSystem._elemental_shield_can_damage(enemy, storm_proj)
+    assert (
+        not can_apply_storm_burn
+    ), "Storm projectile should NOT affect pentagram_fire shield"

@@ -505,6 +505,26 @@ class CollisionSystem:
             return tower_type == "ice"
         return True
 
+    def _show_immune_text(self, enemy: Any) -> None:
+        """Display IMMUNE floating text when elemental shield blocks damage."""
+        try:
+            g = self.game
+            ex, ey = g._enemy_pos(enemy)
+            g.floating_texts.append(
+                {
+                    "text": "IMMUNE",
+                    "x": ex,
+                    "y": ey - 30,
+                    "vx": 0,
+                    "vy": -2,
+                    "lifetime": 30,
+                    "color": (200, 200, 200),
+                    "size": 14,
+                }
+            )
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
+
     def _player_damage_vs_burning(self, projectile, enemy, base_damage: int) -> int:
         """Return adjusted damage for player projectiles.
 
@@ -2084,33 +2104,37 @@ class CollisionSystem:
 
                 # Apply slow effect if projectile has it (Ice towers)
                 if effect == "slow":
-                    # helper handles dict/object and guards against reapplication
-                    self._apply_slow_effect(enemy, slow_duration, slow_factor)
+                    if self._elemental_shield_can_damage(enemy, projectile):
+                        # helper handles dict/object and guards against reapplication
+                        self._apply_slow_effect(enemy, slow_duration, slow_factor)
 
-                    # Add ice explosion particles
-                    for _ in range(10):  # More ice shards for better visibility
-                        vx = random.uniform(-60, 60)
-                        vy = random.uniform(-40, 20)  # Some go up, some down
-                        p_ice_enemy = IceParticle(
-                            enemy.x,
-                            enemy.y,
-                            vx,
-                            vy,
-                            life=25,
-                            size=random.randint(1, 3),
-                        )
-                        enemy.ice_particles.append(p_ice_enemy)
+                        # Add ice explosion particles
+                        for _ in range(10):  # More ice shards for better visibility
+                            vx = random.uniform(-60, 60)
+                            vy = random.uniform(-40, 20)  # Some go up, some down
+                            p_ice_enemy = IceParticle(
+                                enemy.x,
+                                enemy.y,
+                                vx,
+                                vy,
+                                life=25,
+                                size=random.randint(1, 3),
+                            )
+                            enemy.ice_particles.append(p_ice_enemy)
+                    else:
+                        self._show_immune_text(enemy)
 
                 # Apply burn effect (Fire towers)
                 if effect == "burn":
-                    # Only apply if not already burning
-                    try:
-                        if (
-                            not hasattr(enemy, "burn_timer")
-                            or getattr(enemy, "burn_timer", 0) <= 0
-                        ):
-                            enemy.burn_timer = burn_duration
-                            enemy.burn_damage_per_second = burn_dps
+                    if self._elemental_shield_can_damage(enemy, projectile):
+                        # Only apply if not already burning
+                        try:
+                            if (
+                                not hasattr(enemy, "burn_timer")
+                                or getattr(enemy, "burn_timer", 0) <= 0
+                            ):
+                                enemy.burn_timer = burn_duration
+                                enemy.burn_damage_per_second = burn_dps
                             # Counter for per-second ticks
                             enemy.burn_tick_timer = getattr(g, "fps", 60)
                             # For sprite-based enemies, attach propagation-on-death attrs when applicable
@@ -2123,8 +2147,10 @@ class CollisionSystem:
                                     enemy.burn_propagate_hops = 2
                             except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                    except (AttributeError, TypeError, ValueError, KeyError):
-                        pass
+                        except (AttributeError, TypeError, ValueError, KeyError):
+                            pass
+                    else:
+                        self._show_immune_text(enemy)
 
                 # Handle projectile piercing / kill (object-style only)
                 p_pierce_all = getattr(projectile, "pierce_all", False)
@@ -2885,37 +2911,43 @@ class CollisionSystem:
 
                         # Apply slow (object-style)
                         if effect == "slow":
-                            if not hasattr(enemy, "original_speed"):
-                                enemy.original_speed = getattr(enemy, "speed", 100)
-                            enemy.slow_timer = slow_duration
-                            enemy.slow_factor = slow_factor
-                            enemy.speed = enemy.original_speed * enemy.slow_factor
+                            if self._elemental_shield_can_damage(enemy, projectile):
+                                if not hasattr(enemy, "original_speed"):
+                                    enemy.original_speed = getattr(enemy, "speed", 100)
+                                enemy.slow_timer = slow_duration
+                                enemy.slow_factor = slow_factor
+                                enemy.speed = enemy.original_speed * enemy.slow_factor
 
-                            # Add ice explosion particles (object-style)
-                            if not hasattr(enemy, "ice_particles"):
-                                enemy.ice_particles = []
-                            ex, ey = g._enemy_pos(enemy)
-                            for _ in range(10):  # More ice shards for better visibility
-                                vx = random.uniform(-60, 60)
-                                vy = random.uniform(-40, 20)  # Some go up, some down
-                                enemy.ice_particles.append(
-                                    IceParticle(
-                                        ex,
-                                        ey,
-                                        vx,
-                                        vy,
-                                        life=25,
-                                        size=random.randint(1, 3),
+                                # Add ice explosion particles (object-style)
+                                if not hasattr(enemy, "ice_particles"):
+                                    enemy.ice_particles = []
+                                ex, ey = g._enemy_pos(enemy)
+                                for _ in range(10):  # More ice shards for better visibility
+                                    vx = random.uniform(-60, 60)
+                                    vy = random.uniform(-40, 20)  # Some go up, some down
+                                    enemy.ice_particles.append(
+                                        IceParticle(
+                                            ex,
+                                            ey,
+                                            vx,
+                                            vy,
+                                            life=25,
+                                            size=random.randint(1, 3),
+                                        )
                                     )
-                                )
+                            else:
+                                self._show_immune_text(enemy)
 
                         # Apply burn (object-style)
                         if effect == "burn":
-                            # only apply if enemy not already burning
-                            if getattr(enemy, "burn_timer", 0) <= 0:
-                                enemy.burn_timer = burn_duration
-                                enemy.burn_damage_per_second = burn_dps
-                                enemy.burn_tick_counter = g.fps
+                            if self._elemental_shield_can_damage(enemy, projectile):
+                                # only apply if enemy not already burning
+                                if getattr(enemy, "burn_timer", 0) <= 0:
+                                    enemy.burn_timer = burn_duration
+                                    enemy.burn_damage_per_second = burn_dps
+                                    enemy.burn_tick_counter = g.fps
+                            else:
+                                self._show_immune_text(enemy)
 
                         # Handle projectile piercing / kill (object-style)
                         p_pierce_all = getattr(projectile, "pierce_all", False)
@@ -3281,26 +3313,32 @@ class CollisionSystem:
 
                         # Apply slow effect if projectile has it (Ice towers)
                         if effect == "slow":
-                            if (
-                                not hasattr(enemy, "slow_timer")
-                                or getattr(enemy, "slow_timer", 0) <= 0
-                            ):
-                                enemy.slow_timer = slow_duration
-                                enemy.slow_factor = slow_factor
-                                if not hasattr(enemy, "original_speed"):
-                                    enemy.original_speed = enemy.speed
-                                enemy.speed = enemy.speed * enemy.slow_factor
+                            if self._elemental_shield_can_damage(enemy, projectile):
+                                if (
+                                    not hasattr(enemy, "slow_timer")
+                                    or getattr(enemy, "slow_timer", 0) <= 0
+                                ):
+                                    enemy.slow_timer = slow_duration
+                                    enemy.slow_factor = slow_factor
+                                    if not hasattr(enemy, "original_speed"):
+                                        enemy.original_speed = enemy.speed
+                                    enemy.speed = enemy.speed * enemy.slow_factor
+                            else:
+                                self._show_immune_text(enemy)
 
                         # Apply burn effect (Fire towers)
                         if effect == "burn":
-                            if (
-                                not hasattr(enemy, "burn_timer")
+                            if self._elemental_shield_can_damage(enemy, projectile):
+                                if (
+                                    not hasattr(enemy, "burn_timer")
                                 or getattr(enemy, "burn_timer", 0) <= 0
                             ):
-                                enemy.burn_timer = burn_duration
-                                enemy.burn_damage_per_second = burn_dps
-                                # Counter for per-second ticks
-                                enemy.burn_tick_timer = getattr(g, "fps", 60)
+                                    enemy.burn_timer = burn_duration
+                                    enemy.burn_damage_per_second = burn_dps
+                                    # Counter for per-second ticks
+                                    enemy.burn_tick_timer = getattr(g, "fps", 60)
+                            else:
+                                self._show_immune_text(enemy)
 
                         # Handle projectile piercing / kill (support dict or object projectiles)
                         if p_pierce_all:
@@ -3700,38 +3738,47 @@ class CollisionSystem:
                 # Ensure projectiles that carry slow/burn also apply to bosses (defensive/duplicate path)
                 try:
                     if getattr(projectile, "effect", None) == "slow":
-                        # apply slow metadata directly from projectile as a defensive path
-                        try:
-                            # use helper to apply slow
-                            self._apply_slow_effect(
-                                boss,
-                                getattr(projectile, "slow_duration", 120),
-                                getattr(projectile, "slow_factor", 0.5),
-                            )
-                        except (AttributeError, TypeError, ValueError, KeyError):
-                            pass
-                    if getattr(projectile, "effect", None) == "burn":
-                        # Only apply burn if not already burning
-                        if (
-                            not hasattr(boss, "burn_timer")
-                            or getattr(boss, "burn_timer", 0) <= 0
-                        ):
-                            boss.burn_timer = burn_duration
-                            boss.burn_damage_per_second = burn_dps
-                            boss.burn_tick_timer = getattr(g, "fps", 60)
-                            # If FIRE tier 1 is active, mark this burn to propagate on death
+                        if self._elemental_shield_can_damage(boss, projectile):
+                            # apply slow metadata directly from projectile as a defensive path
                             try:
-                                if g.permanent_stats.get("fire_1", 0):
-                                    boss.burn_propagate_on_death = True
-                                    boss.burn_propagate_radius = 150
-                                    boss.burn_propagate_dps = burn_dps
-                                    boss.burn_propagate_duration = burn_duration
-                                    boss.burn_propagate_hops = 2
+                                # use helper to apply slow
+                                self._apply_slow_effect(
+                                    boss,
+                                    getattr(projectile, "slow_duration", 120),
+                                    getattr(projectile, "slow_factor", 0.5),
+                                )
                             except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
+                        else:
+                            self._show_immune_text(boss)
+                    if getattr(projectile, "effect", None) == "burn":
+                        if self._elemental_shield_can_damage(boss, projectile):
+                            # Only apply burn if not already burning
+                            if (
+                                not hasattr(boss, "burn_timer")
+                                or getattr(boss, "burn_timer", 0) <= 0
+                            ):
+                                boss.burn_timer = burn_duration
+                                boss.burn_damage_per_second = burn_dps
+                                boss.burn_tick_timer = getattr(g, "fps", 60)
+                                # If FIRE tier 1 is active, mark this burn to propagate on death
+                                try:
+                                    if g.permanent_stats.get("fire_1", 0):
+                                        boss.burn_propagate_on_death = True
+                                        boss.burn_propagate_radius = 150
+                                        boss.burn_propagate_dps = burn_dps
+                                        boss.burn_propagate_duration = burn_duration
+                                        boss.burn_propagate_hops = 2
+                                except (AttributeError, TypeError, ValueError, KeyError):
+                                    pass
+                        else:
+                            self._show_immune_text(boss)
                     elif getattr(projectile, "effect", None) == "slow":
-                        # another slow branch, use helper
-                        self._apply_slow_effect(boss, slow_duration, slow_factor)
+                        if self._elemental_shield_can_damage(boss, projectile):
+                            # another slow branch, use helper
+                            self._apply_slow_effect(boss, slow_duration, slow_factor)
+                        else:
+                            self._show_immune_text(boss)
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
@@ -3742,11 +3789,14 @@ class CollisionSystem:
                         getattr(projectile, "effect", None) == "slow"
                         and getattr(boss, "slow_timer", 0) <= 0
                     ):
-                        self._apply_slow_effect(
-                            boss,
-                            getattr(projectile, "slow_duration", 120),
-                            getattr(projectile, "slow_factor", 0.5),
-                        )
+                        if self._elemental_shield_can_damage(boss, projectile):
+                            self._apply_slow_effect(
+                                boss,
+                                getattr(projectile, "slow_duration", 120),
+                                getattr(projectile, "slow_factor", 0.5),
+                            )
+                        else:
+                            self._show_immune_text(boss)
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 # Record that this projectile has hit this boss/type so it won't hit again

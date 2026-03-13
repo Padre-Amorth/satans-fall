@@ -822,7 +822,7 @@ class CollisionSystem:
                             )
                             if id(enemy) in getattr(projectile, "_hit_ids", set()):
                                 pass
-                            else:
+                            elif self._elemental_shield_can_damage(enemy, projectile):
                                 try:
                                     LOG.debug(
                                         "handle_collisions ICE3-hit: proj_id=%s effect=%s enemy_id=%s pre_hit_ids=%s",
@@ -839,6 +839,8 @@ class CollisionSystem:
                                 ):
                                     pass
                                 enemy.take_damage(dmg_to_apply, show_floating=False)
+                            else:
+                                self._show_immune_text(enemy)
                                 # ICE3 piercing also counts as tower hits
                                 try:
                                     self._maybe_charge_tower(projectile)
@@ -988,7 +990,7 @@ class CollisionSystem:
                                         projectile, "_hit_ids", set()
                                     ):
                                         pass
-                                    else:
+                                    elif self._elemental_shield_can_damage(enemy, projectile):
                                         enemy.take_damage(
                                             dmg_to_apply, show_floating=False
                                         )
@@ -1002,17 +1004,22 @@ class CollisionSystem:
                                             KeyError,
                                         ):
                                             pass
+                                    else:
+                                        self._show_immune_text(enemy)
 
                                     # Apply slow effect (object or dict) for explosion-area
-                                    slow_duration = getattr(
-                                        projectile, "slow_duration", 120
-                                    )
-                                    slow_factor = getattr(
-                                        projectile, "slow_factor", 0.5
-                                    )
-                                    self._apply_slow_effect(
-                                        enemy, slow_duration, slow_factor, extend=True
-                                    )
+                                    if self._elemental_shield_can_damage(enemy, projectile):
+                                        slow_duration = getattr(
+                                            projectile, "slow_duration", 120
+                                        )
+                                        slow_factor = getattr(
+                                            projectile, "slow_factor", 0.5
+                                        )
+                                        self._apply_slow_effect(
+                                            enemy, slow_duration, slow_factor, extend=True
+                                        )
+                                    else:
+                                        self._show_immune_text(enemy)
 
                                     try:
                                         ex, ey = g._enemy_pos(enemy)
@@ -1122,7 +1129,7 @@ class CollisionSystem:
                                         projectile, "hit_enemy_ids", set()
                                     ):
                                         pass
-                                    else:
+                                    elif self._elemental_shield_can_damage(enemy, projectile):
                                         enemy.take_damage(
                                             dmg_to_apply, show_floating=False
                                         )
@@ -1136,17 +1143,22 @@ class CollisionSystem:
                                             KeyError,
                                         ):
                                             pass
+                                    else:
+                                        self._show_immune_text(enemy)
 
                                     # Apply slow effect
-                                    slow_duration = getattr(
-                                        projectile, "slow_duration", 120
-                                    )
-                                    slow_factor = getattr(
-                                        projectile, "slow_factor", 0.5
-                                    )
-                                    self._apply_slow_effect(
-                                        enemy, slow_duration, slow_factor, extend=True
-                                    )
+                                    if self._elemental_shield_can_damage(enemy, projectile):
+                                        slow_duration = getattr(
+                                            projectile, "slow_duration", 120
+                                        )
+                                        slow_factor = getattr(
+                                            projectile, "slow_factor", 0.5
+                                        )
+                                        self._apply_slow_effect(
+                                            enemy, slow_duration, slow_factor, extend=True
+                                        )
+                                    else:
+                                        self._show_immune_text(enemy)
                                     try:
                                         ex, ey = g._enemy_pos(enemy)
                                         (
@@ -1217,16 +1229,19 @@ class CollisionSystem:
                         dmg_to_apply = getattr(projectile, "damage", 0)
 
                     try:
-                        if hasattr(primary, "take_damage"):
-                            primary.take_damage(dmg_to_apply, show_floating=False)
-                            try:
-                                self._maybe_charge_tower(projectile)
-                            except (AttributeError, TypeError, ValueError, KeyError):
-                                pass
+                        if self._elemental_shield_can_damage(primary, projectile):
+                            if hasattr(primary, "take_damage"):
+                                primary.take_damage(dmg_to_apply, show_floating=False)
+                                try:
+                                    self._maybe_charge_tower(projectile)
+                                except (AttributeError, TypeError, ValueError, KeyError):
+                                    pass
+                            else:
+                                primary["health"] = max(
+                                    0, primary.get("health", 0) - dmg_to_apply
+                                )
                         else:
-                            primary["health"] = max(
-                                0, primary.get("health", 0) - dmg_to_apply
-                            )
+                            self._show_immune_text(primary)
                     except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 

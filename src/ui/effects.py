@@ -959,6 +959,7 @@ class UIEffectsRenderer:
         if hasattr(self.game, "player_weapons") and self.game.player_weapons:
             weapon_y = right_y + 104
             dark_red = (220, 100, 100)
+            yellow = (255, 204, 0)
             for i, wid in enumerate(self.game.player_weapons):
                 if i >= 3:  # Show max 3 weapons in right panel
                     break
@@ -970,9 +971,29 @@ class UIEffectsRenderer:
                     full_text = f"FINAL FORM - {display_name}"
                     text_color_to_use = dark_red
                 else:
-                    full_text = f"{display_name} Lv {lvl}"
-                    text_color_to_use = text_color
-                weapon_text = self.ui.get_text(full_text, tiny_font, text_color_to_use)
+                    # Render name in normal color, level number in yellow (larger font)
+                    name_surf = self.ui.get_text(
+                        f"{display_name}  ", tiny_font, text_color
+                    )
+                    lvl_surf = self.ui.get_text(f"{lvl}", small_font, yellow)
+                    # Align number vertically to center of name
+                    combined_height = max(name_surf.get_height(), lvl_surf.get_height())
+                    combined_width = name_surf.get_width() + lvl_surf.get_width()
+                    combined_surf = self.ui.pygame.Surface(
+                        (combined_width, combined_height), self.ui.pygame.SRCALPHA
+                    )
+                    # Blit name at top
+                    combined_surf.blit(name_surf, (0, 0))
+                    # Blit number centered vertically
+                    lvl_y = (combined_height - lvl_surf.get_height()) // 2
+                    combined_surf.blit(lvl_surf, (name_surf.get_width(), lvl_y))
+                    weapon_text = combined_surf
+                    text_color_to_use = None  # Already colored
+
+                if text_color_to_use is not None:
+                    weapon_text = self.ui.get_text(
+                        full_text, tiny_font, text_color_to_use
+                    )
                 self.ui.screen.blit(
                     weapon_text, (right_x + 25 + shake_x, weapon_y + i * 16 + shake_y)
                 )

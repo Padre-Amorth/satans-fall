@@ -1253,17 +1253,33 @@ class UIGameRenderer:
         y = _draw_section_header("Weapons", right_x, y)
         weapons = list(self.game.player_weapons)
         if weapons:
+            yellow = (255, 204, 0)
             for wid in weapons:
                 lvl = self.game.weapon_levels.get(wid, 0)
                 name = WEAPON_DEFS.get(wid, {}).get("name", _clean(wid))
-                # Display FINAL FORM - Name for level 7, otherwise Name Lv N
+                # Display FINAL FORM - Name for level 7, otherwise Name + number in yellow
                 if lvl == 7:
                     display_text = f"FINAL FORM - {name}"
                     text_color = COLOR_DARK_RED
+                    text_surf = self.ui.get_text(display_text, font_body, text_color)
                 else:
-                    display_text = f"{name} Lv {lvl}"
-                    text_color = COLOR_VALUE
-                text_surf = self.ui.get_text(display_text, font_body, text_color)
+                    # Render name in normal color, level number in yellow (larger font)
+                    name_surf = self.ui.get_text(f"{name}  ", font_body, COLOR_VALUE)
+                    # Use larger font for level number
+                    font_lvl = self.ui.pygame.font.Font(
+                        None, int(font_body.get_height() * 1.3)
+                    )
+                    lvl_surf = self.ui.get_text(f"{lvl}", font_lvl, yellow)
+                    # Align number vertically to center
+                    combined_height = max(name_surf.get_height(), lvl_surf.get_height())
+                    combined_width = name_surf.get_width() + lvl_surf.get_width()
+                    combined_surf = self.ui.pygame.Surface(
+                        (combined_width, combined_height), self.ui.pygame.SRCALPHA
+                    )
+                    combined_surf.blit(name_surf, (0, 0))
+                    lvl_y = (combined_height - lvl_surf.get_height()) // 2
+                    combined_surf.blit(lvl_surf, (name_surf.get_width(), lvl_y))
+                    text_surf = combined_surf
                 self.ui.screen.blit(text_surf, (right_x + shake_x, y + shake_y))
                 y += line_h
         else:

@@ -477,10 +477,9 @@ class UpgradeSystem:
 
             choices: List[Dict[str, str]] = []
             if filtered_unowned:
-                if len(filtered_unowned) >= 3:
-                    selected = random.sample(filtered_unowned, 3)
-                else:
-                    selected = [random.choice(filtered_unowned) for _ in range(3)]
+                selected = random.sample(
+                    filtered_unowned, min(3, len(filtered_unowned))
+                )
                 for weapon in selected:
                     choices.append(
                         {
@@ -493,7 +492,7 @@ class UpgradeSystem:
                 allowed = [w for w in all_weapon_ids if _is_available_for_stage(w)]
                 if not allowed:
                     allowed = all_weapon_ids
-                selected = [random.choice(allowed) for _ in range(3)]
+                selected = random.sample(allowed, 3)
                 for weapon in selected:
                     choices.append(
                         {
@@ -583,7 +582,6 @@ class UpgradeSystem:
                 if not icon:
                     icon = f"weapon_{wid.lower()}.png"
                 c["icon"] = icon
-        return result
         return result
 
     def generate_weapon_upgrade_choices(self):

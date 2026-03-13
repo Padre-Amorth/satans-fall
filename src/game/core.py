@@ -299,6 +299,7 @@ class Game:
         self.stage_start_timer = 0
         self.show_fps: bool = True
         self.paused = False
+        self._paused_by_blasphemy5 = False
         self.awaiting_upgrade = False
         self.selected_upgrade_index = 0
         self.awaiting_weapon_choice = False
@@ -2158,10 +2159,32 @@ class Game:
         """Delegate UI drawing work to the Pygame UI manager where appropriate."""
         # Draw stage start countdown (kept here to avoid changing menu ordering)
         if self.stage_start_countdown > 0:
-            font_large: pygame.Font = pygame.font.SysFont("chiller", 72)
+            font_large: pygame.Font = pygame.font.SysFont("chiller", 90)
             countdown_text: pygame.Surface = font_large.render(
-                str(self.stage_start_countdown), True, (220, 180, 20)
+                str(self.stage_start_countdown), True, (80, 10, 30)
             )
+            # Draw black outline by rendering text around the main text
+            outline_color = (0, 0, 0)
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    if dx != 0 or dy != 0:
+                        outline_text = font_large.render(
+                            str(self.stage_start_countdown), True, outline_color
+                        )
+                        self.screen.blit(
+                            outline_text,
+                            (
+                                self.width // 2
+                                - countdown_text.get_width() // 2
+                                + shake_x
+                                + dx,
+                                self.height // 2
+                                - countdown_text.get_height() // 2
+                                + shake_y
+                                + dy,
+                            ),
+                        )
+            # Draw main text on top
             self.screen.blit(
                 countdown_text,
                 (
@@ -2689,6 +2712,7 @@ class Game:
         # Reset Blasphemy 5 system (revive + blink state)
         if self.blasphemy5_system is not None:
             self.blasphemy5_system.reset()
+        self._paused_by_blasphemy5 = False
 
         # Reset player position and per-run upgrades
         self.player.x = self.width // 2

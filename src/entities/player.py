@@ -188,7 +188,9 @@ class Player(BaseSprite):
         try:
             from src.assets.manager import get_image
 
-            size = (self.width, self.height)
+            # Load walk sprites at 58px width for narrower appearance
+            walk_width = 58
+            size = (walk_width, self.height)
             self.walk_frames = []
 
             # Try to load right-direction walk frames (2 frames)

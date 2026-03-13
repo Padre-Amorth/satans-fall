@@ -103,6 +103,30 @@ class IceParticle:
 
 
 class Enemy(BaseSprite):
+    @staticmethod
+    def _get_barrier_side_position(barrier: dict, enemy_width: float = 30) -> tuple:
+        """
+        Calculate a position to the side of a barrier to avoid stacking.
+        Returns (x, y) positioned on left or right edge of barrier with small jitter.
+        """
+        barrier_x = barrier.get("x", 0)
+        barrier_y = barrier.get("y", 0)
+        barrier_w = barrier.get("w", 80)
+        barrier_h = barrier.get("h", 40)
+
+        # Randomly choose left or right side
+        if random.random() < 0.5:
+            # Left side: position to the left of barrier with small jitter
+            x = barrier_x - enemy_width * 0.6 + random.uniform(-5, 5)
+        else:
+            # Right side: position to the right of barrier with small jitter
+            x = barrier_x + barrier_w + enemy_width * 0.6 + random.uniform(-5, 5)
+
+        # Y position: center of barrier with small vertical jitter
+        y = barrier_y + barrier_h / 2 + random.uniform(-10, 10)
+
+        return (int(x), int(y))
+
     def __init__(
         self,
         x: float,
@@ -282,7 +306,7 @@ class Enemy(BaseSprite):
         if enemy_type == "mage":
             self.shield_timer: int = 60 * 5  # frames until first shield cast
 
-        # Pentagram: HP fixed at 300 body + 1500 shield, independent of global multipliers
+        # Pentagram: HP fixed at 300 body + 1000 shield (base), independent of global multipliers
         if enemy_type in (
             "pentagram",
             "pentagram_fire",
@@ -291,15 +315,20 @@ class Enemy(BaseSprite):
         ):
             self.max_health = 300
             self.health = 300
-            self.shield_hp = 1500
-            self.shield_max_hp = 1500
-        # Elemental variants: 300 body + 500 elemental shield
+            self.shield_hp = 1000
+            self.shield_max_hp = 1000
+        # Elemental variants: 300 body + 300 elemental shield
         if enemy_type in ("pentagram_fire", "pentagram_storm", "pentagram_ice"):
-            self.shield_hp = 500
-            self.shield_max_hp = 500
+            self.shield_hp = 300
+            self.shield_max_hp = 300
         # Custode split flag: True means this custode is already a split half
         if enemy_type == "custode":
             self._custode_split: bool = False
+
+        # Flip timer for giant/custode: flips sprite every 1 second (60 frames)
+        if enemy_type in ("giant", "custode"):
+            self._flip_timer: int = 0  # counts from 0 to 59, then resets
+            self._should_flip: bool = False  # toggles every second
 
         # Track if this enemy's death has been recorded in the limbo horde counter.
         # Prevents double-counting if record_enemy_kill() is called multiple times.
@@ -642,6 +671,10 @@ class Enemy(BaseSprite):
                 pass
             # Vector art fallback
             self._anim_frames = []
+            # Reset flip timer for giant/custode
+            if self.enemy_type in ("giant", "custode"):
+                self._flip_timer = 0
+                self._should_flip = False
             self.draw_demon()
             return
 
@@ -929,6 +962,12 @@ class Enemy(BaseSprite):
                 if self._anim_timer >= 8:
                     self._anim_timer = 0
                     self._anim_frame = (getattr(self, "_anim_frame", 0) + 1) % 8
+            # Flip timer for giant/custode: flip sprite every 48 frames (0.8 seconds)
+            if self.enemy_type in ("giant", "custode"):
+                self._flip_timer = getattr(self, "_flip_timer", 0) + 1
+                if self._flip_timer >= 48:
+                    self._flip_timer = 0
+                    self._should_flip = not getattr(self, "_should_flip", False)
             # Cross Bearer: 2-frame animation cycle (frame 0 / frame 1, swap every 36 frames)
             if self.enemy_type == "cross_bearer":
                 self._anim_timer = getattr(self, "_anim_timer", 0) + 1
@@ -1359,9 +1398,10 @@ class Enemy(BaseSprite):
                                                 b["x"] + b["w"] / 2 - self.x
                                             ),
                                         )
-                                    self.archer_target_x = int(
-                                        nearest["x"] + nearest["w"] / 2
+                                    side_pos = Enemy._get_barrier_side_position(
+                                        nearest, self.width
                                     )
+                                    self.archer_target_x = side_pos[0]
                                     self._hiding_behind_barrier = True
                                     self._hiding_barrier_ref = nearest
                                     self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
@@ -1399,11 +1439,11 @@ class Enemy(BaseSprite):
                                         getattr(self, "_hiding_behind_barrier", False)
                                         and current_barrier_alive
                                     ):
-                                        # Stay at current barrier position
-                                        self.archer_target_x = int(
-                                            current_barrier["x"]
-                                            + current_barrier["w"] / 2
+                                        # Stay at current barrier position (side-positioned)
+                                        side_pos = Enemy._get_barrier_side_position(
+                                            current_barrier, self.width
                                         )
+                                        self.archer_target_x = side_pos[0]
                                         self._hiding_behind_barrier = True
                                         self._hide_suppress = (
                                             BARRIER_HIDE_SUPPRESS_FRAMES
@@ -1436,9 +1476,10 @@ class Enemy(BaseSprite):
                                                     b["x"] + b["w"] / 2 - self.x
                                                 ),
                                             )
-                                        self.archer_target_x = int(
-                                            nearest["x"] + nearest["w"] / 2
+                                        side_pos = Enemy._get_barrier_side_position(
+                                            nearest, self.width
                                         )
+                                        self.archer_target_x = side_pos[0]
                                         self._hiding_behind_barrier = True
                                         self._hiding_barrier_ref = nearest
                                         self._hide_suppress = (
@@ -1525,8 +1566,11 @@ class Enemy(BaseSprite):
                                         barriers,
                                         key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
                                     )
-                                spx = int(nearest["x"] + nearest["w"] / 2)
-                                spy = int(nearest["y"] + nearest["h"] / 2)
+                                side_pos = Enemy._get_barrier_side_position(
+                                    nearest, self.width
+                                )
+                                spx = side_pos[0]
+                                spy = side_pos[1]
                                 self._hiding_behind_barrier = True
                                 self._hiding_barrier_ref = nearest
                                 self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
@@ -1594,13 +1638,12 @@ class Enemy(BaseSprite):
                                 getattr(self, "_hiding_behind_barrier", False)
                                 and current_barrier_alive
                             ):
-                                # Stay at current barrier position
-                                spx = int(
-                                    current_barrier["x"] + current_barrier["w"] / 2
+                                # Stay at current barrier position (side-positioned)
+                                side_pos = Enemy._get_barrier_side_position(
+                                    current_barrier, self.width
                                 )
-                                spy = int(
-                                    current_barrier["y"] + current_barrier["h"] / 2
-                                )
+                                spx = side_pos[0]
+                                spy = side_pos[1]
                                 self._hiding_behind_barrier = True
                                 self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
                             # Try to seek new cover if no barrier or barrier is gone
@@ -1626,8 +1669,11 @@ class Enemy(BaseSprite):
                                         barriers,
                                         key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
                                     )
-                                spx = int(nearest["x"] + nearest["w"] / 2)
-                                spy = int(nearest["y"] + nearest["h"] / 2)
+                                side_pos = Enemy._get_barrier_side_position(
+                                    nearest, self.width
+                                )
+                                spx = side_pos[0]
+                                spy = side_pos[1]
                                 self._hiding_behind_barrier = True
                                 self._hiding_barrier_ref = nearest
                                 self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
@@ -3129,14 +3175,11 @@ class Enemy(BaseSprite):
                     frame_idx = getattr(self, "_anim_frame", 0) % 2
                     blit_image = frames[frame_idx]
             elif self.enemy_type in ("giant", "custode"):
-                anim_frame = getattr(self, "_anim_frame", 0)
-                # Oscillate flip_x every half-cycle (4 frames) to simulate stride
-                stride_flip = anim_frame >= 4
-                facing_right = getattr(self, "_facing_right", True)
-                flip_x = facing_right != stride_flip  # XOR: inverts on each stride
-                if flip_x:
+                # Flip sprite every second based on _should_flip timer
+                should_flip = getattr(self, "_should_flip", False)
+                if should_flip:
                     try:
-                        blit_image = pygame.transform.flip(self.image, flip_x, False)
+                        blit_image = pygame.transform.flip(self.image, True, False)
                     except (AttributeError, TypeError, ValueError, KeyError):
                         blit_image = self.image
             # Rotate pentagram asset on vertical axis with perspective compression

@@ -72,6 +72,7 @@ class Blasphemy5System:
                 # Auto-resume game after 2 seconds
                 self.game.paused = False
                 self._paused_by_blasphemy5 = False
+                self.game._paused_by_blasphemy5 = False
 
     def execute_blasphemy5_blink(self) -> None:
         """Execute Blasphemy 5 blink ability: teleport 120px in current movement direction.
@@ -370,6 +371,7 @@ class Blasphemy5System:
                 # Pause and schedule auto-resume
                 self.game.paused = True
                 self._paused_by_blasphemy5 = True
+                self.game._paused_by_blasphemy5 = True
                 self.blasphemy_5_pause_timer = int(2 * self.game.fps)
                 # Show revive message
                 try:

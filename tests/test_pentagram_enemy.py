@@ -191,3 +191,142 @@ def test_pentagram_reset_on_new_run():
         e for e in g.enemies if getattr(e, "enemy_type", None) in _ALL_PENTAGRAM_TYPES
     ]
     assert len(pentagrams_2) == 1, "Should spawn 1 pentagram variant after reset"
+
+
+def test_elemental_pentagram_shield_immunity():
+    """Verify elemental pentagram shields are immune to mismatched tower types."""
+    from src.entities.enemy import Enemy
+    from src.projectile import Projectile
+    from src.systems.collision_system import CollisionSystem
+
+    # Test pentagram_storm with fire and ice projectiles
+    enemy = Enemy(500.0, 300.0, "pentagram_storm", 300.0, 50.0)
+    initial_shield = enemy.shield_hp
+    assert initial_shield == 500, "Shield should start at 500"
+
+    # Create fire projectile (should NOT damage storm shield)
+    fire_proj = Projectile(100, 100, 1, 0, damage=50)
+    fire_proj.tower_type = "fire"
+
+    # Create ice projectile (should NOT damage storm shield)
+    ice_proj = Projectile(100, 100, 1, 0, damage=50)
+    ice_proj.tower_type = "ice"
+
+    # Create storm projectile (should damage storm shield)
+    storm_proj = Projectile(100, 100, 1, 0, damage=50)
+    storm_proj.tower_type = "storm"
+
+    # Test fire projectile does NOT damage storm shield
+    can_damage_fire = CollisionSystem._elemental_shield_can_damage(enemy, fire_proj)
+    assert not can_damage_fire, "Fire projectile should NOT damage storm shield"
+
+    # Test ice projectile does NOT damage storm shield
+    can_damage_ice = CollisionSystem._elemental_shield_can_damage(enemy, ice_proj)
+    assert not can_damage_ice, "Ice projectile should NOT damage storm shield"
+
+    # Test storm projectile CAN damage storm shield
+    can_damage_storm = CollisionSystem._elemental_shield_can_damage(enemy, storm_proj)
+    assert can_damage_storm, "Storm projectile should damage storm shield"
+
+    # Now test with shield down
+    enemy.shield_hp = 0
+    can_damage_fire_no_shield = CollisionSystem._elemental_shield_can_damage(
+        enemy, fire_proj
+    )
+    assert (
+        can_damage_fire_no_shield
+    ), "Fire projectile should damage body when shield is down"
+
+
+def test_all_elemental_pentagram_shield_immunities():
+    """Verify all elemental variants correctly block wrong tower types."""
+    from src.entities.enemy import Enemy
+    from src.projectile import Projectile
+    from src.systems.collision_system import CollisionSystem
+
+    tower_types = ("fire", "storm", "ice")
+    enemy_types = ("pentagram_fire", "pentagram_storm", "pentagram_ice")
+    mapping = {
+        "pentagram_fire": "fire",
+        "pentagram_storm": "storm",
+        "pentagram_ice": "ice",
+    }
+
+    for enemy_type in enemy_types:
+        enemy = Enemy(500.0, 300.0, enemy_type, 300.0, 50.0)
+        correct_type = mapping[enemy_type]
+
+        for tower_type in tower_types:
+            proj = Projectile(100, 100, 1, 0, damage=50)
+            proj.tower_type = tower_type
+
+            can_damage = CollisionSystem._elemental_shield_can_damage(enemy, proj)
+
+            if tower_type == correct_type:
+                assert (
+                    can_damage
+                ), f"{enemy_type} shield should be damaged by {tower_type} projectile"
+            else:
+                assert (
+                    not can_damage
+                ), f"{enemy_type} shield should be immune to {tower_type} projectile"
+
+
+def test_tower_projectiles_have_tower_type():
+    """Verify all tower projectiles get the correct tower_type attribute."""
+    from src.core.entities.tower import Tower
+
+    for tower_type in ("fire", "storm", "ice"):
+        tower = Tower(640, 200, tower_type=tower_type)
+
+        # Create a fake enemies list to make tower.fire_at_closest work
+        from src.entities.enemy import Enemy
+
+        enemies = [Enemy(640, 400, "archer", 100, 50)]
+
+        projectile = tower.fire_at_closest(enemies, origin_y=200)
+
+        assert projectile is not None, f"{tower_type} tower should fire a projectile"
+        assert hasattr(
+            projectile, "tower_type"
+        ), f"{tower_type} tower projectile missing tower_type attribute"
+        assert (
+            projectile.tower_type == tower_type
+        ), f"{tower_type} tower projectile has wrong tower_type: {projectile.tower_type}"
+
+
+def test_elemental_pentagram_shield_blocks_wrong_tower_damage():
+    """Integration test: verify pentagram_storm shield is not damaged by ice/fire towers."""
+    from src.core.entities.tower import Tower
+    from src.entities.enemy import Enemy
+    from src.systems.collision_system import CollisionSystem
+
+    # Create a pentagram_storm with full shield
+    enemy = Enemy(500.0, 300.0, "pentagram_storm", 300.0, 50.0)
+    initial_shield = enemy.shield_hp
+    assert initial_shield == 500, "Shield should start at 500"
+
+    # Create ice tower and fire a projectile
+    ice_tower = Tower(100, 100, tower_type="ice")
+    enemies_list = [enemy]
+    ice_projectile = ice_tower.fire_at_closest(enemies_list, origin_y=100)
+
+    # Verify the projectile has correct tower_type
+    assert ice_projectile is not None
+    assert ice_projectile.tower_type == "ice"
+
+    # Check that ice damage is NOT allowed on storm shield
+    can_damage = CollisionSystem._elemental_shield_can_damage(enemy, ice_projectile)
+    assert not can_damage, "Ice projectile should NOT damage storm shield"
+
+    # Now apply storm projectile damage (should work)
+    storm_tower = Tower(100, 100, tower_type="storm")
+    storm_projectile = storm_tower.fire_at_closest(enemies_list, origin_y=100)
+
+    assert storm_projectile is not None
+    assert storm_projectile.tower_type == "storm"
+
+    can_damage_storm = CollisionSystem._elemental_shield_can_damage(
+        enemy, storm_projectile
+    )
+    assert can_damage_storm, "Storm projectile SHOULD damage storm shield"

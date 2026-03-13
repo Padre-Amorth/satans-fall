@@ -486,6 +486,10 @@ class CollisionSystem:
         Elemental pentagram variants have shields immune to all damage except
         from the matching tower type.  Once shield_hp reaches 0 the body HP
         is vulnerable to every source.  Non-elemental enemies always return True.
+
+        IMPORTANT: This check MUST be applied consistently in ALL code paths,
+        including fallback handlers and exception cases. If this returns False,
+        NO damage of any kind should be applied to the enemy.
         """
         etype = getattr(enemy, "enemy_type", "")
         if etype not in ("pentagram_fire", "pentagram_storm", "pentagram_ice"):
@@ -1308,12 +1312,19 @@ class CollisionSystem:
                             if self._elemental_shield_can_damage(enemy, projectile):
                                 enemy.take_damage(dmg_to_apply, show_floating=False)
                         except (AttributeError, TypeError, ValueError, KeyError):
-                            try:
-                                enemy.health = max(
-                                    0, getattr(enemy, "health", 0) - dmg_to_apply
-                                )
-                            except (AttributeError, TypeError, ValueError, KeyError):
-                                pass
+                            # Fallback: manually apply damage only if immunity check passed
+                            if self._elemental_shield_can_damage(enemy, projectile):
+                                try:
+                                    enemy.health = max(
+                                        0, getattr(enemy, "health", 0) - dmg_to_apply
+                                    )
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
+                                    pass
                 # Special handling for Tenebrae weapon: decaying beam
                 elif getattr(projectile, "weapon_type", None) == "tenebrae":
                     # compute damage based on how many targets have been hit so far
@@ -1336,20 +1347,27 @@ class CollisionSystem:
                             if self._elemental_shield_can_damage(enemy, projectile):
                                 enemy.take_damage(dmg_to_apply, show_floating=False)
                         except (AttributeError, TypeError, ValueError, KeyError):
-                            try:
-                                enemy.health = max(
-                                    0, getattr(enemy, "health", 0) - dmg_to_apply
-                                )
-                            except (AttributeError, TypeError, ValueError, KeyError):
-                                pass
-                                pass
+                            # Fallback: manually apply damage only if immunity check passed
+                            if self._elemental_shield_can_damage(enemy, projectile):
+                                try:
+                                    enemy.health = max(
+                                        0, getattr(enemy, "health", 0) - dmg_to_apply
+                                    )
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
+                                    pass
 
                     # Fallback when .take_damage isn't available: adjust attribute
                     if not hasattr(enemy, "take_damage"):
                         try:
-                            enemy.health = max(
-                                0, getattr(enemy, "health", 0) - int(dmg_to_apply)
-                            )
+                            if self._elemental_shield_can_damage(enemy, projectile):
+                                enemy.health = max(
+                                    0, getattr(enemy, "health", 0) - int(dmg_to_apply)
+                                )
                         except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                     try:
@@ -2836,12 +2854,14 @@ class CollisionSystem:
                         if self._elemental_shield_can_damage(enemy, projectile):
                             enemy.take_damage(dmg_to_apply, show_floating=False)
                     except (AttributeError, TypeError, ValueError, KeyError):
-                        try:
-                            enemy.health = max(
-                                0, getattr(enemy, "health", 0) - dmg_to_apply
-                            )
-                        except (AttributeError, TypeError, ValueError, KeyError):
-                            pass
+                        # Fallback: manually apply damage only if immunity check passed
+                        if self._elemental_shield_can_damage(enemy, projectile):
+                            try:
+                                enemy.health = max(
+                                    0, getattr(enemy, "health", 0) - dmg_to_apply
+                                )
+                            except (AttributeError, TypeError, ValueError, KeyError):
+                                pass
 
                     # Record this hit so projectile won't hit the same enemy again
                     try:

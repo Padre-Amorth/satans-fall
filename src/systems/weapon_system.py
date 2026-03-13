@@ -6,7 +6,7 @@ import math
 import random
 from typing import TYPE_CHECKING, Any
 
-from src.game_constants import LIMBO_STAGES, PURGATORY_STAGES, HELL_STAGES
+from src.game_constants import HELL_STAGES, LIMBO_STAGES, PURGATORY_STAGES
 from src.projectile import FliesProjectile, Projectile
 from src.weapons import (
     DemonStrike_cooldown,
@@ -195,6 +195,7 @@ class WeaponSystem:
             radius=base_radius,
             appearance="beast" if beast_level > 0 else None,
             weapon_type="beast" if beast_level > 0 else None,
+            weapon_level=beast_level,
         )
         self.game.projectiles.add(projectile)
         mgr = self.game.projectile_manager
@@ -236,6 +237,7 @@ class WeaponSystem:
                 damage=base_damage,
                 radius=base_radius,
                 weapon_type="shotgun",
+                weapon_level=shotgun_level,
             )
             self.game.projectiles.add(pellet)
             mgr = self.game.projectile_manager
@@ -326,6 +328,7 @@ class WeaponSystem:
             damage=dmg,
             radius=radius,
             weapon_type="DemonStrike",
+            weapon_level=dlevel,
         )
         ball.pierce_all = True
         # Slow metadata handled by collision system
@@ -566,6 +569,7 @@ class WeaponSystem:
                     ),
                     radius=int(4 * self.game.projectile_size_multiplier),
                     source="orbital",
+                    weapon_level=self.game.weapon_levels.get("orbital", 0),
                 )
                 self.game.projectiles.add(projectile)
                 mgr = self.game.projectile_manager

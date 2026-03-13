@@ -9,7 +9,7 @@ from src.balance import (
     SPAWN_RAMP_SLOPE_PRE,
     SPAWN_RAMP_START_WAVE,
     XP_BASE,
-    XP_GROWTH,
+    calculate_xp_for_next_level,
 )
 from src.game_constants import HELL_STAGES
 from src.weapons import (
@@ -51,7 +51,7 @@ class GameStateManager:
         # Weapon system
         self.player_weapons: list[str] = []
         self.weapon_levels: dict[str, int] = {}
-        self.max_weapon_level: int = 6
+        self.max_weapon_level: int = 7
 
         # Upgrade system
         self.upgrade_levels: dict[str, int] = {
@@ -174,8 +174,8 @@ class GameStateManager:
         self.player_xp -= self.xp_to_next_level
         self.player_level += 1
 
-        # Calculate new XP requirement
-        self.xp_to_next_level = int(XP_BASE * (XP_GROWTH ** (self.player_level - 1)))
+        # Calculate new XP requirement using tiered growth curve
+        self.xp_to_next_level = calculate_xp_for_next_level(self.player_level)
 
         # Show level up message
         self.add_center_message(

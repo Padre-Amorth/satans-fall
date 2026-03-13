@@ -2,6 +2,7 @@
 
 import logging
 import math
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.assets.manager import get_image
@@ -23,6 +24,14 @@ class UIMenuSystem:
         """
         self.ui = ui_manager
         self.game: Game = ui_manager.game
+
+    def _get_font_path(self, font_name: str) -> str:
+        """Get absolute path to a font file in assets/fonts/."""
+        # Walk up from menus.py (src/ui/menus.py) to find the project root
+        current_path = Path(__file__).resolve()
+        project_root = current_path.parent.parent.parent
+        font_path = project_root / "assets" / "fonts" / font_name
+        return str(font_path)
 
     # ========== MENU DRAWING METHODS ==========
 
@@ -774,7 +783,7 @@ class UIMenuSystem:
             # Label
             label = (
                 self.ui.get_text(label_text, font_med, (210, 185, 165))
-                if hasattr(self.get_text, "__call__")
+                if hasattr(self.ui.get_text, "__call__")
                 else font_med.render(label_text, True, (210, 185, 165))
             )
             self.ui.screen.blit(label, (dx + 24 + shake_x, dy + y_offset + shake_y))
@@ -835,7 +844,7 @@ class UIMenuSystem:
         # Resolution presets
         preset_label = (
             self.ui.get_text("Resolution:", font_med, (210, 185, 165))
-            if hasattr(self.get_text, "__call__")
+            if hasattr(self.ui.get_text, "__call__")
             else font_med.render("Resolution:", True, (210, 185, 165))
         )
         self.ui.screen.blit(preset_label, (dx + 24 + shake_x, dy + 216 + shake_y))
@@ -941,7 +950,7 @@ class UIMenuSystem:
                 self.ui.get_font(20),
                 (255, 230, 205) if hovered else (225, 200, 175),
             )
-            if hasattr(self.get_text, "__call__")
+            if hasattr(self.ui.get_text, "__call__")
             else pygame.font.Font(None, 20).render(
                 "CLOSE", True, (255, 230, 205) if hovered else (225, 200, 175)
             )
@@ -969,8 +978,8 @@ class UIMenuSystem:
         left_x = self.ui.width // 2 - 420
 
         # Draw title
-        font_large = pygame.font.Font(None, 36)
-        title = font_large.render("PERMANENT UPGRADES", True, (255, 255, 0))
+        font_title = pygame.font.Font(None, 36)
+        title = font_title.render("PERMANENT UPGRADES", True, (255, 255, 0))
         self.ui.screen.blit(
             title, (self.ui.width // 2 - title.get_width() // 2 + shake_x, 40 + shake_y)
         )
@@ -1463,6 +1472,7 @@ class UIMenuSystem:
             return
 
         font_small = pygame.font.Font(None, 18)
+        font_label = pygame.font.SysFont("garamond", 26)
 
         tree_box_w = 50
         tree_box_h = 36
@@ -1506,18 +1516,16 @@ class UIMenuSystem:
                 right_active = bool(
                     self.game.permanent_stats.get(f"{key_prefix}_{4 + row}", 0)
                 )
-                left_bg = color if left_active else (26, 26, 26)
-                right_bg = color if right_active else (26, 26, 26)
-                left_border = (
-                    tuple(min(255, c + 20) for c in color)
-                    if left_active
-                    else (51, 51, 51)
+                # Darken active colors by scaling down to ~40-50% brightness
+                left_bg = (
+                    tuple(int(c * 0.4) for c in color) if left_active else (26, 26, 26)
                 )
-                right_border = (
-                    tuple(min(255, c + 20) for c in color)
-                    if right_active
-                    else (51, 51, 51)
+                right_bg = (
+                    tuple(int(c * 0.4) for c in color) if right_active else (26, 26, 26)
                 )
+                # Borders: almost black (10, 10, 10) for active, dark gray for inactive
+                left_border = (10, 10, 10) if left_active else (51, 51, 51)
+                right_border = (10, 10, 10) if right_active else (51, 51, 51)
 
                 try:
                     mouse_point = (self.game.mouse_x, self.game.mouse_y)
@@ -1527,15 +1535,69 @@ class UIMenuSystem:
                 right_hovered = pygame.Rect(*right_rect).collidepoint(mouse_point)
                 if left_hovered:
                     left_border = (255, 224, 20)
-                    left_bg = tuple(min(255, v + 30) for v in left_bg)
+                    left_bg = tuple(min(255, int(v * 0.5)) for v in left_bg)
                 if right_hovered:
                     right_border = (255, 224, 20)
-                    right_bg = tuple(min(255, v + 30) for v in right_bg)
+                    right_bg = tuple(min(255, int(v * 0.5)) for v in right_bg)
+
+                # Draw glow/shadow effect for active boxes (sfumatura esterna)
+                if left_active:
+                    glow_color = tuple(min(255, int(c * 0.5)) for c in color)
+                    pygame.draw.rect(
+                        self.ui.screen,
+                        glow_color,
+                        (
+                            left_rect[0] - 2,
+                            left_rect[1] - 2,
+                            left_rect[2] + 4,
+                            left_rect[3] + 4,
+                        ),
+                        2,
+                    )
+
+                if right_active:
+                    glow_color = tuple(min(255, int(c * 0.5)) for c in color)
+                    pygame.draw.rect(
+                        self.ui.screen,
+                        glow_color,
+                        (
+                            right_rect[0] - 2,
+                            right_rect[1] - 2,
+                            right_rect[2] + 4,
+                            right_rect[3] + 4,
+                        ),
+                        2,
+                    )
 
                 pygame.draw.rect(self.ui.screen, left_bg, left_rect)
-                pygame.draw.rect(self.ui.screen, left_border, left_rect, 1)
+                pygame.draw.rect(self.ui.screen, left_border, left_rect, 2)
                 pygame.draw.rect(self.ui.screen, right_bg, right_rect)
-                pygame.draw.rect(self.ui.screen, right_border, right_rect, 1)
+                pygame.draw.rect(self.ui.screen, right_border, right_rect, 2)
+
+                # Draw labels on all boxes (left: 1,2,3 | right: A,B,C) - always visible
+                left_label = str(row + 1)
+                left_label_color = (255, 255, 255) if left_active else (150, 150, 150)
+                left_label_surf = font_label.render(left_label, True, left_label_color)
+                left_label_x = (
+                    left_rect[0] + tree_box_w // 2 - left_label_surf.get_width() // 2
+                )
+                left_label_y = (
+                    left_rect[1] + tree_box_h // 2 - left_label_surf.get_height() // 2
+                )
+                self.ui.screen.blit(left_label_surf, (left_label_x, left_label_y))
+
+                right_label = chr(ord("A") + row)  # A, B, C
+                right_label_color = (255, 255, 255) if right_active else (150, 150, 150)
+                right_label_surf = font_label.render(
+                    right_label, True, right_label_color
+                )
+                right_label_x = (
+                    right_rect[0] + tree_box_w // 2 - right_label_surf.get_width() // 2
+                )
+                right_label_y = (
+                    right_rect[1] + tree_box_h // 2 - right_label_surf.get_height() // 2
+                )
+                self.ui.screen.blit(right_label_surf, (right_label_x, right_label_y))
 
                 if left_hovered:
                     tooltip_lines = self.game._skill_tooltip_lines(key_prefix, row + 1)
@@ -1561,12 +1623,12 @@ class UIMenuSystem:
             center_y = tree_top_y + 3 * tree_v_spacing
             center_key = f"{key_prefix}_7"
             center_active = bool(self.game.permanent_stats.get(center_key, 0))
-            center_bg = color if center_active else (26, 26, 26)
-            center_border = (
-                tuple(min(255, c + 20) for c in color)
-                if center_active
-                else (51, 51, 51)
+            # Darken active colors by scaling down to ~40-50% brightness
+            center_bg = (
+                tuple(int(c * 0.4) for c in color) if center_active else (26, 26, 26)
             )
+            # Border: almost black (10, 10, 10) for active, dark gray for inactive
+            center_border = (10, 10, 10) if center_active else (51, 51, 51)
             center_rect = (
                 col_x - tree_box_w // 2 + shake_x,
                 center_y + shake_y,
@@ -1580,9 +1642,40 @@ class UIMenuSystem:
             center_hovered = pygame.Rect(*center_rect).collidepoint(mouse_point)
             if center_hovered:
                 center_border = (255, 224, 20)
-                center_bg = tuple(min(255, v + 30) for v in center_bg)
+                center_bg = tuple(min(255, int(v * 0.5)) for v in center_bg)
+
+            # Draw glow/shadow effect for active center box
+            if center_active:
+                glow_color = tuple(min(255, int(c * 0.5)) for c in color)
+                pygame.draw.rect(
+                    self.ui.screen,
+                    glow_color,
+                    (
+                        center_rect[0] - 2,
+                        center_rect[1] - 2,
+                        center_rect[2] + 4,
+                        center_rect[3] + 4,
+                    ),
+                    2,
+                )
+
             pygame.draw.rect(self.ui.screen, center_bg, center_rect)
-            pygame.draw.rect(self.ui.screen, center_border, center_rect, 1)
+            pygame.draw.rect(self.ui.screen, center_border, center_rect, 2)
+
+            # Draw X label on center box - always visible
+            center_label = "X"
+            center_label_color = (255, 255, 255) if center_active else (150, 150, 150)
+            center_label_surf = font_label.render(
+                center_label, True, center_label_color
+            )
+            center_label_x = (
+                center_rect[0] + tree_box_w // 2 - center_label_surf.get_width() // 2
+            )
+            center_label_y = (
+                center_rect[1] + tree_box_h // 2 - center_label_surf.get_height() // 2
+            )
+            self.ui.screen.blit(center_label_surf, (center_label_x, center_label_y))
+
             if center_hovered:
                 tooltip_lines = self.game._skill_tooltip_lines(key_prefix, 7)
                 if tooltip_lines:

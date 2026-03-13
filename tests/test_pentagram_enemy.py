@@ -1,6 +1,9 @@
-"""Tests for the pentagram enemy type."""
+"""Tests for the pentagram enemy type and elemental variants."""
 
 from src.game import Game
+
+_ELEMENTAL_TYPES = ("pentagram_fire", "pentagram_storm", "pentagram_ice")
+_ALL_PENTAGRAM_TYPES = ("pentagram",) + _ELEMENTAL_TYPES
 
 
 def test_pentagram_spawns_at_60_seconds():
@@ -13,7 +16,9 @@ def test_pentagram_spawns_at_60_seconds():
 
     # Should not exist yet
     types_before = [getattr(e, "enemy_type", None) for e in g.enemies]
-    assert "pentagram" not in types_before, "Pentagram should not spawn before 60s"
+    assert not any(
+        t in _ALL_PENTAGRAM_TYPES for t in types_before
+    ), "Pentagram should not spawn before 60s"
 
     # Move time forward to 60.1 seconds
     g.time_elapsed = 60.1
@@ -21,7 +26,9 @@ def test_pentagram_spawns_at_60_seconds():
 
     # Should exist now
     types_after = [getattr(e, "enemy_type", None) for e in g.enemies]
-    assert "pentagram" in types_after, "Pentagram should spawn at t >= 60s"
+    assert any(
+        t in _ALL_PENTAGRAM_TYPES for t in types_after
+    ), "Pentagram should spawn at t >= 60s"
 
 
 def test_pentagram_spawns_once_per_run():
@@ -35,8 +42,10 @@ def test_pentagram_spawns_once_per_run():
     for _ in range(5):
         g.update_game()
 
-    # Count pentagrams
-    pentagrams = [e for e in g.enemies if getattr(e, "enemy_type", None) == "pentagram"]
+    # Count all pentagram variants
+    pentagrams = [
+        e for e in g.enemies if getattr(e, "enemy_type", None) in _ALL_PENTAGRAM_TYPES
+    ]
     assert len(pentagrams) == 1, f"Expected 1 pentagram, found {len(pentagrams)}"
 
 
@@ -44,7 +53,7 @@ def test_pentagram_horizontal_movement():
     """Verify pentagram moves horizontally (x changes, y oscillates)."""
     from src.entities.enemy import Enemy
 
-    e = Enemy(100.0, 250.0, "pentagram", 500.0, 50.0)
+    e = Enemy(100.0, 250.0, "pentagram", 300.0, 50.0)
     e.direction = 1  # moving right
 
     # Simulate 60 frames
@@ -68,23 +77,58 @@ def test_pentagram_horizontal_movement():
 
 
 def test_pentagram_has_correct_health():
-    """Verify pentagram has exactly 500 body HP + 1500 shield HP."""
+    """Verify pentagram has exactly 300 body HP + 1500 shield HP."""
     from src.entities.enemy import Enemy
 
-    e = Enemy(100.0, 300.0, "pentagram", 500.0, 50.0)
-    assert e.max_health == 500, f"Expected max_health=500, got {e.max_health}"
-    assert e.health == 500, f"Expected health=500, got {e.health}"
+    e = Enemy(100.0, 300.0, "pentagram", 300.0, 50.0)
+    assert e.max_health == 300, f"Expected max_health=300, got {e.max_health}"
+    assert e.health == 300, f"Expected health=300, got {e.health}"
     assert e.shield_hp == 1500, f"Expected shield_hp=1500, got {e.shield_hp}"
     assert (
         e.shield_max_hp == 1500
     ), f"Expected shield_max_hp=1500, got {e.shield_max_hp}"
 
 
+def test_elemental_pentagram_has_correct_health():
+    """Verify elemental variants have 300 body HP + 500 elemental shield HP."""
+    from src.entities.enemy import Enemy
+
+    for etype in _ELEMENTAL_TYPES:
+        e = Enemy(100.0, 300.0, etype, 300.0, 50.0)
+        assert (
+            e.max_health == 300
+        ), f"{etype}: Expected max_health=300, got {e.max_health}"
+        assert e.health == 300, f"{etype}: Expected health=300, got {e.health}"
+        assert e.shield_hp == 500, f"{etype}: Expected shield_hp=500, got {e.shield_hp}"
+        assert (
+            e.shield_max_hp == 500
+        ), f"{etype}: Expected shield_max_hp=500, got {e.shield_max_hp}"
+
+
+def test_elemental_pentagram_stage_mapping():
+    """Verify each purgatory stage spawns the correct elemental variant."""
+    _EXPECTED = {
+        "purgatory": "pentagram_fire",
+        "purgatory_2": "pentagram_storm",
+        "purgatory_3": "pentagram_ice",
+    }
+    for stage, expected_type in _EXPECTED.items():
+        g = Game(debug=True)
+        g.selected_stage = stage
+        g.showing_main_menu = False
+        g.time_elapsed = 60.1
+        g.update_game()
+        types = [getattr(e, "enemy_type", None) for e in g.enemies]
+        assert (
+            expected_type in types
+        ), f"Stage '{stage}' should spawn '{expected_type}', got {types}"
+
+
 def test_pentagram_exits_screen_when_off_bounds():
     """Verify pentagram self-removes (health=0) when fully off-screen."""
     from src.entities.enemy import Enemy
 
-    e = Enemy(-50.0, 300.0, "pentagram", 500.0, 50.0)
+    e = Enemy(-50.0, 300.0, "pentagram", 300.0, 50.0)
     e.direction = 1  # moving right
 
     # Simulate enough frames to cross 1280px: 1280 / (50px/s / 60fps) = 1536 frames
@@ -102,11 +146,12 @@ def test_pentagram_exits_screen_when_off_bounds():
 
 
 def test_pentagram_does_not_attack():
-    """Verify pentagram has 0 damage."""
+    """Verify all pentagram variants have 0 damage."""
     from src.entities.enemy import Enemy
 
-    e = Enemy(100.0, 300.0, "pentagram", 500.0, 50.0)
-    assert e.damage == 0, f"Pentagram damage should be 0, got {e.damage}"
+    for etype in _ALL_PENTAGRAM_TYPES:
+        e = Enemy(100.0, 300.0, etype, 300.0, 50.0)
+        assert e.damage == 0, f"{etype} damage should be 0, got {e.damage}"
 
 
 def test_pentagram_reset_on_new_run():
@@ -116,19 +161,22 @@ def test_pentagram_reset_on_new_run():
     g.showing_main_menu = False
     g.time_elapsed = 60.1
 
-    # First run: spawn pentagram
+    # First run: spawn pentagram_fire (purgatory stage)
     g.update_game()
     pentagrams_1 = [
-        e for e in g.enemies if getattr(e, "enemy_type", None) == "pentagram"
+        e for e in g.enemies if getattr(e, "enemy_type", None) in _ALL_PENTAGRAM_TYPES
     ]
-    assert len(pentagrams_1) == 1, "Should spawn 1 pentagram in first run"
+    assert len(pentagrams_1) == 1, "Should spawn 1 pentagram variant in first run"
+    assert (
+        getattr(pentagrams_1[0], "enemy_type", None) == "pentagram_fire"
+    ), "purgatory should spawn pentagram_fire"
 
     # Verify the flag is True
     assert g.spawn_system.pentagram_spawned is True, "Flag should be True after spawn"
 
-    # Reset the run (resets time_elapsed to 0, clears enemies, resets flag)
+    # Reset the run
     g.reset_game()
-    g.selected_stage = "purgatory"  # re-select stage after reset
+    g.selected_stage = "purgatory"
     g.showing_main_menu = False
 
     # Verify the flag is reset to False
@@ -140,6 +188,6 @@ def test_pentagram_reset_on_new_run():
     g.time_elapsed = 60.1
     g.update_game()
     pentagrams_2 = [
-        e for e in g.enemies if getattr(e, "enemy_type", None) == "pentagram"
+        e for e in g.enemies if getattr(e, "enemy_type", None) in _ALL_PENTAGRAM_TYPES
     ]
-    assert len(pentagrams_2) == 1, "Should spawn 1 pentagram after reset"
+    assert len(pentagrams_2) == 1, "Should spawn 1 pentagram variant after reset"

@@ -106,6 +106,12 @@ DEFAULT_PLAYER_ANIM_SPEED = 30
 DEFAULT_WAVE_DURATION = 45  # seconds (increased from 40)
 WALL_THICKNESS = 25
 
+# Wall brick pattern settings per stage group
+WALL_BRICK_PROLOGO = {"w": 10, "h": 6, "mortar": (20, 20, 20), "base": (50, 50, 50)}
+WALL_BRICK_LIMBO = {"w": 9, "h": 5, "mortar": (10, 10, 10), "base": (35, 35, 35)}
+WALL_BRICK_PURGATORY = {"w": 11, "h": 7, "mortar": (25, 20, 20), "base": (60, 55, 55)}
+WALL_BRICK_HELL = {"w": 12, "h": 7, "mortar": (20, 10, 5), "base": (70, 35, 20)}
+
 # Limbo fog alpha ranges (min, max) for each limbo variant
 
 # Legacy fog alpha ranges used by the now‑disabled particle system.  The
@@ -271,17 +277,29 @@ PURGATORY_HORDE_TIME_3: float = 600.0  # purgatory_3: 10 minutes
 # rendered height is identical everywhere.
 STATUE_BASE_Y: int = 640
 
-# Limbo final constants -----------------------------------------------------
-# time (in seconds) after which Limbo Final starts spawning enemies more rapidly
-LIMBO_FINAL_ACCEL_START_TIME: float = 30.0
-# halt all normal enemy spawning this many seconds before the final boss arrival
-LIMBO_FINAL_HALT_BEFORE_BOSS: float = 5.0
-
 # Stage groupings for conditional logic
 PROLOGO_STAGES = {"prologo"}
 LIMBO_STAGES = {"limbo", "limbo_2", "limbo_3", "limbo_final"}
 PURGATORY_STAGES = {"purgatory", "purgatory_2", "purgatory_3"}
 HELL_STAGES = {"hell", "hell_2", "hell_3"}
+
+# Hell stage destructible barriers
+BARRIER_MAX_COUNT = 3
+BARRIER_HP = 350
+BARRIER_WIDTH = 80
+BARRIER_HEIGHT = 40
+BARRIER_SPAWN_INTERVAL_MIN = 15.0  # min seconds between spawn attempts (random)
+BARRIER_SPAWN_INTERVAL_MAX = 35.0  # max seconds between spawn attempts (random)
+BARRIER_DESPAWN_TIME = 45.0  # natural despawn after this many seconds
+BARRIER_SPAWN_DELAY = 10.0  # seconds after stage start before first spawn
+HELL_BARRIER_Y_MIN = 50
+HELL_BARRIER_Y_MAX = 360  # top half only
+HELL_BARRIER_X_MIN = 380  # inside hell arena walls
+HELL_BARRIER_X_MAX = 900
+BARRIER_ARCHER_COVER_CHANCE = 0.95  # High aggressiveness: 95% chance to seek cover
+BARRIER_HIDE_DISTANCE = 40  # px — archer considered "behind" barrier
+BARRIER_HIDE_SUPPRESS_FRAMES = 150  # frames archer won't shoot while hiding (~2.5s)
+BARRIER_DAMAGED_THRESHOLD = 0.40  # Seek new cover if current barrier has < 40% HP
 
 STAGE_SETTINGS: dict[str, dict[str, Any]] = {
     "prologo": {
@@ -415,4 +433,40 @@ __all__: list[str] = [
     "PURGATORY_HORDE_TIME_1",
     "PURGATORY_HORDE_TIME_2",
     "PURGATORY_HORDE_TIME_3",
+    "BARRIER_MAX_COUNT",
+    "BARRIER_HP",
+    "BARRIER_WIDTH",
+    "BARRIER_HEIGHT",
+    "BARRIER_SPAWN_INTERVAL_MIN",
+    "BARRIER_SPAWN_INTERVAL_MAX",
+    "BARRIER_DESPAWN_TIME",
+    "BARRIER_SPAWN_DELAY",
+    "HELL_BARRIER_Y_MIN",
+    "HELL_BARRIER_Y_MAX",
+    "HELL_BARRIER_X_MIN",
+    "HELL_BARRIER_X_MAX",
+    "BARRIER_ARCHER_COVER_CHANCE",
+    "BARRIER_HIDE_DISTANCE",
+    "BARRIER_HIDE_SUPPRESS_FRAMES",
+    "BARRIER_DAMAGED_THRESHOLD",
+    "GIF_RECORDING_FPS",
+    "GIF_MAX_DURATION_SECONDS",
+    "GIF_SCALE_FACTOR",
+    "PENTAGRAM_FIRE_SHIELD_COLOR",
+    "PENTAGRAM_STORM_SHIELD_COLOR",
+    "PENTAGRAM_ICE_SHIELD_COLOR",
+    "PENTAGRAM_ELEMENTAL_BODY_HP",
+    "PENTAGRAM_ELEMENTAL_SHIELD_HP",
 ]
+
+# Elemental pentagram variant shield colours and stats
+PENTAGRAM_FIRE_SHIELD_COLOR = (220, 60, 60)  # red
+PENTAGRAM_STORM_SHIELD_COLOR = (160, 80, 220)  # purple
+PENTAGRAM_ICE_SHIELD_COLOR = (80, 200, 220)  # cyan
+PENTAGRAM_ELEMENTAL_BODY_HP = 500
+PENTAGRAM_ELEMENTAL_SHIELD_HP = 500
+
+# GIF Recording
+GIF_RECORDING_FPS = 15  # frame rate GIF (cattura 1 frame ogni 4 @ 60fps)
+GIF_MAX_DURATION_SECONDS = 60  # sicurezza: ferma auto dopo 60s
+GIF_SCALE_FACTOR = 0.5  # scala a 640x360 per ridurre dimensione file

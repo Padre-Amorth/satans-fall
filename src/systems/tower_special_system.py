@@ -327,12 +327,32 @@ class TowerSpecialSystem:
                 dx = ex - x
                 dy = ey - y
                 if dx * dx + dy * dy <= FIRE_SPECIAL_RADIUS * FIRE_SPECIAL_RADIUS:
+                    _etype = getattr(enemy, "enemy_type", "")
+                    _shp = getattr(enemy, "shield_hp", 0)
+                    _shield_active = _shp > 0 and _etype in (
+                        "pentagram_fire",
+                        "pentagram_storm",
+                        "pentagram_ice",
+                    )
                     try:
-                        enemy.health = max(0, enemy.health - FIRE_SPECIAL_DAMAGE)
+                        if (
+                            _etype in ("pentagram_storm", "pentagram_ice")
+                            and _shield_active
+                        ):
+                            pass  # fire special does not penetrate storm/ice elemental shields
+                        elif _etype == "pentagram_fire" and _shield_active:
+                            # fire special dissolves fire pentagram's shield
+                            absorbed = min(_shp, FIRE_SPECIAL_DAMAGE)
+                            enemy.shield_hp -= absorbed
+                            remainder = FIRE_SPECIAL_DAMAGE - absorbed
+                            if remainder > 0:
+                                enemy.health = max(0, enemy.health - remainder)
+                        else:
+                            enemy.health = max(0, enemy.health - FIRE_SPECIAL_DAMAGE)
                     except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     try:
-                        if getattr(enemy, "burn_timer", 0) <= 0:
+                        if not _shield_active and getattr(enemy, "burn_timer", 0) <= 0:
                             enemy.burn_timer = 120
                             enemy.burn_damage_per_second = 4.0
                     except (AttributeError, TypeError, ValueError, KeyError):
@@ -591,7 +611,14 @@ class TowerSpecialSystem:
                 if dist <= er + 3:  # small tolerance
                     try:
                         # silent damage; we'll show aggregated text separately
-                        enemy.take_damage(1, show_floating=False)
+                        _vetype = getattr(enemy, "enemy_type", "")
+                        _vshield = getattr(enemy, "shield_hp", 0) > 0
+                        _voltaic_blocked = _vshield and _vetype in (
+                            "pentagram_fire",
+                            "pentagram_ice",
+                        )
+                        if not _voltaic_blocked:
+                            enemy.take_damage(1, show_floating=False)
                     except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     # accumulate damage for throttled display

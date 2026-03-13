@@ -45,6 +45,7 @@ class Projectile(BaseSprite):
         weapon_type: Optional[str] = None,
         source: Optional[str] = None,
         appearance: Optional[str] = None,
+        weapon_level: int = 0,
     ) -> None:
         super().__init__()
         self.x: Any = x
@@ -60,6 +61,7 @@ class Projectile(BaseSprite):
         self.is_enemy_projectile: bool = is_enemy_projectile
         self.weapon_type = weapon_type  # 'spear', 'shotgun', or None for regular
         self.source = source  # 'orbital' for orbital projectiles
+        self.weapon_level: int = weapon_level  # For Final Form (Lv7) glow effects
         # Default sentinel: if this is an enemy projectile and no appearance was
         # provided, use `"enemy_default"` so draw_projectile renders the expected
         # golden enemy projectile regardless of asset lookup.
@@ -113,6 +115,7 @@ class Projectile(BaseSprite):
         weapon_type: Optional[str] = None,
         source: Optional[str] = None,
         appearance: Optional[str] = None,
+        weapon_level: int = 0,
     ) -> None:
         """Reset an existing projectile instance for reuse from a pool."""
         self.x = x
@@ -127,6 +130,7 @@ class Projectile(BaseSprite):
         self.is_enemy_projectile = is_enemy_projectile
         self.weapon_type = weapon_type
         self.source = source
+        self.weapon_level = weapon_level
         # Preserve enemy_default sentinel when reusing projectiles from pool
         self.appearance = (
             appearance
@@ -180,8 +184,18 @@ class Projectile(BaseSprite):
         )
 
     def _render_orbital(self) -> None:
-        """Render orbital: light blue circles."""
+        """Render orbital: light blue circles. Final Form (Lv7) has golden glow."""
         self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+
+        # Add Final Form glow at Lv7
+        if getattr(self, "weapon_level", 0) >= 7:
+            pygame.draw.circle(
+                self.image,
+                (255, 215, 0, 100),
+                (self.radius, self.radius),
+                self.radius + 2,
+            )
+
         pygame.draw.circle(
             self.image, (102, 204, 255), (self.radius, self.radius), self.radius
         )
@@ -252,9 +266,16 @@ class Projectile(BaseSprite):
         pygame.draw.polygon(self.image, (207, 162, 111), arrowhead_points, 1)
 
     def _render_shotgun(self) -> None:
-        """Render shotgun pellet."""
+        """Render shotgun pellet. Final Form (Lv7) has white-yellow glow."""
         self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
         cx, cy = self.radius, self.radius
+
+        # Add Final Form glow at Lv7
+        if getattr(self, "weapon_level", 0) >= 7:
+            pygame.draw.circle(
+                self.image, (255, 255, 150, 80), (cx, cy), self.radius + 3
+            )
+
         w = max(1, int(self.radius * 1.25))
         h = max(1, int(self.radius * 2.0))
         rect = (cx - w // 2, cy - h // 2, w, h)
@@ -481,8 +502,19 @@ class Projectile(BaseSprite):
         self.rect = self.image.get_rect(center=(self.x, self.y))
 
     def _render_beast(self) -> None:
-        """Render beast projectile: red '6' text."""
+        """Render beast projectile: red '6' text. Final Form (Lv7) adds golden glow."""
         self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+        weapon_level = getattr(self, "weapon_level", 0)
+
+        # Add golden glow at Lv7 Final Form
+        if weapon_level >= 7:
+            pygame.draw.circle(
+                self.image,
+                (255, 200, 50, 100),
+                (self.radius, self.radius),
+                self.radius + 3,
+            )
+
         try:
             font = pygame.font.Font(None, max(8, int(self.radius * 2)))
             txt = font.render("6", True, (255, 0, 0))

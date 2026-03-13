@@ -6,7 +6,7 @@ import logging
 import random
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from src.balance import PLAYER_BASE_HEALTH, XP_BASE, XP_GROWTH
+from src.balance import PLAYER_BASE_HEALTH, calculate_xp_for_next_level
 from src.core.entities.tower import Tower
 from src.game_constants import (
     HELL_STAGES,
@@ -36,9 +36,7 @@ class UpgradeSystem:
         """Pause game and show upgrade choices"""
         self.game.player_xp -= self.game.xp_to_next_level
         self.game.player_level += 1
-        self.game.xp_to_next_level = int(
-            XP_BASE * (XP_GROWTH ** (self.game.player_level - 1))
-        )
+        self.game.xp_to_next_level = calculate_xp_for_next_level(self.game.player_level)
 
         if self.game.player_level in [3, 6]:
             self.game.awaiting_upgrade = False
@@ -252,9 +250,9 @@ class UpgradeSystem:
                 pass
 
             try:
-                stage = getattr(g, "selected_stage", None)
-                # Projectile Size only available in Hell
-                if not (stage and str(stage) in HELL_STAGES):
+                meta_level = g.global_progress.get("meta_level", 1)
+                # Projectile Size available at Satan Level 14+
+                if meta_level < 14:
                     patterns = [p for p in patterns if p.get("id") != "projectile_size"]
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
@@ -304,16 +302,17 @@ class UpgradeSystem:
                     upgrade_desc: str = get_weapon_upgrade_description(
                         weapon_id, current_level + 1
                     )
-                    weapon_upgrades.append(
-                        {
-                            "id": f"{weapon_id}_upgrade",
-                            "name": upgrade_name,
-                            "description": upgrade_desc,
-                            "apply": lambda w=weapon_id: game.apply_weapon(
-                                f"{w}_upgrade"
-                            ),
-                        }
-                    )
+                    upgrade_entry = {
+                        "id": f"{weapon_id}_upgrade",
+                        "name": upgrade_name,
+                        "description": upgrade_desc,
+                        "apply": lambda w=weapon_id: game.apply_weapon(f"{w}_upgrade"),
+                    }
+                    # Add extra weight for high-level upgrades
+                    # Final Form (Lv6 → Lv7): 2x weight
+                    if current_level == 6 and current_level + 1 == max_level:
+                        weapon_upgrades.append(upgrade_entry)
+                    weapon_upgrades.append(upgrade_entry)
             return weapon_upgrades
 
         all_upgrades = get_upgrade_patterns()

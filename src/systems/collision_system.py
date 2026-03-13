@@ -194,7 +194,7 @@ class CollisionSystem:
                     )
                 else:
                     try:
-                        for enemy in list(g.enemies):
+                        for enemy in g.enemies:
                             ex, ey = g._enemy_pos(enemy)
                             er = g._enemy_radius(enemy)
                             dx = ex - px
@@ -479,6 +479,28 @@ class CollisionSystem:
             pass
         return (base_color, base_font_size)
 
+    @staticmethod
+    def _elemental_shield_can_damage(enemy: Any, projectile: Any) -> bool:
+        """Return True if projectile is allowed to damage the elemental shield.
+
+        Elemental pentagram variants have shields immune to all damage except
+        from the matching tower type.  Once shield_hp reaches 0 the body HP
+        is vulnerable to every source.  Non-elemental enemies always return True.
+        """
+        etype = getattr(enemy, "enemy_type", "")
+        if etype not in ("pentagram_fire", "pentagram_storm", "pentagram_ice"):
+            return True
+        if getattr(enemy, "shield_hp", 0) <= 0:
+            return True  # shield gone — all sources can damage body HP
+        tower_type = getattr(projectile, "tower_type", None)
+        if etype == "pentagram_fire":
+            return tower_type == "fire"
+        elif etype == "pentagram_storm":
+            return tower_type == "storm"
+        elif etype == "pentagram_ice":
+            return tower_type == "ice"
+        return True
+
     def _player_damage_vs_burning(self, projectile, enemy, base_damage: int) -> int:
         """Return adjusted damage for player projectiles.
 
@@ -639,6 +661,41 @@ class CollisionSystem:
             px = getattr(projectile, "x", 0)
             py = getattr(projectile, "y", 0)
             pr = self._projectile_radius(projectile)
+
+            # Hell barrier collision: player projectiles consumed by barriers
+            if getattr(g, "barriers", []):
+                proj_rect = getattr(projectile, "rect", None)
+                hit_barrier = False
+                for b in g.barriers:
+                    if proj_rect is not None:
+                        hit = b["rect"].colliderect(proj_rect)
+                    else:
+                        cx, cy = b["x"] + b["w"] / 2, b["y"] + b["h"] / 2
+                        hit = (
+                            abs(px - cx) < b["w"] / 2 + pr
+                            and abs(py - cy) < b["h"] / 2 + pr
+                        )
+                    if hit:
+                        # Get projectile damage (apply burning bonus if applicable)
+                        try:
+                            dmg = self._player_damage_vs_burning(
+                                projectile, None, getattr(projectile, "damage", 10)
+                            )
+                        except Exception:
+                            dmg = getattr(projectile, "damage", 10)
+                        b["hp"] -= dmg
+                        try:
+                            projectile.kill()
+                        except Exception:
+                            try:
+                                g.projectiles.remove(projectile)
+                            except Exception:
+                                pass
+                        hit_barrier = True
+                        break
+                if hit_barrier:
+                    continue  # skip all enemy-hit logic for this projectile
+
             # For SkullBooms and ice projectiles, also check collision with bosses
             if getattr(projectile, "weapon_type", None) == "skullboom" or (
                 getattr(projectile, "appearance", None) == "ice_statue"
@@ -1248,7 +1305,8 @@ class CollisionSystem:
 
                     if hasattr(enemy, "take_damage"):
                         try:
-                            enemy.take_damage(dmg_to_apply, show_floating=False)
+                            if self._elemental_shield_can_damage(enemy, projectile):
+                                enemy.take_damage(dmg_to_apply, show_floating=False)
                         except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 enemy.health = max(
@@ -1275,7 +1333,8 @@ class CollisionSystem:
 
                     if hasattr(enemy, "take_damage"):
                         try:
-                            enemy.take_damage(dmg_to_apply, show_floating=False)
+                            if self._elemental_shield_can_damage(enemy, projectile):
+                                enemy.take_damage(dmg_to_apply, show_floating=False)
                         except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 enemy.health = max(
@@ -1455,7 +1514,9 @@ class CollisionSystem:
                                 )
                                 if id(enemy) in getattr(projectile, "_hit_ids", set()):
                                     pass
-                                else:
+                                elif self._elemental_shield_can_damage(
+                                    enemy, projectile
+                                ):
                                     enemy.take_damage(dmg_to_apply, show_floating=False)
                                 try:
                                     ex, ey = g._enemy_pos(enemy)
@@ -1543,7 +1604,43 @@ class CollisionSystem:
                         dmg_to_apply = self._player_damage_vs_burning(
                             projectile, enemy, getattr(projectile, "damage", 0)
                         )
-                        enemy.take_damage(dmg_to_apply, show_floating=False)
+                        # Cross Bearer shield (enemy path — defensive, boss path is primary)
+                        _cross_bearer_reflected = False
+                        if getattr(enemy, "enemy_type", "") == "cross_bearer":
+                            cb_shield = getattr(enemy, "cb_shield_hp", 0)
+                            if (
+                                not getattr(enemy, "_shield_broken", False)
+                                and cb_shield > 0
+                            ):
+                                enemy.cb_shield_hp = max(
+                                    0, cb_shield - int(dmg_to_apply)
+                                )
+                                enemy._shield_regen_timer = 0
+                                if enemy.cb_shield_hp <= 0:
+                                    enemy._shield_broken = True
+                                    enemy.shake_timer = 12
+                                else:
+                                    projectile.vel_x = -getattr(projectile, "vel_x", 0)
+                                    projectile.vel_y = -getattr(projectile, "vel_y", 0)
+                                    projectile.is_enemy_projectile = True
+                                    projectile.damage = max(1, int(dmg_to_apply * 0.8))
+                                    # Move reflected projectile from player projectiles to enemy projectiles
+                                    # so it will damage the player when it hits
+                                    try:
+                                        if projectile in g.projectiles:
+                                            g.projectiles.remove(projectile)
+                                        g.enemy_projectiles.add(projectile)
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
+                                        pass
+                                _cross_bearer_reflected = True
+                        if not _cross_bearer_reflected:
+                            if self._elemental_shield_can_damage(enemy, projectile):
+                                enemy.take_damage(dmg_to_apply, show_floating=False)
                         try:
                             self._maybe_charge_tower(projectile)
                         except (AttributeError, TypeError, ValueError, KeyError):
@@ -1654,9 +1751,12 @@ class CollisionSystem:
                                                 targ,
                                                 projectile.damage * 1.5,
                                             )
-                                            targ.take_damage(
-                                                dmg_chain, show_floating=False
-                                            )
+                                            if self._elemental_shield_can_damage(
+                                                targ, projectile
+                                            ):
+                                                targ.take_damage(
+                                                    dmg_chain, show_floating=False
+                                                )
                                             # show damage number using computed value
                                             try:
                                                 ex, ey = g._enemy_pos(targ)
@@ -2459,6 +2559,7 @@ class CollisionSystem:
                         )
                         if boss_hits:
                             for boss in boss_hits:
+                                _cb_reflected2 = False
                                 try:
                                     # Apply direct damage to boss.  Tenebrae projectiles
                                     # compute damage on hit (damage=0) and track
@@ -2500,8 +2601,95 @@ class CollisionSystem:
                                             boss,
                                             getattr(projectile, "damage", 0),
                                         )
+                                    # Cross Bearer shield check (fallback path)
+                                    if (
+                                        getattr(boss, "enemy_type", "")
+                                        == "cross_bearer"
+                                    ):
+                                        cb_shield2 = getattr(boss, "cb_shield_hp", 0)
+                                        cb_broken2 = getattr(
+                                            boss, "_shield_broken", False
+                                        )
+                                        if not cb_broken2 and cb_shield2 > 0:
+                                            boss.cb_shield_hp = max(
+                                                0, cb_shield2 - int(bd_local)
+                                            )
+                                            boss._shield_regen_timer = 0
+                                            if boss.cb_shield_hp <= 0:
+                                                boss._shield_broken = True
+                                                boss.shake_timer = 12
+                                                try:
+                                                    g.spawn_floating_text(
+                                                        "SHIELD BROKEN",
+                                                        int(boss.x),
+                                                        int(boss.y) - 30,
+                                                        color=(100, 180, 255),
+                                                        font_size=18,
+                                                    )
+                                                except (
+                                                    AttributeError,
+                                                    TypeError,
+                                                    ValueError,
+                                                    KeyError,
+                                                ):
+                                                    pass
+                                            else:
+                                                pvx2 = getattr(projectile, "vel_x", 0)
+                                                pvy2 = getattr(projectile, "vel_y", 0)
+                                                projectile.vel_x = -pvx2
+                                                projectile.vel_y = -pvy2
+                                                projectile.is_enemy_projectile = True
+                                                projectile.damage = max(
+                                                    1, int(bd_local * 0.8)
+                                                )
+                                                # Move reflected projectile from player projectiles to enemy projectiles
+                                                # so it will damage the player when it hits
+                                                try:
+                                                    if projectile in g.projectiles:
+                                                        g.projectiles.remove(projectile)
+                                                    g.enemy_projectiles.add(projectile)
+                                                except (
+                                                    AttributeError,
+                                                    TypeError,
+                                                    ValueError,
+                                                    KeyError,
+                                                ):
+                                                    pass
+                                                # Show "REFLECTED" only once every 2 seconds (120 frames) to avoid spam
+                                                try:
+                                                    last_reflect_msg = getattr(
+                                                        boss,
+                                                        "_last_reflect_msg_time",
+                                                        -120,
+                                                    )
+                                                    current_time = (
+                                                        g.time_elapsed * g.fps
+                                                    )
+                                                    if (
+                                                        current_time - last_reflect_msg
+                                                        >= 120
+                                                    ):
+                                                        g.spawn_floating_text(
+                                                            "REFLECTED",
+                                                            int(boss.x),
+                                                            int(boss.y) - 20,
+                                                            color=(160, 210, 255),
+                                                            font_size=14,
+                                                        )
+                                                        boss._last_reflect_msg_time = (
+                                                            current_time
+                                                        )
+                                                except (
+                                                    AttributeError,
+                                                    TypeError,
+                                                    ValueError,
+                                                    KeyError,
+                                                ):
+                                                    pass
+                                            _cb_reflected2 = True
                                     # boss damage should show numbers; let take_damage use default
-                                    boss.take_damage(bd_local)
+                                    if not _cb_reflected2:
+                                        boss.take_damage(bd_local)
                                 except (
                                     AttributeError,
                                     TypeError,
@@ -2555,24 +2743,27 @@ class CollisionSystem:
                                 ):
                                     pass
 
-                                # Remove projectile after hitting a boss (default)
-                                try:
-                                    projectile.kill()
-                                except (
-                                    AttributeError,
-                                    TypeError,
-                                    ValueError,
-                                    KeyError,
-                                ):
+                                # Reflected projectiles stay alive; others are removed
+                                if _cb_reflected2:
+                                    pass  # Reflected: keep alive, now travels as enemy projectile
+                                else:
                                     try:
-                                        g.projectiles.remove(projectile)
+                                        projectile.kill()
                                     except (
                                         AttributeError,
                                         TypeError,
                                         ValueError,
                                         KeyError,
                                     ):
-                                        pass
+                                        try:
+                                            g.projectiles.remove(projectile)
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
+                                            pass
                                 # Mark as processed so we don't run the later boss-collision
                                 # branch again for the same projectile in this frame.
                                 processed_projectile = True
@@ -2642,7 +2833,8 @@ class CollisionSystem:
                         projectile, enemy, p_damage
                     )
                     try:
-                        enemy.take_damage(dmg_to_apply, show_floating=False)
+                        if self._elemental_shield_can_damage(enemy, projectile):
+                            enemy.take_damage(dmg_to_apply, show_floating=False)
                     except (AttributeError, TypeError, ValueError, KeyError):
                         try:
                             enemy.health = max(
@@ -2806,7 +2998,7 @@ class CollisionSystem:
                             # Build a safe snapshot of nearby candidates (exclude the primary)
                             others = []
                             max_chain_distance = 300
-                            for other in list(g.enemies):
+                            for other in g.enemies:
                                 if other is enemy:
                                     continue
                                 if other.get("health", 0) <= 0:
@@ -2920,7 +3112,7 @@ class CollisionSystem:
                             # Skip if this projectile already recorded a hit on this enemy
                             if id(enemy) in getattr(projectile, "_hit_ids", set()):
                                 pass
-                            else:
+                            elif self._elemental_shield_can_damage(enemy, projectile):
                                 enemy.take_damage(dmg_to_apply, show_floating=False)
                                 if (
                                     chain
@@ -3407,8 +3599,82 @@ class CollisionSystem:
                     bd = self._player_damage_vs_burning(
                         projectile, boss, getattr(projectile, "damage", 0)
                     )
-                    # boss should show floating damage numbers
-                    boss.take_damage(bd)
+                    # Cross Bearer: shield absorbs ALL hits while active.
+                    # Shield has 100 HP; reflects projectile back until broken.
+                    # Once broken, body takes damage normally (5s regen).
+                    _cb_reflected = False
+                    if getattr(boss, "enemy_type", "") == "cross_bearer":
+                        cb_shield = getattr(boss, "cb_shield_hp", 0)
+                        cb_broken = getattr(boss, "_shield_broken", False)
+                        if not cb_broken and cb_shield > 0:
+                            # Shield active: absorb damage and reflect
+                            boss.cb_shield_hp = max(0, cb_shield - int(bd))
+                            boss._shield_regen_timer = 0
+                            if boss.cb_shield_hp <= 0:
+                                boss._shield_broken = True
+                                boss.shake_timer = 12
+                                try:
+                                    g.spawn_floating_text(
+                                        "SHIELD BROKEN",
+                                        int(boss.x),
+                                        int(boss.y) - 30,
+                                        color=(100, 180, 255),
+                                        font_size=18,
+                                    )
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
+                                    pass
+                            else:
+                                # Reflect projectile back toward player
+                                pvx = getattr(projectile, "vel_x", 0)
+                                pvy = getattr(projectile, "vel_y", 0)
+                                projectile.vel_x = -pvx
+                                projectile.vel_y = -pvy
+                                projectile.is_enemy_projectile = True
+                                projectile.damage = max(1, int(bd * 0.8))
+                                # Move reflected projectile from player projectiles to enemy projectiles
+                                # so it will damage the player when it hits
+                                try:
+                                    if projectile in g.projectiles:
+                                        g.projectiles.remove(projectile)
+                                    g.enemy_projectiles.add(projectile)
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
+                                    pass
+                                # Show "REFLECTED" only once every 2 seconds (120 frames) to avoid spam
+                                try:
+                                    last_reflect_msg = getattr(
+                                        boss, "_last_reflect_msg_time", -120
+                                    )
+                                    current_time = g.time_elapsed * g.fps
+                                    if current_time - last_reflect_msg >= 120:
+                                        g.spawn_floating_text(
+                                            "REFLECTED",
+                                            int(boss.x),
+                                            int(boss.y) - 20,
+                                            color=(160, 210, 255),
+                                            font_size=14,
+                                        )
+                                        boss._last_reflect_msg_time = current_time
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
+                                    pass
+                            _cb_reflected = True
+                    if not _cb_reflected:
+                        # boss should show floating damage numbers
+                        boss.take_damage(bd)
                     self._maybe_charge_tower(projectile)
 
                 # Ensure projectiles that carry slow/burn also apply to bosses (defensive/duplicate path)
@@ -3476,7 +3742,10 @@ class CollisionSystem:
 
                 # Handle projectile piercing for bosses too
                 # NOTE: Spears should not pierce bosses — treat spear as single-hit for bosses
-                if (
+                # Reflected projectiles (Cross Bearer shield) are NOT removed — they travel back
+                if _cb_reflected:
+                    pass  # Reflected: keep alive, now travels as enemy projectile
+                elif (
                     getattr(projectile, "pierce_all", False)
                     and getattr(projectile, "weapon_type", None) != "spear"
                 ):
@@ -3546,7 +3815,10 @@ class CollisionSystem:
                     # start the victory countdown.
                     if boss.enemy_type != "boss_limbo_horde":
                         boss.kill()
-                    if boss.enemy_type == "boss_medium":
+                    _do_reinforce_col = boss.enemy_type == "boss_medium" or (
+                        boss.enemy_type == "cross_bearer" and random.random() < 0.5
+                    )
+                    if _do_reinforce_col:
                         g.show_centered_message(
                             "REINFORCEMENTS INCOMING!", 1800, (255, 204, 0)
                         )
@@ -3789,7 +4061,15 @@ class CollisionSystem:
                     else:
                         enemy.contact_timer -= 1
                     if enemy.contact_timer <= 0:
-                        enemy.take_damage(4, show_floating=False)
+                        _eshield_active = getattr(
+                            enemy, "shield_hp", 0
+                        ) > 0 and getattr(enemy, "enemy_type", "") in (
+                            "pentagram_fire",
+                            "pentagram_storm",
+                            "pentagram_ice",
+                        )
+                        if not _eshield_active:
+                            enemy.take_damage(4, show_floating=False)
                         enemy.contact_timer = int(g.fps * 2)
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
@@ -3802,7 +4082,11 @@ class CollisionSystem:
                 if g.upgrade_levels.get("armor", 0) > 0:
                     reflect_ratio: float = min(0.3 * g.upgrade_levels["armor"], 0.9)
                     reflected = actual_damage * reflect_ratio
-                    enemy.take_damage(reflected, show_floating=False)
+                    _eshield_active2 = getattr(enemy, "shield_hp", 0) > 0 and getattr(
+                        enemy, "enemy_type", ""
+                    ) in ("pentagram_fire", "pentagram_storm", "pentagram_ice")
+                    if not _eshield_active2:
+                        enemy.take_damage(reflected, show_floating=False)
         else:
             for enemy in list(g.enemies):
                 ex, ey = g._enemy_pos(enemy)
@@ -3865,7 +4149,15 @@ class CollisionSystem:
                         else:
                             enemy.contact_timer -= 1
                         if enemy.contact_timer <= 0:
-                            enemy.take_damage(4, show_floating=False)
+                            _eshield_active3 = getattr(
+                                enemy, "shield_hp", 0
+                            ) > 0 and getattr(enemy, "enemy_type", "") in (
+                                "pentagram_fire",
+                                "pentagram_storm",
+                                "pentagram_ice",
+                            )
+                            if not _eshield_active3:
+                                enemy.take_damage(4, show_floating=False)
                             enemy.contact_timer = int(g.fps * 2)
                     except (AttributeError, TypeError, ValueError, KeyError):
                         # Best-effort fallback: apply tiny constant damage
@@ -3884,7 +4176,15 @@ class CollisionSystem:
                     if g.upgrade_levels.get("armor", 0) > 0:
                         reflect_ratio = min(0.3 * g.upgrade_levels["armor"], 0.9)
                         reflected = actual_damage * reflect_ratio
-                        enemy.take_damage(reflected, show_floating=False)
+                        _eshield_active4 = getattr(
+                            enemy, "shield_hp", 0
+                        ) > 0 and getattr(enemy, "enemy_type", "") in (
+                            "pentagram_fire",
+                            "pentagram_storm",
+                            "pentagram_ice",
+                        )
+                        if not _eshield_active4:
+                            enemy.take_damage(reflected, show_floating=False)
         # Bosses hit player
         hit_bosses = pygame.sprite.spritecollide(g.player, g.bosses, False)
         for boss in hit_bosses:
@@ -3902,7 +4202,11 @@ class CollisionSystem:
                 if enemy.drain_timer % 60 == 0:  # Every second
                     damage = getattr(enemy, "drain_damage", 1)
                     heal = getattr(enemy, "drain_heal", 1)
-                    enemy.take_damage(damage)
+                    _eshield_flies = getattr(enemy, "shield_hp", 0) > 0 and getattr(
+                        enemy, "enemy_type", ""
+                    ) in ("pentagram_fire", "pentagram_storm", "pentagram_ice")
+                    if not _eshield_flies:
+                        enemy.take_damage(damage)
                     # spawn centralized floating text for drain tick
                     try:
                         ex, ey = g._enemy_pos(enemy)
@@ -3932,7 +4236,15 @@ class CollisionSystem:
                         damage = getattr(enemy, "drain_damage", 1)
                         heal = getattr(enemy, "drain_heal", 1)
                         try:
-                            enemy.take_damage(damage)
+                            _eshield_flies2 = getattr(
+                                enemy, "shield_hp", 0
+                            ) > 0 and getattr(enemy, "enemy_type", "") in (
+                                "pentagram_fire",
+                                "pentagram_storm",
+                                "pentagram_ice",
+                            )
+                            if not _eshield_flies2:
+                                enemy.take_damage(damage)
                         except (AttributeError, TypeError, ValueError, KeyError):
                             try:
                                 enemy.health = max(
@@ -4021,7 +4333,15 @@ class CollisionSystem:
                     if dist < enemy.radius + 6:  # orbital radius is 6
                         if eid not in hits:
                             # apply a one‑time orbital damage with level bonuses
-                            enemy.take_damage(orbital_damage)
+                            _eshield_orb = getattr(
+                                enemy, "shield_hp", 0
+                            ) > 0 and getattr(enemy, "enemy_type", "") in (
+                                "pentagram_fire",
+                                "pentagram_storm",
+                                "pentagram_ice",
+                            )
+                            if not _eshield_orb:
+                                enemy.take_damage(orbital_damage)
                             hits.add(eid)
                     else:
                         # enemy has moved away, allow future re-hits

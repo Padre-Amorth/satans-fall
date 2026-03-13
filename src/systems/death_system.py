@@ -266,7 +266,11 @@ class DeathSystem:
 
                     # If a medium (wave) boss dies by any cause, schedule reinforcements
                     try:
-                        if getattr(boss, "enemy_type", "") == "boss_medium":
+                        _btype = getattr(boss, "enemy_type", "")
+                        _do_reinforce = _btype == "boss_medium" or (
+                            _btype == "cross_bearer" and random.random() < 0.5
+                        )
+                        if _do_reinforce:
                             # Show the centered HUD message and schedule the reinforcement timer
                             try:
                                 g.show_centered_message(

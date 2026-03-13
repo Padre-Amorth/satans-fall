@@ -35,11 +35,23 @@ from src.game.persistence import (
 from src.game.ui_helpers import FloatingText
 from src.game.weapons import init_player_weapons, init_weapons
 from src.game_constants import (
+    BARRIER_DESPAWN_TIME,
+    BARRIER_HEIGHT,
+    BARRIER_HP,
+    BARRIER_MAX_COUNT,
+    BARRIER_SPAWN_DELAY,
+    BARRIER_SPAWN_INTERVAL_MAX,
+    BARRIER_SPAWN_INTERVAL_MIN,
+    BARRIER_WIDTH,
     DEFAULT_FPS,
     DEFAULT_HEIGHT,
     DEFAULT_PLAYER_ANIM_SPEED,
     DEFAULT_WAVE_DURATION,
     DEFAULT_WIDTH,
+    HELL_BARRIER_X_MAX,
+    HELL_BARRIER_X_MIN,
+    HELL_BARRIER_Y_MAX,
+    HELL_BARRIER_Y_MIN,
     HELL_STAGES,
     LIMBO_STAGES,
     PURGATORY_STAGES,
@@ -901,6 +913,13 @@ class Game:
             0  # countdown 5s before victory screen
         )
 
+        # Hell stage barriers
+        self.barriers: List[Dict[str, Any]] = []
+        self._barrier_spawn_timer: float = 0.0
+        self._barrier_next_interval: float = random.uniform(
+            BARRIER_SPAWN_INTERVAL_MIN, BARRIER_SPAWN_INTERVAL_MAX
+        )
+
         # victory overlay state
         self.showing_victory: bool = False
         self.victory_alpha: int = 0
@@ -1386,6 +1405,9 @@ class Game:
             "statue_fire.png",
             "statue_storm.png",
             "statue_ice.png",
+            # optional Hell stage barrier assets
+            "barrier_wood.png",
+            "barrier_damaged.png",
         ]
 
         # Preload originals for quick subsequent scaling
@@ -1494,6 +1516,10 @@ class Game:
     def is_limbo_stage(self) -> bool:
         """Return True if the currently selected stage is any variant of Limbo."""
         return bool(self.selected_stage and str(self.selected_stage) in LIMBO_STAGES)
+
+    def is_hell_stage(self) -> bool:
+        """Return True if the currently selected stage is any variant of Hell."""
+        return bool(self.selected_stage and str(self.selected_stage) in HELL_STAGES)
 
     def is_purgatory_stage(self) -> bool:
         """Return True if the currently selected stage is any variant of Purgatory.
@@ -1606,6 +1632,9 @@ class Game:
             self.handle_input()
             self.update()
             self.draw()
+            # GIF recording frame capture
+            if getattr(self, "_gif_recording", False):
+                self.input_handler._capture_gif_frame()
             self.clock.tick(self.fps)
         self.save_permanent_stats()
         logger.info("Game ended")
@@ -2021,14 +2050,62 @@ class Game:
         if self.death_system:
             return self.death_system.update_health_drops()
 
+    def _update_barriers(self) -> None:
+        """Spawn, age, and despawn hell barriers. Only active on hell stages."""
+        if not self.is_hell_stage():
+            return
+        if self.time_elapsed < BARRIER_SPAWN_DELAY:
+            return
+
+        dt = 1.0 / self.fps
+
+        # Age and remove dead/expired barriers
+        self.barriers = [
+            b for b in self.barriers if b["hp"] > 0 and b["despawn_timer"] > 0
+        ]
+        for b in self.barriers:
+            b["despawn_timer"] -= dt
+
+        # Spawn new barrier if below max
+        if len(self.barriers) >= BARRIER_MAX_COUNT:
+            return
+
+        self._barrier_spawn_timer += dt
+        if self._barrier_spawn_timer < self._barrier_next_interval:
+            return
+
+        self._barrier_spawn_timer = 0.0
+        # Pick a new random interval for next spawn
+        self._barrier_next_interval = random.uniform(
+            BARRIER_SPAWN_INTERVAL_MIN, BARRIER_SPAWN_INTERVAL_MAX
+        )
+
+        for _attempt in range(10):
+            bx = random.randint(HELL_BARRIER_X_MIN, HELL_BARRIER_X_MAX - BARRIER_WIDTH)
+            by = random.randint(HELL_BARRIER_Y_MIN, HELL_BARRIER_Y_MAX - BARRIER_HEIGHT)
+            candidate = pygame.Rect(
+                bx - 20, by - 20, BARRIER_WIDTH + 40, BARRIER_HEIGHT + 40
+            )
+            if any(candidate.colliderect(b["rect"]) for b in self.barriers):
+                continue
+            self.barriers.append(
+                {
+                    "x": bx,
+                    "y": by,
+                    "w": BARRIER_WIDTH,
+                    "h": BARRIER_HEIGHT,
+                    "hp": BARRIER_HP,
+                    "max_hp": BARRIER_HP,
+                    "rect": pygame.Rect(bx, by, BARRIER_WIDTH, BARRIER_HEIGHT),
+                    "despawn_timer": BARRIER_DESPAWN_TIME,
+                }
+            )
+            break
+
     def draw_floating_texts(self, shake_x: int = 0, shake_y: int = 0) -> None:
         """Delegate to ParticleSystem."""
         if self.particle_system:
             return self.particle_system.draw_floating_texts(shake_x, shake_y)
-
-    def _draw_floating_texts_old(self, shake_x: int = 0, shake_y: int = 0) -> None:
-        """DEPRECATED: Use ParticleSystem instead."""
-        pass
 
     def draw_ice_particles(self, shake_x: int = 0, shake_y: int = 0) -> None:
         """Delegate to ParticleSystem."""
@@ -2039,10 +2116,6 @@ class Game:
         """Delegate to ParticleSystem."""
         if self.particle_system:
             return self.particle_system.draw_ice_puddles(shake_x, shake_y)
-
-    def _draw_ice_puddles_old(self, shake_x=0, shake_y=0) -> None:
-        """DEPRECATED: Use ParticleSystem instead."""
-        pass
 
     def _draw_blizzard_spiral_particles(
         self, puddle: dict, px: float, py: float, radius: int
@@ -2735,6 +2808,13 @@ class Game:
         self.purgatory_horde_explosion_ready = False
         self.purgatory_horde_victory_timer = 0
 
+        # Reset hell barriers
+        self.barriers = []
+        self._barrier_spawn_timer = 0.0
+        self._barrier_next_interval = random.uniform(
+            BARRIER_SPAWN_INTERVAL_MIN, BARRIER_SPAWN_INTERVAL_MAX
+        )
+
         # Reset stage start countdown
         self.stage_start_countdown = 0
         self.stage_start_timer = 0
@@ -3283,19 +3363,40 @@ class Game:
                         dx = ex - p["x"]
                         dy = ey - p["y"]
                         if dx * dx + dy * dy <= p["radius"] * p["radius"]:
+                            _betype = getattr(enemy, "enemy_type", "")
+                            _bshield = getattr(enemy, "shield_hp", 0) > 0
                             try:
-                                enemy.health = max(
-                                    0, enemy.health - BLIZZARD_EXPIRE_DAMAGE
-                                )
+                                if (
+                                    _betype in ("pentagram_fire", "pentagram_storm")
+                                    and _bshield
+                                ):
+                                    pass  # blizzard does not penetrate fire/storm elemental shields
+                                elif _betype == "pentagram_ice" and _bshield:
+                                    # blizzard dissolves ice pentagram's shield
+                                    absorbed = min(
+                                        enemy.shield_hp, BLIZZARD_EXPIRE_DAMAGE
+                                    )
+                                    enemy.shield_hp -= absorbed
+                                    remainder = BLIZZARD_EXPIRE_DAMAGE - absorbed
+                                    if remainder > 0:
+                                        enemy.health = max(0, enemy.health - remainder)
+                                else:
+                                    enemy.health = max(
+                                        0, enemy.health - BLIZZARD_EXPIRE_DAMAGE
+                                    )
                             except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                            # show damage text above enemy
+                            # show damage text above enemy (suppress if blocked)
                             try:
-                                self.spawn_floating_text(
-                                    str(int(BLIZZARD_EXPIRE_DAMAGE)),
-                                    ex,
-                                    ey - self._enemy_radius(enemy) - 8,
-                                )
+                                if not (
+                                    _bshield
+                                    and _betype in ("pentagram_fire", "pentagram_storm")
+                                ):
+                                    self.spawn_floating_text(
+                                        str(int(BLIZZARD_EXPIRE_DAMAGE)),
+                                        ex,
+                                        ey - self._enemy_radius(enemy) - 8,
+                                    )
                             except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                     # damage bosses as well
@@ -3596,6 +3697,9 @@ class Game:
 
         # Update health drop positions / player collisions
         self._update_health_drops()
+
+        # Update barrier spawning/aging (hell stages only)
+        self._update_barriers()
 
         # Update statue/tower weapons for Limbo and Purgatory
         if self.is_limbo_stage() or (

@@ -10,7 +10,7 @@ from src.balance import (
     DEFAULT_PROJECTILE_SIZE_MULTIPLIER,
     PLAYER_BASE_HEALTH,
     XP_BASE,
-    XP_GROWTH,
+    calculate_xp_for_next_level,
 )
 
 if TYPE_CHECKING:
@@ -440,10 +440,8 @@ class Player(BaseSprite):
     def level_up(self) -> None:
         self.level += 1
         self.xp -= self.xp_to_next_level
-        # Recalculate XP requirement using centralized curve
-        self.xp_to_next_level = int(
-            XP_BASE * (XP_GROWTH ** (self.level - 1))
-        )  # Increase XP requirement
+        # Recalculate XP requirement using tiered growth curve
+        self.xp_to_next_level = calculate_xp_for_next_level(self.level)
         # Note: Upgrade selection will be handled in the game class
 
     def set_scale(self, scale: float) -> None:

@@ -37,6 +37,20 @@ except (AttributeError, TypeError, ValueError, KeyError):
 # Import Projectile explicitly from src.projectile for stability
 from src.projectile import Projectile  # noqa: E402
 
+# Import barrier constants with fallback
+try:
+    from src.game_constants import (
+        BARRIER_ARCHER_COVER_CHANCE,
+        BARRIER_DAMAGED_THRESHOLD,
+        BARRIER_HIDE_DISTANCE,
+        BARRIER_HIDE_SUPPRESS_FRAMES,
+    )
+except ImportError:
+    BARRIER_ARCHER_COVER_CHANCE = 0.95
+    BARRIER_HIDE_DISTANCE = 40
+    BARRIER_HIDE_SUPPRESS_FRAMES = 150
+    BARRIER_DAMAGED_THRESHOLD = 0.40
+
 logger: logging.Logger = logging.getLogger(__name__)
 
 
@@ -209,6 +223,32 @@ class Enemy(BaseSprite):
             self._wave_time: float = 0.0  # accumulator for vertical oscillation
             self._rotation_angle: float = 0.0  # vertical axis rotation angle in radians
             self._spawn_y: float = 0.0  # will be set on first update frame
+        elif enemy_type in ("pentagram_fire", "pentagram_storm", "pentagram_ice"):
+            # Elemental pentagram variants — same traversal behaviour as base pentagram
+            self.width = 70
+            self.height = 70
+            self.damage = 0
+            self.direction = random.choice([-1, 1])
+            self._wave_time = 0.0
+            self._rotation_angle = 0.0
+            self._spawn_y = 0.0
+        elif enemy_type == "cross_bearer":
+            # Cross Bearer: armored knight with a reflective frontal shield.
+            # The shield faces the player at all times and deflects projectiles.
+            # Shield has 100 HP and regenerates 5 seconds after last hit.
+            # External asset: enemy_cross_bearer.png  (falls back to draw_demon)
+            self.width = 40
+            self.height = 60
+            self.damage = 28
+            # Frontal shield angle (radians toward player, updated each frame)
+            self._shield_angle: float = 0.0
+            # Shield HP (separate from body HP)
+            self.cb_shield_hp: int = 200
+            self.cb_shield_max_hp: int = 200
+            # Frames since shield last took damage (regen starts at 300 = 5s)
+            self._shield_regen_timer: int = 0
+            # Whether shield is broken (0 HP and not yet regenerated)
+            self._shield_broken: bool = False
 
         # Make enemies slightly larger by 10 pixels (except final boss keeps canonical size)
         if self.enemy_type != "boss_final":
@@ -242,12 +282,21 @@ class Enemy(BaseSprite):
         if enemy_type == "mage":
             self.shield_timer: int = 60 * 5  # frames until first shield cast
 
-        # Pentagram: HP fixed at 500 body + 1500 shield, independent of global multipliers
-        if enemy_type == "pentagram":
-            self.max_health = 500
-            self.health = 500
+        # Pentagram: HP fixed at 300 body + 1500 shield, independent of global multipliers
+        if enemy_type in (
+            "pentagram",
+            "pentagram_fire",
+            "pentagram_storm",
+            "pentagram_ice",
+        ):
+            self.max_health = 300
+            self.health = 300
             self.shield_hp = 1500
             self.shield_max_hp = 1500
+        # Elemental variants: 300 body + 500 elemental shield
+        if enemy_type in ("pentagram_fire", "pentagram_storm", "pentagram_ice"):
+            self.shield_hp = 500
+            self.shield_max_hp = 500
         # Custode split flag: True means this custode is already a split half
         if enemy_type == "custode":
             self._custode_split: bool = False
@@ -355,6 +404,11 @@ class Enemy(BaseSprite):
             self._anim_timer: int = 0
             self._facing_right: bool = True  # default: face right (toward player)
             self._facing_down: bool = True  # default: face down (toward player)
+        # Cross Bearer has its own 2-frame animation cycle
+        if enemy_type == "cross_bearer":
+            self._anim_frame = 0
+            self._anim_timer = 0
+            self._anim_frames: list = []  # populated by draw_enemy()
 
     def _apply_aura(self, pulse: int) -> None:
         """Helper to rebuild `self.image` with a glowing aura behind the boss.
@@ -560,6 +614,37 @@ class Enemy(BaseSprite):
 
     def draw_enemy(self) -> None:
         """Draw enemy based on type, try to load image first"""
+        # Cross Bearer: attempt to load 2-frame walk animation
+        # Asset names: enemy_cross_bearer_01.png, enemy_cross_bearer_02.png
+        # Falls back to single enemy_cross_bearer.png, then draw_demon.
+        if self.enemy_type == "cross_bearer":
+            try:
+                from src.assets.manager import get_image
+
+                frames: list = []
+                for i in (1, 2):
+                    fname = f"enemy_cross_bearer_{i:02d}.png"
+                    f = get_image(fname, (self.width, self.height))
+                    if f is not None:
+                        frames.append(f.copy())
+                if len(frames) == 2:
+                    # Store both frames; draw() will pick the active one
+                    self._anim_frames = frames
+                    self.image = frames[0]
+                    return
+                # Try single-frame asset as fallback
+                single = get_image("enemy_cross_bearer.png", (self.width, self.height))
+                if single is not None:
+                    self._anim_frames = [single.copy(), single.copy()]
+                    self.image = single.copy()
+                    return
+            except Exception:
+                pass
+            # Vector art fallback
+            self._anim_frames = []
+            self.draw_demon()
+            return
+
         # Map enemy types to asset names
         asset_name = f"enemy_{self.enemy_type}.png"
         if self.enemy_type.startswith("boss_"):
@@ -708,19 +793,31 @@ class Enemy(BaseSprite):
                 self.image, (255, 255, 255), [(14, 8), (15, 12), (16, 8)]
             )
 
-        elif self.enemy_type == "pentagram":
-            # Five-pointed star (pentagram) in dark red/crimson with gold center
-            # Inverted: point downward instead of upward
-            # Rotates continuously on vertical axis (star spins in place)
+        elif self.enemy_type in (
+            "pentagram",
+            "pentagram_fire",
+            "pentagram_storm",
+            "pentagram_ice",
+        ):
+            # Five-pointed star — base or elemental variant
+            # Elemental variants use different border/fill colors
+            if self.enemy_type == "pentagram_storm":
+                star_color = (160, 80, 220)
+                fill_color = (80, 20, 140)
+            elif self.enemy_type == "pentagram_ice":
+                star_color = (80, 200, 220)
+                fill_color = (20, 80, 120)
+            else:
+                # base pentagram and pentagram_fire share crimson red
+                star_color = (220, 60, 60)
+                fill_color = (150, 15, 15)
 
-            # Check if we need to regenerate the base pentagram image
-            # (only regenerate if size changes; rotation is applied via transform)
             base_size = (self.width, self.height)
             if (
                 not hasattr(self, "_pentagram_base")
                 or getattr(self, "_pentagram_base_size", None) != base_size
+                or getattr(self, "_pentagram_base_type", None) != self.enemy_type
             ):
-                # Regenerate base pentagram once (no rotation applied here)
                 base_image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
                 base_image.fill((0, 0, 0, 0))
 
@@ -729,7 +826,6 @@ class Enemy(BaseSprite):
                 outer_r = min(cx, cy) - 4
                 inner_r = outer_r * 0.4
 
-                # Calculate star vertices (static, no rotation)
                 points = []
                 for i in range(10):
                     angle = math.radians(90 + i * 36)
@@ -738,29 +834,69 @@ class Enemy(BaseSprite):
                     y = cy + r * math.sin(angle)
                     points.append((x, y))
 
-                # Draw outer border (bright red)
-                pygame.draw.polygon(base_image, (220, 60, 60), points)
-                # Fill interior (dark crimson)
-                pygame.draw.polygon(base_image, (150, 15, 15), points, 0)
-                # Outline border (bright red)
-                pygame.draw.polygon(base_image, (220, 60, 60), points, 2)
+                pygame.draw.polygon(base_image, star_color, points)
+                pygame.draw.polygon(base_image, fill_color, points, 0)
+                pygame.draw.polygon(base_image, star_color, points, 2)
 
                 self._pentagram_base = base_image
                 self._pentagram_base_size = base_size
+                self._pentagram_base_type = self.enemy_type
 
-            # Apply rotation using cached base image
+            cx = self.width // 2
+            cy = self.height // 2
+            inner_r = (min(cx, cy) - 4) * 0.4
+
             try:
-                # Convert rotation angle to degrees for pygame.transform.rotate
                 rotation_deg = math.degrees(self._rotation_angle) % 360
                 self.image = pygame.transform.rotate(self._pentagram_base, rotation_deg)
             except (AttributeError, TypeError, ValueError, KeyError):
-                # Fallback to base image if rotation fails
                 self.image = self._pentagram_base.copy()
 
             # Center circle (gold)
             pygame.draw.circle(
                 self.image, (200, 160, 20), (cx, cy), max(1, int(inner_r // 2))
             )
+
+        elif self.enemy_type == "cross_bearer":
+            w, h = self.width, self.height
+            cx, cy = w // 2, h // 2
+            # Body: dark armored figure (slate grey)
+            pygame.draw.ellipse(self.image, (70, 70, 80), (cx - 12, cy - 8, 24, 20))
+            # Head: round helmet
+            pygame.draw.circle(self.image, (90, 90, 100), (cx, cy - 14), 9)
+            # Cross on chest: bright white/gold cross
+            cross_color = (220, 210, 150)
+            pygame.draw.rect(
+                self.image, cross_color, (cx - 2, cy - 6, 4, 14)
+            )  # vertical
+            pygame.draw.rect(
+                self.image, cross_color, (cx - 7, cy - 3, 14, 4)
+            )  # horizontal
+            # Shield: blue-white arc on the right side (facing right by default)
+            shield_color = (
+                (160, 200, 255)
+                if not getattr(self, "_shield_broken", False)
+                else (80, 80, 100)
+            )
+            try:
+                import pygame as _pg
+
+                _pg.draw.arc(
+                    self.image,
+                    shield_color,
+                    (cx + 4, cy - 14, 18, 28),
+                    -1.0,
+                    1.0,
+                    4,
+                )
+            except (AttributeError, TypeError, ValueError, KeyError):
+                pass
+            # Legs
+            pygame.draw.rect(self.image, (60, 60, 70), (cx - 8, cy + 10, 6, 10))
+            pygame.draw.rect(self.image, (60, 60, 70), (cx + 2, cy + 10, 6, 10))
+            # Eyes (red glow)
+            pygame.draw.circle(self.image, (220, 60, 60), (cx - 3, cy - 15), 2)
+            pygame.draw.circle(self.image, (220, 60, 60), (cx + 3, cy - 15), 2)
 
         else:
             # Default demon (bosses)
@@ -793,6 +929,12 @@ class Enemy(BaseSprite):
                 if self._anim_timer >= 8:
                     self._anim_timer = 0
                     self._anim_frame = (getattr(self, "_anim_frame", 0) + 1) % 8
+            # Cross Bearer: 2-frame animation cycle (frame 0 / frame 1, swap every 36 frames)
+            if self.enemy_type == "cross_bearer":
+                self._anim_timer = getattr(self, "_anim_timer", 0) + 1
+                if self._anim_timer >= 36:
+                    self._anim_timer = 0
+                    self._anim_frame = (getattr(self, "_anim_frame", 0) + 1) % 2
             # handle crusader invulnerability cycling (3s vulnerable / 3s immune)
             if self.enemy_type == "crusader":
                 # _vuln_timer initialized in __init__
@@ -802,6 +944,24 @@ class Enemy(BaseSprite):
                     self._vuln_timer = 180
                     # little shake whenever the state flips so player gets a cue
                     self.shake_timer = 10
+            # Cross Bearer: update shield angle toward player + shield regen
+            if self.enemy_type == "cross_bearer":
+                # Always point shield toward player
+                try:
+                    dx = player.x - self.x
+                    dy = player.y - self.y
+                    self._shield_angle = math.atan2(dy, dx)
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+                # Regen timer: count up when shield is broken
+                if getattr(self, "_shield_broken", False):
+                    self._shield_regen_timer += 1
+                    # After 5 seconds (300 frames) restore shield fully
+                    if self._shield_regen_timer >= 300:
+                        self.cb_shield_hp = self.cb_shield_max_hp
+                        self._shield_broken = False
+                        self._shield_regen_timer = 0
+                        self.shake_timer = 8  # visual cue on regen
             # Custom movement for the Limbo horde boss: it should never chase the
             # player, instead parking itself in the upper half of the play area and
             # oscillating.  The speed for this type is slightly higher than the
@@ -1120,7 +1280,12 @@ class Enemy(BaseSprite):
                             pass
                     # movement handled; skip other behaviour
                     pass
-                elif self.enemy_type == "pentagram":
+                elif self.enemy_type in (
+                    "pentagram",
+                    "pentagram_fire",
+                    "pentagram_storm",
+                    "pentagram_ice",
+                ):
                     # Pentagram: horizontal traversal with vertical oscillation and continuous rotation
                     # Accumulate time for wave oscillation
                     self._wave_time += 0.04
@@ -1166,7 +1331,48 @@ class Enemy(BaseSprite):
                             pass
                         # Initialize target position if not set
                         if not hasattr(self, "archer_target_x"):
-                            self.archer_target_x = self.x
+                            # Seek cover immediately if barriers available
+                            try:
+                                barriers = getattr(game, "barriers", [])
+                                if (
+                                    barriers
+                                    and random.random() < BARRIER_ARCHER_COVER_CHANCE
+                                ):
+                                    # Prefer intact barriers from spawn
+                                    intact_barriers = [
+                                        b
+                                        for b in barriers
+                                        if b.get("hp", 0) / b.get("max_hp", 1)
+                                        > BARRIER_DAMAGED_THRESHOLD
+                                    ]
+                                    if intact_barriers:
+                                        nearest = min(
+                                            intact_barriers,
+                                            key=lambda b: abs(
+                                                b["x"] + b["w"] / 2 - self.x
+                                            ),
+                                        )
+                                    else:
+                                        nearest = min(
+                                            barriers,
+                                            key=lambda b: abs(
+                                                b["x"] + b["w"] / 2 - self.x
+                                            ),
+                                        )
+                                    self.archer_target_x = int(
+                                        nearest["x"] + nearest["w"] / 2
+                                    )
+                                    self._hiding_behind_barrier = True
+                                    self._hiding_barrier_ref = nearest
+                                    self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
+                                else:
+                                    # No barriers or failed check: use random position
+                                    self.archer_target_x = self.x
+                                    self._hiding_behind_barrier = False
+                            except (AttributeError, TypeError, ValueError, KeyError):
+                                # Fallback if barrier check fails
+                                self.archer_target_x = self.x
+                                self._hiding_behind_barrier = False
                             self.archer_reposition_timer = random.randint(180, 300)
 
                         # Every 180-300 frames, archer picks new target position
@@ -1175,7 +1381,77 @@ class Enemy(BaseSprite):
                             # Pick new random X target position (don't teleport, just set target)
                             if game:
                                 try:
-                                    self.archer_target_x = game.random_x_between_walls()
+                                    barriers = getattr(game, "barriers", [])
+                                    # Aggressive cover-seeking: stay behind barriers as long as they exist
+                                    current_barrier = getattr(
+                                        self, "_hiding_barrier_ref", None
+                                    )
+
+                                    # Check if current barrier still exists and has HP
+                                    current_barrier_alive = (
+                                        current_barrier is not None
+                                        and current_barrier in barriers
+                                        and current_barrier.get("hp", 0) > 0
+                                    )
+
+                                    # If already hiding and barrier is alive, stay there
+                                    if (
+                                        getattr(self, "_hiding_behind_barrier", False)
+                                        and current_barrier_alive
+                                    ):
+                                        # Stay at current barrier position
+                                        self.archer_target_x = int(
+                                            current_barrier["x"]
+                                            + current_barrier["w"] / 2
+                                        )
+                                        self._hiding_behind_barrier = True
+                                        self._hide_suppress = (
+                                            BARRIER_HIDE_SUPPRESS_FRAMES
+                                        )
+                                    # Try to seek new cover if no barrier or barrier is gone
+                                    elif (
+                                        barriers
+                                        and random.random()
+                                        < BARRIER_ARCHER_COVER_CHANCE
+                                    ):
+                                        # Prefer intact barriers, but accept any barrier
+                                        intact_barriers = [
+                                            b
+                                            for b in barriers
+                                            if b.get("hp", 0) / b.get("max_hp", 1)
+                                            > BARRIER_DAMAGED_THRESHOLD
+                                        ]
+                                        if intact_barriers:
+                                            nearest = min(
+                                                intact_barriers,
+                                                key=lambda b: abs(
+                                                    b["x"] + b["w"] / 2 - self.x
+                                                ),
+                                            )
+                                        else:
+                                            # Fallback to any barrier if no intact ones
+                                            nearest = min(
+                                                barriers,
+                                                key=lambda b: abs(
+                                                    b["x"] + b["w"] / 2 - self.x
+                                                ),
+                                            )
+                                        self.archer_target_x = int(
+                                            nearest["x"] + nearest["w"] / 2
+                                        )
+                                        self._hiding_behind_barrier = True
+                                        self._hiding_barrier_ref = nearest
+                                        self._hide_suppress = (
+                                            BARRIER_HIDE_SUPPRESS_FRAMES
+                                        )
+                                    else:
+                                        # No barriers available - random position
+                                        self.archer_target_x = (
+                                            game.random_x_between_walls()
+                                        )
+                                        self._hiding_behind_barrier = False
+                                        self._hiding_barrier_ref = None
+                                        self._hide_suppress = 0
                                 except (
                                     AttributeError,
                                     TypeError,
@@ -1196,6 +1472,19 @@ class Enemy(BaseSprite):
                         self.x += random.uniform(-0.5, 0.5) * self.speed / 60
                         self.y += random.uniform(-0.5, 0.5) * self.speed / 60
 
+                        # Tick down hide suppression timer; clear if barrier is gone
+                        if getattr(self, "_hiding_behind_barrier", False):
+                            if getattr(self, "_hide_suppress", 0) > 0:
+                                self._hide_suppress -= 1
+                            # Clear hiding if barrier was destroyed or removed
+                            ref = getattr(self, "_hiding_barrier_ref", None)
+                            if ref is None or ref not in getattr(game, "barriers", []):
+                                self._hiding_behind_barrier = False
+                                self._hide_suppress = 0
+                            elif ref.get("hp", 0) <= 0:
+                                self._hiding_behind_barrier = False
+                                self._hide_suppress = 0
+
                         if game:
                             try:
                                 self.x = game.clamp_to_walls(self.x)
@@ -1212,14 +1501,56 @@ class Enemy(BaseSprite):
                 elif self.enemy_type == "normal" and game is not None:
                     # Lazily initialize a stop point/time near the center of the battlefield
                     if not hasattr(self, "stop_point"):
-                        center_x = game.width / 2
-                        center_y = game.height / 2
-                        jitter_x = game.width * 0.2
-                        jitter_y = game.height * 0.2
-                        spx = center_x + random.uniform(-jitter_x, jitter_x)
-                        spy = center_y + random.uniform(-jitter_y, jitter_y)
-                        # Ensure the chosen stop point is within the playable walls
-                        spx = game.clamp_to_walls(spx)
+                        # Seek cover immediately if barriers available
+                        try:
+                            barriers = getattr(game, "barriers", [])
+                            if (
+                                barriers
+                                and random.random() < BARRIER_ARCHER_COVER_CHANCE
+                            ):
+                                # Prefer intact barriers from spawn
+                                intact_barriers = [
+                                    b
+                                    for b in barriers
+                                    if b.get("hp", 0) / b.get("max_hp", 1)
+                                    > BARRIER_DAMAGED_THRESHOLD
+                                ]
+                                if intact_barriers:
+                                    nearest = min(
+                                        intact_barriers,
+                                        key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
+                                    )
+                                else:
+                                    nearest = min(
+                                        barriers,
+                                        key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
+                                    )
+                                spx = int(nearest["x"] + nearest["w"] / 2)
+                                spy = int(nearest["y"] + nearest["h"] / 2)
+                                self._hiding_behind_barrier = True
+                                self._hiding_barrier_ref = nearest
+                                self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
+                            else:
+                                # No barriers or failed check: use random position
+                                center_x = game.width / 2
+                                center_y = game.height / 2
+                                jitter_x = game.width * 0.2
+                                jitter_y = game.height * 0.2
+                                spx = center_x + random.uniform(-jitter_x, jitter_x)
+                                spy = center_y + random.uniform(-jitter_y, jitter_y)
+                                # Ensure the chosen stop point is within the playable walls
+                                spx = game.clamp_to_walls(spx)
+                                self._hiding_behind_barrier = False
+                        except (AttributeError, TypeError, ValueError, KeyError):
+                            # Fallback if barrier check fails
+                            center_x = game.width / 2
+                            center_y = game.height / 2
+                            jitter_x = game.width * 0.2
+                            jitter_y = game.height * 0.2
+                            spx = center_x + random.uniform(-jitter_x, jitter_x)
+                            spy = center_y + random.uniform(-jitter_y, jitter_y)
+                            spx = game.clamp_to_walls(spx)
+                            self._hiding_behind_barrier = False
                         self.stop_point = (spx, spy)
                         self.stop_timer = 0
                         self.stop_threshold = max(
@@ -1247,14 +1578,83 @@ class Enemy(BaseSprite):
                         else:
                             # Arrived: stay stopped for a random duration then pick a new stop point
                             self.stop_timer = random.randint(60, 180)
-                            center_x = game.width / 2
-                            center_y = game.height / 2
-                            jitter_x = game.width * 0.2
-                            jitter_y = game.height * 0.2
-                            spx = center_x + random.uniform(-jitter_x, jitter_x)
-                            spy = center_y + random.uniform(-jitter_y, jitter_y)
-                            spx = game.clamp_to_walls(spx)
+                            # Aggressive cover-seeking: stay behind barriers as long as they exist
+                            barriers = getattr(game, "barriers", [])
+                            current_barrier = getattr(self, "_hiding_barrier_ref", None)
+
+                            # Check if current barrier still exists and has HP
+                            current_barrier_alive = (
+                                current_barrier is not None
+                                and current_barrier in barriers
+                                and current_barrier.get("hp", 0) > 0
+                            )
+
+                            # If already hiding and barrier is alive, stay there
+                            if (
+                                getattr(self, "_hiding_behind_barrier", False)
+                                and current_barrier_alive
+                            ):
+                                # Stay at current barrier position
+                                spx = int(
+                                    current_barrier["x"] + current_barrier["w"] / 2
+                                )
+                                spy = int(
+                                    current_barrier["y"] + current_barrier["h"] / 2
+                                )
+                                self._hiding_behind_barrier = True
+                                self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
+                            # Try to seek new cover if no barrier or barrier is gone
+                            elif (
+                                barriers
+                                and random.random() < BARRIER_ARCHER_COVER_CHANCE
+                            ):
+                                # Prefer intact barriers, but accept any barrier
+                                intact_barriers = [
+                                    b
+                                    for b in barriers
+                                    if b.get("hp", 0) / b.get("max_hp", 1)
+                                    > BARRIER_DAMAGED_THRESHOLD
+                                ]
+                                if intact_barriers:
+                                    nearest = min(
+                                        intact_barriers,
+                                        key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
+                                    )
+                                else:
+                                    # Fallback to any barrier if no intact ones
+                                    nearest = min(
+                                        barriers,
+                                        key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
+                                    )
+                                spx = int(nearest["x"] + nearest["w"] / 2)
+                                spy = int(nearest["y"] + nearest["h"] / 2)
+                                self._hiding_behind_barrier = True
+                                self._hiding_barrier_ref = nearest
+                                self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
+                            else:
+                                # No barriers available - normal random stop point
+                                center_x = game.width / 2
+                                center_y = game.height / 2
+                                jitter_x = game.width * 0.2
+                                jitter_y = game.height * 0.2
+                                spx = center_x + random.uniform(-jitter_x, jitter_x)
+                                spy = center_y + random.uniform(-jitter_y, jitter_y)
+                                spx = game.clamp_to_walls(spx)
+                                self._hiding_behind_barrier = False
                             self.stop_point = (spx, spy)
+
+                    # Tick down hide suppression timer; clear if barrier is gone (normal enemies)
+                    if getattr(self, "_hiding_behind_barrier", False):
+                        if getattr(self, "_hide_suppress", 0) > 0:
+                            self._hide_suppress -= 1
+                        # Clear hiding if barrier was destroyed or removed
+                        ref = getattr(self, "_hiding_barrier_ref", None)
+                        if ref is None or ref not in getattr(game, "barriers", []):
+                            self._hiding_behind_barrier = False
+                            self._hide_suppress = 0
+                        elif ref.get("hp", 0) <= 0:
+                            self._hiding_behind_barrier = False
+                            self._hide_suppress = 0
 
                 elif (
                     self.enemy_type == "boss_big"
@@ -1539,7 +1939,7 @@ class Enemy(BaseSprite):
                     # Check for half-health split (only if not already a half)
                     if (
                         not getattr(self, "_custode_split", False)
-                        and self.health <= self.max_health / 2
+                        and self.health <= self.max_health * 0.3
                     ):
                         self._custode_split = True
                         self.health = 0
@@ -1573,7 +1973,9 @@ class Enemy(BaseSprite):
                                 child._custode_push_timer = 15
                                 child.width = half_w
                                 child.height = half_h
-                                child.max_health = int(half_health * 1.2)
+                                child.max_health = int(
+                                    half_health * 0.9
+                                )  # Reduced from 1.2 (60% each) to 0.9 (45% each)
                                 child.health = child.max_health
                                 # make sure collision/slow systems treat the new
                                 # halves as having the doubled speed, otherwise
@@ -2057,6 +2459,29 @@ class Enemy(BaseSprite):
         # Archer doesn't shoot while entering screen
         if self.enemy_type == "archer" and getattr(self, "archer_entering", False):
             return
+        # Brief fire suppression while taking cover (~2.5s): allows enemies to position behind barriers
+        # After suppression ends, enemies shoot normally from behind barriers
+        if getattr(self, "_hiding_behind_barrier", False):
+            if self.enemy_type == "archer":
+                target_x = getattr(self, "archer_target_x", self.x)
+                at_target = abs(self.x - target_x) < BARRIER_HIDE_DISTANCE
+            else:
+                # Extract target from stop_point tuple or individual attributes
+                stop_point = getattr(self, "stop_point", (self.x, self.y))
+                if isinstance(stop_point, tuple) and len(stop_point) >= 2:
+                    target_x, target_y = stop_point[0], stop_point[1]
+                else:
+                    target_x = getattr(self, "stop_x", self.x)
+                    target_y = getattr(self, "stop_y", self.y)
+                at_target = (
+                    abs(self.x - target_x) < BARRIER_HIDE_DISTANCE
+                    and abs(self.y - target_y) < BARRIER_HIDE_DISTANCE
+                )
+            # Only suppress fire during initial positioning (hide_suppress countdown active)
+            # Once countdown expires (hide_suppress = 0), enemies shoot normally
+            if at_target and getattr(self, "_hide_suppress", 0) > 0:
+                self.shoot_cooldown = random.randint(40, 80)
+                return
         try:
             # Mini‑Inquisitor (normal enemy with inquisitor appearance) fires only the single aimed slow projectile
             if (
@@ -2460,13 +2885,19 @@ class Enemy(BaseSprite):
         try:
             from src.game import CURRENT_GAME
 
+            _etype = getattr(self, "enemy_type", "")
             if (
                 CURRENT_GAME is not None
                 and getattr(self, "health", 1) <= 0
-                and getattr(self, "enemy_type", "").startswith("boss_")
+                and (_etype.startswith("boss_") or _etype == "cross_bearer")
             ):
-                # schedule reinforcements for medium bosses
-                if getattr(self, "enemy_type", "") == "boss_medium":
+                # schedule reinforcements for wave bosses
+                import random as _rand
+
+                _do_reinforce_e = _etype == "boss_medium" or (
+                    _etype == "cross_bearer" and _rand.random() < 0.5
+                )
+                if _do_reinforce_e:
                     try:
                         CURRENT_GAME.show_centered_message(
                             "REINFORCEMENTS INCOMING!", 1800, (255, 204, 0)
@@ -2634,6 +3065,46 @@ class Enemy(BaseSprite):
                 else:
                     draw_x += 1
 
+            # Draw Cross Bearer rotational shield arc (facing player)
+            if self.enemy_type == "cross_bearer" and not getattr(
+                self, "_shield_broken", True
+            ):
+                try:
+                    cx = int(self.x if hasattr(self, "x") else self.rect.centerx)
+                    cy = int(self.y if hasattr(self, "y") else self.rect.centery)
+                    shield_angle = getattr(self, "_shield_angle", 0.0)
+                    arc_radius = max(self.width, self.height) // 2 + 8
+                    shield_hp = getattr(self, "cb_shield_hp", 0)
+                    shield_max = getattr(self, "cb_shield_max_hp", 100)
+                    # Color: bright blue when full, fades to pale as damaged
+                    ratio = max(0.0, shield_hp / max(1, shield_max))
+                    r_c = int(80 + 120 * ratio)
+                    g_c = int(140 + 60 * ratio)
+                    b_c = 255
+                    alpha = int(90 + 80 * ratio)  # 90-170 range: semi-transparent
+                    # Draw arc centered around shield_angle, ±60° wide (π/3 each side)
+                    arc_half = math.pi / 3
+                    arc_start = shield_angle - arc_half
+                    arc_end = shield_angle + arc_half
+                    # Draw on a temporary SRCALPHA surface for transparency
+                    arc_surf = pygame.Surface(
+                        (arc_radius * 2, arc_radius * 2), pygame.SRCALPHA
+                    )
+                    arc_rect_local = pygame.Rect(0, 0, arc_radius * 2, arc_radius * 2)
+                    pygame.draw.arc(
+                        arc_surf,
+                        (r_c, g_c, b_c, alpha),
+                        arc_rect_local,
+                        -arc_end,
+                        -arc_start,
+                        2,
+                    )
+                    screen.blit(
+                        arc_surf, (cx - arc_radius + shake_x, cy - arc_radius + shake_y)
+                    )
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+
             # draw aura behind image if crusader is invulnerable
             if self.enemy_type == "crusader" and getattr(self, "invulnerable", False):
                 # filled translucent light-blue circle slightly larger than sprite
@@ -2651,20 +3122,30 @@ class Enemy(BaseSprite):
 
             # Flip giant/custode sprite based on movement direction + walking oscillation
             blit_image = self.image
-            if self.enemy_type in ("giant", "custode"):
+            # Cross Bearer: swap between frame 0 and frame 1 if animated frames loaded
+            if self.enemy_type == "cross_bearer":
+                frames = getattr(self, "_anim_frames", [])
+                if len(frames) >= 2:
+                    frame_idx = getattr(self, "_anim_frame", 0) % 2
+                    blit_image = frames[frame_idx]
+            elif self.enemy_type in ("giant", "custode"):
                 anim_frame = getattr(self, "_anim_frame", 0)
                 # Oscillate flip_x every half-cycle (4 frames) to simulate stride
                 stride_flip = anim_frame >= 4
                 facing_right = getattr(self, "_facing_right", True)
                 flip_x = facing_right != stride_flip  # XOR: inverts on each stride
-                flip_y = not getattr(self, "_facing_down", True)
-                if flip_x or flip_y:
+                if flip_x:
                     try:
-                        blit_image = pygame.transform.flip(self.image, flip_x, flip_y)
+                        blit_image = pygame.transform.flip(self.image, flip_x, False)
                     except (AttributeError, TypeError, ValueError, KeyError):
                         blit_image = self.image
             # Rotate pentagram asset on vertical axis with perspective compression
-            elif self.enemy_type == "pentagram":
+            elif self.enemy_type in (
+                "pentagram",
+                "pentagram_fire",
+                "pentagram_storm",
+                "pentagram_ice",
+            ):
                 try:
                     # Calculate perspective scale: cos(angle) shrinks/grows width
                     # At 0°: cos(0) = 1 (full width)
@@ -2713,11 +3194,45 @@ class Enemy(BaseSprite):
                 except (AttributeError, TypeError, ValueError, KeyError):
                     blit_image = self.image
 
+            # Elemental pentagram aura — drawn before sprite so it appears behind
+            if self.enemy_type in (
+                "pentagram_fire",
+                "pentagram_storm",
+                "pentagram_ice",
+            ):
+                try:
+                    _AURA_COLORS = {
+                        "pentagram_fire": [(255, 80, 0), (220, 40, 0)],
+                        "pentagram_storm": [(100, 40, 180), (60, 20, 120)],
+                        "pentagram_ice": [(60, 200, 220), (20, 120, 180)],
+                    }
+                    a_colors = _AURA_COLORS[self.enemy_type]
+                    cx = (
+                        int(self.x if hasattr(self, "x") else self.rect.centerx)
+                        + shake_x
+                    )
+                    cy = (
+                        int(self.y if hasattr(self, "y") else self.rect.centery)
+                        + shake_y
+                    )
+                    base_r = max(self.width, self.height) // 2 + 10
+                    # pulse: ±5px based on rotation angle
+                    pulse = int(math.sin(self._rotation_angle * 2) * 5)
+                    for i, (r_off, a_color) in enumerate(zip((0, 7), a_colors)):
+                        r = base_r + r_off + pulse
+                        alpha = 80 - i * 40  # inner 80, outer 40
+                        surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+                        pygame.draw.circle(surf, (*a_color, alpha), (r, r), r)
+                        screen.blit(surf, (cx - r, cy - r))
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+
             screen.blit(blit_image, (draw_x, draw_y))
 
             # Draw health bar with shake offset
-            bar_width = 40 if self.enemy_type == "boss_medium" else 25
-            bar_height = 4 if self.enemy_type == "boss_medium" else 3
+            _is_wave_boss = self.enemy_type in ("boss_medium", "cross_bearer")
+            bar_width = 40 if _is_wave_boss else 25
+            bar_height = 4 if _is_wave_boss else 3
             bar_x: int | Any = self.rect.centerx - bar_width // 2 + shake_x
             bar_y: int | Any = self.rect.top - 12 + shake_y
 
@@ -2733,17 +3248,45 @@ class Enemy(BaseSprite):
                 (bar_x, bar_y, bar_width * health_ratio, bar_height),
             )
 
-            # Draw shield bar (blue) below health bar when shield_hp > 0
+            # Draw Cross Bearer shield HP bar (cyan) below health bar
+            if self.enemy_type == "cross_bearer":
+                cb_sh_y = bar_y + 4
+                cb_shield_hp = getattr(self, "cb_shield_hp", 0)
+                cb_shield_max = getattr(self, "cb_shield_max_hp", 100)
+                if not getattr(self, "_shield_broken", False):
+                    cb_ratio = max(0, min(1, cb_shield_hp / max(1, cb_shield_max)))
+                    pygame.draw.rect(
+                        screen, (20, 80, 100), (bar_x, cb_sh_y, bar_width, bar_height)
+                    )
+                    pygame.draw.rect(
+                        screen,
+                        (100, 220, 255),
+                        (bar_x, cb_sh_y, bar_width * cb_ratio, bar_height),
+                    )
+                else:
+                    # Shield broken: show empty bar with dark tint
+                    pygame.draw.rect(
+                        screen, (30, 30, 50), (bar_x, cb_sh_y, bar_width, bar_height)
+                    )
+
+            # Draw shield bar below health bar when shield_hp > 0
             # Crusaders never show a shield bar, so exclude them explicitly
             if self.enemy_type != "crusader" and getattr(self, "shield_hp", 0) > 0:
                 sh_y = bar_y + 4
-                shield_ratio = max(0, min(1, self.shield_hp / max(1, self.max_health)))
-                pygame.draw.rect(
-                    screen, (20, 60, 120), (bar_x, sh_y, bar_width, bar_height)
+                shield_max = getattr(self, "shield_max_hp", self.max_health)
+                shield_ratio = max(0, min(1, self.shield_hp / max(1, shield_max)))
+                _ELEMENTAL_SHIELD_BAR = {
+                    "pentagram_fire": ((80, 20, 20), (220, 60, 60)),
+                    "pentagram_storm": ((40, 10, 80), (160, 80, 220)),
+                    "pentagram_ice": ((10, 60, 80), (80, 200, 220)),
+                }
+                sh_bg, sh_fg = _ELEMENTAL_SHIELD_BAR.get(
+                    self.enemy_type, ((20, 60, 120), (100, 150, 255))
                 )
+                pygame.draw.rect(screen, sh_bg, (bar_x, sh_y, bar_width, bar_height))
                 pygame.draw.rect(
                     screen,
-                    (100, 150, 255),
+                    sh_fg,
                     (bar_x, sh_y, bar_width * shield_ratio, bar_height),
                 )
             # draw a connecting beam if mage has recently granted shield

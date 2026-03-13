@@ -19,6 +19,11 @@ class InputHandler:
 
     def __init__(self, game: "Game") -> None:
         self.game = game
+        # GIF recording state
+        self._gif_recording = False
+        self._gif_frames: list = []
+        self._gif_frame_counter = 0
+        self._gif_start_time = 0.0
 
     def handle_events(self) -> None:
         """Process all queued pygame events (QUIT, KEYDOWN, MOUSEBUTTONDOWN, VIDEORESIZE, USEREVENT)."""
@@ -127,6 +132,14 @@ class InputHandler:
 
         if not pygame:
             return
+
+        # Screenshot works in any game state
+        if key == pygame.K_F12:
+            self._take_screenshot()
+
+        # GIF recording toggle works in any game state
+        if key == pygame.K_F11:
+            self._toggle_gif_recording()
 
         # If unlock overlay is showing, dismiss it on any confirmation key
         if getattr(self.game, "showing_unlock_overlay", False):
@@ -382,6 +395,10 @@ class InputHandler:
         try:
             # Ignore mouse wheel buttons (4/5) globally
             if button in (4, 5):
+                return
+
+            # If unlock overlay is showing, ignore all mouse clicks
+            if getattr(self.game, "showing_unlock_overlay", False):
                 return
 
             # If a pause confirmation dialog is active, allow Yes/No to be clicked
@@ -2133,3 +2150,137 @@ class InputHandler:
                 self.game.reset_run()
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
+
+    def _take_screenshot(self) -> None:
+        """Save a screenshot of the current game window to the screenshots folder."""
+        try:
+            import os
+            from datetime import datetime
+
+            import pygame
+        except (AttributeError, TypeError, ValueError, KeyError, ImportError):
+            return
+
+        try:
+            # Create screenshots directory if it doesn't exist
+            # Use absolute path relative to this file to avoid permission issues
+            base_dir = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
+            screenshots_dir = os.path.join(base_dir, "screenshots")
+            os.makedirs(screenshots_dir, exist_ok=True)
+
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = os.path.join(screenshots_dir, f"screenshot_{timestamp}.png")
+
+            # Save the window surface
+            pygame.image.save(self.game.window_surface, filename)
+            logger.info(f"Screenshot saved: {filename}")
+            print(f"[Screenshot] Salvato: {os.path.abspath(filename)}")
+        except Exception as e:
+            logger.warning(f"Failed to save screenshot: {e}")
+            print(f"[Screenshot] ERRORE: {e}")
+
+    def _toggle_gif_recording(self) -> None:
+        """Toggle GIF recording on/off."""
+        import time
+
+        if not self._gif_recording:
+            # START recording
+            self._gif_recording = True
+            self._gif_frames = []
+            self._gif_frame_counter = 0
+            self._gif_start_time = time.time()
+            self.game._gif_recording = True
+            print("[GIF] Registrazione avviata — premi F11 per fermare")
+        else:
+            # STOP recording
+            self._gif_recording = False
+            self.game._gif_recording = False
+            self._save_gif()
+
+    def _capture_gif_frame(self) -> None:
+        """Capture a frame for GIF recording."""
+        import time
+
+        from src.game_constants import (
+            DEFAULT_FPS,
+            GIF_MAX_DURATION_SECONDS,
+            GIF_RECORDING_FPS,
+            GIF_SCALE_FACTOR,
+        )
+
+        # Auto-stop after max duration
+        if time.time() - self._gif_start_time > GIF_MAX_DURATION_SECONDS:
+            self._gif_recording = False
+            self.game._gif_recording = False
+            self._save_gif()
+            return
+
+        # Capture only 1 frame every N (to reach ~15fps)
+        skip = max(1, DEFAULT_FPS // GIF_RECORDING_FPS)
+        self._gif_frame_counter += 1
+        if self._gif_frame_counter % skip != 0:
+            return
+
+        try:
+            import pygame
+            from PIL import Image
+
+            surface = self.game.window_surface
+            raw = pygame.image.tostring(surface, "RGB")
+            w, h = surface.get_size()
+            img = Image.frombytes("RGB", (w, h), raw)
+
+            # Scale to reduce file size
+            new_w = int(w * GIF_SCALE_FACTOR)
+            new_h = int(h * GIF_SCALE_FACTOR)
+            img = img.resize((new_w, new_h), Image.NEAREST)
+
+            self._gif_frames.append(img)
+        except Exception as e:
+            print(f"[GIF] Errore cattura frame: {e}")
+
+    def _save_gif(self) -> None:
+        """Save captured frames as a GIF file."""
+        if not self._gif_frames:
+            print("[GIF] Nessun frame da salvare")
+            return
+
+        try:
+            import os
+            from datetime import datetime
+
+            from src.game_constants import GIF_RECORDING_FPS
+
+            base_dir = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
+            recordings_dir = os.path.join(base_dir, "recordings")
+            os.makedirs(recordings_dir, exist_ok=True)
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = os.path.join(recordings_dir, f"clip_{timestamp}.gif")
+
+            duration_ms = int(1000 / GIF_RECORDING_FPS)  # ms per frame
+            first = self._gif_frames[0]
+            first.save(
+                filename,
+                save_all=True,
+                append_images=self._gif_frames[1:],
+                duration=duration_ms,
+                loop=0,
+                optimize=True,
+            )
+
+            n = len(self._gif_frames)
+            secs = round(n / GIF_RECORDING_FPS, 1)
+            size_mb = round(os.path.getsize(filename) / 1024 / 1024, 1)
+            print(f"[GIF] Salvato: {filename} ({n} frame, {secs}s, {size_mb} MB)")
+            logger.info(f"GIF saved: {filename}")
+            self._gif_frames = []
+        except Exception as e:
+            print(f"[GIF] Errore salvataggio: {e}")
+            logger.warning(f"Failed to save GIF: {e}")
+            self._gif_frames = []

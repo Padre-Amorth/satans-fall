@@ -10,6 +10,10 @@ from src.game_constants import (
     PURGATORY_STAGES,
     STATUE_ASSET_VERTICAL_OFFSET,
     STATUE_BASE_Y,
+    WALL_BRICK_HELL,
+    WALL_BRICK_LIMBO,
+    WALL_BRICK_PROLOGO,
+    WALL_BRICK_PURGATORY,
     WALL_THICKNESS,
 )
 from src.weapons import WEAPON_DEFS
@@ -30,6 +34,7 @@ class UIGameRenderer:
         """
         self.ui = ui_manager
         self.game: Game = ui_manager.game
+        self._wall_brick_cache: dict = {}  # cache key → (surface, min_x, min_y)
 
     # ========== GAME RENDERING METHODS ==========
 
@@ -84,6 +89,9 @@ class UIGameRenderer:
         wall_color = settings["wall_color"]
 
         is_hell_stage = getattr(self.game, "selected_stage", "") in HELL_STAGES
+        is_purgatory_stage = (
+            getattr(self.game, "selected_stage", "") in PURGATORY_STAGES
+        )
         is_prologo = getattr(self.game, "selected_stage", "") == "prologo"
         is_limbo_stage = self.game.is_limbo_stage()
         render_wall_thickness = (
@@ -125,6 +133,9 @@ class UIGameRenderer:
                 wall_color,
                 [(p[0], p[1]) for p in left_wall_all],
             )
+            self._draw_wall_bricks(
+                self.game.left_wall_points, left_wall_exterior, shake_x, shake_y
+            )
 
             if is_hell_stage:
                 try:
@@ -137,6 +148,48 @@ class UIGameRenderer:
                     )
                     pygame.draw.lines(
                         self.ui.screen, (0, 0, 0), False, outer_edge, width=4
+                    )
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+            elif is_purgatory_stage:
+                try:
+                    inner_edge = [
+                        (int(p[0]), int(p[1])) for p in self.game.left_wall_points
+                    ]
+                    outer_edge = [(int(p[0]), int(p[1])) for p in left_wall_exterior]
+                    pygame.draw.lines(
+                        self.ui.screen, (30, 30, 30), False, inner_edge, width=3
+                    )
+                    pygame.draw.lines(
+                        self.ui.screen, (30, 30, 30), False, outer_edge, width=3
+                    )
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+            elif is_prologo:
+                try:
+                    inner_edge = [
+                        (int(p[0]), int(p[1])) for p in self.game.left_wall_points
+                    ]
+                    outer_edge = [(int(p[0]), int(p[1])) for p in left_wall_exterior]
+                    pygame.draw.lines(
+                        self.ui.screen, (30, 30, 30), False, inner_edge, width=3
+                    )
+                    pygame.draw.lines(
+                        self.ui.screen, (30, 30, 30), False, outer_edge, width=3
+                    )
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+            elif is_limbo_stage:
+                try:
+                    inner_edge = [
+                        (int(p[0]), int(p[1])) for p in self.game.left_wall_points
+                    ]
+                    outer_edge = [(int(p[0]), int(p[1])) for p in left_wall_exterior]
+                    pygame.draw.lines(
+                        self.ui.screen, (30, 30, 30), False, inner_edge, width=3
+                    )
+                    pygame.draw.lines(
+                        self.ui.screen, (30, 30, 30), False, outer_edge, width=3
                     )
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
@@ -166,6 +219,9 @@ class UIGameRenderer:
                 wall_color,
                 [(p[0], p[1]) for p in right_wall_all],
             )
+            self._draw_wall_bricks(
+                self.game.right_wall_points, right_wall_exterior, shake_x, shake_y
+            )
 
             if is_hell_stage:
                 try:
@@ -181,6 +237,151 @@ class UIGameRenderer:
                     )
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
+            elif is_purgatory_stage:
+                try:
+                    inner_edge = [
+                        (int(p[0]), int(p[1])) for p in self.game.right_wall_points
+                    ]
+                    outer_edge = [(int(p[0]), int(p[1])) for p in right_wall_exterior]
+                    pygame.draw.lines(
+                        self.ui.screen, (30, 30, 30), False, inner_edge, width=3
+                    )
+                    pygame.draw.lines(
+                        self.ui.screen, (30, 30, 30), False, outer_edge, width=3
+                    )
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+            elif is_prologo:
+                try:
+                    inner_edge = [
+                        (int(p[0]), int(p[1])) for p in self.game.right_wall_points
+                    ]
+                    outer_edge = [(int(p[0]), int(p[1])) for p in right_wall_exterior]
+                    pygame.draw.lines(
+                        self.ui.screen, (30, 30, 30), False, inner_edge, width=3
+                    )
+                    pygame.draw.lines(
+                        self.ui.screen, (30, 30, 30), False, outer_edge, width=3
+                    )
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+            elif is_limbo_stage:
+                try:
+                    inner_edge = [
+                        (int(p[0]), int(p[1])) for p in self.game.right_wall_points
+                    ]
+                    outer_edge = [(int(p[0]), int(p[1])) for p in right_wall_exterior]
+                    pygame.draw.lines(
+                        self.ui.screen, (30, 30, 30), False, inner_edge, width=3
+                    )
+                    pygame.draw.lines(
+                        self.ui.screen, (30, 30, 30), False, outer_edge, width=3
+                    )
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+
+    def _draw_wall_bricks(self, inner_pts, outer_pts, shake_x=0, shake_y=0) -> None:
+        """Draw a brick/stone pattern over the wall polygon using a cached mask surface."""
+        if not inner_pts or not outer_pts:
+            return
+
+        stage = getattr(self.game, "selected_stage", "")
+
+        # Cache key: first+last wall point coords + length + stage
+        # Points never change mid-run; a new run regenerates points with different values
+        cache_key = (
+            inner_pts[0],
+            inner_pts[-1],
+            len(inner_pts),
+            outer_pts[0],
+            outer_pts[-1],
+            len(outer_pts),
+            stage,
+        )
+        cached = self._wall_brick_cache.get(cache_key)
+
+        if cached is None:
+            if stage == "prologo":
+                cfg = WALL_BRICK_PROLOGO
+            elif stage.startswith("limbo"):
+                cfg = WALL_BRICK_LIMBO
+            elif stage.startswith("purgatory"):
+                cfg = WALL_BRICK_PURGATORY
+            elif stage.startswith("hell"):
+                cfg = WALL_BRICK_HELL
+            else:
+                cfg = WALL_BRICK_PROLOGO
+
+            bw, bh = cfg["w"], cfg["h"]
+            mortar = cfg["mortar"]
+            base = cfg["base"]
+            stagger = stage.startswith("limbo") or stage.startswith("purgatory")
+
+            pygame = self.ui.pygame
+
+            # Build polygon without shake (cache is shake-independent)
+            poly = [(int(p[0]), int(p[1])) for p in inner_pts] + [
+                (int(p[0]), int(p[1])) for p in reversed(outer_pts)
+            ]
+
+            xs = [p[0] for p in poly]
+            ys = [p[1] for p in poly]
+            min_x, max_x = min(xs), max(xs)
+            min_y, max_y = min(ys), max(ys)
+            w = max(1, max_x - min_x)
+            h = max(1, max_y - min_y)
+
+            brick_surf = pygame.Surface((w, h), pygame.SRCALPHA)
+            rng = random.Random(42)
+
+            row_idx = 0
+            ly = 0
+            while ly < h:
+                row_h = bh + rng.randint(-1, 1)
+                row_h = max(3, row_h)
+                x_offset = rng.randint(0, bw) if (row_idx % 2 == 0) else 0
+                row_y_offsets = []
+                row_widths = []
+                lx = -bw + x_offset
+                while lx < w + bw:
+                    brick_w = bw + rng.randint(-2, 2)
+                    brick_w = max(4, brick_w)
+                    y_off = rng.randint(-1, 1) if stagger else 0
+                    row_y_offsets.append(y_off)
+                    row_widths.append(brick_w)
+                    lx += brick_w + 1
+                lx = -bw + x_offset
+                for brick_w, y_off in zip(row_widths, row_y_offsets):
+                    v = rng.randint(-15, 15)
+                    r = max(0, min(255, base[0] + v))
+                    g = max(0, min(255, base[1] + v))
+                    b = max(0, min(255, base[2] + v))
+                    actual_h = max(2, row_h - abs(y_off))
+                    pygame.draw.rect(
+                        brick_surf,
+                        (r, g, b, 255),
+                        (lx, ly + max(y_off, 0), brick_w, actual_h),
+                    )
+                    pygame.draw.rect(
+                        brick_surf,
+                        (mortar[0], mortar[1], mortar[2], 255),
+                        (lx, ly + max(y_off, 0), brick_w, actual_h),
+                        1,
+                    )
+                    lx += brick_w + 1
+                ly += row_h + 1
+                row_idx += 1
+
+            mask_surf = pygame.Surface((w, h), pygame.SRCALPHA)
+            local_poly = [(px - min_x, py - min_y) for px, py in poly]
+            pygame.draw.polygon(mask_surf, (255, 255, 255, 255), local_poly)
+            brick_surf.blit(mask_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+
+            cached = (brick_surf, min_x, min_y)
+            self._wall_brick_cache[cache_key] = cached
+
+        surf, min_x, min_y = cached
+        self.ui.screen.blit(surf, (min_x + shake_x, min_y + shake_y))
 
     def _draw_torches(self, shake_x=0, shake_y=0) -> None:
         pygame = self.ui.pygame
@@ -1724,6 +1925,90 @@ class UIGameRenderer:
         if not self.ui.screen:
             return
         pygame = self.ui.pygame
+        # Draw hell barriers BEFORE enemies (enemies appear in front)
+        # Barriers look like wooden fences
+        for b in getattr(self.game, "barriers", []):
+            try:
+                bx = int(b["x"]) + shake_x
+                by = int(b["y"]) + shake_y
+                bw, bh = b["w"], b["h"]
+                hp, max_hp = b.get("hp", 0), b.get("max_hp", 1)
+
+                # Try to use custom asset first, fallback to vector art
+                asset_key = "barrier_damaged.png" if hp < max_hp else "barrier_wood.png"
+                barrier_img = (
+                    self.game.assets.get(asset_key)
+                    if hasattr(self.game, "assets")
+                    else None
+                )
+
+                if barrier_img is not None:
+                    # Scale asset to barrier size and draw
+                    try:
+                        from src.assets.manager import get_image
+
+                        scaled = get_image(asset_key, (bw, bh))
+                        if scaled is not None:
+                            self.ui.screen.blit(scaled, (bx, by))
+                        else:
+                            raise ValueError("Asset could not be scaled")
+                    except Exception:
+                        # Fallback to vector art if asset loading fails
+                        barrier_img = None
+
+                if barrier_img is None:
+                    # Wooden fence colors (fallback vector art)
+                    wood_dark = (101, 67, 33)  # dark brown
+                    wood_light = (139, 90, 43)  # lighter brown
+                    wood_highlight = (184, 134, 11)  # golden brown
+
+                    # Main fence body
+                    pygame.draw.rect(self.ui.screen, wood_dark, (bx, by, bw, bh))
+
+                    # Vertical planks (3 pieces for variety)
+                    plank_width = bw // 3
+                    for i in range(3):
+                        plank_x = bx + i * plank_width
+                        # Alternate colors slightly for wooden texture
+                        color = wood_light if i % 2 == 0 else (120, 80, 40)
+                        pygame.draw.rect(
+                            self.ui.screen, color, (plank_x, by, plank_width, bh)
+                        )
+                        # Highlight edge on each plank
+                        pygame.draw.line(
+                            self.ui.screen,
+                            wood_highlight,
+                            (plank_x + 2, by),
+                            (plank_x + 2, by + bh),
+                            1,
+                        )
+
+                    # Top reinforcement bar
+                    pygame.draw.rect(self.ui.screen, (60, 40, 20), (bx, by, bw, 3))
+
+                    # Bottom reinforcement bar
+                    pygame.draw.rect(
+                        self.ui.screen, (60, 40, 20), (bx, by + bh - 3, bw, 3)
+                    )
+
+                    # Outer border for depth
+                    pygame.draw.rect(self.ui.screen, (40, 25, 10), (bx, by, bw, bh), 2)
+
+                # HP bar BELOW the barrier — only when damaged
+                hp, max_hp = b.get("hp", 0), b.get("max_hp", 1)
+                if hp < max_hp:
+                    frac = max(0.0, hp / max_hp)
+                    pygame.draw.rect(
+                        self.ui.screen, (40, 10, 10), (bx, by + bh + 3, bw, 5)
+                    )
+                    fill_col = (200, 50, 50) if frac > 0.3 else (255, 80, 0)
+                    pygame.draw.rect(
+                        self.ui.screen,
+                        fill_col,
+                        (bx, by + bh + 3, int(bw * frac), 5),
+                    )
+            except (AttributeError, TypeError, ValueError, KeyError):
+                pass
         # Draw enemies (object-based Enemy instances only)
         for enemy in self.game.enemies:
             # Delegate drawing (and particle updates/emission) to the Enemy instance

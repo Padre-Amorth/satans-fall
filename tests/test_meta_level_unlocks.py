@@ -5,6 +5,7 @@ not stage restrictions.
 """
 
 import pytest
+
 from src.weapons import WEAPON_DEFS
 
 
@@ -14,13 +15,19 @@ class TestWeaponMetaLevelUnlocks:
     def test_hellgun_immediate(self):
         """Hellgun (shotgun) should have no meta_level requirement."""
         wdef = WEAPON_DEFS.get("shotgun", {})
-        assert "required_meta_level" not in wdef, "Hellgun should be immediately available"
-        assert wdef.get("available_from") is None, "Hellgun should not have stage restriction"
+        assert (
+            "required_meta_level" not in wdef
+        ), "Hellgun should be immediately available"
+        assert (
+            wdef.get("available_from") is None
+        ), "Hellgun should not have stage restriction"
 
     def test_orbitals_immediate(self):
         """Orbitals should be immediately available."""
         wdef = WEAPON_DEFS.get("orbital", {})
-        assert "required_meta_level" not in wdef, "Orbitals should be immediately available"
+        assert (
+            "required_meta_level" not in wdef
+        ), "Orbitals should be immediately available"
         assert wdef.get("available_from") is None
 
     def test_spear_immediate(self):
@@ -39,7 +46,9 @@ class TestWeaponMetaLevelUnlocks:
         """SkullBoom should require Satan Level 3."""
         wdef = WEAPON_DEFS.get("skullboom", {})
         assert wdef.get("required_meta_level") == 3, "SkullBoom requires Satan Lv 3"
-        assert wdef.get("available_from") is None, "SkullBoom should not have stage restriction"
+        assert (
+            wdef.get("available_from") is None
+        ), "SkullBoom should not have stage restriction"
 
     def test_flies_level_6(self):
         """Flies should require Satan Level 6 (was Limbo-only)."""
@@ -112,16 +121,17 @@ class TestUpgradeMetaLevelUnlocks:
         assert self._is_boom_available(meta_level=10, stage="purgatory")
         assert self._is_boom_available(meta_level=10, stage="hell")
 
-    def test_projectile_size_stage_locked_hell_only(self):
-        """Projectile Size should be Hell-only, no Satan level requirement."""
-        # Hell: available
-        assert self._is_projectile_size_available(meta_level=1, stage="hell")
-        assert self._is_projectile_size_available(meta_level=1, stage="hell_2")
+    def test_projectile_size_level_14(self):
+        """Projectile Size should require Satan Level 14, available in all stages."""
+        # Satan Lv < 14: locked in all stages
+        assert not self._is_projectile_size_available(meta_level=1, stage="prologo")
+        assert not self._is_projectile_size_available(meta_level=13, stage="hell")
 
-        # Not Hell: locked (regardless of Satan level)
-        assert not self._is_projectile_size_available(meta_level=99, stage="prologo")
-        assert not self._is_projectile_size_available(meta_level=99, stage="limbo")
-        assert not self._is_projectile_size_available(meta_level=99, stage="purgatory")
+        # Satan Lv >= 14: available in all stages
+        assert self._is_projectile_size_available(meta_level=14, stage="prologo")
+        assert self._is_projectile_size_available(meta_level=14, stage="limbo")
+        assert self._is_projectile_size_available(meta_level=14, stage="purgatory")
+        assert self._is_projectile_size_available(meta_level=14, stage="hell")
 
     def test_tower_fire_rate_stage_locked_purgatory_plus(self):
         """Tower Fire Rate should be Purgatory+, no Satan level requirement."""
@@ -150,9 +160,8 @@ class TestUpgradeMetaLevelUnlocks:
 
     @staticmethod
     def _is_projectile_size_available(meta_level: int, stage: str) -> bool:
-        """Simulate Projectile Size availability logic (Hell-only)."""
-        hell_stages = {"hell", "hell_2", "hell_3"}
-        return stage in hell_stages  # Stage-locked, no meta_level requirement
+        """Simulate Projectile Size availability logic (Satan Level 14+)."""
+        return meta_level >= 14  # Available in all stages at Satan Lv 14+
 
     @staticmethod
     def _is_tower_fire_available(meta_level: int, stage: str) -> bool:

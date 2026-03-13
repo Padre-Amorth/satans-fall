@@ -8,21 +8,22 @@ WEAPON_DEFS: Dict[str, Dict] = {
         "name": "Hellgun",
         "description": "Fires multiple pellets in a spread pattern",
         "icon": "weapon_shotgun.png",
-        "max_level": 6,
+        "max_level": 7,
         "upgrade_descriptions": {
             1: "Lv1: Fires 4 pellets in a spread pattern",
             2: "Lv2: +1 pellet and reduced cooldown",
             3: "Lv3: +10% pellet damage",
             4: "Lv4: +1 pellet (now 6)",
             5: "Lv5: +10% pellet damage",
-            6: "Lv6: Max level — larger spread and highest damage",
+            6: "Lv6: Larger spread and high damage",
+            7: "Lv7 [FINAL FORM]: 7 pellets at peak power",
         },
     },
     "orbital": {
         "name": "Orbitals",
         "description": "Summon orbiting sentinels that auto-fire",
         "icon": "weapon_orbital.png",
-        "max_level": 6,
+        "max_level": 7,
         "upgrade_descriptions": {
             1: "Lv1: 3 orbitals that auto-fire",
             2: "Lv2: +1 orbital",
@@ -30,27 +31,29 @@ WEAPON_DEFS: Dict[str, Dict] = {
             4: "Lv4: +1 orbital",
             5: "Lv5: +10% orbital damage",
             6: "Lv6: +1 orbital",
+            7: "Lv7 [FINAL FORM]: 7 orbitals at maximum fire rate",
         },
     },
     "spear": {
         "name": "Spear",
         "description": "Pierces through multiple enemies",
         "icon": "weapon_spear.png",
-        "max_level": 6,
+        "max_level": 7,
         "upgrade_descriptions": {
             1: "Lv1: Fires piercing spears",
             2: "Lv2: +2 base damage",
             3: "Lv3: +2 base damage",
             4: "Lv4: +2 base damage",
             5: "Lv5: +2 base damage",
-            6: "Lv6: Max level",
+            6: "Lv6: +2 base damage",
+            7: "Lv7 [FINAL FORM]: Minimum cooldown — maximum pierce velocity",
         },
     },
     "Flies": {
         "name": "Flies",
         "description": "Fires homing projectiles that latch onto enemies and heal the player",
         "icon": "weapon_flies.png",
-        "max_level": 6,
+        "max_level": 7,
         "required_meta_level": 6,  # Unlocked at Satan Level 6
         "upgrade_descriptions": {
             1: "Lv1: Fires 2 homing fly projectiles that heal the player",
@@ -59,13 +62,16 @@ WEAPON_DEFS: Dict[str, Dict] = {
             4: "Lv4: +10% damage & heal",
             5: "Lv5: +1 projectile",
             6: "Lv6: +20% damage & heal",
+            7: "Lv7 [FINAL FORM]: 5 flies at peak damage and healing",
         },
     },
     "beast": {
         "name": "The number of the beast",
         "description": "Unleash demonic power with devastating attacks",
         "icon": "weapon_beast.png",
-        "max_level": 6,
+        "max_level": 7,
+        "min_damage": 22,
+        "max_damage": 50,
         "upgrade_descriptions": {
             1: "Lv1: +5% damage and increased burst rate",
             2: "Lv2: +5% damage and faster burst rate",
@@ -73,13 +79,14 @@ WEAPON_DEFS: Dict[str, Dict] = {
             4: "Lv4: +5% damage and faster burst rate",
             5: "Lv5: +5% damage and faster burst rate",
             6: "Lv6: +5% damage and maximum burst rate",
+            7: "Lv7 [FINAL FORM]: Maximum demonic power unleashed",
         },
     },
     "skullboom": {
         "name": "SkullBoom",
         "description": "Launches explosive skulls that detonate on enemy contact, dealing area damage",
         "icon": "weapon_skullboom.png",
-        "max_level": 6,
+        "max_level": 7,
         "required_meta_level": 3,  # Unlocked at Satan Level 3
         "upgrade_descriptions": {
             1: "Lv1: Launches explosive skulls",
@@ -87,14 +94,15 @@ WEAPON_DEFS: Dict[str, Dict] = {
             3: "Lv3: +10% explosion radius",
             4: "Lv4: +10% damage and reduced cooldown",
             5: "Lv5: +10% explosion radius",
-            6: "Lv6: Max level",
+            6: "Lv6: +10% damage and reduced cooldown",
+            7: "Lv7 [FINAL FORM]: Cataclysmic explosion at peak speed",
         },
     },
     "DemonStrike": {
         "name": "DemonStrike",
         "description": "A rolling bowling ball — travels vertically, pierces enemies and slows them",
         "icon": "weapon_demonstrike.png",
-        "max_level": 6,
+        "max_level": 7,
         "required_meta_level": 9,  # Unlocked at Satan Level 9
         "upgrade_descriptions": {
             1: "Lv1: Fires a piercing rolling ball that slows enemies (50% for 2s)",
@@ -102,7 +110,8 @@ WEAPON_DEFS: Dict[str, Dict] = {
             3: "Lv3: +10 base damage",
             4: "Lv4: +10 base damage",
             5: "Lv5: +10 base damage",
-            6: "Lv6: Max level",
+            6: "Lv6: +10 base damage",
+            7: "Lv7 [FINAL FORM]: Maximum impact speed and power",
         },
     },
 }
@@ -121,8 +130,8 @@ WEAPON_DEFS["shotgun"].update(
         "min_cd": 0.4,
         "base_radius": 5,
         # New configurable absolute pellet damage targets (used for linear remap)
-        "min_pellet_damage": 18,  # Lv1 target damage per pellet
-        "max_pellet_damage": 28,  # Lv6 target damage per pellet
+        "min_pellet_damage": 20,  # Lv1 target damage per pellet
+        "max_pellet_damage": 30,  # Lv7 target damage per pellet
     }
 )
 
@@ -213,17 +222,19 @@ WEAPON_DEFS["Flies"].update(
         "base_damage": 10,  # doubled from 5
         # Halved healing per your request
         "base_heal": 1,
-        # damage/heal increments now occur at levels 2,4,6 (20% total at max)
+        # damage/heal increments now occur at levels 2,4,6,7
         "damage_heal_increments": {
             2: 0.1,
             4: 0.1,
             6: 0.2,
+            7: 0.1,
         },
-        # Base projectiles still 2; extra ones at lv3 and lv5
+        # Base projectiles still 2; extra ones at lv3, lv5 and lv7
         "base_projectiles": 2,
         "projectiles_at_level": {
             3: 1,
             5: 1,
+            7: 1,
         },
     }
 )
@@ -288,7 +299,7 @@ WEAPON_DEFS["tenebrae"] = {
     "description": (
         "Arc of shadows that pierces enemies, " "losing power with each hit"
     ),
-    "max_level": 6,
+    "max_level": 7,
     "required_meta_level": 12,  # Unlocked at Satan Level 12
     "upgrade_descriptions": {
         1: "Lv1: Base damage 25, -20% per enemy hit",
@@ -297,6 +308,7 @@ WEAPON_DEFS["tenebrae"] = {
         4: "Lv4: +5 base damage, reduced cooldown",
         5: "Lv5: -2% decay per target",
         6: "Lv6: Max base damage, minimal decay and cooldown",
+        7: "Lv7 [FINAL FORM]: Maximum shadow power, near-zero decay",
     },
     # parametri usati dalle funzioni sottostanti
     "base_damage": 25,  # tarato più basso
@@ -348,6 +360,8 @@ def tenebrae_cooldown(level: int) -> float:
 
 
 def get_orbital_count(level: int) -> int:
+    if level >= 7:
+        return 7
     base = int(WEAPON_DEFS.get("orbital", {}).get("base_count", 3) or 3)
     extra = (level // 2) * int(
         WEAPON_DEFS.get("orbital", {}).get("extra_per_pair", 1) or 1

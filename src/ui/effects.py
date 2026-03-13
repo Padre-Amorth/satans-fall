@@ -15,6 +15,7 @@ from src.game_constants import (
     WEAPON_ICON_SIZE,
 )
 from src.ui.constants import _WEAPON_HUD_NAMES
+from src.weapons import WEAPON_DEFS
 
 if TYPE_CHECKING:
     from src.game.core import Game
@@ -967,7 +968,7 @@ class UIEffectsRenderer:
 
                 weapon_name = self.ui.get_text(display_name, tiny_font, text_color)
                 weapon_level = self.ui.get_text(
-                    f"{lvl}{'*' if lvl >= getattr(self.game, 'max_weapon_level', 6) else ''}",
+                    f"{lvl}{'*' if lvl >= WEAPON_DEFS.get(wid, {}).get('max_level', 7) else ''}",
                     level_font,
                     accent_color,
                 )
@@ -1645,7 +1646,7 @@ class UIEffectsRenderer:
             logger.exception("Error drawing victory screen: %s", e)
 
     def draw_unlock_overlay(self, shake_x=0, shake_y=0):
-        """Draw overlay showing newly unlocked weapons and upgrades from this run."""
+        """Draw centered popup showing newly unlocked weapons and upgrades from this run."""
         try:
             import pygame
 
@@ -1661,55 +1662,66 @@ class UIEffectsRenderer:
             )
             alpha = int(self.game.unlock_overlay_alpha)
 
-            # Sfondo semi-trasparente viola scuro
+            # Semi-transparent dark background overlay
             overlay = pygame.Surface(
                 (self.game.width, self.game.height), pygame.SRCALPHA
             )
-            overlay.fill((30, 10, 40, min(200, alpha)))
+            overlay.fill((0, 0, 0, min(120, alpha // 2)))
             self.game.screen.blit(overlay, (shake_x, shake_y))
 
+            # Centered popup box (compact size)
+            popup_w = 420
+            popup_h = 280
+            popup_x = (self.game.width - popup_w) // 2 + shake_x
+            popup_y = (self.game.height - popup_h) // 2 + shake_y
+
+            # Dark purple box background
+            box_surf = pygame.Surface((popup_w, popup_h), pygame.SRCALPHA)
+            box_surf.fill((30, 10, 40, min(240, alpha)))
+            self.game.screen.blit(box_surf, (popup_x, popup_y))
+
+            # Border
+            pygame.draw.rect(
+                self.game.screen,
+                (150, 100, 180, alpha),
+                (popup_x, popup_y, popup_w, popup_h),
+                3,
+            )
+
             cx = self.game.width // 2 + shake_x
-            y = 140 + shake_y
+            y = popup_y + 20
 
             # Titolo: SATAN LEVEL X
             level = notifications[0]["level"]
             title_surf = self.ui.get_text(
-                f"SATAN LEVEL {level}", self.ui.get_font(52), (255, 215, 0)
+                f"SATAN LEVEL {level}", self.ui.get_font(44), (255, 215, 0)
             )
             title_surf.set_alpha(alpha)
-            self.game.screen.blit(
-                title_surf, (cx - title_surf.get_width() // 2, y)
-            )
+            self.game.screen.blit(title_surf, (cx - title_surf.get_width() // 2, y))
 
-            y += 70
+            y += 50
             sub_surf = self.ui.get_text(
-                "NEW UNLOCKS", self.ui.get_font(28), (200, 160, 240)
+                "NEW UNLOCKS", self.ui.get_font(20), (200, 160, 240)
             )
             sub_surf.set_alpha(alpha)
-            self.game.screen.blit(
-                sub_surf, (cx - sub_surf.get_width() // 2, y)
-            )
+            self.game.screen.blit(sub_surf, (cx - sub_surf.get_width() // 2, y))
 
-            y += 60
+            y += 40
             for notif in notifications:
                 kind_color = (
-                    (255, 180, 50)
-                    if notif["kind"] == "WEAPON"
-                    else (100, 220, 255)
+                    (255, 180, 50) if notif["kind"] == "WEAPON" else (100, 220, 255)
                 )
-                kind_label = (
-                    "WEAPON" if notif["kind"] == "WEAPON" else "UPGRADE"
-                )
+                kind_label = "WEAPON" if notif["kind"] == "WEAPON" else "UPGRADE"
                 line = f"[{kind_label}]  {notif['name']}"
-                surf = self.ui.get_text(line, self.ui.get_font(34), kind_color)
+                surf = self.ui.get_text(line, self.ui.get_font(30), kind_color)
                 surf.set_alpha(alpha)
                 self.game.screen.blit(surf, (cx - surf.get_width() // 2, y))
-                y += 50
+                y += 45
 
             # Prompt in basso
             prompt = self.ui.get_text(
                 "PRESS ENTER TO CONTINUE",
-                self.ui.get_font(22),
+                self.ui.get_font(18),
                 (160, 160, 160),
             )
             prompt.set_alpha(alpha)
@@ -1717,7 +1729,7 @@ class UIEffectsRenderer:
                 prompt,
                 (
                     cx - prompt.get_width() // 2,
-                    self.game.height - 80 + shake_y,
+                    popup_y + popup_h - 35,
                 ),
             )
         except Exception as e:

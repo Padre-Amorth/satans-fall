@@ -1,8 +1,47 @@
 """Centralized balance and gameplay tuning parameters."""
 
-# XP progression (per-run leveling)
+# XP progression (per-run leveling) - tiered growth curve
+# Levels 1-10: 1.2 growth (standard)
+# Levels 11-15: 1.15 growth (slower)
+# Levels 16-20: 1.10 growth (even slower)
+# Levels 21+: 1.08 growth (gentler high-level grind)
 XP_BASE: int = 100
-XP_GROWTH: float = 1.2
+XP_GROWTH: float = 1.2  # Used for levels 1-10
+
+
+def calculate_xp_for_next_level(level: int) -> int:
+    """Calculate XP required to reach next level using tiered growth curve.
+
+    Args:
+        level: Current player level (1-based)
+
+    Returns:
+        XP required to reach (level + 1)
+    """
+    next_level = level + 1
+
+    if next_level <= 10:
+        # Levels 1-10: standard 1.2 growth
+        return int(XP_BASE * (1.2 ** (next_level - 1)))
+    elif next_level <= 15:
+        # Levels 11-15: 1.15 growth
+        xp_at_10 = int(XP_BASE * (1.2**9))
+        extra = next_level - 10
+        return int(xp_at_10 * (1.15**extra))
+    elif next_level <= 20:
+        # Levels 16-20: 1.10 growth
+        xp_at_10 = int(XP_BASE * (1.2**9))
+        xp_at_15 = int(xp_at_10 * (1.15**5))
+        extra = next_level - 15
+        return int(xp_at_15 * (1.10**extra))
+    else:
+        # Levels 21+: 1.08 growth
+        xp_at_10 = int(XP_BASE * (1.2**9))
+        xp_at_15 = int(xp_at_10 * (1.15**5))
+        xp_at_20 = int(xp_at_15 * (1.10**5))
+        extra = next_level - 20
+        return int(xp_at_20 * (1.08**extra))
+
 
 # Meta‑progression (separate from per-run XP)
 # Used for permanent upgrade currency. Goals grow more steeply; players no
@@ -68,6 +107,10 @@ ENEMY_BASE_SPEEDS: dict[str, float] = {
     # Crusader is extremely slow, slower than a giant
     "crusader": 30.0,
     "pentagram": 50.0,  # slow horizontal traversal tank
+    "pentagram_fire": 50.0,
+    "pentagram_storm": 50.0,
+    "pentagram_ice": 50.0,
+    "cross_bearer": 40.0,  # shield-reflecting enemy, Hell+ only
 }
 
 

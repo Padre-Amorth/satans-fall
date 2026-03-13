@@ -1502,27 +1502,28 @@ class SpawnSystem:
             pass
 
     def _spawn_pentagram(self) -> None:
-        """Spawn the one-time pentagram tank enemy that traverses the stage horizontally."""
+        """Spawn the one-time pentagram (or elemental variant) that traverses the stage horizontally."""
         self.pentagram_spawned = True
+        # Purgatory stages get elemental variants; all other stages get the base pentagram
+        _STAGE_TO_PENTAGRAM = {
+            "purgatory": "pentagram_fire",
+            "purgatory_2": "pentagram_storm",
+            "purgatory_3": "pentagram_ice",
+        }
+        stage = getattr(self.game, "selected_stage", "")
+        enemy_type = _STAGE_TO_PENTAGRAM.get(str(stage), "pentagram")
         # Choose entry side randomly
         direction: int = random.choice([-1, 1])
         half_w = 40  # half of final width (70 + 10 from global growth) / 2
         if direction == 1:
-            # Enter from left, move right
             x = float(-half_w - 10)
         else:
-            # Enter from right, move left
             x = float(self.game.width + half_w + 10)
-        # Random vertical spawn position: 100px higher than mid-screen, still randomized
         y = float(random.randint(100, 400))
-        # Pentagram: 500 base health (will get 1500 shield added in __init__)
-        health = 500.0 * getattr(self.game, "difficulty_multiplier", 1.0)
-        speed = ENEMY_BASE_SPEEDS.get("pentagram", 50.0)
-        # Create the pentagram enemy
-        enemy = Enemy(x, y, "pentagram", health, speed)
-        # Override direction after construction for correct visuals/movement
+        health = 300.0 * getattr(self.game, "difficulty_multiplier", 1.0)
+        speed = ENEMY_BASE_SPEEDS.get(enemy_type, 50.0)
+        enemy = Enemy(x, y, enemy_type, health, speed)
         enemy.direction = direction
-        # Add to game's enemy group
         if hasattr(self.game.enemies, "add"):
             self.game.enemies.add(enemy)
         else:

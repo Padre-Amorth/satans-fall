@@ -441,15 +441,16 @@ class EnemyManager:
             if getattr(self.game, "is_limbo_stage", lambda: False)():
                 self.spawn_boss("inquisitor")
             # Purgatory: alternate end-of-wave boss between medium and inquisitor
-            elif getattr(self.game, "selected_stage", "").startswith(
-                ("purgatory", "hell")
-            ):
+            elif getattr(self.game, "selected_stage", "").startswith("purgatory"):
                 # Use wave parity to alternate: odd waves -> medium, even waves -> inquisitor
                 current_wave = getattr(self.game, "wave", 0)
                 if current_wave % 2 == 1:
                     self.spawn_boss("mid")
                 else:
                     self.spawn_boss("inquisitor")
+            # Hell: Cross Bearer as the wave boss
+            elif getattr(self.game, "selected_stage", "").startswith("hell"):
+                self.spawn_boss("cross_bearer")
             elif (
                 getattr(self.game, "wave", 0) % 3 == 0
                 and getattr(self.game, "wave", 0) > 0
@@ -657,6 +658,11 @@ class EnemyManager:
             enemy_type = "boss_limbo_horde"
             health = 1000 * getattr(self.game, "difficulty_multiplier", 1.0)
             speed = ENEMY_BASE_SPEEDS.get("boss_limbo_horde", 40)
+        elif boss_type == "cross_bearer":
+            # Cross Bearer: Hell wave boss with reflective frontal shield
+            enemy_type = "cross_bearer"
+            health = 500 * getattr(self.game, "difficulty_multiplier", 1.0)
+            speed = ENEMY_BASE_SPEEDS.get("cross_bearer", 45)
 
         boss = Enemy(x, y, enemy_type, health, speed)
         # tune limbo bosses specially

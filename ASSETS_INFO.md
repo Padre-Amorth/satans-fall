@@ -7,16 +7,10 @@
   - Se non presente, il gioco userà il rendering testuale come fallback automatico
   - Implementazione: `src/ui.py` → `_load_title_image()` + `draw_main_menu()`
 
----
 
-- L'opacità e il colore sono ora configurabili tramite le costanti
-  `PURGATORY_OVERLAY_ALPHA` e `PURGATORY_OVERLAY_COLOR` in
-  `src/game_constants.py`.  Il valore predefinito è un alpha di 60 con colore
-  grigio (200,200,200), ma può essere aumentato o diminuito se si desidera un
-  effetto più marcato o più leggero.  (Non ci sono particelle laterali.)
-- Non sono necessari asset esterni: il riempimento viene creato dinamicamente.
+barrier_wood.png — barriera integra
 
-Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme geometriche predefinite!
+barrier_damaged.png — barriera danneggiata (con HP bar visibile)
 
 ## Come Usare le Immagini
 
@@ -75,6 +69,9 @@ Il gioco ora supporta l'uso di immagini personalizzate per sostituire le forme g
 - **File:** `assets/boss_small.png`
   - Dimensione: 60x60 pixel
   - Boss piccolo
+
+  - enemy_cross_bearer_01
+  - enemy_cross_bearer_02
 
 - **File:** `assets/boss_medium.png`
   - Dimensione: 80x80 pixel

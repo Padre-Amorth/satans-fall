@@ -76,6 +76,7 @@ class ScoreSystem:
                 9: [("WEAPON", "DemonStrike")],
                 10: [("UPGRADE", "BOOM!")],
                 12: [("WEAPON", "Tenebrae")],
+                14: [("UPGRADE", "Projectile Size")],
             }
             unlocks = _LEVEL_UNLOCKS.get(new_level, [])
             if unlocks:
@@ -83,9 +84,7 @@ class ScoreSystem:
                     "pending_unlock_notifications", []
                 )
                 for kind, name in unlocks:
-                    pending.append(
-                        {"level": new_level, "kind": kind, "name": name}
-                    )
+                    pending.append({"level": new_level, "kind": kind, "name": name})
 
     def award_stage_clear(self, stage: str) -> bool:
         """Award the one-time completion reward for a stage.

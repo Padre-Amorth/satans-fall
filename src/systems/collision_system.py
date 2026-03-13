@@ -839,6 +839,48 @@ class CollisionSystem:
                                 ):
                                     pass
                                 enemy.take_damage(dmg_to_apply, show_floating=False)
+                                # Apply slow effect (object-style / dict) for ICE3 hits.
+                                slow_duration = getattr(
+                                    projectile, "slow_duration", 120
+                                )
+                                slow_factor = getattr(projectile, "slow_factor", 0.5)
+                                self._apply_slow_effect(
+                                    enemy, slow_duration, slow_factor, extend=True
+                                )
+                                try:
+                                    ex, ey = g._enemy_pos(enemy)
+                                    (
+                                        final_color,
+                                        final_font,
+                                    ) = self._floating_text_style_for_projectile(
+                                        projectile, (100, 200, 255), 20
+                                    )
+                                    g.spawn_floating_text(
+                                        str(dmg_to_apply),
+                                        ex,
+                                        ey - g._enemy_radius(enemy) - 8,
+                                        color=final_color,
+                                        font_size=final_font,
+                                    )
+                                    try:
+                                        if isinstance(projectile, dict):
+                                            projectile["_was_critical"] = False
+                                        else:
+                                            setattr(projectile, "_was_critical", False)
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
+                                        pass
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
+                                    pass
                             else:
                                 self._show_immune_text(enemy)
                                 # ICE3 piercing also counts as tower hits
@@ -865,41 +907,6 @@ class CollisionSystem:
                                     KeyError,
                                 ):
                                     pass
-                            # Apply slow effect (object-style / dict) for ICE3 hits.
-                            slow_duration = getattr(projectile, "slow_duration", 120)
-                            slow_factor = getattr(projectile, "slow_factor", 0.5)
-                            self._apply_slow_effect(
-                                enemy, slow_duration, slow_factor, extend=True
-                            )
-                            try:
-                                ex, ey = g._enemy_pos(enemy)
-                                (
-                                    final_color,
-                                    final_font,
-                                ) = self._floating_text_style_for_projectile(
-                                    projectile, (100, 200, 255), 20
-                                )
-                                g.spawn_floating_text(
-                                    str(dmg_to_apply),
-                                    ex,
-                                    ey - g._enemy_radius(enemy) - 8,
-                                    color=final_color,
-                                    font_size=final_font,
-                                )
-                                try:
-                                    if isinstance(projectile, dict):
-                                        projectile["_was_critical"] = False
-                                    else:
-                                        setattr(projectile, "_was_critical", False)
-                                except (
-                                    AttributeError,
-                                    TypeError,
-                                    ValueError,
-                                    KeyError,
-                                ):
-                                    pass
-                            except (AttributeError, TypeError, ValueError, KeyError):
-                                pass
                         except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
@@ -990,7 +997,9 @@ class CollisionSystem:
                                         projectile, "_hit_ids", set()
                                     ):
                                         pass
-                                    elif self._elemental_shield_can_damage(enemy, projectile):
+                                    elif self._elemental_shield_can_damage(
+                                        enemy, projectile
+                                    ):
                                         enemy.take_damage(
                                             dmg_to_apply, show_floating=False
                                         )
@@ -1004,11 +1013,8 @@ class CollisionSystem:
                                             KeyError,
                                         ):
                                             pass
-                                    else:
-                                        self._show_immune_text(enemy)
 
-                                    # Apply slow effect (object or dict) for explosion-area
-                                    if self._elemental_shield_can_damage(enemy, projectile):
+                                        # Apply slow effect (object or dict) for explosion-area
                                         slow_duration = getattr(
                                             projectile, "slow_duration", 120
                                         )
@@ -1016,28 +1022,38 @@ class CollisionSystem:
                                             projectile, "slow_factor", 0.5
                                         )
                                         self._apply_slow_effect(
-                                            enemy, slow_duration, slow_factor, extend=True
+                                            enemy,
+                                            slow_duration,
+                                            slow_factor,
+                                            extend=True,
                                         )
-                                    else:
-                                        self._show_immune_text(enemy)
 
-                                    try:
-                                        ex, ey = g._enemy_pos(enemy)
-                                        (
-                                            final_color,
-                                            final_font,
-                                        ) = self._floating_text_style_for_projectile(
-                                            projectile, (100, 200, 255), 20
-                                        )
-                                        g.spawn_floating_text(
-                                            str(dmg_to_apply),
-                                            ex,
-                                            ey - g._enemy_radius(enemy) - 8,
-                                            color=final_color,
-                                            font_size=final_font,
-                                        )
                                         try:
-                                            setattr(projectile, "_was_critical", False)
+                                            ex, ey = g._enemy_pos(enemy)
+                                            (
+                                                final_color,
+                                                final_font,
+                                            ) = self._floating_text_style_for_projectile(
+                                                projectile, (100, 200, 255), 20
+                                            )
+                                            g.spawn_floating_text(
+                                                str(dmg_to_apply),
+                                                ex,
+                                                ey - g._enemy_radius(enemy) - 8,
+                                                color=final_color,
+                                                font_size=final_font,
+                                            )
+                                            try:
+                                                setattr(
+                                                    projectile, "_was_critical", False
+                                                )
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
+                                                pass
                                         except (
                                             AttributeError,
                                             TypeError,
@@ -1045,13 +1061,8 @@ class CollisionSystem:
                                             KeyError,
                                         ):
                                             pass
-                                    except (
-                                        AttributeError,
-                                        TypeError,
-                                        ValueError,
-                                        KeyError,
-                                    ):
-                                        pass
+                                    else:
+                                        self._show_immune_text(enemy)
                                 except (
                                     AttributeError,
                                     TypeError,
@@ -1129,7 +1140,9 @@ class CollisionSystem:
                                         projectile, "hit_enemy_ids", set()
                                     ):
                                         pass
-                                    elif self._elemental_shield_can_damage(enemy, projectile):
+                                    elif self._elemental_shield_can_damage(
+                                        enemy, projectile
+                                    ):
                                         enemy.take_damage(
                                             dmg_to_apply, show_floating=False
                                         )
@@ -1143,11 +1156,8 @@ class CollisionSystem:
                                             KeyError,
                                         ):
                                             pass
-                                    else:
-                                        self._show_immune_text(enemy)
 
-                                    # Apply slow effect
-                                    if self._elemental_shield_can_damage(enemy, projectile):
+                                        # Apply slow effect
                                         slow_duration = getattr(
                                             projectile, "slow_duration", 120
                                         )
@@ -1155,27 +1165,37 @@ class CollisionSystem:
                                             projectile, "slow_factor", 0.5
                                         )
                                         self._apply_slow_effect(
-                                            enemy, slow_duration, slow_factor, extend=True
-                                        )
-                                    else:
-                                        self._show_immune_text(enemy)
-                                    try:
-                                        ex, ey = g._enemy_pos(enemy)
-                                        (
-                                            final_color,
-                                            final_font,
-                                        ) = self._floating_text_style_for_projectile(
-                                            projectile, (100, 200, 255), 20
-                                        )
-                                        g.spawn_floating_text(
-                                            str(dmg_to_apply),
-                                            ex,
-                                            ey - g._enemy_radius(enemy) - 8,
-                                            color=final_color,
-                                            font_size=final_font,
+                                            enemy,
+                                            slow_duration,
+                                            slow_factor,
+                                            extend=True,
                                         )
                                         try:
-                                            setattr(projectile, "_was_critical", False)
+                                            ex, ey = g._enemy_pos(enemy)
+                                            (
+                                                final_color,
+                                                final_font,
+                                            ) = self._floating_text_style_for_projectile(
+                                                projectile, (100, 200, 255), 20
+                                            )
+                                            g.spawn_floating_text(
+                                                str(dmg_to_apply),
+                                                ex,
+                                                ey - g._enemy_radius(enemy) - 8,
+                                                color=final_color,
+                                                font_size=final_font,
+                                            )
+                                            try:
+                                                setattr(
+                                                    projectile, "_was_critical", False
+                                                )
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
+                                                pass
                                         except (
                                             AttributeError,
                                             TypeError,
@@ -1183,13 +1203,8 @@ class CollisionSystem:
                                             KeyError,
                                         ):
                                             pass
-                                    except (
-                                        AttributeError,
-                                        TypeError,
-                                        ValueError,
-                                        KeyError,
-                                    ):
-                                        pass
+                                    else:
+                                        self._show_immune_text(enemy)
                                 except (
                                     AttributeError,
                                     TypeError,
@@ -1234,44 +1249,51 @@ class CollisionSystem:
                                 primary.take_damage(dmg_to_apply, show_floating=False)
                                 try:
                                     self._maybe_charge_tower(projectile)
-                                except (AttributeError, TypeError, ValueError, KeyError):
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                             else:
                                 primary["health"] = max(
                                     0, primary.get("health", 0) - dmg_to_apply
                                 )
+
+                            # Apply slow to the primary target (use helper to handle dict/object)
+                            try:
+                                slow_duration = getattr(
+                                    projectile, "slow_duration", 120
+                                )
+                                slow_factor = getattr(projectile, "slow_factor", 0.5)
+                                # extend=True because max/min semantics were previously used
+                                self._apply_slow_effect(
+                                    primary, slow_duration, slow_factor, extend=True
+                                )
+                            except (AttributeError, TypeError, ValueError, KeyError):
+                                pass
+
+                            # Floating text
+                            try:
+                                ex, ey = g._enemy_pos(primary)
+                                (
+                                    final_color,
+                                    final_font,
+                                ) = self._floating_text_style_for_projectile(
+                                    projectile, (100, 200, 255), 20
+                                )
+                                g.spawn_floating_text(
+                                    str(dmg_to_apply),
+                                    ex,
+                                    ey - g._enemy_radius(primary) - 8,
+                                    color=final_color,
+                                    font_size=final_font,
+                                )
+                            except (AttributeError, TypeError, ValueError, KeyError):
+                                pass
                         else:
                             self._show_immune_text(primary)
-                    except (AttributeError, TypeError, ValueError, KeyError):
-                        pass
-
-                    # Apply slow to the primary target (use helper to handle dict/object)
-                    try:
-                        slow_duration = getattr(projectile, "slow_duration", 120)
-                        slow_factor = getattr(projectile, "slow_factor", 0.5)
-                        # extend=True because max/min semantics were previously used
-                        self._apply_slow_effect(
-                            primary, slow_duration, slow_factor, extend=True
-                        )
-                    except (AttributeError, TypeError, ValueError, KeyError):
-                        pass
-
-                    # Floating text
-                    try:
-                        ex, ey = g._enemy_pos(primary)
-                        (
-                            final_color,
-                            final_font,
-                        ) = self._floating_text_style_for_projectile(
-                            projectile, (100, 200, 255), 20
-                        )
-                        g.spawn_floating_text(
-                            str(dmg_to_apply),
-                            ex,
-                            ey - g._enemy_radius(primary) - 8,
-                            color=final_color,
-                            font_size=final_font,
-                        )
                     except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
@@ -1381,6 +1403,8 @@ class CollisionSystem:
                         try:
                             if self._elemental_shield_can_damage(enemy, projectile):
                                 enemy.take_damage(dmg_to_apply, show_floating=False)
+                            else:
+                                self._show_immune_text(enemy)
                         except (AttributeError, TypeError, ValueError, KeyError):
                             # Fallback: manually apply damage only if immunity check passed
                             if self._elemental_shield_can_damage(enemy, projectile):
@@ -1395,6 +1419,8 @@ class CollisionSystem:
                                     KeyError,
                                 ):
                                     pass
+                            else:
+                                self._show_immune_text(enemy)
 
                     # Fallback when .take_damage isn't available: adjust attribute
                     if not hasattr(enemy, "take_damage"):
@@ -1403,61 +1429,141 @@ class CollisionSystem:
                                 enemy.health = max(
                                     0, getattr(enemy, "health", 0) - int(dmg_to_apply)
                                 )
-                        except (AttributeError, TypeError, ValueError, KeyError):
-                            pass
-                    try:
-                        ex, ey = g._enemy_pos(enemy)
-                        try:
-                            base = getattr(projectile, "damage", 0)
-                            is_player_proj = (
-                                not getattr(projectile, "is_enemy_projectile", False)
-                            ) and (getattr(projectile, "source", None) != "statue")
-                            color = (
-                                (255, 200, 0)
-                                if (
-                                    g.permanent_stats.get("fire_3", 0)
-                                    and is_player_proj
-                                    and dmg_to_apply > base
-                                )
-                                else (255, 255, 255)
-                            )
-                        except (AttributeError, TypeError, ValueError, KeyError):
-                            color = (255, 255, 255)
-                        (
-                            final_color,
-                            final_font,
-                        ) = self._floating_text_style_for_projectile(
-                            projectile, color, 20
-                        )
-                        g.spawn_floating_text(
-                            str(int(dmg_to_apply)),
-                            ex,
-                            ey - g._enemy_radius(enemy) - 8,
-                            color=final_color,
-                            font_size=final_font,
-                        )
-                        try:
-                            if isinstance(projectile, dict):
-                                projectile["_was_critical"] = False
+                                try:
+                                    ex, ey = g._enemy_pos(enemy)
+                                    try:
+                                        base = getattr(projectile, "damage", 0)
+                                        is_player_proj = (
+                                            not getattr(
+                                                projectile, "is_enemy_projectile", False
+                                            )
+                                        ) and (
+                                            getattr(projectile, "source", None)
+                                            != "statue"
+                                        )
+                                        color = (
+                                            (255, 200, 0)
+                                            if (
+                                                g.permanent_stats.get("fire_3", 0)
+                                                and is_player_proj
+                                                and dmg_to_apply > base
+                                            )
+                                            else (255, 255, 255)
+                                        )
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
+                                        color = (255, 255, 255)
+                                    (
+                                        final_color,
+                                        final_font,
+                                    ) = self._floating_text_style_for_projectile(
+                                        projectile, color, 20
+                                    )
+                                    g.spawn_floating_text(
+                                        str(int(dmg_to_apply)),
+                                        ex,
+                                        ey - g._enemy_radius(enemy) - 8,
+                                        color=final_color,
+                                        font_size=final_font,
+                                    )
+                                    try:
+                                        if isinstance(projectile, dict):
+                                            projectile["_was_critical"] = False
+                                        else:
+                                            setattr(projectile, "_was_critical", False)
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
+                                        pass
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
+                                    pass
                             else:
-                                setattr(projectile, "_was_critical", False)
+                                self._show_immune_text(enemy)
                         except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-                    except (AttributeError, TypeError, ValueError, KeyError):
-                        pass
+                    else:
+                        # Only show floating text if damage was applied
+                        if self._elemental_shield_can_damage(enemy, projectile):
+                            try:
+                                ex, ey = g._enemy_pos(enemy)
+                                try:
+                                    base = getattr(projectile, "damage", 0)
+                                    is_player_proj = (
+                                        not getattr(
+                                            projectile, "is_enemy_projectile", False
+                                        )
+                                    ) and (
+                                        getattr(projectile, "source", None) != "statue"
+                                    )
+                                    color = (
+                                        (255, 200, 0)
+                                        if (
+                                            g.permanent_stats.get("fire_3", 0)
+                                            and is_player_proj
+                                            and dmg_to_apply > base
+                                        )
+                                        else (255, 255, 255)
+                                    )
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
+                                    color = (255, 255, 255)
+                                (
+                                    final_color,
+                                    final_font,
+                                ) = self._floating_text_style_for_projectile(
+                                    projectile, color, 20
+                                )
+                                g.spawn_floating_text(
+                                    str(int(dmg_to_apply)),
+                                    ex,
+                                    ey - g._enemy_radius(enemy) - 8,
+                                    color=final_color,
+                                    font_size=final_font,
+                                )
+                                try:
+                                    if isinstance(projectile, dict):
+                                        projectile["_was_critical"] = False
+                                    else:
+                                        setattr(projectile, "_was_critical", False)
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
+                                    pass
+                            except (AttributeError, TypeError, ValueError, KeyError):
+                                pass
 
-                    # Apply drain effect (secondary periodic damage/heal)
-                    if (
-                        not hasattr(enemy, "drain_timer")
-                        or getattr(enemy, "drain_timer", 0) <= 0
-                    ):
-                        try:
-                            enemy.drain_timer = 4 * 60  # 4 seconds
-                            enemy.drain_damage = projectile.damage
-                            enemy.drain_heal = projectile.heal_amount
-                            enemy.drain_source = projectile  # To track
-                        except (AttributeError, TypeError, ValueError, KeyError):
-                            pass
+                    # Apply drain effect (secondary periodic damage/heal) only if shield can be damaged
+                    if self._elemental_shield_can_damage(enemy, projectile):
+                        if (
+                            not hasattr(enemy, "drain_timer")
+                            or getattr(enemy, "drain_timer", 0) <= 0
+                        ):
+                            try:
+                                enemy.drain_timer = 4 * 60  # 4 seconds
+                                enemy.drain_damage = projectile.damage
+                                enemy.drain_heal = projectile.heal_amount
+                                enemy.drain_source = projectile  # To track
+                            except (AttributeError, TypeError, ValueError, KeyError):
+                                pass
 
                     # Record this hit so the same projectile won't process the same enemy again
                     try:
@@ -1571,53 +1677,64 @@ class CollisionSystem:
                                     enemy, projectile
                                 ):
                                     enemy.take_damage(dmg_to_apply, show_floating=False)
-                                try:
-                                    ex, ey = g._enemy_pos(enemy)
-                                    # Highlight numeric damage yellow if FIRE tier-3 bonus applied
                                     try:
-                                        base = getattr(projectile, "damage", 0)
-                                        is_player_proj = (
-                                            not getattr(
-                                                projectile, "is_enemy_projectile", False
+                                        ex, ey = g._enemy_pos(enemy)
+                                        # Highlight numeric damage yellow if FIRE tier-3 bonus applied
+                                        try:
+                                            base = getattr(projectile, "damage", 0)
+                                            is_player_proj = (
+                                                not getattr(
+                                                    projectile,
+                                                    "is_enemy_projectile",
+                                                    False,
+                                                )
+                                            ) and (
+                                                getattr(projectile, "source", None)
+                                                != "statue"
                                             )
-                                        ) and (
-                                            getattr(projectile, "source", None)
-                                            != "statue"
-                                        )
-                                        color = (
-                                            (255, 200, 0)
-                                            if (
-                                                g.permanent_stats.get("fire_3", 0)
-                                                and is_player_proj
-                                                and dmg_to_apply > base
+                                            color = (
+                                                (255, 200, 0)
+                                                if (
+                                                    g.permanent_stats.get("fire_3", 0)
+                                                    and is_player_proj
+                                                    and dmg_to_apply > base
+                                                )
+                                                else (255, 255, 255)
                                             )
-                                            else (255, 255, 255)
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
+                                            color = (255, 255, 255)
+                                        (
+                                            final_color,
+                                            final_font,
+                                        ) = self._floating_text_style_for_projectile(
+                                            projectile, color, 20
                                         )
-                                    except (
-                                        AttributeError,
-                                        TypeError,
-                                        ValueError,
-                                        KeyError,
-                                    ):
-                                        color = (255, 255, 255)
-                                    (
-                                        final_color,
-                                        final_font,
-                                    ) = self._floating_text_style_for_projectile(
-                                        projectile, color, 20
-                                    )
-                                    g.spawn_floating_text(
-                                        str(dmg_to_apply),
-                                        ex,
-                                        ey - g._enemy_radius(enemy) - 8,
-                                        color=final_color,
-                                        font_size=final_font,
-                                    )
-                                    try:
-                                        if isinstance(projectile, dict):
-                                            projectile["_was_critical"] = False
-                                        else:
-                                            setattr(projectile, "_was_critical", False)
+                                        g.spawn_floating_text(
+                                            str(dmg_to_apply),
+                                            ex,
+                                            ey - g._enemy_radius(enemy) - 8,
+                                            color=final_color,
+                                            font_size=final_font,
+                                        )
+                                        try:
+                                            if isinstance(projectile, dict):
+                                                projectile["_was_critical"] = False
+                                            else:
+                                                setattr(
+                                                    projectile, "_was_critical", False
+                                                )
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
+                                            pass
                                     except (
                                         AttributeError,
                                         TypeError,
@@ -1625,13 +1742,8 @@ class CollisionSystem:
                                         KeyError,
                                     ):
                                         pass
-                                except (
-                                    AttributeError,
-                                    TypeError,
-                                    ValueError,
-                                    KeyError,
-                                ):
-                                    pass
+                                else:
+                                    self._show_immune_text(enemy)
                             except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
 
@@ -1696,7 +1808,12 @@ class CollisionSystem:
                                 enemy.take_damage(dmg_to_apply, show_floating=False)
                                 try:
                                     self._maybe_charge_tower(projectile)
-                                except (AttributeError, TypeError, ValueError, KeyError):
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                                 try:
                                     ex, ey = g._enemy_pos(enemy)
@@ -1710,7 +1827,10 @@ class CollisionSystem:
                                             not getattr(
                                                 projectile, "is_enemy_projectile", False
                                             )
-                                        ) and (getattr(projectile, "source", None) != "statue")
+                                        ) and (
+                                            getattr(projectile, "source", None)
+                                            != "statue"
+                                        )
                                         color = (
                                             (255, 200, 0)
                                             if (
@@ -1720,7 +1840,12 @@ class CollisionSystem:
                                             )
                                             else (255, 255, 255)
                                         )
-                                    except (AttributeError, TypeError, ValueError, KeyError):
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         color = (255, 255, 255)
                                     try:
                                         ex, ey = g._enemy_pos(enemy)
@@ -1751,7 +1876,9 @@ class CollisionSystem:
                                             if isinstance(projectile, dict):
                                                 projectile["_was_critical"] = False
                                             else:
-                                                setattr(projectile, "_was_critical", False)
+                                                setattr(
+                                                    projectile, "_was_critical", False
+                                                )
                                         except (
                                             AttributeError,
                                             TypeError,
@@ -1759,9 +1886,19 @@ class CollisionSystem:
                                             KeyError,
                                         ):
                                             pass
-                                    except (AttributeError, TypeError, ValueError, KeyError):
+                                    except (
+                                        AttributeError,
+                                        TypeError,
+                                        ValueError,
+                                        KeyError,
+                                    ):
                                         pass
-                                except (AttributeError, TypeError, ValueError, KeyError):
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                             else:
                                 self._show_immune_text(enemy)
@@ -1812,29 +1949,31 @@ class CollisionSystem:
                                                 targ.take_damage(
                                                     dmg_chain, show_floating=False
                                                 )
-                                            # show damage number using computed value
-                                            try:
-                                                ex, ey = g._enemy_pos(targ)
-                                                (
-                                                    final_color,
-                                                    final_font,
-                                                ) = self._floating_text_style_for_projectile(
-                                                    projectile, (255, 255, 255), 20
-                                                )
-                                                g.spawn_floating_text(
-                                                    str(int(dmg_chain)),
-                                                    ex,
-                                                    ey - g._enemy_radius(targ) - 8,
-                                                    color=final_color,
-                                                    font_size=final_font,
-                                                )
-                                            except (
-                                                AttributeError,
-                                                TypeError,
-                                                ValueError,
-                                                KeyError,
-                                            ):
-                                                pass
+                                                # show damage number using computed value
+                                                try:
+                                                    ex, ey = g._enemy_pos(targ)
+                                                    (
+                                                        final_color,
+                                                        final_font,
+                                                    ) = self._floating_text_style_for_projectile(
+                                                        projectile, (255, 255, 255), 20
+                                                    )
+                                                    g.spawn_floating_text(
+                                                        str(int(dmg_chain)),
+                                                        ex,
+                                                        ey - g._enemy_radius(targ) - 8,
+                                                        color=final_color,
+                                                        font_size=final_font,
+                                                    )
+                                                except (
+                                                    AttributeError,
+                                                    TypeError,
+                                                    ValueError,
+                                                    KeyError,
+                                                ):
+                                                    pass
+                                            else:
+                                                self._show_immune_text(targ)
                                             try:
                                                 self._maybe_charge_tower(projectile)
                                             except (
@@ -2939,9 +3078,13 @@ class CollisionSystem:
                                 if not hasattr(enemy, "ice_particles"):
                                     enemy.ice_particles = []
                                 ex, ey = g._enemy_pos(enemy)
-                                for _ in range(10):  # More ice shards for better visibility
+                                for _ in range(
+                                    10
+                                ):  # More ice shards for better visibility
                                     vx = random.uniform(-60, 60)
-                                    vy = random.uniform(-40, 20)  # Some go up, some down
+                                    vy = random.uniform(
+                                        -40, 20
+                                    )  # Some go up, some down
                                     enemy.ice_particles.append(
                                         IceParticle(
                                             ex,
@@ -3348,8 +3491,8 @@ class CollisionSystem:
                             if self._elemental_shield_can_damage(enemy, projectile):
                                 if (
                                     not hasattr(enemy, "burn_timer")
-                                or getattr(enemy, "burn_timer", 0) <= 0
-                            ):
+                                    or getattr(enemy, "burn_timer", 0) <= 0
+                                ):
                                     enemy.burn_timer = burn_duration
                                     enemy.burn_damage_per_second = burn_dps
                                     # Counter for per-second ticks
@@ -3786,7 +3929,12 @@ class CollisionSystem:
                                         boss.burn_propagate_dps = burn_dps
                                         boss.burn_propagate_duration = burn_duration
                                         boss.burn_propagate_hops = 2
-                                except (AttributeError, TypeError, ValueError, KeyError):
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
                         else:
                             self._show_immune_text(boss)

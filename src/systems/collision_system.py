@@ -1694,75 +1694,77 @@ class CollisionSystem:
                         if not _cross_bearer_reflected:
                             if self._elemental_shield_can_damage(enemy, projectile):
                                 enemy.take_damage(dmg_to_apply, show_floating=False)
-                        try:
-                            self._maybe_charge_tower(projectile)
-                        except (AttributeError, TypeError, ValueError, KeyError):
-                            pass
-                        try:
-                            ex, ey = g._enemy_pos(enemy)
-                            try:
-                                base = (
-                                    projectile.get("damage", 0)
-                                    if isinstance(projectile, dict)
-                                    else getattr(projectile, "damage", 0)
-                                )
-                                is_player_proj = (
-                                    not getattr(
-                                        projectile, "is_enemy_projectile", False
-                                    )
-                                ) and (getattr(projectile, "source", None) != "statue")
-                                color = (
-                                    (255, 200, 0)
-                                    if (
-                                        g.permanent_stats.get("fire_3", 0)
-                                        and is_player_proj
-                                        and dmg_to_apply > base
-                                    )
-                                    else (255, 255, 255)
-                                )
-                            except (AttributeError, TypeError, ValueError, KeyError):
-                                color = (255, 255, 255)
-                            try:
-                                ex, ey = g._enemy_pos(enemy)
-                                (
-                                    final_color,
-                                    final_font,
-                                ) = self._floating_text_style_for_projectile(
-                                    projectile, color, 20
-                                )
                                 try:
-                                    # display the actual damage applied (including crit bonus)
-                                    display_text = str(dmg_to_apply)
-                                except (
-                                    AttributeError,
-                                    TypeError,
-                                    ValueError,
-                                    KeyError,
-                                ):
-                                    display_text = str(dmg_to_apply)
-                                g.spawn_floating_text(
-                                    display_text,
-                                    ex,
-                                    ey - g._enemy_radius(enemy) - 8,
-                                    color=final_color,
-                                    font_size=final_font,
-                                )
-                                try:
-                                    if isinstance(projectile, dict):
-                                        projectile["_was_critical"] = False
-                                    else:
-                                        setattr(projectile, "_was_critical", False)
-                                except (
-                                    AttributeError,
-                                    TypeError,
-                                    ValueError,
-                                    KeyError,
-                                ):
+                                    self._maybe_charge_tower(projectile)
+                                except (AttributeError, TypeError, ValueError, KeyError):
                                     pass
-                            except (AttributeError, TypeError, ValueError, KeyError):
-                                pass
-                        except (AttributeError, TypeError, ValueError, KeyError):
-                            pass
+                                try:
+                                    ex, ey = g._enemy_pos(enemy)
+                                    try:
+                                        base = (
+                                            projectile.get("damage", 0)
+                                            if isinstance(projectile, dict)
+                                            else getattr(projectile, "damage", 0)
+                                        )
+                                        is_player_proj = (
+                                            not getattr(
+                                                projectile, "is_enemy_projectile", False
+                                            )
+                                        ) and (getattr(projectile, "source", None) != "statue")
+                                        color = (
+                                            (255, 200, 0)
+                                            if (
+                                                g.permanent_stats.get("fire_3", 0)
+                                                and is_player_proj
+                                                and dmg_to_apply > base
+                                            )
+                                            else (255, 255, 255)
+                                        )
+                                    except (AttributeError, TypeError, ValueError, KeyError):
+                                        color = (255, 255, 255)
+                                    try:
+                                        ex, ey = g._enemy_pos(enemy)
+                                        (
+                                            final_color,
+                                            final_font,
+                                        ) = self._floating_text_style_for_projectile(
+                                            projectile, color, 20
+                                        )
+                                        try:
+                                            # display the actual damage applied (including crit bonus)
+                                            display_text = str(dmg_to_apply)
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
+                                            display_text = str(dmg_to_apply)
+                                        g.spawn_floating_text(
+                                            display_text,
+                                            ex,
+                                            ey - g._enemy_radius(enemy) - 8,
+                                            color=final_color,
+                                            font_size=final_font,
+                                        )
+                                        try:
+                                            if isinstance(projectile, dict):
+                                                projectile["_was_critical"] = False
+                                            else:
+                                                setattr(projectile, "_was_critical", False)
+                                        except (
+                                            AttributeError,
+                                            TypeError,
+                                            ValueError,
+                                            KeyError,
+                                        ):
+                                            pass
+                                    except (AttributeError, TypeError, ValueError, KeyError):
+                                        pass
+                                except (AttributeError, TypeError, ValueError, KeyError):
+                                    pass
+                            else:
+                                self._show_immune_text(enemy)
                         # Storm-statue projectiles should be removed on first contact (apply chain immediately)
                         if getattr(projectile, "appearance", None) == "storm_statue":
                             # Apply chain lightning to nearby enemies (primary already hit)

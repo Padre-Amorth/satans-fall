@@ -15,8 +15,8 @@ def test_skullboom_weapon_definition():
     assert "skullboom" in WEAPON_DEFS
     weapon = WEAPON_DEFS["skullboom"]
     assert weapon["name"] == "SkullBoom"
-    assert weapon["max_level"] == 6
-    assert len(weapon["upgrade_descriptions"]) == 6
+    assert weapon["max_level"] == 7
+    assert len(weapon["upgrade_descriptions"]) == 7
 
 
 def test_skullboom_cooldown():

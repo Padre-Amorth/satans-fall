@@ -320,7 +320,7 @@ WEAPON_DEFS["tenebrae"] = {
     # less cooldown benefit as requested
     "cd_reduction_per_level": 0.15,
     "min_cd": 0.4,
-    "speed": 400,  # relativamente lento
+    "speed": 350,  # relativamente lento
 }
 
 

@@ -54,6 +54,7 @@ from src.game_constants import (
     HELL_BARRIER_Y_MIN,
     HELL_STAGES,
     LIMBO_LAMP_OFFSET_LEFT,
+    LIMBO_LAMP_OFFSET_LEFT_TOP,
     LIMBO_LAMP_OFFSET_RIGHT,
     LIMBO_LAMP_SIZE,
     LIMBO_LAMP_SPACING,
@@ -1557,7 +1558,11 @@ class Game:
 
         # Skip first (top, cut off) and last 2 (bottom), take 4 from middle
         if len(left_candidates) > 3:
-            self.limbo_lamps.extend(left_candidates[1:5])  # indices 1,2,3,4
+            selected_left = left_candidates[1:5]  # indices 1,2,3,4
+            # Adjust top 2 left lamps closer to wall
+            for i in range(min(2, len(selected_left))):
+                selected_left[i]["x"] -= (LIMBO_LAMP_OFFSET_LEFT - LIMBO_LAMP_OFFSET_LEFT_TOP)
+            self.limbo_lamps.extend(selected_left)
         if len(right_candidates) > 3:
             self.limbo_lamps.extend(right_candidates[1:5])  # indices 1,2,3,4
 

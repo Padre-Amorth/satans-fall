@@ -1529,25 +1529,32 @@ class Game:
         self.limbo_lamps = []
         spacing = LIMBO_LAMP_SPACING  # 120 pixels between lamps
 
-        # Left wall lamps - place every spacing pixels along wall height
+        # Collect candidates first, then filter to get 4 lamps per side
+        left_candidates = []
         if self.left_wall_points:
             last_y = -999
             for point in self.left_wall_points:
                 if point[1] - last_y >= spacing:
-                    lamp_x = point[0] - LIMBO_LAMP_OFFSET
+                    lamp_x = point[0] + LIMBO_LAMP_OFFSET  # Inside wall (positive offset)
                     lamp_y = point[1]  # Top-left corner for blit
-                    self.limbo_lamps.append({"x": lamp_x, "y": lamp_y, "side": "left"})
+                    left_candidates.append({"x": lamp_x, "y": lamp_y, "side": "left"})
                     last_y = point[1]
 
-        # Right wall lamps - place every spacing pixels along wall height
+        right_candidates = []
         if self.right_wall_points:
             last_y = -999
             for point in self.right_wall_points:
                 if point[1] - last_y >= spacing:
-                    lamp_x = point[0] + LIMBO_LAMP_OFFSET
+                    lamp_x = point[0] - LIMBO_LAMP_OFFSET  # Inside wall (negative offset)
                     lamp_y = point[1]  # Top-left corner for blit
-                    self.limbo_lamps.append({"x": lamp_x, "y": lamp_y, "side": "right"})
+                    right_candidates.append({"x": lamp_x, "y": lamp_y, "side": "right"})
                     last_y = point[1]
+
+        # Skip first (top, cut off) and last 2 (bottom), take 4 from middle
+        if len(left_candidates) > 3:
+            self.limbo_lamps.extend(left_candidates[1:5])  # indices 1,2,3,4
+        if len(right_candidates) > 3:
+            self.limbo_lamps.extend(right_candidates[1:5])  # indices 1,2,3,4
 
         logger.info("Generated %d limbo lamps for stage %s", len(self.limbo_lamps), self.selected_stage)
 

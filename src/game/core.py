@@ -53,9 +53,7 @@ from src.game_constants import (
     HELL_BARRIER_Y_MAX,
     HELL_BARRIER_Y_MIN,
     HELL_STAGES,
-    LIMBO_LAMP_OFFSET_LEFT,
-    LIMBO_LAMP_OFFSET_RIGHT_TOP,
-    LIMBO_LAMP_OFFSET_RIGHT_BOTTOM,
+    LIMBO_LAMP_OFFSET,
     LIMBO_LAMP_SIZE,
     LIMBO_LAMP_SPACING,
     LIMBO_STAGES,
@@ -1538,7 +1536,7 @@ class Game:
             flip = False
             for point in self.left_wall_points:
                 if point[1] - last_y >= spacing:
-                    lamp_x = point[0] + LIMBO_LAMP_OFFSET_LEFT  # Inside wall (positive offset)
+                    lamp_x = point[0] + LIMBO_LAMP_OFFSET  # Inside wall (positive offset)
                     lamp_y = point[1]  # Top-left corner for blit
                     left_candidates.append({"x": lamp_x, "y": lamp_y, "side": "left", "flip": flip})
                     flip = not flip  # Alternate flip
@@ -1550,9 +1548,9 @@ class Game:
             flip = False
             for point in self.right_wall_points:
                 if point[1] - last_y >= spacing:
-                    lamp_x = point[0]  # Will be adjusted based on position
+                    lamp_x = point[0] - LIMBO_LAMP_OFFSET  # Inside wall (negative offset, symmetric to left)
                     lamp_y = point[1]  # Top-left corner for blit
-                    right_candidates.append({"x": lamp_x, "y": lamp_y, "side": "right", "flip": flip, "wall_x": point[0]})
+                    right_candidates.append({"x": lamp_x, "y": lamp_y, "side": "right", "flip": flip})
                     flip = not flip  # Alternate flip
                     last_y = point[1]
 
@@ -1560,18 +1558,7 @@ class Game:
         if len(left_candidates) > 3:
             self.limbo_lamps.extend(left_candidates[1:5])  # indices 1,2,3,4
         if len(right_candidates) > 3:
-            selected_right = right_candidates[1:5]  # indices 1,2,3,4
-            # Apply different offsets for top 2 and bottom 2
-            for i in range(len(selected_right)):
-                if i < 2:  # Top 2 lamps
-                    selected_right[i]["x"] -= LIMBO_LAMP_OFFSET_RIGHT_TOP
-                else:  # Bottom 2 lamps
-                    # Align bottom 2 lamps to wall edge (lamp width = LIMBO_LAMP_SIZE[0])
-                    selected_right[i]["x"] = selected_right[i]["wall_x"] - LIMBO_LAMP_SIZE[0]
-            # Clean up temporary field
-            for lamp in selected_right:
-                lamp.pop("wall_x", None)
-            self.limbo_lamps.extend(selected_right)
+            self.limbo_lamps.extend(right_candidates[1:5])  # indices 1,2,3,4
 
         logger.info("Generated %d limbo lamps for stage %s", len(self.limbo_lamps), self.selected_stage)
 

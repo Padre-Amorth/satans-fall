@@ -115,9 +115,7 @@ WALL_BRICK_HELL = {"w": 12, "h": 7, "mortar": (20, 10, 5), "base": (70, 35, 20)}
 # Limbo wall lamps decorative elements
 LIMBO_LAMP_SPACING = 120  # distance between consecutive lamps (pixels)
 LIMBO_LAMP_SIZE = (27, 79)  # width, height of lamp sprite (2/3 scale, maintains aspect ratio)
-LIMBO_LAMP_OFFSET_LEFT = 15  # horizontal offset from left wall edge (pixels, towards center)
-LIMBO_LAMP_OFFSET_RIGHT_TOP = 65  # offset for top 2 right lamps (closer to wall, towards center)
-LIMBO_LAMP_OFFSET_RIGHT_BOTTOM = 40  # offset for bottom 2 right lamps (farther from wall)
+LIMBO_LAMP_OFFSET = 15  # horizontal offset from wall edge (pixels, towards center, symmetric for both walls)
 
 # Limbo fog alpha ranges (min, max) for each limbo variant
 
@@ -468,9 +466,7 @@ __all__: list[str] = [
     "PENTAGRAM_ELEMENTAL_SHIELD_HP",
     "LIMBO_LAMP_SPACING",
     "LIMBO_LAMP_SIZE",
-    "LIMBO_LAMP_OFFSET_LEFT",
-    "LIMBO_LAMP_OFFSET_RIGHT_TOP",
-    "LIMBO_LAMP_OFFSET_RIGHT_BOTTOM",
+    "LIMBO_LAMP_OFFSET",
 ]
 
 # Elemental pentagram variant shield colours and stats

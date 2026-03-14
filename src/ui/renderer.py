@@ -393,7 +393,7 @@ class UIGameRenderer:
         if not hasattr(self.game, "limbo_lamps") or not self.game.limbo_lamps:
             return
 
-        lamp_sprite = get_image("lampioni-removebg-preview.png", LIMBO_LAMP_SIZE)
+        lamp_sprite = get_image("lamp1.png", LIMBO_LAMP_SIZE)
         if lamp_sprite is None:
             # Fallback: draw simple circles if asset not available
             for lamp in self.game.limbo_lamps:

@@ -1414,7 +1414,7 @@ class Game:
             "barrier_wood.png",
             "barrier_damaged.png",
             # optional Limbo wall lamp assets
-            "lampioni-removebg-preview.png",
+            "lamp1.png",
         ]
 
         # Preload originals for quick subsequent scaling

@@ -38,6 +38,10 @@ desktop.ini
 permanent_stats.json
 permanent_stats.json.bak
 permanent_stats.json.tmp
+profile_1.json
+profile_2.json
+profile_3.json
+*.json.tmp
 
 # Ignore everything in parent dir (avoid nested-repo confusion)
 # Note: avoid ignoring repo root

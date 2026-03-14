@@ -1535,7 +1535,7 @@ class Game:
             for point in self.left_wall_points:
                 if point[1] - last_y >= spacing:
                     lamp_x = point[0] - LIMBO_LAMP_OFFSET
-                    lamp_y = point[1] - LIMBO_LAMP_SIZE[1] // 2
+                    lamp_y = point[1]  # Top-left corner for blit
                     self.limbo_lamps.append({"x": lamp_x, "y": lamp_y, "side": "left"})
                     last_y = point[1]
 
@@ -1545,7 +1545,7 @@ class Game:
             for point in self.right_wall_points:
                 if point[1] - last_y >= spacing:
                     lamp_x = point[0] + LIMBO_LAMP_OFFSET
-                    lamp_y = point[1] - LIMBO_LAMP_SIZE[1] // 2
+                    lamp_y = point[1]  # Top-left corner for blit
                     self.limbo_lamps.append({"x": lamp_x, "y": lamp_y, "side": "right"})
                     last_y = point[1]
 

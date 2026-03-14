@@ -53,7 +53,8 @@ from src.game_constants import (
     HELL_BARRIER_Y_MAX,
     HELL_BARRIER_Y_MIN,
     HELL_STAGES,
-    LIMBO_LAMP_OFFSET,
+    LIMBO_LAMP_OFFSET_LEFT,
+    LIMBO_LAMP_OFFSET_RIGHT,
     LIMBO_LAMP_SIZE,
     LIMBO_LAMP_SPACING,
     LIMBO_STAGES,
@@ -1536,7 +1537,7 @@ class Game:
             flip = False
             for point in self.left_wall_points:
                 if point[1] - last_y >= spacing:
-                    lamp_x = point[0] + LIMBO_LAMP_OFFSET  # Inside wall (positive offset)
+                    lamp_x = point[0] + LIMBO_LAMP_OFFSET_LEFT  # Inside wall (positive offset)
                     lamp_y = point[1]  # Top-left corner for blit
                     left_candidates.append({"x": lamp_x, "y": lamp_y, "side": "left", "flip": flip})
                     flip = not flip  # Alternate flip
@@ -1548,7 +1549,7 @@ class Game:
             flip = False
             for point in self.right_wall_points:
                 if point[1] - last_y >= spacing:
-                    lamp_x = point[0] - LIMBO_LAMP_OFFSET  # Inside wall (negative offset)
+                    lamp_x = point[0] - LIMBO_LAMP_OFFSET_RIGHT  # Inside wall (negative offset)
                     lamp_y = point[1]  # Top-left corner for blit
                     right_candidates.append({"x": lamp_x, "y": lamp_y, "side": "right", "flip": flip})
                     flip = not flip  # Alternate flip

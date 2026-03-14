@@ -114,8 +114,8 @@ WALL_BRICK_HELL = {"w": 12, "h": 7, "mortar": (20, 10, 5), "base": (70, 35, 20)}
 
 # Limbo wall lamps decorative elements
 LIMBO_LAMP_SPACING = 120  # distance between consecutive lamps (pixels)
-LIMBO_LAMP_SIZE = (40, 40)  # width, height of lamp sprite
-LIMBO_LAMP_OFFSET = 35  # horizontal offset from wall edge (pixels)
+LIMBO_LAMP_SIZE = (40, 118)  # width, height of lamp sprite (maintains 129:382 aspect ratio)
+LIMBO_LAMP_OFFSET = 50  # horizontal offset from wall edge (pixels)
 
 # Limbo fog alpha ranges (min, max) for each limbo variant
 

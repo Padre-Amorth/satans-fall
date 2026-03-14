@@ -53,6 +53,9 @@ from src.game_constants import (
     HELL_BARRIER_Y_MAX,
     HELL_BARRIER_Y_MIN,
     HELL_STAGES,
+    LIMBO_LAMP_OFFSET,
+    LIMBO_LAMP_SIZE,
+    LIMBO_LAMP_SPACING,
     LIMBO_STAGES,
     PURGATORY_STAGES,
     STAGE_SETTINGS,
@@ -297,6 +300,7 @@ class Game:
         # Gameplay defaults used by tests and early update paths
         self.stage_start_countdown = 0
         self.stage_start_timer = 0
+        self.countdown_fade_timer = 0  # Timer for fade-out effect
         self.show_fps: bool = True
         self.paused = False
         self._paused_by_blasphemy5 = False
@@ -1409,6 +1413,8 @@ class Game:
             # optional Hell stage barrier assets
             "barrier_wood.png",
             "barrier_damaged.png",
+            # optional Limbo wall lamp assets
+            "lampioni-removebg-preview.png",
         ]
 
         # Preload originals for quick subsequent scaling
@@ -1513,6 +1519,31 @@ class Game:
                             new_right_x,
                             self.right_wall_points[i][1],
                         )
+
+    def generate_limbo_lamps(self) -> None:
+        """Generate decorative lamps along limbo walls at regular intervals."""
+        if not self.is_limbo_stage():
+            self.limbo_lamps = []
+            return
+
+        self.limbo_lamps = []
+        spacing = LIMBO_LAMP_SPACING
+
+        # Left wall lamps
+        if self.left_wall_points:
+            for i in range(0, len(self.left_wall_points), max(1, spacing // 20)):
+                point = self.left_wall_points[i]
+                lamp_x = point[0] - LIMBO_LAMP_OFFSET
+                lamp_y = point[1] - LIMBO_LAMP_SIZE[1] // 2
+                self.limbo_lamps.append({"x": lamp_x, "y": lamp_y, "side": "left"})
+
+        # Right wall lamps
+        if self.right_wall_points:
+            for i in range(0, len(self.right_wall_points), max(1, spacing // 20)):
+                point = self.right_wall_points[i]
+                lamp_x = point[0] + LIMBO_LAMP_OFFSET
+                lamp_y = point[1] - LIMBO_LAMP_SIZE[1] // 2
+                self.limbo_lamps.append({"x": lamp_x, "y": lamp_y, "side": "right"})
 
     def is_limbo_stage(self) -> bool:
         """Return True if the currently selected stage is any variant of Limbo."""
@@ -2161,30 +2192,19 @@ class Game:
         if self.stage_start_countdown > 0:
             font_large: pygame.Font = pygame.font.SysFont("chiller", 90)
             countdown_text: pygame.Surface = font_large.render(
-                str(self.stage_start_countdown), True, (80, 10, 30)
+                str(self.stage_start_countdown), True, (180, 140, 20)
             )
-            # Draw black outline by rendering text around the main text
-            outline_color = (0, 0, 0)
-            for dx in [-1, 0, 1]:
-                for dy in [-1, 0, 1]:
-                    if dx != 0 or dy != 0:
-                        outline_text = font_large.render(
-                            str(self.stage_start_countdown), True, outline_color
-                        )
-                        self.screen.blit(
-                            outline_text,
-                            (
-                                self.width // 2
-                                - countdown_text.get_width() // 2
-                                + shake_x
-                                + dx,
-                                self.height // 2
-                                - countdown_text.get_height() // 2
-                                + shake_y
-                                + dy,
-                            ),
-                        )
-            # Draw main text on top
+            # Apply fade-out effect in last 0.5 seconds (30 frames at 60 FPS)
+            alpha = 255
+            fade_start_frames = 30
+            if self.countdown_fade_timer > self.fps - fade_start_frames:
+                # Fade from 255 to 0 over last 30 frames
+                frames_into_fade = self.countdown_fade_timer - (self.fps - fade_start_frames)
+                alpha = max(0, 255 - int(255 * frames_into_fade / fade_start_frames))
+
+            countdown_text.set_alpha(alpha)
+
+            # Draw main text (no outline)
             self.screen.blit(
                 countdown_text,
                 (
@@ -2839,9 +2859,13 @@ class Game:
             BARRIER_SPAWN_INTERVAL_MIN, BARRIER_SPAWN_INTERVAL_MAX
         )
 
+        # Reset limbo lamps (decorative wall elements)
+        self.limbo_lamps = []
+
         # Reset stage start countdown
         self.stage_start_countdown = 0
         self.stage_start_timer = 0
+        self.countdown_fade_timer = 0
 
         # Reset weapons and upgrades
         self.player_weapons = []
@@ -3474,9 +3498,11 @@ class Game:
 
         # Handle stage start countdown
         if self.stage_start_countdown > 0:
+            self.countdown_fade_timer += 1
             self.stage_start_timer -= 1
             if self.stage_start_timer <= 0:
                 self.stage_start_countdown -= 1
+                self.countdown_fade_timer = 0  # Reset fade timer for new number
                 if self.stage_start_countdown > 0:
                     self.stage_start_timer = self.fps  # Reset for next second
                 else:
@@ -3802,11 +3828,16 @@ class Game:
                 moving = True
 
             # Update player animation
-            # Always increment anim_frame for wobble effect (even during vertical movement)
-            # But only show walk frames when moving horizontally
+            # Always increment anim_frame for wobble/sway effect (works in all directions)
             if moving:
                 self.player_anim_timer += 1
                 if self.player_anim_timer >= self.player_anim_speed:
+                    self.player_anim_timer = 0
+                    self.player_anim_frame = (self.player_anim_frame + 1) % 8
+            else:
+                # When not moving, still cycle the frame slowly for idle bobbing
+                self.player_anim_timer += 1
+                if self.player_anim_timer >= self.player_anim_speed * 2:
                     self.player_anim_timer = 0
                     self.player_anim_frame = (self.player_anim_frame + 1) % 8
 
@@ -3815,10 +3846,6 @@ class Game:
                 self.player_is_moving = True
             else:
                 self.player_is_moving = False
-                # Only reset frame when completely still (no movement at all)
-                if not moving:
-                    self.player_anim_frame = 0
-                    self.player_anim_timer = 0
 
     def update_weapon_firing(self) -> None:
         """Handle automatic weapon firing"""

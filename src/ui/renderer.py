@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from src.assets.manager import get_image
 from src.game_constants import (
     HELL_STAGES,
+    LIMBO_LAMP_SIZE,
     PURGATORY_STAGES,
     STATUE_ASSET_VERTICAL_OFFSET,
     STATUE_BASE_Y,
@@ -382,6 +383,29 @@ class UIGameRenderer:
 
         surf, min_x, min_y = cached
         self.ui.screen.blit(surf, (min_x + shake_x, min_y + shake_y))
+
+    def _draw_limbo_lamps(self, shake_x=0, shake_y=0) -> None:
+        """Draw decorative lamps along limbo walls."""
+        if not self.game.is_limbo_stage():
+            return
+
+        pygame = self.ui.pygame
+        if not hasattr(self.game, "limbo_lamps") or not self.game.limbo_lamps:
+            return
+
+        lamp_sprite = get_image("lampioni-removebg-preview.png", LIMBO_LAMP_SIZE)
+        if lamp_sprite is None:
+            # Fallback: draw simple circles if asset not available
+            for lamp in self.game.limbo_lamps:
+                x = int(lamp["x"]) + shake_x
+                y = int(lamp["y"]) + shake_y
+                pygame.draw.circle(self.ui.screen, (255, 220, 100), (x, y), 12)
+            return
+
+        for lamp in self.game.limbo_lamps:
+            x = int(lamp["x"]) + shake_x
+            y = int(lamp["y"]) + shake_y
+            self.ui.screen.blit(lamp_sprite, (x, y))
 
     def _draw_torches(self, shake_x=0, shake_y=0) -> None:
         pygame = self.ui.pygame
@@ -951,6 +975,7 @@ class UIGameRenderer:
 
         self.ui._draw_floor_polygon(shake_x, shake_y)
         self.ui._draw_walls(shake_x, shake_y)
+        self.ui._draw_limbo_lamps(shake_x, shake_y)
         self.ui._draw_torches(shake_x, shake_y)
         self.ui._draw_buildings(shake_x, shake_y)
         self.ui._draw_battlefield_crosses(shake_x, shake_y)

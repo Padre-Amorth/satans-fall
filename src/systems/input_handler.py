@@ -1771,6 +1771,7 @@ class InputHandler:
         # Generate stage-specific features
         if str(stage) in LIMBO_STAGES:
             self.game.generate_dead_trees()
+            self.game.generate_limbo_lamps()
             # Configure statue/tower types per Limbo level
             if stage == "limbo":
                 # Limbo 1 -> Fire
@@ -2106,6 +2107,7 @@ class InputHandler:
         self.game.showing_prologo_end = False
         self.game.selected_stage = "limbo"
         self.game.generate_dead_trees()
+        self.game.generate_limbo_lamps()
         self.game.reset_run()
 
     def continue_after_victory(self) -> None:
@@ -2144,6 +2146,7 @@ class InputHandler:
             if nxt in LIMBO_STAGES:
                 try:
                     self.game.generate_dead_trees()
+                    self.game.generate_limbo_lamps()
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             try:

@@ -102,7 +102,7 @@ BLIZZARD_PARTICLE_S_CURVE_RADIAL = (
 )
 BLIZZARD_PARTICLE_EXPANSION = 0.50  # radial expansion near respawn point (fraction of original spawn distance) - increased for outward bulge
 
-DEFAULT_PLAYER_ANIM_SPEED = 30
+DEFAULT_PLAYER_ANIM_SPEED = 40
 DEFAULT_WAVE_DURATION = 45  # seconds (increased from 40)
 WALL_THICKNESS = 25
 
@@ -111,6 +111,11 @@ WALL_BRICK_PROLOGO = {"w": 10, "h": 6, "mortar": (20, 20, 20), "base": (50, 50, 
 WALL_BRICK_LIMBO = {"w": 9, "h": 5, "mortar": (10, 10, 10), "base": (35, 35, 35)}
 WALL_BRICK_PURGATORY = {"w": 11, "h": 7, "mortar": (25, 20, 20), "base": (60, 55, 55)}
 WALL_BRICK_HELL = {"w": 12, "h": 7, "mortar": (20, 10, 5), "base": (70, 35, 20)}
+
+# Limbo wall lamps decorative elements
+LIMBO_LAMP_SPACING = 120  # distance between consecutive lamps (pixels)
+LIMBO_LAMP_SIZE = (40, 40)  # width, height of lamp sprite
+LIMBO_LAMP_OFFSET = 35  # horizontal offset from wall edge (pixels)
 
 # Limbo fog alpha ranges (min, max) for each limbo variant
 
@@ -459,6 +464,9 @@ __all__: list[str] = [
     "PENTAGRAM_ICE_SHIELD_COLOR",
     "PENTAGRAM_ELEMENTAL_BODY_HP",
     "PENTAGRAM_ELEMENTAL_SHIELD_HP",
+    "LIMBO_LAMP_SPACING",
+    "LIMBO_LAMP_SIZE",
+    "LIMBO_LAMP_OFFSET",
 ]
 
 # Elemental pentagram variant shield colours and stats

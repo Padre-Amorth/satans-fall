@@ -54,8 +54,8 @@ from src.game_constants import (
     HELL_BARRIER_Y_MIN,
     HELL_STAGES,
     LIMBO_LAMP_OFFSET_LEFT,
-    LIMBO_LAMP_OFFSET_RIGHT,
-    LIMBO_LAMP_RIGHT_TOP_ADJUST,
+    LIMBO_LAMP_OFFSET_RIGHT_TOP,
+    LIMBO_LAMP_OFFSET_RIGHT_BOTTOM,
     LIMBO_LAMP_SIZE,
     LIMBO_LAMP_SPACING,
     LIMBO_STAGES,
@@ -1550,7 +1550,7 @@ class Game:
             flip = False
             for point in self.right_wall_points:
                 if point[1] - last_y >= spacing:
-                    lamp_x = point[0] - LIMBO_LAMP_OFFSET_RIGHT  # Inside wall (negative offset)
+                    lamp_x = point[0]  # Will be adjusted based on position
                     lamp_y = point[1]  # Top-left corner for blit
                     right_candidates.append({"x": lamp_x, "y": lamp_y, "side": "right", "flip": flip})
                     flip = not flip  # Alternate flip
@@ -1561,9 +1561,12 @@ class Game:
             self.limbo_lamps.extend(left_candidates[1:5])  # indices 1,2,3,4
         if len(right_candidates) > 3:
             selected_right = right_candidates[1:5]  # indices 1,2,3,4
-            # Adjust top 2 right lamps slightly to the left
-            for i in range(min(2, len(selected_right))):
-                selected_right[i]["x"] += LIMBO_LAMP_RIGHT_TOP_ADJUST
+            # Apply different offsets for top 2 and bottom 2
+            for i in range(len(selected_right)):
+                if i < 2:  # Top 2 lamps
+                    selected_right[i]["x"] -= LIMBO_LAMP_OFFSET_RIGHT_TOP
+                else:  # Bottom 2 lamps
+                    selected_right[i]["x"] -= LIMBO_LAMP_OFFSET_RIGHT_BOTTOM
             self.limbo_lamps.extend(selected_right)
 
         logger.info("Generated %d limbo lamps for stage %s", len(self.limbo_lamps), self.selected_stage)

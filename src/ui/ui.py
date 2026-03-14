@@ -583,6 +583,9 @@ class PygameUIManager:
     def _draw_torches(self, shake_x: int = 0, shake_y: int = 0) -> None:
         return self.renderer._draw_torches(shake_x, shake_y)
 
+    def _draw_limbo_lamps(self, shake_x: int = 0, shake_y: int = 0) -> None:
+        return self.renderer._draw_limbo_lamps(shake_x, shake_y)
+
     def _draw_cathedral_procedural(self, pygame, base_x: int, base_y: int) -> None:
         return self.renderer._draw_cathedral_procedural(pygame, base_x, base_y)
 

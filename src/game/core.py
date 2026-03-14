@@ -1527,23 +1527,27 @@ class Game:
             return
 
         self.limbo_lamps = []
-        spacing = LIMBO_LAMP_SPACING
+        spacing = LIMBO_LAMP_SPACING  # 120 pixels between lamps
 
-        # Left wall lamps
+        # Left wall lamps - place every spacing pixels along wall height
         if self.left_wall_points:
-            for i in range(0, len(self.left_wall_points), max(1, spacing // 20)):
-                point = self.left_wall_points[i]
-                lamp_x = point[0] - LIMBO_LAMP_OFFSET
-                lamp_y = point[1] - LIMBO_LAMP_SIZE[1] // 2
-                self.limbo_lamps.append({"x": lamp_x, "y": lamp_y, "side": "left"})
+            last_y = -999
+            for point in self.left_wall_points:
+                if point[1] - last_y >= spacing:
+                    lamp_x = point[0] - LIMBO_LAMP_OFFSET
+                    lamp_y = point[1] - LIMBO_LAMP_SIZE[1] // 2
+                    self.limbo_lamps.append({"x": lamp_x, "y": lamp_y, "side": "left"})
+                    last_y = point[1]
 
-        # Right wall lamps
+        # Right wall lamps - place every spacing pixels along wall height
         if self.right_wall_points:
-            for i in range(0, len(self.right_wall_points), max(1, spacing // 20)):
-                point = self.right_wall_points[i]
-                lamp_x = point[0] + LIMBO_LAMP_OFFSET
-                lamp_y = point[1] - LIMBO_LAMP_SIZE[1] // 2
-                self.limbo_lamps.append({"x": lamp_x, "y": lamp_y, "side": "right"})
+            last_y = -999
+            for point in self.right_wall_points:
+                if point[1] - last_y >= spacing:
+                    lamp_x = point[0] + LIMBO_LAMP_OFFSET
+                    lamp_y = point[1] - LIMBO_LAMP_SIZE[1] // 2
+                    self.limbo_lamps.append({"x": lamp_x, "y": lamp_y, "side": "right"})
+                    last_y = point[1]
 
     def is_limbo_stage(self) -> bool:
         """Return True if the currently selected stage is any variant of Limbo."""

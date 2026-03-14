@@ -390,11 +390,18 @@ class UIGameRenderer:
             return
 
         pygame = self.ui.pygame
-        if not hasattr(self.game, "limbo_lamps") or not self.game.limbo_lamps:
+        if not hasattr(self.game, "limbo_lamps"):
+            logger.warning("Game has no limbo_lamps attribute")
             return
 
+        if not self.game.limbo_lamps:
+            logger.debug("No lamps to draw")
+            return
+
+        logger.debug("Drawing %d limbo lamps", len(self.game.limbo_lamps))
         lamp_sprite = get_image("lamp1.png", LIMBO_LAMP_SIZE)
         if lamp_sprite is None:
+            logger.debug("lamp1.png not loaded, using circle fallback")
             # Fallback: draw simple circles if asset not available
             for lamp in self.game.limbo_lamps:
                 x = int(lamp["x"]) + shake_x
@@ -402,6 +409,7 @@ class UIGameRenderer:
                 pygame.draw.circle(self.ui.screen, (255, 220, 100), (x, y), 12)
             return
 
+        logger.debug("Drawing lamps with sprite")
         for lamp in self.game.limbo_lamps:
             x = int(lamp["x"]) + shake_x
             y = int(lamp["y"]) + shake_y

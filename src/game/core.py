@@ -1549,6 +1549,8 @@ class Game:
                     self.limbo_lamps.append({"x": lamp_x, "y": lamp_y, "side": "right"})
                     last_y = point[1]
 
+        logger.info("Generated %d limbo lamps for stage %s", len(self.limbo_lamps), self.selected_stage)
+
     def is_limbo_stage(self) -> bool:
         """Return True if the currently selected stage is any variant of Limbo."""
         return bool(self.selected_stage and str(self.selected_stage) in LIMBO_STAGES)

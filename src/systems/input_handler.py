@@ -1771,7 +1771,6 @@ class InputHandler:
         # Generate stage-specific features
         if str(stage) in LIMBO_STAGES:
             self.game.generate_dead_trees()
-            self.game.generate_limbo_lamps()
             # Configure statue/tower types per Limbo level
             if stage == "limbo":
                 # Limbo 1 -> Fire
@@ -1900,6 +1899,10 @@ class InputHandler:
 
         # Reset game state for new run
         self.game.reset_run()
+
+        # Generate lamps for limbo stages (after reset_run so they're not cleared)
+        if str(stage) in LIMBO_STAGES and stage != "limbo_final":
+            self.game.generate_limbo_lamps()
 
         # Prologo-specific starting weapon
         if stage == "prologo":
@@ -2107,8 +2110,8 @@ class InputHandler:
         self.game.showing_prologo_end = False
         self.game.selected_stage = "limbo"
         self.game.generate_dead_trees()
-        self.game.generate_limbo_lamps()
         self.game.reset_run()
+        self.game.generate_limbo_lamps()
 
     def continue_after_victory(self) -> None:
         """After a victory overlay, start the next limbo variant (or return to limbo).
@@ -2146,13 +2149,18 @@ class InputHandler:
             if nxt in LIMBO_STAGES:
                 try:
                     self.game.generate_dead_trees()
-                    self.game.generate_limbo_lamps()
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
             try:
                 self.game.reset_run()
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
+            # Generate lamps for limbo stages (excluding limbo_final)
+            if nxt in LIMBO_STAGES and nxt != "limbo_final":
+                try:
+                    self.game.generate_limbo_lamps()
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
 
     def _take_screenshot(self) -> None:
         """Save a screenshot of the current game window to the screenshots folder."""

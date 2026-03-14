@@ -1552,7 +1552,7 @@ class Game:
                 if point[1] - last_y >= spacing:
                     lamp_x = point[0]  # Will be adjusted based on position
                     lamp_y = point[1]  # Top-left corner for blit
-                    right_candidates.append({"x": lamp_x, "y": lamp_y, "side": "right", "flip": flip})
+                    right_candidates.append({"x": lamp_x, "y": lamp_y, "side": "right", "flip": flip, "wall_x": point[0]})
                     flip = not flip  # Alternate flip
                     last_y = point[1]
 
@@ -1566,7 +1566,11 @@ class Game:
                 if i < 2:  # Top 2 lamps
                     selected_right[i]["x"] -= LIMBO_LAMP_OFFSET_RIGHT_TOP
                 else:  # Bottom 2 lamps
-                    selected_right[i]["x"] -= LIMBO_LAMP_OFFSET_RIGHT_BOTTOM
+                    # Align bottom 2 lamps to wall edge (lamp width = LIMBO_LAMP_SIZE[0])
+                    selected_right[i]["x"] = selected_right[i]["wall_x"] - LIMBO_LAMP_SIZE[0]
+            # Clean up temporary field
+            for lamp in selected_right:
+                lamp.pop("wall_x", None)
             self.limbo_lamps.extend(selected_right)
 
         logger.info("Generated %d limbo lamps for stage %s", len(self.limbo_lamps), self.selected_stage)

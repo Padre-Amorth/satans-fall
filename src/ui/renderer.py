@@ -413,7 +413,11 @@ class UIGameRenderer:
         for lamp in self.game.limbo_lamps:
             x = int(lamp["x"]) + shake_x
             y = int(lamp["y"]) + shake_y
-            self.ui.screen.blit(lamp_sprite, (x, y))
+            # Apply horizontal flip if needed
+            sprite = lamp_sprite
+            if lamp.get("flip", False):
+                sprite = pygame.transform.flip(lamp_sprite, True, False)
+            self.ui.screen.blit(sprite, (x, y))
 
     def _draw_torches(self, shake_x=0, shake_y=0) -> None:
         pygame = self.ui.pygame

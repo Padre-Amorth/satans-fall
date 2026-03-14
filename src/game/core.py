@@ -1533,21 +1533,25 @@ class Game:
         left_candidates = []
         if self.left_wall_points:
             last_y = -999
+            flip = False
             for point in self.left_wall_points:
                 if point[1] - last_y >= spacing:
                     lamp_x = point[0] + LIMBO_LAMP_OFFSET  # Inside wall (positive offset)
                     lamp_y = point[1]  # Top-left corner for blit
-                    left_candidates.append({"x": lamp_x, "y": lamp_y, "side": "left"})
+                    left_candidates.append({"x": lamp_x, "y": lamp_y, "side": "left", "flip": flip})
+                    flip = not flip  # Alternate flip
                     last_y = point[1]
 
         right_candidates = []
         if self.right_wall_points:
             last_y = -999
+            flip = False
             for point in self.right_wall_points:
                 if point[1] - last_y >= spacing:
                     lamp_x = point[0] - LIMBO_LAMP_OFFSET  # Inside wall (negative offset)
                     lamp_y = point[1]  # Top-left corner for blit
-                    right_candidates.append({"x": lamp_x, "y": lamp_y, "side": "right"})
+                    right_candidates.append({"x": lamp_x, "y": lamp_y, "side": "right", "flip": flip})
+                    flip = not flip  # Alternate flip
                     last_y = point[1]
 
         # Skip first (top, cut off) and last 2 (bottom), take 4 from middle

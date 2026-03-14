@@ -55,6 +55,7 @@ from src.game_constants import (
     HELL_STAGES,
     LIMBO_LAMP_OFFSET_LEFT,
     LIMBO_LAMP_OFFSET_RIGHT,
+    LIMBO_LAMP_RIGHT_TOP_ADJUST,
     LIMBO_LAMP_SIZE,
     LIMBO_LAMP_SPACING,
     LIMBO_STAGES,
@@ -1559,7 +1560,11 @@ class Game:
         if len(left_candidates) > 3:
             self.limbo_lamps.extend(left_candidates[1:5])  # indices 1,2,3,4
         if len(right_candidates) > 3:
-            self.limbo_lamps.extend(right_candidates[1:5])  # indices 1,2,3,4
+            selected_right = right_candidates[1:5]  # indices 1,2,3,4
+            # Adjust top 2 right lamps slightly to the left
+            for i in range(min(2, len(selected_right))):
+                selected_right[i]["x"] += LIMBO_LAMP_RIGHT_TOP_ADJUST
+            self.limbo_lamps.extend(selected_right)
 
         logger.info("Generated %d limbo lamps for stage %s", len(self.limbo_lamps), self.selected_stage)
 

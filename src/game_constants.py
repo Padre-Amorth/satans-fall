@@ -117,6 +117,7 @@ LIMBO_LAMP_SPACING = 120  # distance between consecutive lamps (pixels)
 LIMBO_LAMP_SIZE = (40, 118)  # width, height of lamp sprite (maintains 129:382 aspect ratio)
 LIMBO_LAMP_OFFSET_LEFT = 15  # horizontal offset from left wall edge (pixels, towards center)
 LIMBO_LAMP_OFFSET_RIGHT = 50  # horizontal offset from right wall edge (pixels, towards center)
+LIMBO_LAMP_RIGHT_TOP_ADJUST = 15  # additional leftward shift for top 2 right lamps (pixels)
 
 # Limbo fog alpha ranges (min, max) for each limbo variant
 
@@ -469,6 +470,7 @@ __all__: list[str] = [
     "LIMBO_LAMP_SIZE",
     "LIMBO_LAMP_OFFSET_LEFT",
     "LIMBO_LAMP_OFFSET_RIGHT",
+    "LIMBO_LAMP_RIGHT_TOP_ADJUST",
 ]
 
 # Elemental pentagram variant shield colours and stats

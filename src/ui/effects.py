@@ -955,10 +955,11 @@ class UIEffectsRenderer:
             (right_x + shake_x, right_y + 80 + shake_y),
         )
 
-        # Weapons section (icons only with level number below)
+        # Weapons section (icons in frame with level number below)
         if hasattr(self.game, "player_weapons") and self.game.player_weapons:
             weapons = list(self.game.player_weapons)[:3]  # Show max 3 weapons
             if weapons:
+                pygame = self.ui.pygame
                 yellow = (255, 204, 0)
                 icon_size = 36  # Slightly larger for HUD visibility
                 icon_spacing = (
@@ -966,6 +967,9 @@ class UIEffectsRenderer:
                 )
                 weapon_x = right_x + 10  # Starting position
                 weapon_y = right_y + 95  # Position in HUD
+                frame_size = icon_size + 4  # Add 2px border on each side
+                frame_color = (100, 100, 100)  # Gray frame border
+                bg_color = (50, 50, 50)  # Dark gray background inside frame
 
                 for wid in weapons:
                     lvl: int = self.game.weapon_levels.get(wid, 0)
@@ -984,6 +988,23 @@ class UIEffectsRenderer:
                             )
                     except (AttributeError, TypeError, ValueError, KeyError):
                         pass
+
+                    # Draw frame and background
+                    frame_x = weapon_x - 2
+                    frame_y = weapon_y - 2
+                    # Draw dark background inside frame
+                    pygame.draw.rect(
+                        self.ui.screen,
+                        bg_color,
+                        (frame_x + shake_x, frame_y + shake_y, frame_size, frame_size),
+                    )
+                    # Draw frame border
+                    pygame.draw.rect(
+                        self.ui.screen,
+                        frame_color,
+                        (frame_x + shake_x, frame_y + shake_y, frame_size, frame_size),
+                        1,
+                    )
 
                     # Draw icon
                     if icon_surf is not None:

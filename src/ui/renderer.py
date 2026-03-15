@@ -1341,6 +1341,17 @@ class UIGameRenderer:
                 text_x = right_x
                 if icon_surf is not None:
                     icon_y = y + (line_h - icon_size) // 2
+                    frame_size = icon_size + 4  # Add 2px border on each side
+                    frame_x = text_x - 2
+                    frame_y = icon_y - 2
+                    # Draw frame border
+                    pygame.draw.rect(
+                        self.ui.screen,
+                        (100, 100, 100),
+                        (frame_x + shake_x, frame_y + shake_y, frame_size, frame_size),
+                        1,
+                    )
+                    # Draw icon inside frame
                     self.ui.screen.blit(icon_surf, (text_x + shake_x, icon_y + shake_y))
                     text_x += icon_size + icon_padding
 

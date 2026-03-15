@@ -1,3 +1,4 @@
+import atexit
 import logging
 import math
 import random
@@ -83,6 +84,28 @@ logger: logging.Logger = logging.getLogger(__name__)
 # Global reference to running game instance (set in Game.__init__)
 CURRENT_GAME = None
 
+# --- atexit helper: only the most recent Game instance saves on exit ------
+_atexit_registered = False
+
+
+def _atexit_save_handler() -> None:
+    """Emergency save on process exit (Ctrl+C, crash, window kill)."""
+    if CURRENT_GAME is not None:
+        try:
+            if getattr(CURRENT_GAME, "active_profile_slot", None) is not None:
+                save_permanent_stats(CURRENT_GAME)
+        except Exception:
+            pass
+
+
+def _set_atexit_game(game: "Game") -> None:
+    """Register *game* as the instance to save on exit."""
+    global CURRENT_GAME, _atexit_registered
+    CURRENT_GAME = game
+    if not _atexit_registered:
+        atexit.register(_atexit_save_handler)
+        _atexit_registered = True
+
 
 class Game:
     def __setattr__(self, name, value):
@@ -129,6 +152,14 @@ class Game:
         self._init_weapons()
         self._init_entities()
         self._init_managers()
+
+        # Auto-save timer: save profile every 30 seconds during gameplay
+        self._autosave_interval = 30.0  # seconds
+        self._autosave_timer = 0.0
+
+        # Register atexit handler so Ctrl+C / process kill still saves.
+        # Use module-level ref so only the LAST Game instance saves on exit.
+        _set_atexit_game(self)
 
     def _init_display(self) -> None:
         # Virtual/internal resolution (keep `self.screen` API unchanged for UI/tests)
@@ -3011,6 +3042,7 @@ class Game:
         """Write permanent stats and global meta-progress to disk."""
         save_permanent_stats(self)
 
+
     def get_profile_info(self, slot: int) -> dict:
         """Return display info for a profile slot without loading full stats into game state."""
         return get_profile_info(slot)
@@ -3522,6 +3554,16 @@ class Game:
         without menus interfering.
         """
         self._update_pre_guard_state()
+
+        # Periodic auto-save (every 30s) to protect against crashes / Ctrl+C
+        self._autosave_timer += 1.0 / self.fps
+        if self._autosave_timer >= self._autosave_interval:
+            self._autosave_timer = 0.0
+            if getattr(self, "active_profile_slot", None) is not None:
+                try:
+                    self.save_permanent_stats()
+                except Exception:
+                    pass
 
         # Handle stage start countdown
         if self.stage_start_countdown > 0:

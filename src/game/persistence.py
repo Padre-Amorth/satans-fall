@@ -118,12 +118,92 @@ def save_permanent_stats(game: Any) -> None:
     Saves to ``profile_N.json`` in the project root using an atomic write
     (temp file + os.replace) so a crash mid-write never corrupts the save.
     Does nothing if no profile slot is active.
+
+    **Regression guard**: before writing, the existing profile file is read.
+    If the in-memory state looks like a default/uninitialized reset (meta_level
+    dropped while permanent_stats still have upgrades on disk), the save is
+    blocked to prevent overwriting hard-earned progression with zeros.
+    Values that can only grow (meta_level, permanent_stat tiers, stages_cleared)
+    are enforced to never decrease.
     """
     slot = getattr(game, "active_profile_slot", None)
     if slot is None:
         return
     save_path = profile_path(slot)
     tmp_path = save_path.with_suffix(".json.tmp")
+
+    # --- Regression guard: read existing on-disk data ---------------------
+    disk_ps: Dict[str, int] = {}
+    disk_gp: Dict[str, Any] = {}
+    if save_path.exists():
+        try:
+            with open(save_path, "r", encoding="utf-8") as f:
+                disk_data = json.load(f)
+            raw_ps = disk_data.get("permanent_stats", {})
+            if isinstance(raw_ps, dict):
+                for k, v in raw_ps.items():
+                    if isinstance(k, str) and isinstance(v, int):
+                        disk_ps[k] = v
+            raw_gp = disk_data.get("global_progress", {})
+            if isinstance(raw_gp, dict):
+                disk_gp = raw_gp
+        except Exception:
+            pass  # if the file is corrupt we just save what we have
+
+    # Detect whether in-memory state looks like an uninitialized reset:
+    # if the disk has significant upgrades but memory has none, the in-memory
+    # state was likely wiped by a code restart / crash.
+    mem_total = sum(game.permanent_stats.get(k, 0) for k in game.permanent_stats)
+    dsk_total = sum(disk_ps.values())
+    # A reset is: disk has upgrades but memory has zero (all defaults).
+    # This catches the case where Game() was constructed but global_progress
+    # was wiped before load_permanent_stats ran.
+    is_likely_reset = (dsk_total > 0 and mem_total == 0)
+
+    if is_likely_reset:
+        # Restore ALL disk data — memory state is not trustworthy
+        dsk_meta_level = int(disk_gp.get("meta_level", 1)) if isinstance(
+            disk_gp.get("meta_level"), (int, float)
+        ) else 1
+        dsk_xp = int(disk_gp.get("meta_xp", 0)) if isinstance(
+            disk_gp.get("meta_xp"), (int, float)
+        ) else 0
+        dsk_pts = int(disk_gp.get("meta_points", 0)) if isinstance(
+            disk_gp.get("meta_points"), (int, float)
+        ) else 0
+        logger.warning(
+            "Regression guard: memory looks reset (0 upgrades vs %d on disk), "
+            "restoring disk values (level=%d, xp=%d, points=%d)",
+            dsk_total, dsk_meta_level, dsk_xp, dsk_pts,
+        )
+        game.global_progress["meta_level"] = dsk_meta_level
+        game.global_progress["meta_xp"] = dsk_xp
+        game.global_progress["meta_points"] = dsk_pts
+        for k, v in disk_ps.items():
+            game.permanent_stats[k] = v
+    else:
+        # Normal save path: apply monotonic guards for values that should
+        # never decrease during legitimate gameplay.
+
+        # Guard 1: permanent_stats tiers must never decrease
+        for k, dsk_val in disk_ps.items():
+            mem_val = game.permanent_stats.get(k, 0)
+            if mem_val < dsk_val:
+                game.permanent_stats[k] = dsk_val
+        for k in disk_ps:
+            if k not in game.permanent_stats:
+                game.permanent_stats[k] = disk_ps[k]
+
+    # Guard 2: stages_cleared can only grow (union) — always applies
+    dsk_sc = disk_gp.get("stages_cleared", {})
+    if isinstance(dsk_sc, dict):
+        mem_sc = game.global_progress.get("stages_cleared", {})
+        if isinstance(mem_sc, dict):
+            merged_sc = dict(dsk_sc)
+            merged_sc.update(mem_sc)
+            game.global_progress["stages_cleared"] = merged_sc
+
+    # --- Build save data --------------------------------------------------
     profile_name = game.global_progress.get("profile_name", f"Profile {slot}")
     game.global_progress["active_profile_slot"] = slot
     data = {

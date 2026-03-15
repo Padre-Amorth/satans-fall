@@ -1339,6 +1339,7 @@ class UIGameRenderer:
 
                 # Draw icon if available
                 text_x = right_x
+                text_y = y
                 if icon_surf is not None:
                     icon_y = y + (line_h - icon_size) // 2
                     frame_size = icon_size + 4  # Add 2px border on each side
@@ -1354,8 +1355,12 @@ class UIGameRenderer:
                     # Draw icon inside frame
                     self.ui.screen.blit(icon_surf, (text_x + shake_x, icon_y + shake_y))
                     text_x += icon_size + icon_padding
+                    # Center text vertically with frame
+                    frame_center_y = frame_y + frame_size // 2
+                    text_height = text_surf.get_height()
+                    text_y = frame_center_y - text_height // 2
 
-                self.ui.screen.blit(text_surf, (text_x + shake_x, y + shake_y))
+                self.ui.screen.blit(text_surf, (text_x + shake_x, text_y + shake_y))
                 y += line_h
         else:
             self.ui.screen.blit(

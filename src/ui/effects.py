@@ -970,8 +970,8 @@ class UIEffectsRenderer:
                 frame_size = icon_size + 4  # Add 2px border on each side
                 frame_color = (100, 100, 100)  # Gray frame border
                 bg_color = (50, 50, 50)  # Dark gray background inside frame
-                # Font for level numbers (slightly larger than tiny_font)
-                lvl_font = self.ui.get_font(18)
+                # Font for level numbers (larger for visibility)
+                lvl_font = self.ui.get_font(20)
 
                 for wid in weapons:
                     lvl: int = self.game.weapon_levels.get(wid, 0)
@@ -1019,7 +1019,7 @@ class UIEffectsRenderer:
                     # Draw level number below icon
                     lvl_surf = self.ui.get_text(f"{lvl}", lvl_font, yellow)
                     lvl_x = weapon_x + (icon_size - lvl_surf.get_width()) // 2
-                    lvl_y = weapon_y + icon_size + 2
+                    lvl_y = weapon_y + icon_size + 6  # Increased spacing below icon
                     self.ui.screen.blit(lvl_surf, (lvl_x + shake_x, lvl_y + shake_y))
 
                     weapon_x += icon_spacing

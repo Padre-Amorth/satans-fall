@@ -105,24 +105,11 @@ class IceParticle:
 class Enemy(BaseSprite):
     @staticmethod
     def _get_barrier_side_position(barrier: dict, enemy_width: float = 30) -> tuple:
-        """
-        Calculate a position to the side of a barrier using slot-based positioning.
-        Supports up to 3 enemies per barrier (left, center, right slots).
-        Returns (x, y, slot_name) positioned on left or right edge with slot-aware placement.
-        Stores slot name in barrier dict for caller to retrieve.
-        """
-        barrier_x = barrier.get("x", 0)
-        barrier_y = barrier.get("y", 0)
-        barrier_w = barrier.get("w", 80)
-        barrier_h = barrier.get("h", 40)
-
-        # Initialize slot tracking if not present
+        """Position enemy at available slot (left/center/right) beside barrier."""
         if "occupied_slots" not in barrier:
             barrier["occupied_slots"] = {"left": 0, "center": 0, "right": 0}
 
         slots = barrier["occupied_slots"]
-
-        # Find the first available slot (prefer left, then center, then right)
         if slots["left"] < 1:
             slot = "left"
         elif slots["center"] < 1:
@@ -130,31 +117,27 @@ class Enemy(BaseSprite):
         elif slots["right"] < 1:
             slot = "right"
         else:
-            # All slots full, pick randomly (will overlap)
             slot = random.choice(["left", "center", "right"])
 
-        # Increment slot counter
         slots[slot] += 1
-
-        # Store current slot in barrier for retrieval
         barrier["_current_slot"] = slot
 
-        # Calculate position based on slot
-        barrier_center_x = barrier_x + barrier_w / 2
+        bx, by, bw, bh = (
+            barrier.get("x", 0),
+            barrier.get("y", 0),
+            barrier.get("w", 80),
+            barrier.get("h", 40),
+        )
+        bcx = bx + bw / 2
 
         if slot == "left":
-            # Left side: well to the left of barrier
-            x = barrier_x - enemy_width * 1.2 + random.uniform(-3, 3)
+            x = bx - enemy_width * 1.2 + random.uniform(-3, 3)
         elif slot == "center":
-            # Center: behind the barrier (slightly back)
-            x = barrier_center_x + random.uniform(-8, 8)
-        else:  # right
-            # Right side: well to the right of barrier
-            x = barrier_x + barrier_w + enemy_width * 1.2 + random.uniform(-3, 3)
+            x = bcx + random.uniform(-8, 8)
+        else:
+            x = bx + bw + enemy_width * 1.2 + random.uniform(-3, 3)
 
-        # Y position: center of barrier with minimal jitter to keep enemies aligned
-        y = barrier_y + barrier_h / 2 + random.uniform(-5, 5)
-
+        y = by + bh / 2 + random.uniform(-5, 5)
         return (int(x), int(y))
 
     def __init__(
@@ -231,22 +214,16 @@ class Enemy(BaseSprite):
             self.archer_fire_count = 0  # 0-1=single, 2=burst, then reset
             # track burst state: which arrow in the 3-arrow burst (0=idle, 1-3=burst arrows)
             self.archer_burst_arrow = 0
-            # entry phase: move downward into view before settling
             self.archer_entering = True
-            # randomize entry target between 150-210 for variety
             self.archer_entry_target_y = random.randint(150, 210)
-            # randomize entry speed between 0.8-1.2 px/frame for smoother entry
             self.archer_entry_speed = random.uniform(0.8, 1.2)
-            # impose vertical starting cap if spawn above limit (mostly for forced spawns)
+            self._archer_behavior_initialized: bool = False
             try:
                 from src.game_constants import ARCHER_VERTICAL_LIMIT
-
                 if self.y > ARCHER_VERTICAL_LIMIT:
                     self.y = ARCHER_VERTICAL_LIMIT
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
-            # Flag to track if archer behavior (target position + cover seeking) has been initialized
-            self._archer_behavior_initialized: bool = False
         elif enemy_type == "boss_medium":
             self.width = 60
             self.height = 60
@@ -465,18 +442,15 @@ class Enemy(BaseSprite):
             self._anim_timer: int = 0
             self._facing_right: bool = True  # default: face right (toward player)
             self._facing_down: bool = True  # default: face down (toward player)
-        # Cross Bearer has its own 2-frame animation cycle
         if enemy_type == "cross_bearer":
             self._anim_frame = 0
             self._anim_timer = 0
-            self._anim_frames: list = []  # populated by draw_enemy()
+            self._anim_frames: list = []
 
-        # Barrier cover-seeking state for archer and normal enemies
         self._hiding_behind_barrier: bool = False
         self._hiding_barrier_ref: dict | None = None
         self._hide_suppress: int = 0
 
-        # Normal enemy movement state — initialized but marker flag tracks if behavior was set up
         if enemy_type == "normal":
             self.stop_point: tuple = (x, y)
             self.stop_timer: int = 0
@@ -1428,20 +1402,11 @@ class Enemy(BaseSprite):
                                         if b.get("hp", 0) / b.get("max_hp", 1)
                                         > BARRIER_DAMAGED_THRESHOLD
                                     ]
-                                    if intact_barriers:
-                                        nearest = min(
-                                            intact_barriers,
-                                            key=lambda b: abs(
-                                                b["x"] + b["w"] / 2 - self.x
-                                            ),
-                                        )
-                                    else:
-                                        nearest = min(
-                                            barriers,
-                                            key=lambda b: abs(
-                                                b["x"] + b["w"] / 2 - self.x
-                                            ),
-                                        )
+                                    barrier_list = intact_barriers if intact_barriers else barriers
+                                    nearest = min(
+                                        barrier_list,
+                                        key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
+                                    )
                                     side_pos = Enemy._get_barrier_side_position(
                                         nearest, self.width
                                     )
@@ -1461,91 +1426,56 @@ class Enemy(BaseSprite):
                             self.archer_reposition_timer = random.randint(180, 300)
                             self._archer_behavior_initialized = True
 
-                        # Every 180-300 frames, archer picks new target position
                         self.archer_reposition_timer -= 1
                         if self.archer_reposition_timer <= 0:
-                            # Pick new random X target position (don't teleport, just set target)
                             if game:
                                 try:
                                     barriers = getattr(game, "barriers", [])
-                                    # Aggressive cover-seeking: stay behind barriers as long as they exist
-                                    current_barrier = getattr(
-                                        self, "_hiding_barrier_ref", None
+                                    curr_barrier = getattr(self, "_hiding_barrier_ref", None)
+                                    curr_alive = (
+                                        curr_barrier is not None
+                                        and curr_barrier in barriers
+                                        and curr_barrier.get("hp", 0) > 0
                                     )
 
-                                    # Check if current barrier still exists and has HP
-                                    current_barrier_alive = (
-                                        current_barrier is not None
-                                        and current_barrier in barriers
-                                        and current_barrier.get("hp", 0) > 0
-                                    )
-
-                                    # If already hiding and barrier is alive, stay there
                                     if (
                                         getattr(self, "_hiding_behind_barrier", False)
-                                        and current_barrier_alive
+                                        and curr_alive
                                     ):
-                                        # Stay at current barrier position (side-positioned)
-                                        side_pos = Enemy._get_barrier_side_position(
-                                            current_barrier, self.width
+                                        pos = Enemy._get_barrier_side_position(
+                                            curr_barrier, self.width
                                         )
-                                        self.archer_target_x = side_pos[0]
-                                        self._hiding_behind_barrier = True
-                                        self._hide_suppress = (
-                                            BARRIER_HIDE_SUPPRESS_FRAMES
-                                        )
-                                    # Try to seek new cover if no barrier or barrier is gone
+                                        self.archer_target_x = pos[0]
+                                        self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
                                     elif (
                                         barriers
-                                        and random.random()
-                                        < BARRIER_ARCHER_COVER_CHANCE
+                                        and random.random() < BARRIER_ARCHER_COVER_CHANCE
                                     ):
-                                        # Prefer intact barriers, but accept any barrier
-                                        intact_barriers = [
+                                        intact = [
                                             b
                                             for b in barriers
                                             if b.get("hp", 0) / b.get("max_hp", 1)
                                             > BARRIER_DAMAGED_THRESHOLD
                                         ]
-                                        if intact_barriers:
-                                            nearest = min(
-                                                intact_barriers,
-                                                key=lambda b: abs(
-                                                    b["x"] + b["w"] / 2 - self.x
-                                                ),
-                                            )
-                                        else:
-                                            # Fallback to any barrier if no intact ones
-                                            nearest = min(
-                                                barriers,
-                                                key=lambda b: abs(
-                                                    b["x"] + b["w"] / 2 - self.x
-                                                ),
-                                            )
-                                        side_pos = Enemy._get_barrier_side_position(
+                                        barrier_list = intact if intact else barriers
+                                        nearest = min(
+                                            barrier_list,
+                                            key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
+                                        )
+                                        pos = Enemy._get_barrier_side_position(
                                             nearest, self.width
                                         )
-                                        self.archer_target_x = side_pos[0]
+                                        self.archer_target_x = pos[0]
                                         self._hiding_behind_barrier = True
                                         self._hiding_barrier_ref = nearest
                                         self._barrier_slot = nearest.get("_current_slot", "left")
-                                        self._hide_suppress = (
-                                            BARRIER_HIDE_SUPPRESS_FRAMES
-                                        )
+                                        self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
                                     else:
-                                        # No barriers available - random position
-                                        self.archer_target_x = (
-                                            game.random_x_between_walls()
-                                        )
+                                        self.archer_target_x = game.random_x_between_walls()
                                         self._hiding_behind_barrier = False
                                         self._hiding_barrier_ref = None
                                         self._hide_suppress = 0
-                                except (
-                                    AttributeError,
-                                    TypeError,
-                                    ValueError,
-                                    KeyError,
-                                ):
+                                except (AttributeError, TypeError, ValueError, KeyError):
                                     pass
                             self.archer_reposition_timer = random.randint(180, 300)
 
@@ -1560,30 +1490,25 @@ class Enemy(BaseSprite):
                         self.x += random.uniform(-0.5, 0.5) * self.speed / 60
                         self.y += random.uniform(-0.5, 0.5) * self.speed / 60
 
-                        # Tick down hide suppression timer; clear if barrier is gone
                         if getattr(self, "_hiding_behind_barrier", False):
                             if getattr(self, "_hide_suppress", 0) > 0:
                                 self._hide_suppress -= 1
-                            # Clear hiding if barrier was destroyed or removed
                             ref = getattr(self, "_hiding_barrier_ref", None)
-                            if ref is None or ref not in getattr(game, "barriers", []):
-                                # Free up the slot when leaving barrier
-                                if ref is not None and "occupied_slots" in ref:
-                                    slot_idx = getattr(self, "_barrier_slot", None)
-                                    if slot_idx and slot_idx in ref["occupied_slots"]:
-                                        ref["occupied_slots"][slot_idx] = max(
-                                            0, ref["occupied_slots"][slot_idx] - 1
-                                        )
-                                self._hiding_behind_barrier = False
-                                self._hide_suppress = 0
-                            elif ref.get("hp", 0) <= 0:
-                                # Free up the slot when barrier is destroyed
-                                if "occupied_slots" in ref:
-                                    slot_idx = getattr(self, "_barrier_slot", None)
-                                    if slot_idx and slot_idx in ref["occupied_slots"]:
-                                        ref["occupied_slots"][slot_idx] = max(
-                                            0, ref["occupied_slots"][slot_idx] - 1
-                                        )
+                            barrier_gone = (
+                                ref is None
+                                or ref not in getattr(game, "barriers", [])
+                                or ref.get("hp", 0) <= 0
+                            )
+                            if barrier_gone:
+                                slot_idx = getattr(self, "_barrier_slot", None)
+                                if (
+                                    ref is not None
+                                    and "occupied_slots" in ref
+                                    and slot_idx in ref["occupied_slots"]
+                                ):
+                                    ref["occupied_slots"][slot_idx] = max(
+                                        0, ref["occupied_slots"][slot_idx] - 1
+                                    )
                                 self._hiding_behind_barrier = False
                                 self._hide_suppress = 0
 
@@ -1683,72 +1608,52 @@ class Enemy(BaseSprite):
                                 self._facing_right = dx > 0
                                 self._facing_down = dy > 0
                         else:
-                            # Arrived: stay stopped for a random duration then pick a new stop point
                             self.stop_timer = random.randint(60, 180)
-                            # Aggressive cover-seeking: stay behind barriers as long as they exist
                             barriers = getattr(game, "barriers", [])
-                            current_barrier = getattr(self, "_hiding_barrier_ref", None)
-
-                            # Check if current barrier still exists and has HP
-                            current_barrier_alive = (
-                                current_barrier is not None
-                                and current_barrier in barriers
-                                and current_barrier.get("hp", 0) > 0
+                            curr_barrier = getattr(self, "_hiding_barrier_ref", None)
+                            curr_alive = (
+                                curr_barrier is not None
+                                and curr_barrier in barriers
+                                and curr_barrier.get("hp", 0) > 0
                             )
 
-                            # If already hiding and barrier is alive, stay there
                             if (
                                 getattr(self, "_hiding_behind_barrier", False)
-                                and current_barrier_alive
+                                and curr_alive
                             ):
-                                # Stay at current barrier position (side-positioned)
-                                side_pos = Enemy._get_barrier_side_position(
-                                    current_barrier, self.width
+                                pos = Enemy._get_barrier_side_position(
+                                    curr_barrier, self.width
                                 )
-                                spx = side_pos[0]
-                                spy = side_pos[1]
-                                self._hiding_behind_barrier = True
+                                spx, spy = pos[0], pos[1]
                                 self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
-                            # Try to seek new cover if no barrier or barrier is gone
                             elif (
                                 barriers
                                 and random.random() < BARRIER_ARCHER_COVER_CHANCE
                             ):
-                                # Prefer intact barriers, but accept any barrier
-                                intact_barriers = [
+                                intact = [
                                     b
                                     for b in barriers
                                     if b.get("hp", 0) / b.get("max_hp", 1)
                                     > BARRIER_DAMAGED_THRESHOLD
                                 ]
-                                if intact_barriers:
-                                    nearest = min(
-                                        intact_barriers,
-                                        key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
-                                    )
-                                else:
-                                    # Fallback to any barrier if no intact ones
-                                    nearest = min(
-                                        barriers,
-                                        key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
-                                    )
-                                side_pos = Enemy._get_barrier_side_position(
-                                    nearest, self.width
+                                barrier_list = intact if intact else barriers
+                                nearest = min(
+                                    barrier_list,
+                                    key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
                                 )
-                                spx = side_pos[0]
-                                spy = side_pos[1]
+                                pos = Enemy._get_barrier_side_position(nearest, self.width)
+                                spx, spy = pos[0], pos[1]
                                 self._hiding_behind_barrier = True
                                 self._hiding_barrier_ref = nearest
                                 self._barrier_slot = nearest.get("_current_slot", "left")
                                 self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
                             else:
-                                # No barriers available - normal random stop point
-                                center_x = game.width / 2
-                                center_y = game.height / 2
-                                jitter_x = game.width * 0.2
-                                jitter_y = game.height * 0.2
-                                spx = center_x + random.uniform(-jitter_x, jitter_x)
-                                spy = center_y + random.uniform(-jitter_y, jitter_y)
+                                cx = game.width / 2
+                                cy = game.height / 2
+                                jx = game.width * 0.2
+                                jy = game.height * 0.2
+                                spx = cx + random.uniform(-jx, jx)
+                                spy = cy + random.uniform(-jy, jy)
                                 spx = game.clamp_to_walls(spx)
                                 self._hiding_behind_barrier = False
                             self.stop_point = (spx, spy)

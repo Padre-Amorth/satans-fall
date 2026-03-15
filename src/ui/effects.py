@@ -966,10 +966,12 @@ class UIEffectsRenderer:
                     50  # Space between icons (includes spacing for level text)
                 )
                 weapon_x = right_x + 10  # Starting position
-                weapon_y = right_y + 95  # Position in HUD
+                weapon_y = right_y + 100  # Position in HUD (5px lower)
                 frame_size = icon_size + 4  # Add 2px border on each side
                 frame_color = (100, 100, 100)  # Gray frame border
                 bg_color = (50, 50, 50)  # Dark gray background inside frame
+                # Font for level numbers (slightly larger than tiny_font)
+                lvl_font = self.ui.get_font(18)
 
                 for wid in weapons:
                     lvl: int = self.game.weapon_levels.get(wid, 0)
@@ -989,14 +991,16 @@ class UIEffectsRenderer:
                     except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
-                    # Draw frame and background
+                    # Draw frame and background (slightly transparent)
                     frame_x = weapon_x - 2
                     frame_y = weapon_y - 2
-                    # Draw dark background inside frame
-                    pygame.draw.rect(
-                        self.ui.screen,
-                        bg_color,
-                        (frame_x + shake_x, frame_y + shake_y, frame_size, frame_size),
+                    # Create transparent dark background
+                    bg_surf = pygame.Surface(
+                        (frame_size, frame_size), pygame.SRCALPHA
+                    )
+                    bg_surf.fill((*bg_color, 200))  # 200/255 alpha for transparency
+                    self.ui.screen.blit(
+                        bg_surf, (frame_x + shake_x, frame_y + shake_y)
                     )
                     # Draw frame border
                     pygame.draw.rect(
@@ -1013,7 +1017,7 @@ class UIEffectsRenderer:
                         )
 
                     # Draw level number below icon
-                    lvl_surf = self.ui.get_text(f"{lvl}", tiny_font, yellow)
+                    lvl_surf = self.ui.get_text(f"{lvl}", lvl_font, yellow)
                     lvl_x = weapon_x + (icon_size - lvl_surf.get_width()) // 2
                     lvl_y = weapon_y + icon_size + 2
                     self.ui.screen.blit(lvl_surf, (lvl_x + shake_x, lvl_y + shake_y))

@@ -1415,15 +1415,15 @@ class Enemy(BaseSprite):
                                     self._hiding_barrier_ref = nearest
                                     self._barrier_slot = nearest.get("_current_slot", "left")
                                     self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
+                                    self.archer_reposition_timer = random.randint(600, 900)
                                 else:
-                                    # No barriers or failed check: use random position
                                     self.archer_target_x = self.x
                                     self._hiding_behind_barrier = False
+                                    self.archer_reposition_timer = random.randint(180, 300)
                             except (AttributeError, TypeError, ValueError, KeyError):
-                                # Fallback if barrier check fails
                                 self.archer_target_x = self.x
                                 self._hiding_behind_barrier = False
-                            self.archer_reposition_timer = random.randint(180, 300)
+                                self.archer_reposition_timer = random.randint(180, 300)
                             self._archer_behavior_initialized = True
 
                         self.archer_reposition_timer -= 1
@@ -1477,7 +1477,6 @@ class Enemy(BaseSprite):
                                         self._hide_suppress = 0
                                 except (AttributeError, TypeError, ValueError, KeyError):
                                     pass
-                            self.archer_reposition_timer = random.randint(180, 300)
 
                         # Move toward target position gradually
                         target_diff = self.archer_target_x - self.x
@@ -1583,7 +1582,11 @@ class Enemy(BaseSprite):
                             spx = game.clamp_to_walls(spx)
                             self._hiding_behind_barrier = False
                         self.stop_point = (spx, spy)
-                        self.stop_timer = 0
+                        self.stop_timer = (
+                            random.randint(300, 600)
+                            if getattr(self, "_hiding_behind_barrier", False)
+                            else random.randint(60, 180)
+                        )
                         self.stop_threshold = max(
                             10, min(game.width, game.height) * 0.05
                         )
@@ -1608,7 +1611,10 @@ class Enemy(BaseSprite):
                                 self._facing_right = dx > 0
                                 self._facing_down = dy > 0
                         else:
-                            self.stop_timer = random.randint(60, 180)
+                            if getattr(self, "_hiding_behind_barrier", False):
+                                self.stop_timer = random.randint(300, 600)
+                            else:
+                                self.stop_timer = random.randint(60, 180)
                             barriers = getattr(game, "barriers", [])
                             curr_barrier = getattr(self, "_hiding_barrier_ref", None)
                             curr_alive = (

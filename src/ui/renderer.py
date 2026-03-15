@@ -2050,19 +2050,18 @@ class UIGameRenderer:
                     # Outer border for depth
                     pygame.draw.rect(self.ui.screen, (40, 25, 10), (bx, by, bw, bh), 2)
 
-                # HP bar BELOW the barrier — only when damaged
+                # HP bar BELOW the barrier — only when damaged (semi-transparent)
                 hp, max_hp = b.get("hp", 0), b.get("max_hp", 1)
                 if hp < max_hp:
                     frac = max(0.0, hp / max_hp)
-                    pygame.draw.rect(
-                        self.ui.screen, (40, 10, 10), (bx, by + bh + 3, bw, 5)
-                    )
-                    fill_col = (200, 50, 50) if frac > 0.3 else (255, 80, 0)
-                    pygame.draw.rect(
-                        self.ui.screen,
-                        fill_col,
-                        (bx, by + bh + 3, int(bw * frac), 5),
-                    )
+                    bg_color = (40, 10, 10, 120)
+                    fill_col = (200, 50, 50, 120) if frac > 0.3 else (255, 80, 0, 120)
+                    bg_surf = pygame.Surface((bw, 5), pygame.SRCALPHA)
+                    bg_surf.fill(bg_color)
+                    self.ui.screen.blit(bg_surf, (bx, by + bh + 3))
+                    fill_surf = pygame.Surface((int(bw * frac), 5), pygame.SRCALPHA)
+                    fill_surf.fill(fill_col)
+                    self.ui.screen.blit(fill_surf, (bx, by + bh + 3))
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         # Draw enemies (object-based Enemy instances only)

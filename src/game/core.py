@@ -1424,13 +1424,10 @@ class Game:
             "enemy_giant.png",
             "enemy_crusader.png",  # optional custom asset for the new crusader type
             "enemy_inquisitor.png",  # optional custom sprite for non-boss inquisitor
-            "boss_small.png",
             "boss_medium.png",
             "boss_big.png",
             "boss_final.png",
             "boss_limbo_horde.png",  # optional asset for Limbo horde boss
-            "projectile.png",
-            "enemy_projectile.png",
             "battlefield_cross.png",  # Bloody cross for battlefield decoration
             # optional Limbo battlefield image (see STAGE_SETTINGS)
             "limbo_battlefield.png",
@@ -3229,10 +3226,6 @@ class Game:
                         self.limbo_horde_active = False
                         self.limbo_horde_completed = True
                         self.limbo_horde_ready_for_victory = True
-                        print(
-                            f"[LIMBO_HORDE] Boss death detected in update! "
-                            f"Setting victory ready. Enemies: {len(self.enemies)}, Bosses: {len(self.bosses)}"
-                        )
                         # Clear all remaining enemies and bosses immediately
                         try:
                             self.enemies.empty()
@@ -3301,10 +3294,6 @@ class Game:
                 )
             if self.limbo_horde_victory_timer <= 0:
                 # begin full victory overlay sequence (will stay until keypress)
-                if getattr(self, "debug", False):
-                    print(
-                        "[LIMBO_HORDE] Victory timer expired! Showing victory screen!"
-                    )
                 self.showing_victory = True
                 self.victory_alpha = 0
 
@@ -3324,10 +3313,6 @@ class Game:
                     # Trigger screen shake (light intensity, 2 seconds duration)
                     self.shake_intensity = 4
                     self.shake_timer = int(2 * self.fps)
-                    print(
-                        f"[PURGATORY_HORDE] 60s elapsed! Triggering malevolent wave. "
-                        f"Enemies: {len(self.enemies)}, Bosses: {len(self.bosses)}"
-                    )
                     # Clear all remaining enemies immediately
                     try:
                         self.enemies.empty()
@@ -3347,11 +3332,6 @@ class Game:
                 if self.purgatory_horde_victory_timer <= 0:
                     self.purgatory_horde_victory_timer = int(self.fps * 5)
                     self.purgatory_horde_explosion_ready = False
-                    if getattr(self, "debug", False):
-                        print(
-                            f"[PURGATORY_HORDE] Wave expansion complete! Starting victory countdown: "
-                            f"{self.purgatory_horde_victory_timer} frames"
-                        )
 
         # Purgatory victory countdown
         if getattr(self, "purgatory_horde_victory_timer", 0) > 0:
@@ -3365,10 +3345,6 @@ class Game:
                 )
             if self.purgatory_horde_victory_timer <= 0:
                 # Show victory screen
-                if getattr(self, "debug", False):
-                    print(
-                        "[PURGATORY_HORDE] Victory timer expired! Showing victory screen!"
-                    )
                 self.showing_victory = True
                 self.victory_alpha = 0
 
@@ -3385,8 +3361,6 @@ class Game:
                     f"[LIMBO_FINAL] Countdown: {self.limbo_final_victory_timer} frames remaining"
                 )
             if self.limbo_final_victory_timer <= 0:
-                if getattr(self, "debug", False):
-                    print("[LIMBO_FINAL] Countdown expired, triggering defeat")
                 try:
                     self.limbo_final_defeat()
                 except (AttributeError, TypeError, ValueError, KeyError):

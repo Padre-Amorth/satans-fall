@@ -65,7 +65,6 @@ def _load_original(name: str) -> Optional[pygame.Surface]:
             surf = loaded
         _original_cache[name] = surf
     except Exception as e:
-        logger.warning("Asset %s could not be loaded: %s", path, e)
         # cache None so we don't repeatedly log the same missing-file warnings
         _original_cache[name] = None
     return _original_cache[name]
@@ -113,7 +112,6 @@ def get_image(
         _scaled_cache[key] = surf
         return surf
     except Exception as e:
-        logger.warning("Failed to scale %s to %s: %s", name, size, e)
         _scaled_cache[key] = orig
         return orig
 

@@ -483,7 +483,12 @@ class TowerSpecialSystem:
         # persist between activations.
         if not getattr(self, "voltaic_active", False):
             self._voltaic_accum.clear()
+            self._voltaic_frame_counter = 0
             return
+
+        # frame counter for damage timing: deal 2 damage every 3 frames (40 DPS at 60 FPS)
+        if not hasattr(self, "_voltaic_frame_counter"):
+            self._voltaic_frame_counter = 0
 
         # decrement timer and disable when expired; deactivate when the
         # counter hits zero so that the effect ends immediately on the frame
@@ -618,21 +623,27 @@ class TowerSpecialSystem:
                             "pentagram_ice",
                         )
                         if not _voltaic_blocked:
-                            enemy.take_damage(1, show_floating=False)
+                            # deal 2 damage every 3 frames (40 DPS at 60 FPS)
+                            if self._voltaic_frame_counter % 3 == 0:
+                                enemy.take_damage(2, show_floating=False)
+                            else:
+                                enemy.take_damage(1, show_floating=False)
                     except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     # accumulate damage for throttled display
                     try:
                         eid = id(enemy)
-                        total = self._voltaic_accum.get(eid, 0) + 1
+                        # add 2 damage every 3 frames, 1 damage on other frames (40 DPS average)
+                        damage_this_frame = 2 if self._voltaic_frame_counter % 3 == 0 else 1
+                        total = self._voltaic_accum.get(eid, 0) + damage_this_frame
                         self._voltaic_accum[eid] = total
-                        if total >= 10:
-                            # show a bundled "10" above the enemy
+                        if total >= 30:
+                            # show a bundled "30" above the enemy
                             try:
-                                self.game.spawn_floating_text("10", ex, ey - 8)
+                                self.game.spawn_floating_text("30", ex, ey - 8)
                             except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
-                            self._voltaic_accum[eid] = total - 10
+                            self._voltaic_accum[eid] = total - 30
                     except (AttributeError, TypeError, ValueError, KeyError):
                         pass
                     # drop the entry if the enemy died to avoid leaks
@@ -641,6 +652,9 @@ class TowerSpecialSystem:
                             self._voltaic_accum.pop(eid, None)
                     except (AttributeError, TypeError, ValueError, KeyError):
                         pass
+
+        # increment frame counter for damage timing
+        self._voltaic_frame_counter += 1
 
     def use_fire_charge(self) -> bool:
         """Consume one fire-special charge if any remain in the active window.

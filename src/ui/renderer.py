@@ -1291,9 +1291,27 @@ class UIGameRenderer:
         weapons = list(self.game.player_weapons)
         if weapons:
             yellow = (255, 204, 0)
+            icon_size = 32
+            icon_padding = 8
             for wid in weapons:
                 lvl = self.game.weapon_levels.get(wid, 0)
                 name = WEAPON_DEFS.get(wid, {}).get("name", _clean(wid))
+
+                # Load weapon icon
+                icon_surf = None
+                icon_key = WEAPON_DEFS.get(wid, {}).get("icon")
+                if not icon_key:
+                    icon_key = f"weapon_{wid.lower()}.png"
+                try:
+                    icon_surf = get_image(icon_key, (icon_size, icon_size))
+                    if icon_surf is None and icon_key.startswith("weapon_"):
+                        # Try fallback: remove "weapon_" prefix
+                        icon_surf = get_image(
+                            icon_key[len("weapon_") :], (icon_size, icon_size)
+                        )
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+
                 # Display FINAL FORM - Name for level 7, otherwise Name + number in yellow
                 if lvl == 7:
                     display_text = f"FINAL FORM - {name}"
@@ -1317,7 +1335,15 @@ class UIGameRenderer:
                     lvl_y = (combined_height - lvl_surf.get_height()) // 2
                     combined_surf.blit(lvl_surf, (name_surf.get_width(), lvl_y))
                     text_surf = combined_surf
-                self.ui.screen.blit(text_surf, (right_x + shake_x, y + shake_y))
+
+                # Draw icon if available
+                text_x = right_x
+                if icon_surf is not None:
+                    icon_y = y + (line_h - icon_size) // 2
+                    self.ui.screen.blit(icon_surf, (text_x + shake_x, icon_y + shake_y))
+                    text_x += icon_size + icon_padding
+
+                self.ui.screen.blit(text_surf, (text_x + shake_x, y + shake_y))
                 y += line_h
         else:
             self.ui.screen.blit(
@@ -2238,19 +2264,9 @@ class UIGameRenderer:
                 1,
             )
 
-        # Draw special effects
-        self.ui.effects.draw_special_effects(shake_x, shake_y)
-
-        # Draw tower energy bar (bottom-right) only if special unlocked and not prologo
-        try:
-            if self.game.special_unlocked():
-                self.ui._draw_tower_energy_bar(shake_x, shake_y)
-        except (AttributeError, TypeError, ValueError, KeyError):
-            pass
-
-        # Always render statues/towers last so they layer above projectiles and
-        # even Voltaic Mayhem rays.  ``draw_pedestals`` is a no-op except in
-        # Limbo, while the dynamic tower code handles Purgatory/Hell.
+        # Render statues/towers BEFORE special effects so they layer above Voltaic Mayhem.
+        # ``draw_pedestals`` is a no-op except in Limbo, while the dynamic tower code
+        # handles Purgatory/Hell.
         try:
             if hasattr(self, "draw_pedestals"):
                 self.draw_pedestals(shake_x, shake_y)
@@ -2275,4 +2291,14 @@ class UIGameRenderer:
                     )
         except (AttributeError, TypeError, ValueError, KeyError):
             # Don't break rendering if statue drawing throws
+            pass
+
+        # Draw special effects (including Voltaic Mayhem, which now layers behind towers)
+        self.ui.effects.draw_special_effects(shake_x, shake_y)
+
+        # Draw tower energy bar (bottom-right) only if special unlocked and not prologo
+        try:
+            if self.game.special_unlocked():
+                self.ui._draw_tower_energy_bar(shake_x, shake_y)
+        except (AttributeError, TypeError, ValueError, KeyError):
             pass

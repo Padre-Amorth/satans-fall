@@ -7,7 +7,7 @@ DEFAULT_FPS = 60
 # Duration (in frames) of the storm-tier7 "Voltaic Mayhem" special when
 # activated.  The beam can persist up to this many frames but also cancels
 # early if the right mouse button is released.
-VOLTAIC_MAYHEM_MAX_DURATION = 5 * DEFAULT_FPS
+VOLTAIC_MAYHEM_MAX_DURATION = int(3.5 * DEFAULT_FPS)  # 210 frames (3.5 seconds)
 
 # Movement speed for the beam's controllable endpoint (pixels/second).  The
 # endpoint will chase the mouse cursor at this rate rather than teleporting

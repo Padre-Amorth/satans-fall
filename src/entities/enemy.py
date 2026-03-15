@@ -106,24 +106,54 @@ class Enemy(BaseSprite):
     @staticmethod
     def _get_barrier_side_position(barrier: dict, enemy_width: float = 30) -> tuple:
         """
-        Calculate a position to the side of a barrier to avoid stacking.
-        Returns (x, y) positioned on left or right edge of barrier with small jitter.
+        Calculate a position to the side of a barrier using slot-based positioning.
+        Supports up to 3 enemies per barrier (left, center, right slots).
+        Returns (x, y, slot_name) positioned on left or right edge with slot-aware placement.
+        Stores slot name in barrier dict for caller to retrieve.
         """
         barrier_x = barrier.get("x", 0)
         barrier_y = barrier.get("y", 0)
         barrier_w = barrier.get("w", 80)
         barrier_h = barrier.get("h", 40)
 
-        # Randomly choose left or right side
-        if random.random() < 0.5:
-            # Left side: position to the left of barrier with small jitter
-            x = barrier_x - enemy_width * 0.6 + random.uniform(-5, 5)
-        else:
-            # Right side: position to the right of barrier with small jitter
-            x = barrier_x + barrier_w + enemy_width * 0.6 + random.uniform(-5, 5)
+        # Initialize slot tracking if not present
+        if "occupied_slots" not in barrier:
+            barrier["occupied_slots"] = {"left": 0, "center": 0, "right": 0}
 
-        # Y position: center of barrier with small vertical jitter
-        y = barrier_y + barrier_h / 2 + random.uniform(-10, 10)
+        slots = barrier["occupied_slots"]
+
+        # Find the first available slot (prefer left, then center, then right)
+        if slots["left"] < 1:
+            slot = "left"
+        elif slots["center"] < 1:
+            slot = "center"
+        elif slots["right"] < 1:
+            slot = "right"
+        else:
+            # All slots full, pick randomly (will overlap)
+            slot = random.choice(["left", "center", "right"])
+
+        # Increment slot counter
+        slots[slot] += 1
+
+        # Store current slot in barrier for retrieval
+        barrier["_current_slot"] = slot
+
+        # Calculate position based on slot
+        barrier_center_x = barrier_x + barrier_w / 2
+
+        if slot == "left":
+            # Left side: well to the left of barrier
+            x = barrier_x - enemy_width * 1.2 + random.uniform(-3, 3)
+        elif slot == "center":
+            # Center: behind the barrier (slightly back)
+            x = barrier_center_x + random.uniform(-8, 8)
+        else:  # right
+            # Right side: well to the right of barrier
+            x = barrier_x + barrier_w + enemy_width * 1.2 + random.uniform(-3, 3)
+
+        # Y position: center of barrier with minimal jitter to keep enemies aligned
+        y = barrier_y + barrier_h / 2 + random.uniform(-5, 5)
 
         return (int(x), int(y))
 
@@ -1418,6 +1448,7 @@ class Enemy(BaseSprite):
                                     self.archer_target_x = side_pos[0]
                                     self._hiding_behind_barrier = True
                                     self._hiding_barrier_ref = nearest
+                                    self._barrier_slot = nearest.get("_current_slot", "left")
                                     self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
                                 else:
                                     # No barriers or failed check: use random position
@@ -1497,6 +1528,7 @@ class Enemy(BaseSprite):
                                         self.archer_target_x = side_pos[0]
                                         self._hiding_behind_barrier = True
                                         self._hiding_barrier_ref = nearest
+                                        self._barrier_slot = nearest.get("_current_slot", "left")
                                         self._hide_suppress = (
                                             BARRIER_HIDE_SUPPRESS_FRAMES
                                         )
@@ -1535,9 +1567,23 @@ class Enemy(BaseSprite):
                             # Clear hiding if barrier was destroyed or removed
                             ref = getattr(self, "_hiding_barrier_ref", None)
                             if ref is None or ref not in getattr(game, "barriers", []):
+                                # Free up the slot when leaving barrier
+                                if ref is not None and "occupied_slots" in ref:
+                                    slot_idx = getattr(self, "_barrier_slot", None)
+                                    if slot_idx and slot_idx in ref["occupied_slots"]:
+                                        ref["occupied_slots"][slot_idx] = max(
+                                            0, ref["occupied_slots"][slot_idx] - 1
+                                        )
                                 self._hiding_behind_barrier = False
                                 self._hide_suppress = 0
                             elif ref.get("hp", 0) <= 0:
+                                # Free up the slot when barrier is destroyed
+                                if "occupied_slots" in ref:
+                                    slot_idx = getattr(self, "_barrier_slot", None)
+                                    if slot_idx and slot_idx in ref["occupied_slots"]:
+                                        ref["occupied_slots"][slot_idx] = max(
+                                            0, ref["occupied_slots"][slot_idx] - 1
+                                        )
                                 self._hiding_behind_barrier = False
                                 self._hide_suppress = 0
 
@@ -1588,6 +1634,7 @@ class Enemy(BaseSprite):
                                 spy = side_pos[1]
                                 self._hiding_behind_barrier = True
                                 self._hiding_barrier_ref = nearest
+                                self._barrier_slot = nearest.get("_current_slot", "left")
                                 self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
                             else:
                                 # No barriers or failed check: use random position
@@ -1692,6 +1739,7 @@ class Enemy(BaseSprite):
                                 spy = side_pos[1]
                                 self._hiding_behind_barrier = True
                                 self._hiding_barrier_ref = nearest
+                                self._barrier_slot = nearest.get("_current_slot", "left")
                                 self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
                             else:
                                 # No barriers available - normal random stop point

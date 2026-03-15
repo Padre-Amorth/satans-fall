@@ -1006,6 +1006,7 @@ class UIGameRenderer:
         font_title = self.ui.get_font(40)
         font_header = self.ui.get_font(20)
         font_body = self.ui.get_font(18)
+        font_weapon = self.ui.get_font(20)  # Slightly larger for weapons
         font_small = self.ui.get_font(15)
 
         COLOR_TITLE = (220, 180, 40)
@@ -1075,7 +1076,7 @@ class UIGameRenderer:
             1,
         )
 
-        line_h = 25
+        line_h = 30  # Increased spacing for better readability with icons
         left_x = self.ui.width // 2 - 430
         right_x = self.ui.width // 2 + 40
         top_y = 88
@@ -1292,7 +1293,7 @@ class UIGameRenderer:
         if weapons:
             yellow = (255, 204, 0)
             icon_size = 32
-            icon_padding = 8
+            icon_padding = 16  # Increased from 8 to prevent overlap
             for wid in weapons:
                 lvl = self.game.weapon_levels.get(wid, 0)
                 name = WEAPON_DEFS.get(wid, {}).get("name", _clean(wid))
@@ -1316,13 +1317,13 @@ class UIGameRenderer:
                 if lvl == 7:
                     display_text = f"FINAL FORM - {name}"
                     text_color = COLOR_DARK_RED
-                    text_surf = self.ui.get_text(display_text, font_body, text_color)
+                    text_surf = self.ui.get_text(display_text, font_weapon, text_color)
                 else:
                     # Render name in normal color, level number in yellow (larger font)
-                    name_surf = self.ui.get_text(f"{name}  ", font_body, COLOR_VALUE)
+                    name_surf = self.ui.get_text(f"{name}  ", font_weapon, COLOR_VALUE)
                     # Use larger font for level number
                     font_lvl = self.ui.pygame.font.Font(
-                        None, int(font_body.get_height() * 1.3)
+                        None, int(font_weapon.get_height() * 1.3)
                     )
                     lvl_surf = self.ui.get_text(f"{lvl}", font_lvl, yellow)
                     # Align number vertically to center

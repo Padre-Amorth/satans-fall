@@ -961,12 +961,12 @@ class UIEffectsRenderer:
             if weapons:
                 pygame = self.ui.pygame
                 yellow = (255, 204, 0)
-                icon_size = 36  # Slightly larger for HUD visibility
+                icon_size = 40  # Increased from 36 for better visibility
                 icon_spacing = (
-                    50  # Space between icons (includes spacing for level text)
+                    54  # Space between icons (includes spacing for level text)
                 )
-                weapon_x = right_x + 10  # Starting position
-                weapon_y = right_y + 100  # Position in HUD (5px lower)
+                weapon_x = right_x + 8  # Starting position (adjusted for larger icons)
+                weapon_y = right_y + 98  # Position in HUD
                 frame_size = icon_size + 4  # Add 2px border on each side
                 frame_color = (100, 100, 100)  # Gray frame border
                 bg_color = (50, 50, 50)  # Dark gray background inside frame

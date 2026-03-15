@@ -14,7 +14,7 @@ from src.game_constants import (
     WEAPON_ICON_PADDING,
     WEAPON_ICON_SIZE,
 )
-from src.ui.constants import _WEAPON_HUD_NAMES
+from src.weapons import WEAPON_DEFS
 
 if TYPE_CHECKING:
     from src.game.core import Game
@@ -955,48 +955,49 @@ class UIEffectsRenderer:
             (right_x + shake_x, right_y + 80 + shake_y),
         )
 
-        # Weapons section (no header, just weapon names with level numbers)
+        # Weapons section (icons only with level number below)
         if hasattr(self.game, "player_weapons") and self.game.player_weapons:
-            weapon_y = right_y + 104
-            dark_red = (220, 100, 100)
-            yellow = (255, 204, 0)
-            for i, wid in enumerate(self.game.player_weapons):
-                if i >= 3:  # Show max 3 weapons in right panel
-                    break
-                lvl: int = self.game.weapon_levels.get(wid, 0)
-                display_name: str = _WEAPON_HUD_NAMES.get(wid, wid.capitalize())
-
-                # Display FINAL FORM - Name for level 7, otherwise Name Lv N
-                if lvl == 7:
-                    full_text = f"FINAL FORM - {display_name}"
-                    text_color_to_use = dark_red
-                else:
-                    # Render name in normal color, level number in yellow (larger font)
-                    name_surf = self.ui.get_text(
-                        f"{display_name}  ", tiny_font, text_color
-                    )
-                    lvl_surf = self.ui.get_text(f"{lvl}", small_font, yellow)
-                    # Align number vertically to center of name
-                    combined_height = max(name_surf.get_height(), lvl_surf.get_height())
-                    combined_width = name_surf.get_width() + lvl_surf.get_width()
-                    combined_surf = self.ui.pygame.Surface(
-                        (combined_width, combined_height), self.ui.pygame.SRCALPHA
-                    )
-                    # Blit name at top
-                    combined_surf.blit(name_surf, (0, 0))
-                    # Blit number centered vertically
-                    lvl_y = (combined_height - lvl_surf.get_height()) // 2
-                    combined_surf.blit(lvl_surf, (name_surf.get_width(), lvl_y))
-                    weapon_text = combined_surf
-                    text_color_to_use = None  # Already colored
-
-                if text_color_to_use is not None:
-                    weapon_text = self.ui.get_text(
-                        full_text, tiny_font, text_color_to_use
-                    )
-                self.ui.screen.blit(
-                    weapon_text, (right_x + 25 + shake_x, weapon_y + i * 16 + shake_y)
+            weapons = list(self.game.player_weapons)[:3]  # Show max 3 weapons
+            if weapons:
+                yellow = (255, 204, 0)
+                icon_size = 36  # Slightly larger for HUD visibility
+                icon_spacing = (
+                    50  # Space between icons (includes spacing for level text)
                 )
+                weapon_x = right_x + 10  # Starting position
+                weapon_y = right_y + 95  # Position in HUD
+
+                for wid in weapons:
+                    lvl: int = self.game.weapon_levels.get(wid, 0)
+
+                    # Load weapon icon
+                    icon_surf = None
+                    icon_key = WEAPON_DEFS.get(wid, {}).get("icon")
+                    if not icon_key:
+                        icon_key = f"weapon_{wid.lower()}.png"
+                    try:
+                        icon_surf = get_image(icon_key, (icon_size, icon_size))
+                        if icon_surf is None and icon_key.startswith("weapon_"):
+                            # Try fallback: remove "weapon_" prefix
+                            icon_surf = get_image(
+                                icon_key[len("weapon_") :], (icon_size, icon_size)
+                            )
+                    except (AttributeError, TypeError, ValueError, KeyError):
+                        pass
+
+                    # Draw icon
+                    if icon_surf is not None:
+                        self.ui.screen.blit(
+                            icon_surf, (weapon_x + shake_x, weapon_y + shake_y)
+                        )
+
+                    # Draw level number below icon
+                    lvl_surf = self.ui.get_text(f"{lvl}", tiny_font, yellow)
+                    lvl_x = weapon_x + (icon_size - lvl_surf.get_width()) // 2
+                    lvl_y = weapon_y + icon_size + 2
+                    self.ui.screen.blit(lvl_surf, (lvl_x + shake_x, lvl_y + shake_y))
+
+                    weapon_x += icon_spacing
         else:
             no_wpn = self.ui.get_text("None", tiny_font, (100, 100, 100))
             self.ui.screen.blit(no_wpn, (right_x + shake_x, right_y + 104 + shake_y))

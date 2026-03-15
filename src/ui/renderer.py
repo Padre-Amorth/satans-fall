@@ -1076,7 +1076,7 @@ class UIGameRenderer:
             1,
         )
 
-        line_h = 30  # Increased spacing for better readability with icons
+        line_h = 36  # Spacing to prevent icon frame overlap
         left_x = self.ui.width // 2 - 430
         right_x = self.ui.width // 2 + 40
         top_y = 88

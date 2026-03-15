@@ -1485,6 +1485,32 @@ class Enemy(BaseSprite):
                             move_toward = 0.5 if target_diff > 0 else -0.5
                             self.x += move_toward
 
+                        # Actively seek barriers if none found yet, or if current is destroyed
+                        barriers = getattr(game, "barriers", [])
+                        curr_barrier = getattr(self, "_hiding_barrier_ref", None)
+                        barrier_alive = (
+                            curr_barrier is not None
+                            and curr_barrier in barriers
+                            and curr_barrier.get("hp", 0) > 0
+                        )
+
+                        if not barrier_alive and barriers and random.random() < BARRIER_ARCHER_COVER_CHANCE:
+                            intact = [
+                                b for b in barriers
+                                if b.get("hp", 0) / b.get("max_hp", 1) > BARRIER_DAMAGED_THRESHOLD
+                            ]
+                            barrier_list = intact if intact else barriers
+                            nearest = min(
+                                barrier_list,
+                                key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
+                            )
+                            pos = Enemy._get_barrier_side_position(nearest, self.width)
+                            self.archer_target_x = pos[0]
+                            self._hiding_behind_barrier = True
+                            self._hiding_barrier_ref = nearest
+                            self._barrier_slot = nearest.get("_current_slot", "left")
+                            self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
+
                         # Add jitter on top of base movement
                         self.x += random.uniform(-0.5, 0.5) * self.speed / 60
                         self.y += random.uniform(-0.5, 0.5) * self.speed / 60
@@ -1663,6 +1689,33 @@ class Enemy(BaseSprite):
                                 spx = game.clamp_to_walls(spx)
                                 self._hiding_behind_barrier = False
                             self.stop_point = (spx, spy)
+
+                    # Actively seek barriers if none found yet, or if current is destroyed
+                    barriers = getattr(game, "barriers", [])
+                    curr_barrier = getattr(self, "_hiding_barrier_ref", None)
+                    barrier_alive = (
+                        curr_barrier is not None
+                        and curr_barrier in barriers
+                        and curr_barrier.get("hp", 0) > 0
+                    )
+
+                    if not barrier_alive and barriers and random.random() < BARRIER_ARCHER_COVER_CHANCE:
+                        intact = [
+                            b for b in barriers
+                            if b.get("hp", 0) / b.get("max_hp", 1) > BARRIER_DAMAGED_THRESHOLD
+                        ]
+                        barrier_list = intact if intact else barriers
+                        nearest = min(
+                            barrier_list,
+                            key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
+                        )
+                        pos = Enemy._get_barrier_side_position(nearest, self.width)
+                        self.stop_point = (pos[0], pos[1])
+                        self._hiding_behind_barrier = True
+                        self._hiding_barrier_ref = nearest
+                        self._barrier_slot = nearest.get("_current_slot", "left")
+                        self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
+                        self.stop_timer = random.randint(300, 600)
 
                     # Tick down hide suppression timer; clear if barrier is gone (normal enemies)
                     if getattr(self, "_hiding_behind_barrier", False):

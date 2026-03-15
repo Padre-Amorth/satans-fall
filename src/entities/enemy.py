@@ -215,6 +215,8 @@ class Enemy(BaseSprite):
                     self.y = ARCHER_VERTICAL_LIMIT
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
+            # Flag to track if archer behavior (target position + cover seeking) has been initialized
+            self._archer_behavior_initialized: bool = False
         elif enemy_type == "boss_medium":
             self.width = 60
             self.height = 60
@@ -438,6 +440,18 @@ class Enemy(BaseSprite):
             self._anim_frame = 0
             self._anim_timer = 0
             self._anim_frames: list = []  # populated by draw_enemy()
+
+        # Barrier cover-seeking state for archer and normal enemies
+        self._hiding_behind_barrier: bool = False
+        self._hiding_barrier_ref: dict | None = None
+        self._hide_suppress: int = 0
+
+        # Normal enemy movement state — initialized but marker flag tracks if behavior was set up
+        if enemy_type == "normal":
+            self.stop_point: tuple = (x, y)
+            self.stop_timer: int = 0
+            self.stop_threshold: float = 50.0
+            self._normal_behavior_initialized: bool = False
 
     def _apply_aura(self, pulse: int) -> None:
         """Helper to rebuild `self.image` with a glowing aura behind the boss.
@@ -1369,7 +1383,7 @@ class Enemy(BaseSprite):
                         except (AttributeError, TypeError, ValueError, KeyError):
                             pass
                         # Initialize target position if not set
-                        if not hasattr(self, "archer_target_x"):
+                        if not getattr(self, "_archer_behavior_initialized", False):
                             # Seek cover immediately if barriers available
                             try:
                                 barriers = getattr(game, "barriers", [])
@@ -1414,6 +1428,7 @@ class Enemy(BaseSprite):
                                 self.archer_target_x = self.x
                                 self._hiding_behind_barrier = False
                             self.archer_reposition_timer = random.randint(180, 300)
+                            self._archer_behavior_initialized = True
 
                         # Every 180-300 frames, archer picks new target position
                         self.archer_reposition_timer -= 1
@@ -1541,7 +1556,7 @@ class Enemy(BaseSprite):
                     pass
                 elif self.enemy_type == "normal" and game is not None:
                     # Lazily initialize a stop point/time near the center of the battlefield
-                    if not hasattr(self, "stop_point"):
+                    if not getattr(self, "_normal_behavior_initialized", False):
                         # Seek cover immediately if barriers available
                         try:
                             barriers = getattr(game, "barriers", [])
@@ -1600,6 +1615,7 @@ class Enemy(BaseSprite):
                         self.stop_threshold = max(
                             10, min(game.width, game.height) * 0.05
                         )
+                        self._normal_behavior_initialized = True
 
                     # If currently stopped, count down and do not move
                     if getattr(self, "stop_timer", 0) > 0:

@@ -76,7 +76,7 @@ def test_purgatory_and_hell_unchanged():
         g.selected_stage = stage
         x, y = statue_projectile_offsets(g)
         assert x == expected_x, f"Expected X={expected_x} for {stage}, got {x}"
-        assert y == 60, f"Expected Y=60 for {stage}, got {y}"
+        assert y == 10, f"Expected Y=10 for {stage}, got {y}"
 
 
 def test_ice_tower_limbo_fires_at_offset():

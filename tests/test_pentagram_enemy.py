@@ -77,20 +77,20 @@ def test_pentagram_horizontal_movement():
 
 
 def test_pentagram_has_correct_health():
-    """Verify pentagram has exactly 300 body HP + 1500 shield HP."""
+    """Verify pentagram has exactly 300 body HP + 1000 shield HP."""
     from src.entities.enemy import Enemy
 
     e = Enemy(100.0, 300.0, "pentagram", 300.0, 50.0)
     assert e.max_health == 300, f"Expected max_health=300, got {e.max_health}"
     assert e.health == 300, f"Expected health=300, got {e.health}"
-    assert e.shield_hp == 1500, f"Expected shield_hp=1500, got {e.shield_hp}"
+    assert e.shield_hp == 1000, f"Expected shield_hp=1000, got {e.shield_hp}"
     assert (
-        e.shield_max_hp == 1500
-    ), f"Expected shield_max_hp=1500, got {e.shield_max_hp}"
+        e.shield_max_hp == 1000
+    ), f"Expected shield_max_hp=1000, got {e.shield_max_hp}"
 
 
 def test_elemental_pentagram_has_correct_health():
-    """Verify elemental variants have 300 body HP + 500 elemental shield HP."""
+    """Verify elemental variants have 300 body HP + 300 elemental shield HP."""
     from src.entities.enemy import Enemy
 
     for etype in _ELEMENTAL_TYPES:
@@ -99,10 +99,10 @@ def test_elemental_pentagram_has_correct_health():
             e.max_health == 300
         ), f"{etype}: Expected max_health=300, got {e.max_health}"
         assert e.health == 300, f"{etype}: Expected health=300, got {e.health}"
-        assert e.shield_hp == 500, f"{etype}: Expected shield_hp=500, got {e.shield_hp}"
+        assert e.shield_hp == 300, f"{etype}: Expected shield_hp=300, got {e.shield_hp}"
         assert (
-            e.shield_max_hp == 500
-        ), f"{etype}: Expected shield_max_hp=500, got {e.shield_max_hp}"
+            e.shield_max_hp == 300
+        ), f"{etype}: Expected shield_max_hp=300, got {e.shield_max_hp}"
 
 
 def test_elemental_pentagram_stage_mapping():
@@ -202,7 +202,7 @@ def test_elemental_pentagram_shield_immunity():
     # Test pentagram_storm with fire and ice projectiles
     enemy = Enemy(500.0, 300.0, "pentagram_storm", 300.0, 50.0)
     initial_shield = enemy.shield_hp
-    assert initial_shield == 500, "Shield should start at 500"
+    assert initial_shield == 300, "Shield should start at 300"
 
     # Create fire projectile (should NOT damage storm shield)
     fire_proj = Projectile(100, 100, 1, 0, damage=50)
@@ -304,7 +304,7 @@ def test_elemental_pentagram_shield_blocks_wrong_tower_damage():
     # Create a pentagram_storm with full shield
     enemy = Enemy(500.0, 300.0, "pentagram_storm", 300.0, 50.0)
     initial_shield = enemy.shield_hp
-    assert initial_shield == 500, "Shield should start at 500"
+    assert initial_shield == 300, "Shield should start at 300"
 
     # Create ice tower and fire a projectile
     ice_tower = Tower(100, 100, tower_type="ice")
@@ -340,7 +340,7 @@ def test_elemental_pentagram_shield_blocks_burn_effect():
 
     # Create pentagram_fire with shield
     enemy = Enemy(500.0, 300.0, "pentagram_fire", 300.0, 50.0)
-    assert enemy.shield_hp == 500
+    assert enemy.shield_hp == 300
 
     # Fire projectile with burn effect (should work)
     fire_proj = Projectile(100, 100, 1, 0, damage=50)

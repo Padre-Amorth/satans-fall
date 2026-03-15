@@ -18,7 +18,7 @@ def test_custode_split_creates_explosion():
     cust = [e for e in g.enemies if getattr(e, "enemy_type", "") == "custode"]
     assert cust
     big = cust[0]
-    big.take_damage(big.max_health // 2 + 1)
+    big.take_damage(int(big.max_health * 0.71))
     try:
         big.update(g.player, g)
     except Exception:

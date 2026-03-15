@@ -37,7 +37,7 @@ def test_permanent_stat_effect_texts():
     assert g.permanent_stat_effect_text("power", 5) == "+5% dmg/level (25% total)"
     assert (
         g.permanent_stat_effect_text("vigor", 3)
-        == "+10 HP/level (30 HP total)\nHeal 0.5 HP every 5s/level (0.5 HP/5s)"
+        == "+10 HP/level (30 HP total)\nHeal 0.5 HP every 5s/level (1.5 HP/5s)"
     )
     assert (
         g.permanent_stat_effect_text("adrenaline", 2)
@@ -64,9 +64,9 @@ def test_permanent_stat_effect_texts():
     # Blasphemy 5 is now a blink ability; show its description even at level 0
     assert (
         g.permanent_stat_effect_text("blasphemy_5", 0)
-        == "Blink: teleport in moving direction (spacebar)"
+        == "Blink: teleport in moving direction (spacebar); 5s cooldown"
     )
     assert (
         g.permanent_stat_effect_text("blasphemy_5", 1)
-        == "Blink: teleport in moving direction (spacebar)"
+        == "Blink: teleport in moving direction (spacebar); 5s cooldown"
     )

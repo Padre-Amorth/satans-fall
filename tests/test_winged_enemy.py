@@ -9,12 +9,13 @@ def test_winged_zigzag_and_fast_movement():
     """Winged enemies should oscillate horizontally and descend quickly."""
     pygame.init()
     g = Game(debug=True)
-    # create a winged enemy heading downward from top
-    w = Enemy(100, 0, "winged", health=30, speed=ENEMY_BASE_SPEEDS.get("winged", 120))
+    # Place winged enemy directly above the player so the base movement
+    # vector is purely downward and the zigzag lateral offset is visible.
+    w = Enemy(g.player.x, 0, "winged", health=30, speed=ENEMY_BASE_SPEEDS.get("winged", 120))
 
     dxs = []
-    # simulate a few frames and record horizontal deltas
-    for _ in range(20):
+    # simulate enough frames for a full zigzag cycle
+    for _ in range(80):
         old_x = w.x
         old_y = w.y
         w.update(g.player, g)

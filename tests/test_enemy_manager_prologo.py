@@ -248,7 +248,12 @@ def test_statue_projectile_offsets_helper():
             expected_x = getattr(game_constants, attr) - 35
         else:
             expected_x = getattr(game_constants, attr) if attr else 0
-        expected_y = game_constants.STATUE_PROJECTILE_OFFSET_Y
+        if stage.startswith("purgatory"):
+            expected_y = game_constants.STATUE_PROJECTILE_OFFSET_Y_PURGATORY
+        elif stage.startswith("hell"):
+            expected_y = game_constants.STATUE_PROJECTILE_OFFSET_Y_HELL
+        else:
+            expected_y = game_constants.STATUE_PROJECTILE_OFFSET_Y
         assert (x, y) == (
             expected_x,
             expected_y,

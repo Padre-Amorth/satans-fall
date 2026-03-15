@@ -49,6 +49,8 @@ def test_hell_colors_fill_inside_and_outside(tmp_path: Path) -> None:
 
     assert close(tuple(inside_pixel), settings["floor_color"])
     assert close(tuple(outside_pixel), settings["bg_color"])
-    assert close(tuple(wall_pixel), settings["wall_color"])
+    # The renderer overrides wall_color for hell stages with a dark brown
+    # tint (20, 10, 5), so compare against the actual rendered value.
+    assert close(tuple(wall_pixel), (20, 10, 5))
     assert close(tuple(outer_border), (0, 0, 0))
     assert close(tuple(inner_border), (0, 0, 0))

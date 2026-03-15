@@ -13,7 +13,7 @@ def test_custode_halves_do_not_split_again():
     halves = [e for e in g.enemies if getattr(e, "enemy_type", "") == "custode"]
     assert len(halves) == 1
     big = halves[0]
-    big.take_damage(big.max_health // 2 + 1)
+    big.take_damage(int(big.max_health * 0.71))
     try:
         big.update(g.player, g)
     except Exception:

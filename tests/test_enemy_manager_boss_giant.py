@@ -21,6 +21,7 @@ def test_spawn_giant_and_boss_via_manager():
 
     # Hell stage should replace giants with custodes
     g.selected_stage = "hell"
+    g.spawn_system.last_giant_spawn_time = -20
     g.spawn_giant_enemy()
     custodes = [e for e in g.enemies if getattr(e, "enemy_type", "") == "custode"]
     assert custodes, "hell stage spawn_giant_enemy should produce a custode"
@@ -58,6 +59,7 @@ def test_spawn_giant_spawns_from_left_and_right():
     assert left.x < 0
     assert 0 <= left.y <= g.height
 
+    g.spawn_system.last_giant_spawn_time = -20
     right = em.spawn_giant_enemy(side="right")
     assert getattr(right, "enemy_type", "") == "giant"
     assert right.x > g.width
@@ -65,8 +67,10 @@ def test_spawn_giant_spawns_from_left_and_right():
 
     # On hell stage, side spawns should also respect custode replacement
     g.selected_stage = "hell"
+    g.spawn_system.last_giant_spawn_time = -20
     left2 = em.spawn_giant_enemy(side="left")
     assert getattr(left2, "enemy_type", "") == "custode"
+    g.spawn_system.last_giant_spawn_time = -20
     right2 = em.spawn_giant_enemy(side="right")
     assert getattr(right2, "enemy_type", "") == "custode"
 
@@ -76,6 +80,7 @@ def test_spawn_giant_default_spawns_from_top_inside_walls():
     em = g.enemy_manager
     # Call multiple times to exercise randomness; default should spawn from top inside walls
     for _ in range(20):
+        g.spawn_system.last_giant_spawn_time = -20
         e = em.spawn_giant_enemy()
         assert getattr(e, "enemy_type", "") == "giant"
         # Default top spawn should start off-screen (y < 0) and x should be clamped inside walls
@@ -85,6 +90,7 @@ def test_spawn_giant_default_spawns_from_top_inside_walls():
     # double-check default behaviour on hell stage also produces custode
     g.selected_stage = "hell"
     for _ in range(5):
+        g.spawn_system.last_giant_spawn_time = -20
         e = em.spawn_giant_enemy()
         assert getattr(e, "enemy_type", "") == "custode"
         assert e.y < 0

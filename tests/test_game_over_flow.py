@@ -131,7 +131,7 @@ def test_blasphemy5_revive_auto_unpauses_and_draws():
     assert game.blasphemy_5_revived is True
     assert game.paused is True
     assert game._paused_by_blasphemy5 is True
-    assert game.blasphemy_5_pause_timer > 0
+    assert game.blasphemy5_system.blasphemy_5_pause_timer > 0
     assert game.player.health > 0, "Revive should restore some health"
 
     # step through the pause duration; draw() may be called while paused

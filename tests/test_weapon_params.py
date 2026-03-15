@@ -26,9 +26,10 @@ def test_shotgun_pellets_and_fire():
             level
         ), f"Expected {shotgun_pellets(level)} pellets at level {level}, got {len(projs)}"
 
-        # Pellets should be 2px larger in radius compared to legacy base (base 5 -> now 7)
+        # Pellet radius: base 5 scaled by projectile_size_multiplier, then -1 for
+        # reduced collision radius (see weapon_system.py shotgun path)
         if projs:
-            expected_radius = int(5 * game.projectile_size_multiplier) + 2
+            expected_radius = max(1, int(5 * game.projectile_size_multiplier) - 1)
             assert (
                 projs[0].radius == expected_radius
             ), f"Pellet radius should be {expected_radius}, got {projs[0].radius}"
@@ -37,8 +38,8 @@ def test_shotgun_pellets_and_fire():
     from src.weapons import WEAPON_DEFS
 
     assert (
-        WEAPON_DEFS["shotgun"]["spread_deg"] == 15
-    ), "Hellgun spread should be set to 15 degrees"
+        WEAPON_DEFS["shotgun"]["spread_deg"] == 22
+    ), "Hellgun spread should be set to 22 degrees"
 
 
 def test_shotgun_and_spear_cooldowns():

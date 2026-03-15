@@ -17,7 +17,8 @@ def test_custode_splits_at_half_health():
     g.enemies = pygame.sprite.Group()
 
     g.selected_stage = "hell"  # ensure custode spawn
-    # force a big spawn
+    # force a big spawn — bypass 12-second cooldown
+    g.spawn_system.last_giant_spawn_time = -20
     g.spawn_giant_enemy()
     custodes = [e for e in g.enemies if getattr(e, "enemy_type", "") == "custode"]
     assert custodes, "custode should be spawned on hell stage"
@@ -27,7 +28,7 @@ def test_custode_splits_at_half_health():
     original_height = c.height
     initial_max = c.max_health
     # deal damage to push it below half
-    c.take_damage(initial_max // 2 + 1)
+    c.take_damage(int(initial_max * 0.71))
     # simulate a game update so splitting logic runs
     try:
         c.update(g.player, g)

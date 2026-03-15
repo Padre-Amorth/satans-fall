@@ -182,14 +182,9 @@ def save_permanent_stats(game: Any) -> None:
         for k, v in disk_ps.items():
             game.permanent_stats[k] = v
     else:
-        # Normal save path: apply monotonic guards for values that should
-        # never decrease during legitimate gameplay.
-
-        # Guard 1: permanent_stats tiers must never decrease
-        for k, dsk_val in disk_ps.items():
-            mem_val = game.permanent_stats.get(k, 0)
-            if mem_val < dsk_val:
-                game.permanent_stats[k] = dsk_val
+        # Normal save path: player intentionally modified stats (upgrade/downgrade).
+        # Allow individual stats to decrease (right-click downgrade).
+        # Restore stats that exist on disk but not in memory (edge case).
         for k in disk_ps:
             if k not in game.permanent_stats:
                 game.permanent_stats[k] = disk_ps[k]

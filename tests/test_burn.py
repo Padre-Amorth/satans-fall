@@ -383,9 +383,31 @@ def test_fire_left_tier3_applies_to_multiple_player_weapons():
     assert ds is not None
     assert_bonus_applies(ds, 100, getattr(ds, "damage", 0))
 
-    # Flies (use explicit class)
+    # Flies (use explicit class) — the Flies code path uses
+    # _apply_damage_with_barrier_protection which calls take_damage(show_floating=False),
+    # so no floating text is spawned.  Verify damage only.
     sd = FliesProjectile(0, 0, 0, 0, damage=10)
-    assert_bonus_applies(sd, 40, 10)
+    sd.x = 320
+    sd.y = 520
+    try:
+        g.projectiles.empty()
+    except Exception:
+        g.projectiles = []
+    try:
+        g.projectiles.add(sd)
+    except Exception:
+        g.projectiles.append(sd)
+    enemy_flies = Enemy(320, 520, enemy_type="normal", health=40)
+    enemy_flies.health = 40
+    enemy_flies.max_health = 40
+    enemy_flies.speed = 75
+    enemy_flies.radius = 12
+    enemy_flies.damage = 5
+    enemy_flies.burn_timer = 3
+    enemy_flies.burn_damage_per_second = 1
+    g.enemies = [enemy_flies]
+    g.handle_collisions()
+    assert enemy_flies.health == 40 - int(round(10 * 1.25))
 
 
 def test_fire_left_tier1_propagates_burn_to_nearby_enemies():

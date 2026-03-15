@@ -228,8 +228,6 @@ class Enemy(BaseSprite):
             self.damage = 18
             # Toggle used to alternate firing pattern (3-shot, then single)
             self.inquisitor_fire_single_next: bool = False
-            # Flag to track if roam behavior (including barrier seeking) has been initialized
-            self._inquisitor_roam_initialized: bool = False
         elif enemy_type == "boss_big":
             # Make boss_big significantly larger (at least 3x the normal size)
             # Base enemies end up at ~40px after default growth, so 3x yields >=120.
@@ -1849,57 +1847,23 @@ class Enemy(BaseSprite):
                 elif self.enemy_type == "boss_inquisitor" and game is not None:
                     # Inquisitor roams randomly within the top half of the playfield
                     # Do not chase the player directly; pick random roam targets and move there
-                    # Prefer positions near barriers for cover when available
                     top_margin = 50
                     bottom_limit = int(game.height / 2) - 40  # do not cross halfway
                     left_limit = 50
                     right_limit = game.width - 50
 
-                    if not getattr(self, "_inquisitor_roam_initialized", False):
-                        # Try to position near barriers if available
-                        barriers = getattr(game, "barriers", [])
-                        if (
-                            barriers
-                            and random.random() < BARRIER_ARCHER_COVER_CHANCE
-                        ):
-                            # Pick a barrier and position nearby (slightly above it within top half)
-                            try:
-                                nearest = min(
-                                    barriers,
-                                    key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
-                                )
-                                rx = nearest["x"] + nearest["w"] / 2
-                                ry = max(
-                                    top_margin,
-                                    min(
-                                        nearest["y"] - 40,
-                                        max(top_margin + 10, bottom_limit),
-                                    ),
-                                )
-                                rx = game.clamp_to_walls(rx)
-                            except (AttributeError, TypeError, ValueError, KeyError):
-                                # Fallback to random roam
-                                rx = random.uniform(
-                                    game.clamp_to_walls(0),
-                                    game.clamp_to_walls(game.width),
-                                )
-                                ry = random.uniform(
-                                    top_margin, max(top_margin + 10, bottom_limit)
-                                )
-                                rx = game.clamp_to_walls(rx)
-                        else:
-                            # Random roam position (no barriers or random chance failed)
-                            rx = random.uniform(
-                                game.clamp_to_walls(0),
-                                game.clamp_to_walls(game.width),
-                            )
-                            ry = random.uniform(
-                                top_margin, max(top_margin + 10, bottom_limit)
-                            )
-                            rx = game.clamp_to_walls(rx)
+                    if not hasattr(self, "roam_target"):
+                        # Use game's clamp_to_walls so roam stays within arena walls
+                        rx = random.uniform(
+                            game.clamp_to_walls(0), game.clamp_to_walls(game.width)
+                        )
+                        ry = random.uniform(
+                            top_margin, max(top_margin + 10, bottom_limit)
+                        )
+                        # Ensure x respects wall clamps explicitly
+                        rx = game.clamp_to_walls(rx)
                         self.roam_target = (rx, ry)
                         self.roam_timer = random.randint(60, 180)
-                        self._inquisitor_roam_initialized = True
 
                     # Move toward roam target with slight speed variation
                     tx, ty = self.roam_target

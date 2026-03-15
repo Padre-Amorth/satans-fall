@@ -615,6 +615,32 @@ class CollisionSystem:
             pass
         return base_damage
 
+    def _apply_damage_with_barrier_protection(
+        self, enemy: Any, damage: float, projectile: Any
+    ) -> bool:
+        """Apply damage to enemy or barrier if enemy is protected.
+
+        Returns True if damage was applied to enemy, False if blocked by barrier.
+        """
+        g = self.game
+        hiding = getattr(enemy, "_hiding_behind_barrier", False)
+        barrier_ref = getattr(enemy, "_hiding_barrier_ref", None) if hiding else None
+
+        if hiding and barrier_ref is not None and barrier_ref in getattr(g, "barriers", []):
+            # Enemy is protected by barrier - damage barrier instead
+            try:
+                barrier_ref["hp"] -= damage
+            except (TypeError, KeyError):
+                pass
+            return False
+        else:
+            # Enemy is not protected - apply damage normally
+            try:
+                enemy.take_damage(damage, show_floating=False)
+            except (AttributeError, TypeError):
+                pass
+            return True
+
     def handle_collisions(self) -> None:
         """Handle all collision detection"""
         g = self.game
@@ -833,7 +859,9 @@ class CollisionSystem:
                                     KeyError,
                                 ):
                                     pass
-                                enemy.take_damage(dmg_to_apply, show_floating=False)
+                                self._apply_damage_with_barrier_protection(
+                                    enemy, dmg_to_apply, projectile
+                                )
                                 # Apply slow effect (object-style / dict) for ICE3 hits.
                                 slow_duration = getattr(
                                     projectile, "slow_duration", 120
@@ -995,19 +1023,20 @@ class CollisionSystem:
                                     elif self._elemental_shield_can_damage(
                                         enemy, projectile
                                     ):
-                                        enemy.take_damage(
-                                            dmg_to_apply, show_floating=False
-                                        )
-                                        # charge energy for each successful hit
-                                        try:
-                                            self._maybe_charge_tower(projectile)
-                                        except (
-                                            AttributeError,
-                                            TypeError,
-                                            ValueError,
-                                            KeyError,
+                                        # Check if enemy is protected by barrier
+                                        if self._apply_damage_with_barrier_protection(
+                                            enemy, dmg_to_apply, projectile
                                         ):
-                                            pass
+                                            # charge energy for each successful hit (only if enemy was hit, not barrier)
+                                            try:
+                                                self._maybe_charge_tower(projectile)
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
+                                                pass
 
                                         # Apply slow effect (object or dict) for explosion-area
                                         slow_duration = getattr(
@@ -1138,19 +1167,20 @@ class CollisionSystem:
                                     elif self._elemental_shield_can_damage(
                                         enemy, projectile
                                     ):
-                                        enemy.take_damage(
-                                            dmg_to_apply, show_floating=False
-                                        )
-                                        # charge energy on each enemy hit by explosion
-                                        try:
-                                            self._maybe_charge_tower(projectile)
-                                        except (
-                                            AttributeError,
-                                            TypeError,
-                                            ValueError,
-                                            KeyError,
+                                        # Check if enemy is protected by barrier
+                                        if self._apply_damage_with_barrier_protection(
+                                            enemy, dmg_to_apply, projectile
                                         ):
-                                            pass
+                                            # charge energy on each enemy hit by explosion (only if enemy was hit)
+                                            try:
+                                                self._maybe_charge_tower(projectile)
+                                            except (
+                                                AttributeError,
+                                                TypeError,
+                                                ValueError,
+                                                KeyError,
+                                            ):
+                                                pass
 
                                         # Apply slow effect
                                         slow_duration = getattr(
@@ -1362,16 +1392,30 @@ class CollisionSystem:
                     if hasattr(enemy, "take_damage"):
                         try:
                             if self._elemental_shield_can_damage(enemy, projectile):
-                                enemy.take_damage(dmg_to_apply, show_floating=False)
+                                self._apply_damage_with_barrier_protection(
+                                    enemy, dmg_to_apply, projectile
+                                )
                             else:
                                 self._show_immune_text(enemy)
                         except (AttributeError, TypeError, ValueError, KeyError):
                             # Fallback: manually apply damage only if immunity check passed
                             if self._elemental_shield_can_damage(enemy, projectile):
                                 try:
-                                    enemy.health = max(
-                                        0, getattr(enemy, "health", 0) - dmg_to_apply
-                                    )
+                                    # Check barrier protection for fallback path too
+                                    hiding = getattr(enemy, "_hiding_behind_barrier", False)
+                                    barrier_ref = getattr(
+                                        enemy, "_hiding_barrier_ref", None
+                                    ) if hiding else None
+                                    if (
+                                        hiding
+                                        and barrier_ref is not None
+                                        and barrier_ref in getattr(self.game, "barriers", [])
+                                    ):
+                                        barrier_ref["hp"] -= dmg_to_apply
+                                    else:
+                                        enemy.health = max(
+                                            0, getattr(enemy, "health", 0) - dmg_to_apply
+                                        )
                                 except (
                                     AttributeError,
                                     TypeError,
@@ -1416,16 +1460,30 @@ class CollisionSystem:
                     if hasattr(enemy, "take_damage"):
                         try:
                             if self._elemental_shield_can_damage(enemy, projectile):
-                                enemy.take_damage(dmg_to_apply, show_floating=False)
+                                self._apply_damage_with_barrier_protection(
+                                    enemy, dmg_to_apply, projectile
+                                )
                             else:
                                 self._show_immune_text(enemy)
                         except (AttributeError, TypeError, ValueError, KeyError):
                             # Fallback: manually apply damage only if immunity check passed
                             if self._elemental_shield_can_damage(enemy, projectile):
                                 try:
-                                    enemy.health = max(
-                                        0, getattr(enemy, "health", 0) - dmg_to_apply
-                                    )
+                                    # Check barrier protection for fallback path too
+                                    hiding = getattr(enemy, "_hiding_behind_barrier", False)
+                                    barrier_ref = getattr(
+                                        enemy, "_hiding_barrier_ref", None
+                                    ) if hiding else None
+                                    if (
+                                        hiding
+                                        and barrier_ref is not None
+                                        and barrier_ref in getattr(self.game, "barriers", [])
+                                    ):
+                                        barrier_ref["hp"] -= dmg_to_apply
+                                    else:
+                                        enemy.health = max(
+                                            0, getattr(enemy, "health", 0) - dmg_to_apply
+                                        )
                                 except (
                                     AttributeError,
                                     TypeError,
@@ -1440,9 +1498,21 @@ class CollisionSystem:
                     if not hasattr(enemy, "take_damage"):
                         try:
                             if self._elemental_shield_can_damage(enemy, projectile):
-                                enemy.health = max(
-                                    0, getattr(enemy, "health", 0) - int(dmg_to_apply)
-                                )
+                                # Check barrier protection for non-take_damage enemies too
+                                hiding = getattr(enemy, "_hiding_behind_barrier", False)
+                                barrier_ref = getattr(
+                                    enemy, "_hiding_barrier_ref", None
+                                ) if hiding else None
+                                if (
+                                    hiding
+                                    and barrier_ref is not None
+                                    and barrier_ref in getattr(self.game, "barriers", [])
+                                ):
+                                    barrier_ref["hp"] -= int(dmg_to_apply)
+                                else:
+                                    enemy.health = max(
+                                        0, getattr(enemy, "health", 0) - int(dmg_to_apply)
+                                    )
                                 try:
                                     ex, ey = g._enemy_pos(enemy)
                                     try:

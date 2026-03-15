@@ -998,7 +998,7 @@ class UIEffectsRenderer:
                     bg_surf = pygame.Surface(
                         (frame_size, frame_size), pygame.SRCALPHA
                     )
-                    bg_surf.fill((*bg_color, 200))  # 200/255 alpha for transparency
+                    bg_surf.fill((*bg_color, 120))  # 120/255 alpha for more transparency
                     self.ui.screen.blit(
                         bg_surf, (frame_x + shake_x, frame_y + shake_y)
                     )

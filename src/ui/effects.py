@@ -439,14 +439,15 @@ class UIEffectsRenderer:
                     particles = fire.get("particles", [])
                     for p in particles:
                         try:
-                            # Draw burn particles exactly like burning enemies
+                            # Draw burn particles with slight transparency
                             surf = pygame.Surface(
                                 (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
                             )
-                            alpha = max(60, int(255 * (p.life / 44)))
+                            # Reduce alpha by 30% for semi-transparent effect
+                            alpha = max(60, int(255 * (p.life / 44))) * 0.7
                             pygame.draw.circle(
                                 surf,
-                                (255, 120, 0, alpha),
+                                (255, 120, 0, int(alpha)),
                                 (p.size + 1, p.size + 1),
                                 p.size,
                             )

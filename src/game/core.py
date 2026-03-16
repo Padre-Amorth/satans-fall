@@ -3521,9 +3521,9 @@ class Game:
                     px = fire["x"] + random.uniform(-5, 5)
                     py = fire["y"] + random.uniform(-3, 3)
                     # Minimal horizontal velocity (mostly vertical rise)
-                    vx = random.uniform(-5, 5)
-                    # Strong upward velocity for vertical flame rise
-                    vy = random.uniform(-25, -15)
+                    vx = random.uniform(-2, 2)
+                    # Very strong upward velocity for rapid vertical rise
+                    vy = random.uniform(-40, -30)
                     p = BurnParticle(
                         px,
                         py,

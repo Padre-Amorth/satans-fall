@@ -3476,8 +3476,8 @@ class Game:
             else:
                 x = random.uniform(self.width - HELL_FIRE_PARTICLE_MARGIN, self.width)
 
-            # Y position at bottom of screen (flame rises from bottom)
-            y = self.height - random.uniform(0, 20)
+            # Y position anywhere along the screen height (external space)
+            y = random.uniform(0, self.height)
 
             # Random duration between 5-8 seconds
             duration = random.randint(
@@ -3503,13 +3503,13 @@ class Game:
             # Emit 1-3 particles per frame (like burning enemy)
             try:
                 for _ in range(random.randint(1, 3)):
-                    # Wider horizontal spread at fire source (flame expansion)
-                    px = fire["x"] + random.uniform(-25, 25)
-                    py = fire["y"] + random.uniform(-8, 8)
-                    # Wider horizontal velocity for flame spread
-                    vx = random.uniform(-40, 40)
-                    # Stronger upward velocity for dramatic flame rise
-                    vy = random.uniform(25, 50)
+                    # Horizontal spread at fire source (flame expansion)
+                    px = fire["x"] + random.uniform(-15, 15)
+                    py = fire["y"] + random.uniform(-5, 5)
+                    # Horizontal velocity for flame spread
+                    vx = random.uniform(-20, 20)
+                    # Upward velocity to make particles rise slightly from spawn point
+                    vy = random.uniform(-15, -8)
                     p = BurnParticle(
                         px,
                         py,

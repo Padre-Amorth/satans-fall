@@ -59,7 +59,7 @@ class TestHellBurnFires:
         assert "particles" in fire
 
     def test_fires_spawn_at_edges(self):
-        """Fires should spawn only at screen edges."""
+        """Fires should spawn only at lateral screen edges (left or right)."""
         g = Game()
         g.selected_stage = "hell"
 
@@ -69,13 +69,17 @@ class TestHellBurnFires:
         for _ in range(2000):
             g._update_hell_fire_particles()
 
-        # All fires should be at edges
+        # All fires should be at left or right edges
         for fire in g.hell_burn_fires:
             x = fire["x"]
             # Either left edge or right edge
             is_left = x < HELL_FIRE_PARTICLE_MARGIN
             is_right = x > (g.width - HELL_FIRE_PARTICLE_MARGIN)
             assert is_left or is_right, f"Fire x={x} not at edge"
+
+            # Y position should be anywhere on screen
+            y = fire["y"]
+            assert 0 <= y <= g.height, f"Fire y={y} outside screen height"
 
     def test_fires_have_random_duration(self):
         """Fires should have random duration between min and max."""

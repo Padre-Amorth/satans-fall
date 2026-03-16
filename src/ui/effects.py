@@ -439,26 +439,16 @@ class UIEffectsRenderer:
                     fire_color = fire.get("color", (255, 120, 0))
                     for p in particles:
                         try:
-                            # Draw burn particles with transparency
-                            surf = pygame.Surface(
-                                (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
-                            )
-                            # Reduce alpha by 70% for very ethereal semi-transparent effect
+                            # Calculate alpha: reduce by 70% for very ethereal semi-transparent effect
                             alpha = max(60, int(255 * (p.life / 44))) * 0.3
                             # Use fire-specific color
                             r, g, b = fire_color
+                            # Draw directly to screen with anti-aliasing for performance
                             pygame.draw.circle(
-                                surf,
-                                (r, g, b, int(alpha)),
-                                (p.size + 1, p.size + 1),
+                                self.ui.screen,
+                                (r, g, b),
+                                (int(p.x + shake_x), int(p.y + shake_y)),
                                 p.size,
-                            )
-                            self.ui.screen.blit(
-                                surf,
-                                (
-                                    int(p.x + shake_x - p.size),
-                                    int(p.y + shake_y - p.size),
-                                ),
                             )
                         except (AttributeError, TypeError, ValueError, KeyError):
                             pass

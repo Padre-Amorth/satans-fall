@@ -3469,18 +3469,18 @@ class Game:
             len(self.hell_burn_fires) < HELL_FIRE_PARTICLE_MAX_ACTIVE
             and random.random() < HELL_FIRE_PARTICLE_SPAWN_CHANCE
         ):
-            # Spawn fires in outer areas only (outside battlefield, between walls and screen edges)
-            from src.game_constants import WALL_THICKNESS
+            # Spawn fires in outer areas only (outside battlefield arena)
+            from src.game_constants import HELL_BARRIER_X_MIN, HELL_BARRIER_X_MAX
 
             margin = 20  # 20px margin from screen edges
 
-            # Choose left or right side area
+            # Choose left or right side area - spawn anywhere in the outer region
             if random.choice([True, False]):
-                # Left side: between left edge and left wall
-                x = random.uniform(margin, WALL_THICKNESS)
+                # Left side: between left edge (with margin) and left battlefield wall
+                x = random.uniform(margin, HELL_BARRIER_X_MIN)
             else:
-                # Right side: between right wall and right edge
-                x = random.uniform(self.width - WALL_THICKNESS, self.width - margin)
+                # Right side: between right battlefield wall and right edge (with margin)
+                x = random.uniform(HELL_BARRIER_X_MAX, self.width - margin)
 
             # Y position anywhere vertically within margins
             y = random.uniform(margin, self.height - margin)

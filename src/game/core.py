@@ -3545,7 +3545,7 @@ class Game:
                         vx,
                         vy,
                         life=random.randint(20, 44),
-                        size=random.randint(5, 8),
+                        size=random.randint(5, 12),
                     )
                     fire["particles"].append(p)
             except (AttributeError, TypeError, ValueError, KeyError):

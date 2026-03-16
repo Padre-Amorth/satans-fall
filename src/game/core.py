@@ -3530,13 +3530,13 @@ class Game:
             # Emit 1-3 particles per frame (like burning enemy)
             try:
                 for _ in range(random.randint(1, 3)):
-                    # Wider horizontal spread at fire source for random dispersion
-                    px = fire["x"] + random.uniform(-15, 15)
-                    py = fire["y"] + random.uniform(-10, 10)
-                    # More randomized velocity - can go in various directions
-                    vx = random.uniform(-15, 15)
-                    # Mix of upward and sideways movement for more chaotic flames
-                    vy = random.uniform(-35, -5)
+                    # Narrow horizontal spread at fire source (tighter flame base)
+                    px = fire["x"] + random.uniform(-5, 5)
+                    py = fire["y"] + random.uniform(-3, 3)
+                    # Minimal horizontal velocity (mostly vertical rise)
+                    vx = random.uniform(-2, 2)
+                    # Very strong upward velocity for rapid vertical rise
+                    vy = random.uniform(-40, -30)
                     p = BurnParticle(
                         px,
                         py,

@@ -3472,14 +3472,15 @@ class Game:
             # Spawn fires in multiple zones: screen edges AND near battlefield walls
             from src.game_constants import WALL_THICKNESS
 
+            margin = 20  # 20px margin from all screen edges
             zone = random.choice(["left_edge", "right_edge", "left_wall", "right_wall"])
 
             if zone == "left_edge":
-                # Far left screen edge (outside playable area)
-                x = random.uniform(0, HELL_FIRE_PARTICLE_MARGIN)
+                # Far left screen edge (outside playable area, with 20px margin)
+                x = random.uniform(margin, HELL_FIRE_PARTICLE_MARGIN)
             elif zone == "right_edge":
-                # Far right screen edge (outside playable area)
-                x = random.uniform(self.width - HELL_FIRE_PARTICLE_MARGIN, self.width)
+                # Far right screen edge (outside playable area, with 20px margin)
+                x = random.uniform(self.width - HELL_FIRE_PARTICLE_MARGIN, self.width - margin)
             elif zone == "left_wall":
                 # Near left battlefield wall (inside but close)
                 x = random.uniform(WALL_THICKNESS, WALL_THICKNESS + HELL_FIRE_PARTICLE_MARGIN)
@@ -3490,9 +3491,8 @@ class Game:
                     self.width - WALL_THICKNESS
                 )
 
-            # Y position with margin from top/bottom edges (avoid screen edge cutoff)
-            margin_y = 20
-            y = random.uniform(margin_y, self.height - margin_y)
+            # Y position with margin from top/bottom edges (20px from all edges)
+            y = random.uniform(margin, self.height - margin)
 
             # Check distance from existing fires (minimum 60px separation)
             min_distance = 60

@@ -220,6 +220,7 @@ class Enemy(BaseSprite):
             self._archer_behavior_initialized: bool = False
             try:
                 from src.game_constants import ARCHER_VERTICAL_LIMIT
+
                 if self.y > ARCHER_VERTICAL_LIMIT:
                     self.y = ARCHER_VERTICAL_LIMIT
             except (AttributeError, TypeError, ValueError, KeyError):
@@ -315,21 +316,18 @@ class Enemy(BaseSprite):
         if enemy_type == "mage":
             self.shield_timer: int = 60 * 5  # frames until first shield cast
 
-        # Pentagram: HP fixed at 300 body + 1000 shield (base), independent of global multipliers
+        # Pentagram: HP fixed at 500 body + 500 shield (base), independent of global multipliers
         if enemy_type in (
             "pentagram",
             "pentagram_fire",
             "pentagram_storm",
             "pentagram_ice",
         ):
-            self.max_health = 300
-            self.health = 300
-            self.shield_hp = 1000
-            self.shield_max_hp = 1000
-        # Elemental variants: 300 body + 300 elemental shield
-        if enemy_type in ("pentagram_fire", "pentagram_storm", "pentagram_ice"):
-            self.shield_hp = 300
-            self.shield_max_hp = 300
+            self.max_health = 500
+            self.health = 500
+            self.shield_hp = 500
+            self.shield_max_hp = 500
+        # Elemental variants: keep same 500 body + 500 elemental shield (no change from base)
         # Custode split flag: True means this custode is already a split half
         if enemy_type == "custode":
             self._custode_split: bool = False
@@ -631,6 +629,31 @@ class Enemy(BaseSprite):
                     if CURRENT_GAME is not None:
                         CURRENT_GAME.record_enemy_kill()
                 except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+                # Award blasphemy point for pentagram kills
+                try:
+                    if CURRENT_GAME is not None and getattr(self, "enemy_type", "") in (
+                        "pentagram",
+                        "pentagram_fire",
+                        "pentagram_storm",
+                        "pentagram_ice",
+                    ):
+                        CURRENT_GAME.global_progress["blasphemy_points"] = (
+                            CURRENT_GAME.global_progress.get("blasphemy_points", 0) + 1
+                        )
+                        CURRENT_GAME.save_permanent_stats()
+                        try:
+                            CURRENT_GAME.spawn_floating_text(
+                                "+1 BLASPHEMY!",
+                                getattr(self, "x", CURRENT_GAME.player.x),
+                                getattr(self, "y", CURRENT_GAME.player.y) - 20,
+                                color=(200, 80, 220),
+                                font_size=28,
+                                life=90,
+                            )
+                        except Exception:
+                            pass
+                except Exception:
                     pass
                 try:
                     self._kill_recorded = True
@@ -1402,7 +1425,9 @@ class Enemy(BaseSprite):
                                         if b.get("hp", 0) / b.get("max_hp", 1)
                                         > BARRIER_DAMAGED_THRESHOLD
                                     ]
-                                    barrier_list = intact_barriers if intact_barriers else barriers
+                                    barrier_list = (
+                                        intact_barriers if intact_barriers else barriers
+                                    )
                                     nearest = min(
                                         barrier_list,
                                         key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
@@ -1413,13 +1438,19 @@ class Enemy(BaseSprite):
                                     self.archer_target_x = side_pos[0]
                                     self._hiding_behind_barrier = True
                                     self._hiding_barrier_ref = nearest
-                                    self._barrier_slot = nearest.get("_current_slot", "left")
+                                    self._barrier_slot = nearest.get(
+                                        "_current_slot", "left"
+                                    )
                                     self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
-                                    self.archer_reposition_timer = random.randint(600, 900)
+                                    self.archer_reposition_timer = random.randint(
+                                        600, 900
+                                    )
                                 else:
                                     self.archer_target_x = self.x
                                     self._hiding_behind_barrier = False
-                                    self.archer_reposition_timer = random.randint(180, 300)
+                                    self.archer_reposition_timer = random.randint(
+                                        180, 300
+                                    )
                             except (AttributeError, TypeError, ValueError, KeyError):
                                 self.archer_target_x = self.x
                                 self._hiding_behind_barrier = False
@@ -1431,7 +1462,9 @@ class Enemy(BaseSprite):
                             if game:
                                 try:
                                     barriers = getattr(game, "barriers", [])
-                                    curr_barrier = getattr(self, "_hiding_barrier_ref", None)
+                                    curr_barrier = getattr(
+                                        self, "_hiding_barrier_ref", None
+                                    )
                                     curr_alive = (
                                         curr_barrier is not None
                                         and curr_barrier in barriers
@@ -1446,10 +1479,13 @@ class Enemy(BaseSprite):
                                             curr_barrier, self.width
                                         )
                                         self.archer_target_x = pos[0]
-                                        self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
+                                        self._hide_suppress = (
+                                            BARRIER_HIDE_SUPPRESS_FRAMES
+                                        )
                                     elif (
                                         barriers
-                                        and random.random() < BARRIER_ARCHER_COVER_CHANCE
+                                        and random.random()
+                                        < BARRIER_ARCHER_COVER_CHANCE
                                     ):
                                         intact = [
                                             b
@@ -1460,7 +1496,9 @@ class Enemy(BaseSprite):
                                         barrier_list = intact if intact else barriers
                                         nearest = min(
                                             barrier_list,
-                                            key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
+                                            key=lambda b: abs(
+                                                b["x"] + b["w"] / 2 - self.x
+                                            ),
                                         )
                                         pos = Enemy._get_barrier_side_position(
                                             nearest, self.width
@@ -1468,14 +1506,25 @@ class Enemy(BaseSprite):
                                         self.archer_target_x = pos[0]
                                         self._hiding_behind_barrier = True
                                         self._hiding_barrier_ref = nearest
-                                        self._barrier_slot = nearest.get("_current_slot", "left")
-                                        self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
+                                        self._barrier_slot = nearest.get(
+                                            "_current_slot", "left"
+                                        )
+                                        self._hide_suppress = (
+                                            BARRIER_HIDE_SUPPRESS_FRAMES
+                                        )
                                     else:
-                                        self.archer_target_x = game.random_x_between_walls()
+                                        self.archer_target_x = (
+                                            game.random_x_between_walls()
+                                        )
                                         self._hiding_behind_barrier = False
                                         self._hiding_barrier_ref = None
                                         self._hide_suppress = 0
-                                except (AttributeError, TypeError, ValueError, KeyError):
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
                                     pass
 
                         # Move toward target position gradually
@@ -1494,10 +1543,16 @@ class Enemy(BaseSprite):
                             and curr_barrier.get("hp", 0) > 0
                         )
 
-                        if not barrier_alive and barriers and random.random() < BARRIER_ARCHER_COVER_CHANCE:
+                        if (
+                            not barrier_alive
+                            and barriers
+                            and random.random() < BARRIER_ARCHER_COVER_CHANCE
+                        ):
                             intact = [
-                                b for b in barriers
-                                if b.get("hp", 0) / b.get("max_hp", 1) > BARRIER_DAMAGED_THRESHOLD
+                                b
+                                for b in barriers
+                                if b.get("hp", 0) / b.get("max_hp", 1)
+                                > BARRIER_DAMAGED_THRESHOLD
                             ]
                             barrier_list = intact if intact else barriers
                             nearest = min(
@@ -1584,7 +1639,9 @@ class Enemy(BaseSprite):
                                 spy = side_pos[1]
                                 self._hiding_behind_barrier = True
                                 self._hiding_barrier_ref = nearest
-                                self._barrier_slot = nearest.get("_current_slot", "left")
+                                self._barrier_slot = nearest.get(
+                                    "_current_slot", "left"
+                                )
                                 self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
                             else:
                                 # No barriers or failed check: use random position
@@ -1673,11 +1730,15 @@ class Enemy(BaseSprite):
                                     barrier_list,
                                     key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
                                 )
-                                pos = Enemy._get_barrier_side_position(nearest, self.width)
+                                pos = Enemy._get_barrier_side_position(
+                                    nearest, self.width
+                                )
                                 spx, spy = pos[0], pos[1]
                                 self._hiding_behind_barrier = True
                                 self._hiding_barrier_ref = nearest
-                                self._barrier_slot = nearest.get("_current_slot", "left")
+                                self._barrier_slot = nearest.get(
+                                    "_current_slot", "left"
+                                )
                                 self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
                             else:
                                 cx = game.width / 2
@@ -1699,10 +1760,16 @@ class Enemy(BaseSprite):
                         and curr_barrier.get("hp", 0) > 0
                     )
 
-                    if not barrier_alive and barriers and random.random() < BARRIER_ARCHER_COVER_CHANCE:
+                    if (
+                        not barrier_alive
+                        and barriers
+                        and random.random() < BARRIER_ARCHER_COVER_CHANCE
+                    ):
                         intact = [
-                            b for b in barriers
-                            if b.get("hp", 0) / b.get("max_hp", 1) > BARRIER_DAMAGED_THRESHOLD
+                            b
+                            for b in barriers
+                            if b.get("hp", 0) / b.get("max_hp", 1)
+                            > BARRIER_DAMAGED_THRESHOLD
                         ]
                         barrier_list = intact if intact else barriers
                         nearest = min(

@@ -102,7 +102,7 @@ BLIZZARD_PARTICLE_S_CURVE_RADIAL = (
 )
 BLIZZARD_PARTICLE_EXPANSION = 0.50  # radial expansion near respawn point (fraction of original spawn distance) - increased for outward bulge
 
-DEFAULT_PLAYER_ANIM_SPEED = 40
+DEFAULT_PLAYER_ANIM_SPEED = 30
 DEFAULT_WAVE_DURATION = 45  # seconds (increased from 40)
 WALL_THICKNESS = 25
 
@@ -114,11 +114,20 @@ WALL_BRICK_HELL = {"w": 12, "h": 7, "mortar": (20, 10, 5), "base": (70, 35, 20)}
 
 # Limbo wall lamps decorative elements
 LIMBO_LAMP_SPACING = 120  # distance between consecutive lamps (pixels)
-LIMBO_LAMP_SIZE = (27, 79)  # width, height of lamp sprite (2/3 scale, maintains aspect ratio)
-LIMBO_LAMP_OFFSET_LEFT = 15  # horizontal offset from left wall edge (pixels, towards center)
+LIMBO_LAMP_SIZE = (
+    27,
+    79,
+)  # width, height of lamp sprite (2/3 scale, maintains aspect ratio)
+LIMBO_LAMP_OFFSET_LEFT = (
+    15  # horizontal offset from left wall edge (pixels, towards center)
+)
 LIMBO_LAMP_OFFSET_LEFT_TOP = 12  # offset for top 2 left lamps (3px closer to wall)
-LIMBO_LAMP_OFFSET_LEFT_BOTTOM = 13  # offset for bottom 2 left lamps (2px closer to wall)
-LIMBO_LAMP_OFFSET_RIGHT = 40  # horizontal offset from right wall edge (pixels, towards center)
+LIMBO_LAMP_OFFSET_LEFT_BOTTOM = (
+    13  # offset for bottom 2 left lamps (2px closer to wall)
+)
+LIMBO_LAMP_OFFSET_RIGHT = (
+    40  # horizontal offset from right wall edge (pixels, towards center)
+)
 
 # Limbo fog alpha ranges (min, max) for each limbo variant
 
@@ -383,18 +392,24 @@ STAGE_SETTINGS: dict[str, dict[str, Any]] = {
     },
     "hell": {
         "bg_color": (80, 8, 8),
+        "bg_image_external": "hell_background.png",  # optional full-screen external image (parts laterali fuori dai muri)
+        "bg_image": "hell_battlefield.png",  # optional battlefield image (campo di battaglia centrale)
         "floor_color": (60, 60, 60),  # grigio del campo schiarito
         "wall_color": (40, 40, 40),  # now dark gray like other stages
         "building_color": None,
     },
     "hell_2": {
         "bg_color": (80, 8, 8),
+        "bg_image_external": "hell_2_background.png",  # optional full-screen external image
+        "bg_image": "hell_2_battlefield.png",  # optional battlefield image
         "floor_color": (60, 60, 60),  # grigio del campo schiarito
         "wall_color": (40, 40, 40),
         "building_color": None,
     },
     "hell_3": {
         "bg_color": (80, 8, 8),
+        "bg_image_external": "hell_3_background.png",  # optional full-screen external image
+        "bg_image": "hell_3_battlefield.png",  # optional battlefield image
         "floor_color": (60, 60, 60),  # grigio del campo schiarito
         "wall_color": (40, 40, 40),
         "building_color": None,
@@ -473,6 +488,13 @@ __all__: list[str] = [
     "LIMBO_LAMP_OFFSET_LEFT_TOP",
     "LIMBO_LAMP_OFFSET_LEFT_BOTTOM",
     "LIMBO_LAMP_OFFSET_RIGHT",
+    "BLASPHEMY_POINT_COST_DEFAULT",
+    "BLASPHEMY_POINT_COST_10",
+    "HELL_FIRE_PARTICLE_SPAWN_CHANCE",
+    "HELL_FIRE_PARTICLE_LIFETIME",
+    "HELL_FIRE_PARTICLE_SIZE",
+    "HELL_FIRE_PARTICLE_MARGIN",
+    "HELL_FIRE_PARTICLE_MAX_ACTIVE",
 ]
 
 # Elemental pentagram variant shield colours and stats
@@ -481,6 +503,17 @@ PENTAGRAM_STORM_SHIELD_COLOR = (160, 80, 220)  # purple
 PENTAGRAM_ICE_SHIELD_COLOR = (80, 200, 220)  # cyan
 PENTAGRAM_ELEMENTAL_BODY_HP = 500
 PENTAGRAM_ELEMENTAL_SHIELD_HP = 500
+
+# Blasphemy Points system
+BLASPHEMY_POINT_COST_DEFAULT = 1  # cost per level for blasphemy_1..9
+BLASPHEMY_POINT_COST_10 = 3  # cost for blasphemy_10 (revive toggle)
+
+# Hell stage ambient fire particles (lateral flames)
+HELL_FIRE_PARTICLE_SPAWN_CHANCE = 0.005  # chance per frame to spawn a fire particle
+HELL_FIRE_PARTICLE_LIFETIME = 120  # frames (2 seconds at 60fps)
+HELL_FIRE_PARTICLE_SIZE = 8  # base radius of fire circles
+HELL_FIRE_PARTICLE_MARGIN = 50  # pixels from edge where fires can spawn
+HELL_FIRE_PARTICLE_MAX_ACTIVE = 8  # max simultaneous fire particles on screen
 
 # GIF Recording
 GIF_RECORDING_FPS = 15  # frame rate GIF (cattura 1 frame ogni 4 @ 60fps)

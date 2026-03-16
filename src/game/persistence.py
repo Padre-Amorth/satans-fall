@@ -93,7 +93,7 @@ def load_permanent_stats(game: Any) -> None:
 
         gp = data.get("global_progress", {})
         if isinstance(gp, dict):
-            for key in ("meta_xp", "meta_level", "meta_points"):
+            for key in ("meta_xp", "meta_level", "meta_points", "blasphemy_points"):
                 if key in gp and isinstance(gp[key], (int, float)):
                     game.global_progress[key] = int(gp[key])
             sc = gp.get("stages_cleared")
@@ -158,27 +158,42 @@ def save_permanent_stats(game: Any) -> None:
     # A reset is: disk has upgrades but memory has zero (all defaults).
     # This catches the case where Game() was constructed but global_progress
     # was wiped before load_permanent_stats ran.
-    is_likely_reset = (dsk_total > 0 and mem_total == 0)
+    is_likely_reset = dsk_total > 0 and mem_total == 0
 
     if is_likely_reset:
         # Restore ALL disk data — memory state is not trustworthy
-        dsk_meta_level = int(disk_gp.get("meta_level", 1)) if isinstance(
-            disk_gp.get("meta_level"), (int, float)
-        ) else 1
-        dsk_xp = int(disk_gp.get("meta_xp", 0)) if isinstance(
-            disk_gp.get("meta_xp"), (int, float)
-        ) else 0
-        dsk_pts = int(disk_gp.get("meta_points", 0)) if isinstance(
-            disk_gp.get("meta_points"), (int, float)
-        ) else 0
+        dsk_meta_level = (
+            int(disk_gp.get("meta_level", 1))
+            if isinstance(disk_gp.get("meta_level"), (int, float))
+            else 1
+        )
+        dsk_xp = (
+            int(disk_gp.get("meta_xp", 0))
+            if isinstance(disk_gp.get("meta_xp"), (int, float))
+            else 0
+        )
+        dsk_pts = (
+            int(disk_gp.get("meta_points", 0))
+            if isinstance(disk_gp.get("meta_points"), (int, float))
+            else 0
+        )
         logger.warning(
             "Regression guard: memory looks reset (0 upgrades vs %d on disk), "
             "restoring disk values (level=%d, xp=%d, points=%d)",
-            dsk_total, dsk_meta_level, dsk_xp, dsk_pts,
+            dsk_total,
+            dsk_meta_level,
+            dsk_xp,
+            dsk_pts,
         )
         game.global_progress["meta_level"] = dsk_meta_level
         game.global_progress["meta_xp"] = dsk_xp
         game.global_progress["meta_points"] = dsk_pts
+        dsk_bp = (
+            int(disk_gp.get("blasphemy_points", 0))
+            if isinstance(disk_gp.get("blasphemy_points"), (int, float))
+            else 0
+        )
+        game.global_progress["blasphemy_points"] = dsk_bp
         for k, v in disk_ps.items():
             game.permanent_stats[k] = v
     else:
@@ -210,6 +225,7 @@ def save_permanent_stats(game: Any) -> None:
             "meta_xp": game.global_progress.get("meta_xp", 0),
             "meta_level": game.global_progress.get("meta_level", 1),
             "meta_points": game.global_progress.get("meta_points", 0),
+            "blasphemy_points": game.global_progress.get("blasphemy_points", 0),
             "stages_cleared": dict(game.global_progress.get("stages_cleared", {})),
             "display": game.global_progress.get("display", {}),
             "audio": game.global_progress.get("audio", {}),

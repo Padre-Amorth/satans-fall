@@ -414,7 +414,92 @@ class UIEffectsRenderer:
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
+            # Draw Hell stage ambient fire particles
+            self._draw_hell_fire_particles(shake_x, shake_y)
+
         self.draw_chain_lightning_effects(shake_x, shake_y)
+
+    def _draw_hell_fire_particles(self, shake_x: int = 0, shake_y: int = 0) -> None:
+        """Draw Hell stage ambient fire particles (lateral flames)."""
+        pygame = self.ui.pygame
+        if not pygame or not self.ui.screen:
+            return
+
+        try:
+            particles = getattr(self.game, "hell_fire_particles", [])
+            if not particles:
+                return
+
+            for p in particles:
+                try:
+                    # Calculate fade based on life remaining
+                    life = p.get("life", 0)
+                    max_life = p.get("max_life", 1)
+                    if max_life <= 0:
+                        continue
+
+                    progress = 1.0 - (life / max_life)  # 0 (new) to 1 (dead)
+                    alpha = int(200 * (1.0 - progress))  # Fade out
+
+                    if alpha < 10:
+                        continue
+
+                    # Pulsing size effect (larger at birth, shrinks as it fades)
+                    base_size = p.get("size", 8)
+                    size = int(base_size * (1.0 + 0.3 * progress))
+
+                    # Orange-red fire colors with flicker
+                    flicker = random.uniform(0.8, 1.2)
+                    if progress < 0.5:
+                        # Orange flames (early)
+                        color = (
+                            int(255 * flicker),
+                            int(150 * flicker),
+                            int(20 * flicker),
+                            alpha,
+                        )
+                    else:
+                        # Red-orange fading (late)
+                        color = (
+                            int(255 * flicker),
+                            int(100 * flicker),
+                            int(0 * flicker),
+                            alpha,
+                        )
+
+                    # Draw fire circle with inner glow
+                    px = int(p["x"] + shake_x)
+                    py = int(p["y"] + shake_y)
+
+                    # Create temporary surface for alpha blending
+                    surf = pygame.Surface((size * 2 + 4, size * 2 + 4), pygame.SRCALPHA)
+
+                    # Outer bright flame circle
+                    pygame.draw.circle(
+                        surf,
+                        color,
+                        (size + 2, size + 2),
+                        size,
+                    )
+
+                    # Inner yellow-white glow (only early in life)
+                    if progress < 0.6:
+                        inner_size = max(2, int(size * 0.5))
+                        inner_alpha = int(alpha * (1.0 - progress))
+                        inner_color = (255, 220, 100, inner_alpha)
+                        pygame.draw.circle(
+                            surf,
+                            inner_color,
+                            (size + 2, size + 2),
+                            inner_size,
+                        )
+
+                    self.ui.screen.blit(surf, (px - size - 2, py - size - 2))
+
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
 
     def draw_lightning_effect(self, shake_x=0, shake_y=0):
         pygame = self.ui.pygame
@@ -995,13 +1080,11 @@ class UIEffectsRenderer:
                     frame_x = weapon_x - 2
                     frame_y = weapon_y - 2
                     # Create transparent dark background
-                    bg_surf = pygame.Surface(
-                        (frame_size, frame_size), pygame.SRCALPHA
-                    )
-                    bg_surf.fill((*bg_color, 120))  # 120/255 alpha for more transparency
-                    self.ui.screen.blit(
-                        bg_surf, (frame_x + shake_x, frame_y + shake_y)
-                    )
+                    bg_surf = pygame.Surface((frame_size, frame_size), pygame.SRCALPHA)
+                    bg_surf.fill(
+                        (*bg_color, 120)
+                    )  # 120/255 alpha for more transparency
+                    self.ui.screen.blit(bg_surf, (frame_x + shake_x, frame_y + shake_y))
                     # Draw frame border
                     pygame.draw.rect(
                         self.ui.screen,

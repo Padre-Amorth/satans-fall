@@ -55,10 +55,9 @@ from src.game_constants import (
     HELL_BARRIER_Y_MIN,
     HELL_STAGES,
     LIMBO_LAMP_OFFSET_LEFT,
-    LIMBO_LAMP_OFFSET_LEFT_TOP,
     LIMBO_LAMP_OFFSET_LEFT_BOTTOM,
+    LIMBO_LAMP_OFFSET_LEFT_TOP,
     LIMBO_LAMP_OFFSET_RIGHT,
-    LIMBO_LAMP_SIZE,
     LIMBO_LAMP_SPACING,
     LIMBO_STAGES,
     PURGATORY_STAGES,
@@ -685,6 +684,13 @@ class Game:
             self.blasphemy5_system.blasphemy_5_blink_particles
             if self.blasphemy5_system
             else []
+        )
+
+    @property
+    def blasphemy_5_scale(self) -> float:
+        """Get player scale during blink animation (read by ui.py)."""
+        return (
+            self.blasphemy5_system.blasphemy_5_scale if self.blasphemy5_system else 1.0
         )
 
     @property
@@ -1567,9 +1573,13 @@ class Game:
             flip = False
             for point in self.left_wall_points:
                 if point[1] - last_y >= spacing:
-                    lamp_x = point[0] + LIMBO_LAMP_OFFSET_LEFT  # Inside wall (positive offset)
+                    lamp_x = (
+                        point[0] + LIMBO_LAMP_OFFSET_LEFT
+                    )  # Inside wall (positive offset)
                     lamp_y = point[1]  # Top-left corner for blit
-                    left_candidates.append({"x": lamp_x, "y": lamp_y, "side": "left", "flip": flip})
+                    left_candidates.append(
+                        {"x": lamp_x, "y": lamp_y, "side": "left", "flip": flip}
+                    )
                     flip = not flip  # Alternate flip
                     last_y = point[1]
 
@@ -1579,9 +1589,13 @@ class Game:
             flip = False
             for point in self.right_wall_points:
                 if point[1] - last_y >= spacing:
-                    lamp_x = point[0] - LIMBO_LAMP_OFFSET_RIGHT  # Inside wall (negative offset)
+                    lamp_x = (
+                        point[0] - LIMBO_LAMP_OFFSET_RIGHT
+                    )  # Inside wall (negative offset)
                     lamp_y = point[1]  # Top-left corner for blit
-                    right_candidates.append({"x": lamp_x, "y": lamp_y, "side": "right", "flip": flip})
+                    right_candidates.append(
+                        {"x": lamp_x, "y": lamp_y, "side": "right", "flip": flip}
+                    )
                     flip = not flip  # Alternate flip
                     last_y = point[1]
 
@@ -1590,15 +1604,23 @@ class Game:
             selected_left = left_candidates[1:5]  # indices 1,2,3,4
             # Adjust top 2 left lamps closer to wall
             for i in range(min(2, len(selected_left))):
-                selected_left[i]["x"] -= (LIMBO_LAMP_OFFSET_LEFT - LIMBO_LAMP_OFFSET_LEFT_TOP)
+                selected_left[i]["x"] -= (
+                    LIMBO_LAMP_OFFSET_LEFT - LIMBO_LAMP_OFFSET_LEFT_TOP
+                )
             # Adjust bottom 2 left lamps closer to wall
             for i in range(2, min(4, len(selected_left))):
-                selected_left[i]["x"] -= (LIMBO_LAMP_OFFSET_LEFT - LIMBO_LAMP_OFFSET_LEFT_BOTTOM)
+                selected_left[i]["x"] -= (
+                    LIMBO_LAMP_OFFSET_LEFT - LIMBO_LAMP_OFFSET_LEFT_BOTTOM
+                )
             self.limbo_lamps.extend(selected_left)
         if len(right_candidates) > 3:
             self.limbo_lamps.extend(right_candidates[1:5])  # indices 1,2,3,4
 
-        logger.info("Generated %d limbo lamps for stage %s", len(self.limbo_lamps), self.selected_stage)
+        logger.info(
+            "Generated %d limbo lamps for stage %s",
+            len(self.limbo_lamps),
+            self.selected_stage,
+        )
 
     def is_limbo_stage(self) -> bool:
         """Return True if the currently selected stage is any variant of Limbo."""
@@ -2254,7 +2276,9 @@ class Game:
             fade_start_frames = 30
             if self.countdown_fade_timer > self.fps - fade_start_frames:
                 # Fade from 255 to 0 over last 30 frames
-                frames_into_fade = self.countdown_fade_timer - (self.fps - fade_start_frames)
+                frames_into_fade = self.countdown_fade_timer - (
+                    self.fps - fade_start_frames
+                )
                 alpha = max(0, 255 - int(255 * frames_into_fade / fade_start_frames))
 
             countdown_text.set_alpha(alpha)
@@ -2837,6 +2861,7 @@ class Game:
         self.skullboom_explosions.clear()
         self.ice_particles.clear()
         self.ice_puddles.clear()
+        self.hell_fire_particles.clear()
 
         self.wave = 0
         self.wave_time = 0.0
@@ -3039,7 +3064,6 @@ class Game:
         """Write permanent stats and global meta-progress to disk."""
         save_permanent_stats(self)
 
-
     def get_profile_info(self, slot: int) -> dict:
         """Return display info for a profile slot without loading full stats into game state."""
         return get_profile_info(slot)
@@ -3059,12 +3083,14 @@ class Game:
         self.global_progress.setdefault("meta_xp", 0)
         self.global_progress.setdefault("meta_level", 1)
         self.global_progress.setdefault("meta_points", 0)
+        self.global_progress.setdefault("blasphemy_points", 0)
         self.global_progress.setdefault("stages_cleared", {})
         self.load_permanent_stats()
         # Fill any gaps with defaults
         self.global_progress.setdefault("meta_xp", 0)
         self.global_progress.setdefault("meta_level", 1)
         self.global_progress.setdefault("meta_points", 0)
+        self.global_progress.setdefault("blasphemy_points", 0)
         self.global_progress.setdefault("stages_cleared", {})
         # Ensure profile_name is set
         self.global_progress.setdefault("profile_name", f"Profile {slot}")
@@ -3415,11 +3441,65 @@ class Game:
             ):
                 self.statue_projectiles.remove(projectile)
 
+    def _update_hell_fire_particles(self) -> None:
+        """Update Hell stage ambient fire particles (lateral flames)."""
+        # Only spawn in hell stages
+        if not str(getattr(self, "selected_stage", "")).startswith("hell"):
+            return
+
+        try:
+            from src.game_constants import (
+                HELL_FIRE_PARTICLE_LIFETIME,
+                HELL_FIRE_PARTICLE_MARGIN,
+                HELL_FIRE_PARTICLE_MAX_ACTIVE,
+                HELL_FIRE_PARTICLE_SIZE,
+                HELL_FIRE_PARTICLE_SPAWN_CHANCE,
+            )
+        except (AttributeError, TypeError, ValueError, KeyError):
+            return
+
+        # Remove dead particles
+        self.hell_fire_particles = [
+            p for p in self.hell_fire_particles if p.get("life", 0) > 0
+        ]
+
+        # Spawn new particles randomly
+        if (
+            len(self.hell_fire_particles) < HELL_FIRE_PARTICLE_MAX_ACTIVE
+            and random.random() < HELL_FIRE_PARTICLE_SPAWN_CHANCE
+        ):
+            # Spawn only on left or right edges (outside playable area)
+            side = random.choice(["left", "right"])
+            if side == "left":
+                x = random.uniform(0, HELL_FIRE_PARTICLE_MARGIN)
+            else:
+                x = random.uniform(self.width - HELL_FIRE_PARTICLE_MARGIN, self.width)
+
+            # Y position anywhere on screen
+            y = random.uniform(0, self.height)
+
+            self.hell_fire_particles.append(
+                {
+                    "x": x,
+                    "y": y,
+                    "size": HELL_FIRE_PARTICLE_SIZE,
+                    "life": HELL_FIRE_PARTICLE_LIFETIME,
+                    "max_life": HELL_FIRE_PARTICLE_LIFETIME,
+                }
+            )
+
+        # Update particle lifetimes
+        for p in self.hell_fire_particles:
+            p["life"] -= 1
+
     def _update_particle_effects(self) -> None:
         """Update all particle systems and puddle effects."""
         # Delegate particle updates to ParticleSystem
         if self.particle_system:
             self.particle_system.update_particles()
+
+        # Update Hell stage ambient fire particles
+        self._update_hell_fire_particles()
 
         # Handle blizzard expiry damage (special logic not in ParticleSystem)
         if hasattr(self, "blizzard_puddles"):

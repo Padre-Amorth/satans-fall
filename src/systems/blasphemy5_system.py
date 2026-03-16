@@ -44,6 +44,7 @@ class Blasphemy5System:
         self.blasphemy_5_blink_particles: list[dict[str, Any]] = []
         self.blasphemy_5_invisible: bool = False
         self.blasphemy_5_invulnerable: bool = False
+        self.blasphemy_5_scale: float = 1.0  # Shrink/expand scale during blink
 
     def reset(self) -> None:
         """Reset revive state at start of run. Called from reset_run()."""
@@ -149,6 +150,7 @@ class Blasphemy5System:
         self.blasphemy_5_blink_timer = 10  # 10 frame pre-delay
         self.blasphemy_5_invisible = False  # Visible during pre-blink
         self.blasphemy_5_invulnerable = True  # Immortal immediately
+        self.blasphemy_5_scale = 1.0  # Start at full scale
 
         # Create violet particles at origin point (6-8 particles)
         num_particles = random.randint(6, 8)
@@ -176,9 +178,9 @@ class Blasphemy5System:
 
         States:
         - 0: No animation
-        - 1: Pre-blink (10 frames, visible & invulnerable)
+        - 1: Pre-blink (10 frames, visible & invulnerable, shrinking with ease-out)
         - 2: Invisible transit (15 frames, invisible & invulnerable)
-        - 3: Post-arrival (10 frames, visible & vulnerable)
+        - 3: Post-arrival (10 frames, visible & vulnerable, expanding with ease-out)
         """
         if self.blasphemy_5_blink_state == 0:
             return
@@ -199,19 +201,26 @@ class Blasphemy5System:
             p for p in self.blasphemy_5_blink_particles if p["life"] > 0
         ]
 
-        if self.blasphemy_5_blink_state == 1:  # Pre-blink state
+        if self.blasphemy_5_blink_state == 1:  # Pre-blink state (shrinking)
             self.blasphemy_5_invisible = False
             self.blasphemy_5_invulnerable = True
+            # Calculate shrink scale with ease-out (0 to 1 progress → 1.0 to 0.5 scale)
+            progress = 1.0 - (self.blasphemy_5_blink_timer / 10.0)
+            # Ease-out: 1 - (1-t)^2
+            eased = 1.0 - ((1.0 - progress) ** 2)
+            self.blasphemy_5_scale = 1.0 - (eased * 0.5)  # 1.0 → 0.5
             if self.blasphemy_5_blink_timer <= 0:
                 # Transition to invisible phase
                 self.blasphemy_5_blink_state = 2
                 self.blasphemy_5_blink_timer = 15
                 self.blasphemy_5_invisible = True
                 self.blasphemy_5_invulnerable = True
+                self.blasphemy_5_scale = 0.5  # Ensure fully shrunk
 
         elif self.blasphemy_5_blink_state == 2:  # Invisible phase
             self.blasphemy_5_invisible = True
             self.blasphemy_5_invulnerable = True
+            self.blasphemy_5_scale = 0.5  # Stay shrunk while invisible
             if self.blasphemy_5_blink_timer <= 0:
                 # Execute teleport
                 self.game.player.x = self.blasphemy_5_blink_target_x
@@ -237,14 +246,20 @@ class Blasphemy5System:
                 self.blasphemy_5_blink_timer = 10
                 self.blasphemy_5_invisible = False
 
-        elif self.blasphemy_5_blink_state == 3:  # Post-blink state
+        elif self.blasphemy_5_blink_state == 3:  # Post-blink state (expanding)
             self.blasphemy_5_invisible = False
             self.blasphemy_5_invulnerable = False
+            # Calculate expand scale with ease-out (0 to 1 progress → 0.5 to 1.0 scale)
+            progress = 1.0 - (self.blasphemy_5_blink_timer / 10.0)
+            # Ease-out: 1 - (1-t)^2
+            eased = 1.0 - ((1.0 - progress) ** 2)
+            self.blasphemy_5_scale = 0.5 + (eased * 0.5)  # 0.5 → 1.0
             if self.blasphemy_5_blink_timer <= 0:
                 # Animation complete
                 self.blasphemy_5_blink_state = 0
                 self.blasphemy_5_invisible = False
                 self.blasphemy_5_invulnerable = False
+                self.blasphemy_5_scale = 1.0  # Reset to full scale
 
     def _handle_blasphemy5_revive(self) -> bool:
         """Handle blasphemy-10 one-time player revive on death.

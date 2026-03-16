@@ -938,7 +938,7 @@ class SpawnSystem:
             if normal_count >= 5:
                 # Still need to track crusader spawn opportunity even if we skip this spawn
                 # This ensures the force_crusader counter reaches 30 and triggers
-                if not hasattr(self, 'spawns_since_last_crusader'):
+                if not hasattr(self, "spawns_since_last_crusader"):
                     self.spawns_since_last_crusader = 0
                 self.spawns_since_last_crusader += 1
                 return  # Skip spawn if already at limit
@@ -1149,12 +1149,9 @@ class SpawnSystem:
 
         # mage override: only after purgatory starts and once timer expires (~15s)
         # BUT: never override special enemies like crusaders, giants, etc.
-        if (
-            enemy_type not in ("crusader", "giant", "inquisitor")
-            and (getattr(self.game, "selected_stage", None) or "").startswith(
-                ("purgatory", "hell")
-            )
-        ):
+        if enemy_type not in ("crusader", "giant", "inquisitor") and (
+            getattr(self.game, "selected_stage", None) or ""
+        ).startswith(("purgatory", "hell")):
             if not hasattr(self.game, "mage_last_spawn_frame"):
                 # just initialize; no chance to convert on this spawn
                 self.game.mage_last_spawn_frame = getattr(self.game, "frame_count", 0)
@@ -1528,7 +1525,7 @@ class SpawnSystem:
             x = float(-half_w - 10)
         else:
             x = float(self.game.width + half_w + 10)
-        y = float(random.randint(100, 400))
+        y = float(random.randint(200, 400))
         health = 300.0 * getattr(self.game, "difficulty_multiplier", 1.0)
         speed = ENEMY_BASE_SPEEDS.get(enemy_type, 50.0)
         enemy = Enemy(x, y, enemy_type, health, speed)

@@ -1076,7 +1076,7 @@ class UIGameRenderer:
             1,
         )
 
-        line_h = 36  # Spacing to prevent icon frame overlap
+        line_h = 28  # Spacing to prevent icon frame overlap
         left_x = self.ui.width // 2 - 430
         right_x = self.ui.width // 2 + 40
         top_y = 88
@@ -1294,6 +1294,7 @@ class UIGameRenderer:
             yellow = (255, 204, 0)
             icon_size = 32
             icon_padding = 16  # Increased from 8 to prevent overlap
+            weapon_line_h = 40  # Increased spacing for weapon items
             for wid in weapons:
                 lvl = self.game.weapon_levels.get(wid, 0)
                 name = WEAPON_DEFS.get(wid, {}).get("name", _clean(wid))
@@ -1361,7 +1362,7 @@ class UIGameRenderer:
                     text_y = frame_center_y - text_height // 2
 
                 self.ui.screen.blit(text_surf, (text_x + shake_x, text_y + shake_y))
-                y += line_h
+                y += weapon_line_h
         else:
             self.ui.screen.blit(
                 self.ui.get_text("None", font_body, COLOR_HINT),
@@ -2212,6 +2213,7 @@ class UIGameRenderer:
 
         # Draw player (skip if invisible during blink transit)
         if not getattr(self.game, "blasphemy_5_invisible", False):
+            scale = getattr(self.game, "blasphemy_5_scale", 1.0)
             self.game.player.draw(
                 self.ui.screen,
                 shake_x,
@@ -2219,6 +2221,7 @@ class UIGameRenderer:
                 self.game.player_anim_frame,
                 self.game.player_is_moving,
                 self.game.player_facing_right,
+                scale=scale,
             )
 
         # Draw Blasphemy 5 blink particles (if any)

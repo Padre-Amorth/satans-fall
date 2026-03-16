@@ -484,6 +484,7 @@ class Player(BaseSprite):
         anim_frame=0,
         is_moving=False,
         facing_right=True,
+        scale=1.0,
     ) -> None:
         # Apply shake offset
         draw_x: float | int = self.rect.x + shake_x
@@ -504,14 +505,41 @@ class Player(BaseSprite):
             bob_offset = 0  # Center
 
         if is_moving and self.walk_frames:
-            # Use walking frames based on direction (2 frames per direction)
+            # Use walking frames with alpha blending for smooth transitions
             # Frames 0-1 = right direction, frames 2-3 = left (flipped)
+            frame_progress: float = (anim_frame % 10) / 10.0  # Blend progress 0.0-1.0
             frame_index: int = anim_frame % 2
-            if not facing_right:
-                frame_index += 2  # Use flipped frames for left movement
+            next_frame_index: int = (frame_index + 1) % 2
 
-            if frame_index < len(self.walk_frames):
+            if not facing_right:
+                frame_index += 2
+                next_frame_index += 2
+
+            if frame_index < len(self.walk_frames) and next_frame_index < len(
+                self.walk_frames
+            ):
+                # Alpha blend between current and next frame
+                frame1 = self.walk_frames[frame_index]
+                frame2 = self.walk_frames[next_frame_index].copy()
+                frame2.set_alpha(int(255 * frame_progress))
+
+                current_image = frame1.copy()
+                current_image.blit(frame2, (0, 0))
+            elif frame_index < len(self.walk_frames):
                 current_image = self.walk_frames[frame_index]
+
+        # Apply scale if provided
+        if scale != 1.0:
+            scaled_width = int(current_image.get_width() * scale)
+            scaled_height = int(current_image.get_height() * scale)
+            current_image = pygame.transform.scale(
+                current_image, (scaled_width, scaled_height)
+            )
+            # Adjust draw position to keep centered
+            offset_x = (self.rect.width - scaled_width) // 2
+            offset_y = (self.rect.height - scaled_height) // 2
+            draw_x = draw_x + offset_x
+            draw_y = draw_y + offset_y
 
         # Draw sprite with wobble offset
         screen.blit(current_image, (draw_x, draw_y + bob_offset))

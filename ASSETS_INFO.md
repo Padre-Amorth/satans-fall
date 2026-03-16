@@ -120,6 +120,10 @@ barrier_damaged.png — barriera danneggiata (con HP bar visibile)
   - Chiesa esterna destra
   - Posizionata al lato più esterno destro del livello PROLOGUE
 
+hell_background.png + hell_battlefield.png (stage 1)
+hell_2_background.png + hell_2_battlefield.png (stage 2)
+hell_3_background.png + hell_3_battlefield.png (stage 3)
+
 ### Campo di battaglia (Limbo)
 - **File:** `assets/limbo_battlefield.png`
   - Dimensione consigliata: 1280x720 (verrà ridimensionata automaticamente)
@@ -274,34 +278,3 @@ Per tornare alle forme geometriche, basta rimuovere o rinominare i file dalla ca
   - `weapon_skullboom.png`
   - `weapon_demonstrike.png` (DemonStrike)
   - `weapon_tenebrae.png` (Tenebrae)
-
-For the Tenebrae weapon the actual projectile graphic may be placed in
-`assets/tenebrae.png`; the code will also fall back to
-`weapon_tenebrae.png` if the former is missing.  This mirrors the icon
-naming and lets you share a single file for both purposes if desired.
-
-  In futuro altri armi possono essere aggiunte seguendo lo stesso schema.
-
-- **File:** `assets/icon_damage.png`
-  - Dimensione: 64x64 pixel
-  - Icona per upgrade Danno
-
-- **File:** `assets/icon_fire_rate.png`
-  - Dimensione: 64x64 pixel
-  - Icona per upgrade Velocità di fuoco
-
-- **File:** `assets/icon_piercing.png`
-  - Dimensione: 64x64 pixel
-  - Icona per upgrade Perforazione
-
-- **File:** `assets/icon_bounce.png`
-  - Dimensione: 64x64 pixel
-  - Icona per upgrade Rimbalzo
-
-- **File:** `assets/icon_area.png`
-  - Dimensione: 64x64 pixel
-  - Icona per upgrade Area
-
-- **File:** `assets/icon_speed.png`
-  - Dimensione: 64x64 pixel
-  - Icona per upgrade Velocità proiettile

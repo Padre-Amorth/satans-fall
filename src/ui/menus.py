@@ -1189,6 +1189,22 @@ class UIMenuSystem:
         blasp_text = font_medium.render("BLASPHEMIES", True, (136, 136, 136))
         self.ui.screen.blit(blasp_text, (left_x + shake_x, separator_y + 30 + shake_y))
 
+        # Draw blasphemy points balance
+        bp = (
+            self.game.global_progress.get("blasphemy_points", 0)
+            if getattr(self.game, "global_progress", None)
+            else 0
+        )
+        bp_color = (200, 80, 220) if bp > 0 else (100, 60, 100)
+        bp_text = font_medium.render(f"  |  Points: {bp}", True, bp_color)
+        try:
+            self.ui.screen.blit(
+                bp_text,
+                (left_x + blasp_text.get_width() + shake_x, separator_y + 30 + shake_y),
+            )
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
+
         box_width = 80
         box_height = box_width
         box_spacing = 100
@@ -1246,6 +1262,26 @@ class UIMenuSystem:
 
                 key = f"blasphemy_{row_idx * 5 + col + 1}"
                 lvl = self.game.permanent_stats.get(key, 0)
+                max_lvl = 1 if key == "blasphemy_10" else 3
+                cost = 3 if key == "blasphemy_10" else 1
+                bp = (
+                    self.game.global_progress.get("blasphemy_points", 0)
+                    if getattr(self.game, "global_progress", None)
+                    else 0
+                )
+
+                # Dim unaffordable boxes (can't afford AND not maxed out)
+                if bp < cost and lvl < max_lvl:
+                    try:
+                        overlay = pygame.Surface(
+                            (box_width, box_height), pygame.SRCALPHA
+                        )
+                        overlay.fill((0, 0, 0, 140))  # 55% opaque black
+                        self.ui.screen.blit(
+                            overlay, (bx - box_width // 2 + shake_x, y + shake_y)
+                        )
+                    except (AttributeError, TypeError, ValueError, KeyError):
+                        pass
 
                 # Render roman numerals for blasphemies that show level text
                 if lvl and key in (

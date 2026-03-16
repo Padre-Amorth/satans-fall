@@ -123,6 +123,29 @@ class InputHandler:
                     self.show_stage_menu()
                     pygame.time.set_timer(pygame.USEREVENT + 2, 0)
 
+    def _blasphemy_point_cost(self, key: str) -> int:
+        """Return point cost to purchase one level of the given blasphemy key."""
+        return 3 if key == "blasphemy_10" else 1
+
+    def _blasphemy_can_afford(self, key: str) -> bool:
+        """Check if player has enough blasphemy points to afford this upgrade."""
+        cost = self._blasphemy_point_cost(key)
+        return self.game.global_progress.get("blasphemy_points", 0) >= cost
+
+    def _blasphemy_spend(self, key: str) -> None:
+        """Deduct blasphemy points for a purchase."""
+        cost = self._blasphemy_point_cost(key)
+        self.game.global_progress["blasphemy_points"] = (
+            self.game.global_progress.get("blasphemy_points", 0) - cost
+        )
+
+    def _blasphemy_refund(self, key: str) -> None:
+        """Refund blasphemy points for a downgrade."""
+        cost = self._blasphemy_point_cost(key)
+        self.game.global_progress["blasphemy_points"] = (
+            self.game.global_progress.get("blasphemy_points", 0) + cost
+        )
+
     def handle_keydown(self, key):
         """Handle keyboard input based on game state."""
         try:
@@ -1071,6 +1094,19 @@ class InputHandler:
                                 button == 1
                                 and self.game.permanent_stats.get(key, 0) < 3
                             ):
+                                if not self._blasphemy_can_afford(key):
+                                    cost = self._blasphemy_point_cost(key)
+                                    pts = self.game.global_progress.get(
+                                        "blasphemy_points", 0
+                                    )
+                                    self.game.show_centered_message(
+                                        f"Need {cost} Blasphemy Point{'s' if cost > 1 else ''} (have {pts})",
+                                        80,
+                                        (180, 80, 80),
+                                        18,
+                                    )
+                                    return
+                                self._blasphemy_spend(key)
                                 self.game.permanent_stats[key] = (
                                     self.game.permanent_stats.get(key, 0) + 1
                                 )
@@ -1086,6 +1122,7 @@ class InputHandler:
                                 button == 3
                                 and self.game.permanent_stats.get(key, 0) > 0
                             ):
+                                self._blasphemy_refund(key)
                                 self.game.permanent_stats[key] = (
                                     self.game.permanent_stats.get(key, 0) - 1
                                 )
@@ -1102,6 +1139,19 @@ class InputHandler:
                             if button == 1 and not self.game.permanent_stats.get(
                                 key, 0
                             ):
+                                if not self._blasphemy_can_afford(key):
+                                    cost = self._blasphemy_point_cost(key)
+                                    pts = self.game.global_progress.get(
+                                        "blasphemy_points", 0
+                                    )
+                                    self.game.show_centered_message(
+                                        f"Need {cost} Blasphemy Point{'s' if cost > 1 else ''} (have {pts})",
+                                        80,
+                                        (180, 80, 80),
+                                        18,
+                                    )
+                                    return
+                                self._blasphemy_spend(key)
                                 self.game.permanent_stats[key] = 1
                                 self.game.apply_permanent_stats()
                                 self.game.save_permanent_stats()
@@ -1112,6 +1162,7 @@ class InputHandler:
                                     20,
                                 )
                             elif button == 3 and self.game.permanent_stats.get(key, 0):
+                                self._blasphemy_refund(key)
                                 self.game.permanent_stats[key] = 0
                                 self.game.apply_permanent_stats()
                                 self.game.save_permanent_stats()
@@ -1143,6 +1194,19 @@ class InputHandler:
                                 button == 1
                                 and self.game.permanent_stats.get(key, 0) < 3
                             ):
+                                if not self._blasphemy_can_afford(key):
+                                    cost = self._blasphemy_point_cost(key)
+                                    pts = self.game.global_progress.get(
+                                        "blasphemy_points", 0
+                                    )
+                                    self.game.show_centered_message(
+                                        f"Need {cost} Blasphemy Point{'s' if cost > 1 else ''} (have {pts})",
+                                        80,
+                                        (180, 80, 80),
+                                        18,
+                                    )
+                                    return
+                                self._blasphemy_spend(key)
                                 self.game.permanent_stats[key] = (
                                     self.game.permanent_stats.get(key, 0) + 1
                                 )
@@ -1158,6 +1222,7 @@ class InputHandler:
                                 button == 3
                                 and self.game.permanent_stats.get(key, 0) > 0
                             ):
+                                self._blasphemy_refund(key)
                                 self.game.permanent_stats[key] = (
                                     self.game.permanent_stats.get(key, 0) - 1
                                 )
@@ -1174,6 +1239,19 @@ class InputHandler:
                             if button == 1 and not self.game.permanent_stats.get(
                                 key, 0
                             ):
+                                if not self._blasphemy_can_afford(key):
+                                    cost = self._blasphemy_point_cost(key)
+                                    pts = self.game.global_progress.get(
+                                        "blasphemy_points", 0
+                                    )
+                                    self.game.show_centered_message(
+                                        f"Need {cost} Blasphemy Point{'s' if cost > 1 else ''} (have {pts})",
+                                        80,
+                                        (180, 80, 80),
+                                        18,
+                                    )
+                                    return
+                                self._blasphemy_spend(key)
                                 self.game.permanent_stats[key] = 1
                                 self.game.apply_permanent_stats()
                                 self.game.save_permanent_stats()
@@ -1184,6 +1262,7 @@ class InputHandler:
                                     20,
                                 )
                             elif button == 3 and self.game.permanent_stats.get(key, 0):
+                                self._blasphemy_refund(key)
                                 self.game.permanent_stats[key] = 0
                                 self.game.apply_permanent_stats()
                                 self.game.save_permanent_stats()
@@ -1347,6 +1426,7 @@ class InputHandler:
                         elif button == 3:
                             if self.game.permanent_stats.get(center_key, 0):
                                 self.game.permanent_stats[center_key] = 0
+                                self.game.apply_permanent_stats()
                                 self.game.save_permanent_stats()
                                 self.game.show_centered_message(
                                     f"{label} final tier downgraded!",

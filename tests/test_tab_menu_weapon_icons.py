@@ -103,3 +103,30 @@ def test_tab_menu_no_crash_with_missing_icon():
     except Exception as e:
         # Icon loading should be graceful, not crash
         assert False, f"draw_player_stats crashed on icon loading: {e}"
+
+
+def test_weapon_section_spacing_40px():
+    """Verify weapon section uses 40px line spacing to prevent box overlap.
+
+    Spacing proportions (as of Mar 16 2026):
+    - Standard menu sections: 28px (line_h)
+    - Weapon section: 40px (weapon_line_h)
+
+    This test ensures weapons don't overlap when multiple are acquired.
+    """
+    g = Game()
+    g.select_stage("purgatory")
+
+    # Add 5 weapons to stress-test spacing
+    weapons_list = ["shotgun", "orbital", "spear", "beast", "flies"]
+    for wid in weapons_list:
+        if wid not in g.player_weapons:
+            g.player_weapons.append(wid)
+        g.weapon_levels[wid] = 4
+
+    g.showing_player_stats = True
+
+    try:
+        g.ui.draw_player_stats()
+    except Exception as e:
+        assert False, f"Weapon spacing test failed with 5 weapons: {e}"

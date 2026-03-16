@@ -3473,7 +3473,12 @@ class Game:
             from src.game_constants import WALL_THICKNESS
 
             margin = 20  # 20px margin from all screen edges
-            zone = random.choice(["left_edge", "right_edge", "left_wall", "right_wall"])
+            # Weighted choice: 60% wall zones, 40% screen edges
+            zone = random.choices(
+                ["left_edge", "right_edge", "left_wall", "right_wall"],
+                weights=[0.2, 0.2, 0.3, 0.3],
+                k=1
+            )[0]
 
             if zone == "left_edge":
                 # Far left screen edge (outside playable area, with 20px margin)

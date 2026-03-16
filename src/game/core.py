@@ -3529,9 +3529,9 @@ class Game:
             if timer <= 0:
                 continue
 
-            # Emit 1-3 particles per frame (like burning enemy)
+            # Emit 1-2 particles per frame (like burning enemy)
             try:
-                for _ in range(random.randint(1, 3)):
+                for _ in range(random.randint(1, 2)):
                     # Narrow horizontal spread at fire source (tighter flame base)
                     px = fire["x"] + random.uniform(-5, 5)
                     py = fire["y"] + random.uniform(-3, 3)
@@ -3544,7 +3544,7 @@ class Game:
                         py,
                         vx,
                         vy,
-                        life=random.randint(20, 44),
+                        life=random.randint(10, 30),
                         size=random.randint(5, 12),
                     )
                     fire["particles"].append(p)

@@ -58,32 +58,25 @@ class TestHellBurnFires:
         assert "max_timer" in fire
         assert "particles" in fire
 
-    def test_fires_spawn_at_edges(self):
-        """Fires should spawn at lateral edges or near walls (left or right)."""
+    def test_fires_spawn_within_margins(self):
+        """Fires should spawn anywhere within background with 20px margin from edges."""
         g = Game()
         g.selected_stage = "hell"
-
-        # Spawn many fires to test positioning
-        from src.game_constants import HELL_FIRE_PARTICLE_MARGIN, WALL_THICKNESS
 
         for _ in range(2000):
             g._update_hell_fire_particles()
 
-        # All fires should be at edges or near walls
+        # All fires should be within 20px margin from edges
+        margin = 20
         for fire in g.hell_burn_fires:
             x = fire["x"]
-            # Either: screen edge, or near walls
-            is_left_edge = x < HELL_FIRE_PARTICLE_MARGIN
-            is_right_edge = x > (g.width - HELL_FIRE_PARTICLE_MARGIN)
-            is_left_wall = WALL_THICKNESS <= x <= (WALL_THICKNESS + HELL_FIRE_PARTICLE_MARGIN)
-            is_right_wall = (g.width - WALL_THICKNESS - HELL_FIRE_PARTICLE_MARGIN) <= x <= (g.width - WALL_THICKNESS)
-
-            assert is_left_edge or is_right_edge or is_left_wall or is_right_wall, f"Fire x={x} not at edge or wall"
-
-            # Y position should avoid screen edges (margin of 20px)
             y = fire["y"]
-            margin_y = 20
-            assert margin_y <= y <= (g.height - margin_y), f"Fire y={y} too close to screen edge"
+
+            # X position should be within margins
+            assert margin <= x <= (g.width - margin), f"Fire x={x} outside margin boundaries"
+
+            # Y position should be within margins
+            assert margin <= y <= (g.height - margin), f"Fire y={y} outside margin boundaries"
 
     def test_fires_have_random_duration(self):
         """Fires should have random duration between min and max."""

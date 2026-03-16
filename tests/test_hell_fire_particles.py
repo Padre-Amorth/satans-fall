@@ -80,9 +80,9 @@ class TestHellBurnFires:
 
             assert is_left_edge or is_right_edge or is_left_wall or is_right_wall, f"Fire x={x} not at edge or wall"
 
-            # Y position should avoid screen edges (margin of 100px)
+            # Y position should avoid screen edges (margin of 20px)
             y = fire["y"]
-            margin_y = 100
+            margin_y = 20
             assert margin_y <= y <= (g.height - margin_y), f"Fire y={y} too close to screen edge"
 
     def test_fires_have_random_duration(self):
@@ -275,7 +275,7 @@ class TestHellBurnFires:
             g._update_hell_fire_particles()
 
         # Check distance between all pairs of fires
-        min_distance = 150
+        min_distance = 60
         for i, fire1 in enumerate(g.hell_burn_fires):
             for fire2 in g.hell_burn_fires[i + 1 :]:
                 x1, y1 = fire1.get("x", 0), fire1.get("y", 0)

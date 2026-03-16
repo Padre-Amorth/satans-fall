@@ -3491,11 +3491,11 @@ class Game:
                 )
 
             # Y position with margin from top/bottom edges (avoid screen edge cutoff)
-            margin_y = 100
+            margin_y = 20
             y = random.uniform(margin_y, self.height - margin_y)
 
-            # Check distance from existing fires (minimum 150px separation)
-            min_distance = 150
+            # Check distance from existing fires (minimum 60px separation)
+            min_distance = 60
             too_close = False
             for existing_fire in self.hell_burn_fires:
                 ex_x = existing_fire.get("x", 0)

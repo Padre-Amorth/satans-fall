@@ -3469,12 +3469,26 @@ class Game:
             len(self.hell_burn_fires) < HELL_FIRE_PARTICLE_MAX_ACTIVE
             and random.random() < HELL_FIRE_PARTICLE_SPAWN_CHANCE
         ):
-            # Spawn only on left or right edges (outside playable area)
-            side = random.choice(["left", "right"])
-            if side == "left":
+            # Spawn fires in multiple zones: screen edges AND near battlefield walls
+            from src.game_constants import WALL_THICKNESS
+
+            zone = random.choice(["left_edge", "right_edge", "left_wall", "right_wall"])
+
+            if zone == "left_edge":
+                # Far left screen edge (outside playable area)
                 x = random.uniform(0, HELL_FIRE_PARTICLE_MARGIN)
-            else:
+            elif zone == "right_edge":
+                # Far right screen edge (outside playable area)
                 x = random.uniform(self.width - HELL_FIRE_PARTICLE_MARGIN, self.width)
+            elif zone == "left_wall":
+                # Near left battlefield wall (inside but close)
+                x = random.uniform(WALL_THICKNESS, WALL_THICKNESS + HELL_FIRE_PARTICLE_MARGIN)
+            else:  # right_wall
+                # Near right battlefield wall (inside but close)
+                x = random.uniform(
+                    self.width - WALL_THICKNESS - HELL_FIRE_PARTICLE_MARGIN,
+                    self.width - WALL_THICKNESS
+                )
 
             # Y position anywhere along the screen height (external space)
             y = random.uniform(0, self.height)
@@ -3503,13 +3517,13 @@ class Game:
             # Emit 1-3 particles per frame (like burning enemy)
             try:
                 for _ in range(random.randint(1, 3)):
-                    # Horizontal spread at fire source (flame expansion)
-                    px = fire["x"] + random.uniform(-15, 15)
-                    py = fire["y"] + random.uniform(-5, 5)
-                    # Horizontal velocity for flame spread
-                    vx = random.uniform(-20, 20)
-                    # Upward velocity to make particles rise slightly from spawn point
-                    vy = random.uniform(-15, -8)
+                    # Narrow horizontal spread at fire source (tighter flame base)
+                    px = fire["x"] + random.uniform(-5, 5)
+                    py = fire["y"] + random.uniform(-3, 3)
+                    # Minimal horizontal velocity (mostly vertical rise)
+                    vx = random.uniform(-5, 5)
+                    # Strong upward velocity for vertical flame rise
+                    vy = random.uniform(-25, -15)
                     p = BurnParticle(
                         px,
                         py,

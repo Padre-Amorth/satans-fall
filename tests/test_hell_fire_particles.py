@@ -59,23 +59,26 @@ class TestHellBurnFires:
         assert "particles" in fire
 
     def test_fires_spawn_at_edges(self):
-        """Fires should spawn only at lateral screen edges (left or right)."""
+        """Fires should spawn at lateral edges or near walls (left or right)."""
         g = Game()
         g.selected_stage = "hell"
 
         # Spawn many fires to test positioning
-        from src.game_constants import HELL_FIRE_PARTICLE_MARGIN
+        from src.game_constants import HELL_FIRE_PARTICLE_MARGIN, WALL_THICKNESS
 
         for _ in range(2000):
             g._update_hell_fire_particles()
 
-        # All fires should be at left or right edges
+        # All fires should be at edges or near walls
         for fire in g.hell_burn_fires:
             x = fire["x"]
-            # Either left edge or right edge
-            is_left = x < HELL_FIRE_PARTICLE_MARGIN
-            is_right = x > (g.width - HELL_FIRE_PARTICLE_MARGIN)
-            assert is_left or is_right, f"Fire x={x} not at edge"
+            # Either: screen edge, or near walls
+            is_left_edge = x < HELL_FIRE_PARTICLE_MARGIN
+            is_right_edge = x > (g.width - HELL_FIRE_PARTICLE_MARGIN)
+            is_left_wall = WALL_THICKNESS <= x <= (WALL_THICKNESS + HELL_FIRE_PARTICLE_MARGIN)
+            is_right_wall = (g.width - WALL_THICKNESS - HELL_FIRE_PARTICLE_MARGIN) <= x <= (g.width - WALL_THICKNESS)
+
+            assert is_left_edge or is_right_edge or is_left_wall or is_right_wall, f"Fire x={x} not at edge or wall"
 
             # Y position should be anywhere on screen
             y = fire["y"]

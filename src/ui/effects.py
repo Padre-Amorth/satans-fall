@@ -414,9 +414,6 @@ class UIEffectsRenderer:
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
-            # Draw Hell stage ambient fire particles
-            self._draw_hell_fire_particles(shake_x, shake_y)
-
         self.draw_chain_lightning_effects(shake_x, shake_y)
 
     def _draw_hell_fire_particles(self, shake_x: int = 0, shake_y: int = 0) -> None:

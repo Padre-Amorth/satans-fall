@@ -2284,6 +2284,9 @@ class UIGameRenderer:
                 1,
             )
 
+        # Draw Hell fire particles BEFORE towers so towers layer on top
+        self.ui.effects._draw_hell_fire_particles(shake_x, shake_y)
+
         # Render statues/towers BEFORE special effects so they layer above Voltaic Mayhem.
         # ``draw_pedestals`` is a no-op except in Limbo, while the dynamic tower code
         # handles Purgatory/Hell.

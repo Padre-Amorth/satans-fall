@@ -421,6 +421,7 @@ class UIEffectsRenderer:
 
         Displays BurnParticles that rise from fire sources on lateral screen edges,
         matching the exact visual effect of enemies with burn damage applied.
+        Color varies by stage: orange (Lake of Fire), purple/yellow (Gehenna), green (Hades).
         """
         pygame = self.ui.pygame
         if not pygame or not self.ui.screen:
@@ -434,6 +435,8 @@ class UIEffectsRenderer:
             for fire in fires:
                 try:
                     particles = fire.get("particles", [])
+                    # Get fire color, default to orange if not set
+                    fire_color = fire.get("color", (255, 120, 0))
                     for p in particles:
                         try:
                             # Draw burn particles with transparency
@@ -442,9 +445,11 @@ class UIEffectsRenderer:
                             )
                             # Reduce alpha by 70% for very ethereal semi-transparent effect
                             alpha = max(60, int(255 * (p.life / 44))) * 0.3
+                            # Use fire-specific color
+                            r, g, b = fire_color
                             pygame.draw.circle(
                                 surf,
-                                (255, 120, 0, int(alpha)),
+                                (r, g, b, int(alpha)),
                                 (p.size + 1, p.size + 1),
                                 p.size,
                             )

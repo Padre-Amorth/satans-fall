@@ -63,7 +63,7 @@ class TestHellBurnFires:
         g = Game()
         g.selected_stage = "hell"
 
-        from src.game_constants import HELL_BARRIER_X_MIN, HELL_BARRIER_X_MAX
+        from src.game_constants import HELL_BARRIER_X_MAX, HELL_BARRIER_X_MIN
 
         for _ in range(2000):
             g._update_hell_fire_particles()
@@ -76,11 +76,17 @@ class TestHellBurnFires:
 
             # X position should be on left or right side (with buffer from battlefield)
             is_left_side = margin <= x <= (HELL_BARRIER_X_MIN - outer_buffer)
-            is_right_side = (HELL_BARRIER_X_MAX + outer_buffer) <= x <= (g.width - margin)
-            assert is_left_side or is_right_side, f"Fire x={x} too close to battlefield (BARRIER_X_MIN={HELL_BARRIER_X_MIN}, BARRIER_X_MAX={HELL_BARRIER_X_MAX})"
+            is_right_side = (
+                (HELL_BARRIER_X_MAX + outer_buffer) <= x <= (g.width - margin)
+            )
+            assert (
+                is_left_side or is_right_side
+            ), f"Fire x={x} too close to battlefield (BARRIER_X_MIN={HELL_BARRIER_X_MIN}, BARRIER_X_MAX={HELL_BARRIER_X_MAX})"
 
             # Y position should be within margins
-            assert margin <= y <= (g.height - margin), f"Fire y={y} outside margin boundaries"
+            assert (
+                margin <= y <= (g.height - margin)
+            ), f"Fire y={y} outside margin boundaries"
 
     def test_fires_have_random_duration(self):
         """Fires should have random duration between min and max."""
@@ -278,4 +284,54 @@ class TestHellBurnFires:
                 x1, y1 = fire1.get("x", 0), fire1.get("y", 0)
                 x2, y2 = fire2.get("x", 0), fire2.get("y", 0)
                 distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-                assert distance >= min_distance, f"Fires too close: {distance:.1f}px < {min_distance}px"
+                assert (
+                    distance >= min_distance
+                ), f"Fires too close: {distance:.1f}px < {min_distance}px"
+
+    def test_fires_have_stage_specific_colors(self):
+        """Fires should have colors specific to the Hell stage."""
+
+        stages_colors = {
+            "hell": [(0, 0, 0), (255, 120, 0)],  # Lake of Fire: black and orange
+            "hell_2": [(180, 100, 200), (255, 220, 100)],  # Gehenna: purple and yellow
+            "hell_3": [
+                (100, 200, 80),
+                (50, 150, 50),
+            ],  # Hades: light green and dark green
+        }
+
+        for stage, expected_colors in stages_colors.items():
+            g = Game()
+            g.selected_stage = stage
+
+            # Spawn many fires to ensure we get multiple
+            for _ in range(2000):
+                g._update_hell_fire_particles()
+
+            # Check that all fires have a color and it's valid for the stage
+            for fire in g.hell_burn_fires:
+                color = fire.get("color")
+                assert color is not None, f"Fire in {stage} missing color"
+                assert (
+                    color in expected_colors
+                ), f"Fire color {color} not in expected colors for {stage}"
+
+    def test_fire_colors_match_stage_definitions(self):
+        """Fire colors should match the HELL_FIRE_COLORS constant."""
+        from src.game_constants import HELL_FIRE_COLORS
+
+        for stage in HELL_FIRE_COLORS.keys():
+            g = Game()
+            g.selected_stage = stage
+
+            # Spawn fires
+            for _ in range(2000):
+                g._update_hell_fire_particles()
+
+            # All fires should use colors from HELL_FIRE_COLORS[stage]
+            valid_colors = HELL_FIRE_COLORS[stage]
+            for fire in g.hell_burn_fires:
+                color = fire.get("color")
+                assert (
+                    color in valid_colors
+                ), f"Color {color} not in HELL_FIRE_COLORS[{stage}]"

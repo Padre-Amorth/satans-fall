@@ -3450,9 +3450,9 @@ class Game:
         try:
             from src.entities.enemy import BurnParticle
             from src.game_constants import (
+                HELL_FIRE_COLORS,
                 HELL_FIRE_PARTICLE_LIFETIME_MAX,
                 HELL_FIRE_PARTICLE_LIFETIME_MIN,
-                HELL_FIRE_PARTICLE_MARGIN,
                 HELL_FIRE_PARTICLE_MAX_ACTIVE,
                 HELL_FIRE_PARTICLE_SPAWN_CHANCE,
             )
@@ -3470,10 +3470,12 @@ class Game:
             and random.random() < HELL_FIRE_PARTICLE_SPAWN_CHANCE
         ):
             # Spawn fires in outer areas only (outside battlefield arena)
-            from src.game_constants import HELL_BARRIER_X_MIN, HELL_BARRIER_X_MAX
+            from src.game_constants import HELL_BARRIER_X_MAX, HELL_BARRIER_X_MIN
 
             margin = 20  # 20px margin from screen edges
-            outer_buffer = 100  # 100px buffer from battlefield walls to avoid interior spawn
+            outer_buffer = (
+                100  # 100px buffer from battlefield walls to avoid interior spawn
+            )
 
             # Choose left or right side area - spawn in outer region only
             if random.choice([True, False]):
@@ -3481,7 +3483,9 @@ class Game:
                 x = random.uniform(margin, HELL_BARRIER_X_MIN - outer_buffer)
             else:
                 # Right side: between right battlefield wall (with buffer) and right edge (with margin)
-                x = random.uniform(HELL_BARRIER_X_MAX + outer_buffer, self.width - margin)
+                x = random.uniform(
+                    HELL_BARRIER_X_MAX + outer_buffer, self.width - margin
+                )
 
             # Y position anywhere vertically within margins
             y = random.uniform(margin, self.height - margin)
@@ -3503,6 +3507,11 @@ class Game:
                     HELL_FIRE_PARTICLE_LIFETIME_MIN, HELL_FIRE_PARTICLE_LIFETIME_MAX
                 )
 
+                # Choose color based on current stage
+                stage = str(getattr(self, "selected_stage", "hell"))
+                stage_colors = HELL_FIRE_COLORS.get(stage, [(255, 120, 0)])
+                fire_color = random.choice(stage_colors)
+
                 self.hell_burn_fires.append(
                     {
                         "x": x,
@@ -3510,6 +3519,7 @@ class Game:
                         "timer": duration,
                         "max_timer": duration,
                         "particles": [],
+                        "color": fire_color,
                     }
                 )
 

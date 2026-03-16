@@ -526,7 +526,7 @@ HELL_FIRE_PARTICLE_MAX_ACTIVE = 8  # max simultaneous fire particles on screen
 HELL_FIRE_COLORS = {
     "hell": [(180, 100, 200), (255, 220, 100)],  # Gehenna: purple and yellow
     "hell_2": [(0, 0, 0), (255, 120, 0)],  # Lake of Fire: black and orange
-    "hell_3": [(100, 200, 80), (50, 150, 50)],  # Hades: light green and dark green
+    "hell_3": [(100, 200, 80), (100, 50, 150)],  # Hades: light green and dark purple
 }
 
 # GIF Recording

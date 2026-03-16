@@ -296,8 +296,8 @@ class TestHellBurnFires:
             "hell_2": [(0, 0, 0), (255, 120, 0)],  # Lake of Fire: black and orange
             "hell_3": [
                 (100, 200, 80),
-                (50, 150, 50),
-            ],  # Hades: light green and dark green
+                (100, 50, 150),
+            ],  # Hades: light green and dark purple
         }
 
         for stage, expected_colors in stages_colors.items():

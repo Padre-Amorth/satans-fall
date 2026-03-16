@@ -512,11 +512,11 @@ BLASPHEMY_POINT_COST_10 = 3  # cost for blasphemy_10 (revive toggle)
 # Hell stage ambient fire particles (lateral flames - burn effect style)
 HELL_FIRE_PARTICLE_SPAWN_CHANCE = 0.01  # chance per frame to spawn a fire particle
 HELL_FIRE_PARTICLE_LIFETIME_MIN = (
-    5 * 60
-)  # minimum lifetime in frames (5 seconds at 60fps)
+    10 * 60
+)  # minimum lifetime in frames (10 seconds at 60fps)
 HELL_FIRE_PARTICLE_LIFETIME_MAX = (
-    8 * 60
-)  # maximum lifetime in frames (8 seconds at 60fps)
+    15 * 60
+)  # maximum lifetime in frames (15 seconds at 60fps)
 HELL_FIRE_PARTICLE_SIZE = 6  # base radius of fire circles
 HELL_FIRE_PARTICLE_MARGIN = 50  # pixels from edge where fires can spawn
 HELL_FIRE_PARTICLE_MAX_ACTIVE = 6  # max simultaneous fire particles on screen

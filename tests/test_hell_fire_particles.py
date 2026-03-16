@@ -58,22 +58,25 @@ class TestHellBurnFires:
         assert "max_timer" in fire
         assert "particles" in fire
 
-    def test_fires_spawn_within_margins(self):
-        """Fires should spawn anywhere within background with 20px margin from edges."""
+    def test_fires_spawn_in_outer_areas(self):
+        """Fires should spawn in outer areas only (outside walls, near screen edges)."""
         g = Game()
         g.selected_stage = "hell"
+
+        from src.game_constants import WALL_THICKNESS
 
         for _ in range(2000):
             g._update_hell_fire_particles()
 
-        # All fires should be within 20px margin from edges
         margin = 20
         for fire in g.hell_burn_fires:
             x = fire["x"]
             y = fire["y"]
 
-            # X position should be within margins
-            assert margin <= x <= (g.width - margin), f"Fire x={x} outside margin boundaries"
+            # X position should be on left or right side (outside walls)
+            is_left_side = margin <= x <= WALL_THICKNESS
+            is_right_side = (g.width - WALL_THICKNESS) <= x <= (g.width - margin)
+            assert is_left_side or is_right_side, f"Fire x={x} spawned inside battlefield"
 
             # Y position should be within margins
             assert margin <= y <= (g.height - margin), f"Fire y={y} outside margin boundaries"

@@ -59,7 +59,7 @@ class TestHellBurnFires:
         assert "particles" in fire
 
     def test_fires_spawn_in_outer_areas(self):
-        """Fires should spawn in outer areas only (outside battlefield arena)."""
+        """Fires should spawn in outer areas only (with 100px buffer from battlefield)."""
         g = Game()
         g.selected_stage = "hell"
 
@@ -69,14 +69,15 @@ class TestHellBurnFires:
             g._update_hell_fire_particles()
 
         margin = 20
+        outer_buffer = 100
         for fire in g.hell_burn_fires:
             x = fire["x"]
             y = fire["y"]
 
-            # X position should be on left or right side (outside battlefield)
-            is_left_side = margin <= x <= HELL_BARRIER_X_MIN
-            is_right_side = HELL_BARRIER_X_MAX <= x <= (g.width - margin)
-            assert is_left_side or is_right_side, f"Fire x={x} spawned inside battlefield (BARRIER_X_MIN={HELL_BARRIER_X_MIN}, BARRIER_X_MAX={HELL_BARRIER_X_MAX})"
+            # X position should be on left or right side (with buffer from battlefield)
+            is_left_side = margin <= x <= (HELL_BARRIER_X_MIN - outer_buffer)
+            is_right_side = (HELL_BARRIER_X_MAX + outer_buffer) <= x <= (g.width - margin)
+            assert is_left_side or is_right_side, f"Fire x={x} too close to battlefield (BARRIER_X_MIN={HELL_BARRIER_X_MIN}, BARRIER_X_MAX={HELL_BARRIER_X_MAX})"
 
             # Y position should be within margins
             assert margin <= y <= (g.height - margin), f"Fire y={y} outside margin boundaries"

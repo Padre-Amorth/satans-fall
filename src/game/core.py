@@ -3473,14 +3473,15 @@ class Game:
             from src.game_constants import HELL_BARRIER_X_MIN, HELL_BARRIER_X_MAX
 
             margin = 20  # 20px margin from screen edges
+            outer_buffer = 100  # 100px buffer from battlefield walls to avoid interior spawn
 
-            # Choose left or right side area - spawn anywhere in the outer region
+            # Choose left or right side area - spawn in outer region only
             if random.choice([True, False]):
-                # Left side: between left edge (with margin) and left battlefield wall
-                x = random.uniform(margin, HELL_BARRIER_X_MIN)
+                # Left side: between left edge (with margin) and left battlefield wall (with buffer)
+                x = random.uniform(margin, HELL_BARRIER_X_MIN - outer_buffer)
             else:
-                # Right side: between right battlefield wall and right edge (with margin)
-                x = random.uniform(HELL_BARRIER_X_MAX, self.width - margin)
+                # Right side: between right battlefield wall (with buffer) and right edge (with margin)
+                x = random.uniform(HELL_BARRIER_X_MAX + outer_buffer, self.width - margin)
 
             # Y position anywhere vertically within margins
             y = random.uniform(margin, self.height - margin)

@@ -3544,7 +3544,7 @@ class Game:
                         py,
                         vx,
                         vy,
-                        life=random.randint(10, 30),
+                        life=random.randint(20, 44),
                         size=random.randint(5, 12),
                     )
                     fire["particles"].append(p)

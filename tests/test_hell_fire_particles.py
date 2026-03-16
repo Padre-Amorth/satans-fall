@@ -1,15 +1,15 @@
-"""Test Hell stage ambient fire particles."""
+"""Test Hell stage ambient burn fires (sustained burning effects)."""
 
 import pytest
 
 from src.game.core import Game
 
 
-class TestHellFireParticles:
-    """Test Hell stage fire particle system."""
+class TestHellBurnFires:
+    """Test Hell stage burn fire system."""
 
-    def test_particles_not_spawned_in_non_hell_stages(self):
-        """Particles should not spawn in non-hell stages."""
+    def test_fires_not_spawned_in_non_hell_stages(self):
+        """Burn fires should not spawn in non-hell stages."""
         g = Game()
         g.selected_stage = "purgatory"
 
@@ -17,69 +17,68 @@ class TestHellFireParticles:
         for _ in range(500):
             g._update_hell_fire_particles()
 
-        # Should not spawn any particles
-        assert len(g.hell_fire_particles) == 0
+        # Should not spawn any fires
+        assert len(g.hell_burn_fires) == 0
 
-    def test_particles_spawn_in_hell_stage(self):
-        """Particles should spawn in hell stage."""
+    def test_fires_spawn_in_hell_stage(self):
+        """Burn fires should spawn in hell stage."""
         g = Game()
         g.selected_stage = "hell"
 
-        # Run updates (spawn chance is 0.005 per frame)
         # Run until we get a spawn or max frames
         spawn_found = False
         for i in range(2000):
             g._update_hell_fire_particles()
-            if len(g.hell_fire_particles) > 0:
+            if len(g.hell_burn_fires) > 0:
                 spawn_found = True
                 break
 
-        assert spawn_found, "No particles spawned in 2000 frames (p=0.5% per frame)"
+        assert spawn_found, "No fires spawned in 2000 frames (p=1% per frame)"
 
-    def test_particles_have_required_attributes(self):
-        """Spawned particles should have required attributes."""
+    def test_fires_have_required_attributes(self):
+        """Spawned fires should have required attributes."""
         g = Game()
         g.selected_stage = "hell"
 
-        # Manually spawn a particle for testing
-        g.hell_fire_particles.append(
+        # Manually add a test fire
+        g.hell_burn_fires.append(
             {
                 "x": 100,
                 "y": 200,
-                "size": 8,
-                "life": 60,
-                "max_life": 120,
+                "timer": 300,
+                "max_timer": 300,
+                "particles": [],
             }
         )
 
-        p = g.hell_fire_particles[0]
-        assert "x" in p
-        assert "y" in p
-        assert "size" in p
-        assert "life" in p
-        assert "max_life" in p
+        fire = g.hell_burn_fires[0]
+        assert "x" in fire
+        assert "y" in fire
+        assert "timer" in fire
+        assert "max_timer" in fire
+        assert "particles" in fire
 
-    def test_particles_spawn_at_edges(self):
-        """Particles should spawn only at screen edges."""
+    def test_fires_spawn_at_edges(self):
+        """Fires should spawn only at screen edges."""
         g = Game()
         g.selected_stage = "hell"
 
-        # Spawn many particles to test positioning
+        # Spawn many fires to test positioning
         from src.game_constants import HELL_FIRE_PARTICLE_MARGIN
 
         for _ in range(2000):
             g._update_hell_fire_particles()
 
-        # All particles should be at edges
-        for p in g.hell_fire_particles:
-            x = p["x"]
+        # All fires should be at edges
+        for fire in g.hell_burn_fires:
+            x = fire["x"]
             # Either left edge or right edge
             is_left = x < HELL_FIRE_PARTICLE_MARGIN
             is_right = x > (g.width - HELL_FIRE_PARTICLE_MARGIN)
-            assert is_left or is_right, f"Particle x={x} not at edge"
+            assert is_left or is_right, f"Fire x={x} not at edge"
 
-    def test_particles_have_random_lifetime(self):
-        """Particles should have random lifetime between min and max."""
+    def test_fires_have_random_duration(self):
+        """Fires should have random duration between min and max."""
         from src.game_constants import (
             HELL_FIRE_PARTICLE_LIFETIME_MAX,
             HELL_FIRE_PARTICLE_LIFETIME_MIN,
@@ -88,136 +87,148 @@ class TestHellFireParticles:
         g = Game()
         g.selected_stage = "hell"
 
-        # Spawn many particles and collect all lifetimes spawned
-        lifetimes = []
+        # Spawn many fires and collect durations
         for _ in range(10000):
             g._update_hell_fire_particles()
 
-        # Collect lifetimes from all particles ever spawned
-        # (check by monitoring different particles)
-        prev_max_life = None
-        for _ in range(10000):
-            g._update_hell_fire_particles()
-            for p in g.hell_fire_particles:
-                max_life = p["max_life"]
-                if prev_max_life is not None and max_life != prev_max_life:
-                    lifetimes.append(max_life)
-                    break
-                prev_max_life = max_life
-
-        # All lifetimes should be within range
-        for lifetime in set(lifetimes):
+        # All durations should be within range
+        durations = set()
+        for fire in g.hell_burn_fires:
+            duration = fire["max_timer"]
             assert (
                 HELL_FIRE_PARTICLE_LIFETIME_MIN
-                <= lifetime
+                <= duration
                 <= HELL_FIRE_PARTICLE_LIFETIME_MAX
-            ), f"Lifetime {lifetime} outside range"
+            ), f"Duration {duration} outside range"
+            durations.add(duration)
 
-        # We should eventually see variation in lifetimes if we spawned enough
-        # (this is probabilistic, so keep it lenient)
-        assert len(g.hell_fire_particles) > 0, "No particles spawned in 10000 frames"
+        # We should eventually see variation in durations
+        assert len(durations) > 0 or len(g.hell_burn_fires) > 0, "No fires spawned"
 
-    def test_particles_fade_over_time(self):
-        """Particles should decrease in life over time."""
+    def test_fires_emit_burn_particles(self):
+        """Fires should emit BurnParticles like burning enemies."""
         g = Game()
         g.selected_stage = "hell"
 
-        # Manually add a particle
-        g.hell_fire_particles.append(
+        # Manually add a fire
+        g.hell_burn_fires.append(
             {
                 "x": 100,
                 "y": 200,
-                "size": 8,
-                "life": 60,
-                "max_life": 120,
+                "timer": 100,
+                "max_timer": 100,
+                "particles": [],
             }
         )
 
-        initial_life = g.hell_fire_particles[0]["life"]
+        fire = g.hell_burn_fires[0]
+        assert len(fire["particles"]) == 0
+
+        # Update - should emit particles
+        g._update_hell_fire_particles()
+
+        # Should have particles now
+        assert len(fire["particles"]) > 0
+
+    def test_fires_fade_over_time(self):
+        """Fires should decrease in timer over time."""
+        g = Game()
+        g.selected_stage = "hell"
+
+        # Manually add a fire
+        g.hell_burn_fires.append(
+            {
+                "x": 100,
+                "y": 200,
+                "timer": 100,
+                "max_timer": 100,
+                "particles": [],
+            }
+        )
+
+        initial_timer = g.hell_burn_fires[0]["timer"]
 
         # Update once
         g._update_hell_fire_particles()
 
-        # Life should decrease
-        assert g.hell_fire_particles[0]["life"] < initial_life
+        # Timer should decrease
+        assert g.hell_burn_fires[0]["timer"] < initial_timer
 
-    def test_particles_removed_when_dead(self):
-        """Particles should be removed when life reaches 0."""
+    def test_fires_removed_when_expired(self):
+        """Fires should be removed when timer reaches 0."""
         g = Game()
         g.selected_stage = "hell"
 
-        # Manually add a particle with very low life
-        g.hell_fire_particles.append(
+        # Manually add a fire with very low timer
+        g.hell_burn_fires.append(
             {
                 "x": 100,
                 "y": 200,
-                "size": 8,
-                "life": 1,
-                "max_life": 120,
+                "timer": 1,
+                "max_timer": 100,
+                "particles": [],
             }
         )
 
-        assert len(g.hell_fire_particles) == 1
+        assert len(g.hell_burn_fires) == 1
 
-        # Update once - particle should reach life=0
+        # Update - fire should expire
+        g._update_hell_fire_particles()
         g._update_hell_fire_particles()
 
-        assert len(g.hell_fire_particles) == 1  # Still there after first update
+        # Fire should be removed
+        assert len(g.hell_burn_fires) == 0
 
-        # Update again - now particle should be removed
-        g._update_hell_fire_particles()
-
-        # Particle should be removed (life <= 0 means it's filtered out)
-        assert len(g.hell_fire_particles) == 0
-
-    def test_max_particles_capped(self):
-        """Should not exceed max active particles."""
+    def test_max_fires_capped(self):
+        """Should not exceed max active fires."""
         from src.game_constants import HELL_FIRE_PARTICLE_MAX_ACTIVE
 
         g = Game()
         g.selected_stage = "hell"
 
-        # Run many updates to let particles accumulate
+        # Run many updates to let fires accumulate
         for _ in range(10000):
             g._update_hell_fire_particles()
 
         # Should not exceed max
-        assert len(g.hell_fire_particles) <= HELL_FIRE_PARTICLE_MAX_ACTIVE
+        assert len(g.hell_burn_fires) <= HELL_FIRE_PARTICLE_MAX_ACTIVE
 
-    def test_particles_clear_on_reset(self):
-        """Particles should clear when run is reset."""
+    def test_fires_clear_on_reset(self):
+        """Fires should clear when run is reset."""
         g = Game()
         g.selected_stage = "hell"
 
-        # Spawn some particles until we get one
+        # Spawn some fires
         for _ in range(2000):
             g._update_hell_fire_particles()
-            if len(g.hell_fire_particles) > 0:
-                break
 
-        assert len(g.hell_fire_particles) > 0, "Could not spawn particle for test"
+        assert len(g.hell_burn_fires) > 0
 
         # Reset run
         g.reset_run()
 
-        # Particles should be cleared
-        assert len(g.hell_fire_particles) == 0
+        # Fires should be cleared
+        assert len(g.hell_burn_fires) == 0
 
     def test_drawing_does_not_crash(self):
-        """Drawing particles should not crash."""
+        """Drawing fires should not crash."""
+        from src.entities.enemy import BurnParticle
+
         g = Game()
         g.selected_stage = "hell"
 
-        # Add a test particle
-        g.hell_fire_particles.append(
-            {
-                "x": 100,
-                "y": 200,
-                "size": 8,
-                "life": 60,
-                "max_life": 120,
-            }
-        )
+        # Add a test fire with particles
+        fire = {
+            "x": 100,
+            "y": 200,
+            "timer": 100,
+            "max_timer": 100,
+            "particles": [
+                BurnParticle(100, 200, 0, 12, life=30, size=3),
+                BurnParticle(105, 205, -5, 15, life=35, size=4),
+            ],
+        }
+        g.hell_burn_fires.append(fire)
 
         # Should not raise exception
         try:
@@ -225,8 +236,8 @@ class TestHellFireParticles:
         except Exception as e:
             pytest.fail(f"Drawing crashed: {e}")
 
-    def test_all_hell_stages_support_particles(self):
-        """All hell stages should spawn particles."""
+    def test_all_hell_stages_support_fires(self):
+        """All hell stages should spawn fires."""
         from src.game_constants import HELL_STAGES
 
         for stage in HELL_STAGES:
@@ -237,9 +248,9 @@ class TestHellFireParticles:
             spawn_found = False
             for _ in range(2000):
                 g._update_hell_fire_particles()
-                if len(g.hell_fire_particles) > 0:
+                if len(g.hell_burn_fires) > 0:
                     spawn_found = True
                     break
 
-            # Should spawn particles in each stage
-            assert spawn_found, f"No particles spawned in {stage} after 2000 frames"
+            # Should spawn fires in each stage
+            assert spawn_found, f"No fires spawned in {stage} after 2000 frames"

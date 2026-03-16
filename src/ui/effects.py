@@ -420,52 +420,45 @@ class UIEffectsRenderer:
         self.draw_chain_lightning_effects(shake_x, shake_y)
 
     def _draw_hell_fire_particles(self, shake_x: int = 0, shake_y: int = 0) -> None:
-        """Draw Hell stage ambient fire particles (lateral flames - burn effect style).
+        """Draw Hell stage ambient burn fires (sustained effects like burning enemies).
 
-        Matches the orange burn particle effect from Fire tower damage, with same
-        color (255, 120, 0) and alpha fade pattern.
+        Displays BurnParticles that rise from fire sources on lateral screen edges,
+        matching the exact visual effect of enemies with burn damage applied.
         """
         pygame = self.ui.pygame
         if not pygame or not self.ui.screen:
             return
 
         try:
-            particles = getattr(self.game, "hell_fire_particles", [])
-            if not particles:
+            fires = getattr(self.game, "hell_burn_fires", [])
+            if not fires:
                 return
 
-            for p in particles:
+            for fire in fires:
                 try:
-                    # Calculate alpha based on life remaining (matching burn particle fade)
-                    life = p.get("life", 0)
-                    max_life = p.get("max_life", 1)
-                    if max_life <= 0:
-                        continue
-
-                    # Same alpha calculation as burn particles: max(60, int(255 * (life / 44)))
-                    # But adjusted for variable lifetime: use 44 frames as reference
-                    alpha = max(60, int(255 * (life / 44)))
-
-                    if alpha < 60:
-                        continue
-
-                    size = p.get("size", 6)
-                    px = int(p["x"] + shake_x)
-                    py = int(p["y"] + shake_y)
-
-                    # Create temporary surface for alpha blending (matching burn particle style)
-                    surf = pygame.Surface((size * 2 + 2, size * 2 + 2), pygame.SRCALPHA)
-
-                    # Same color as burn particles: (255, 120, 0)
-                    pygame.draw.circle(
-                        surf,
-                        (255, 120, 0, alpha),
-                        (size + 1, size + 1),
-                        size,
-                    )
-
-                    self.ui.screen.blit(surf, (px - size, py - size))
-
+                    particles = fire.get("particles", [])
+                    for p in particles:
+                        try:
+                            # Draw burn particles exactly like burning enemies
+                            surf = pygame.Surface(
+                                (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
+                            )
+                            alpha = max(60, int(255 * (p.life / 44)))
+                            pygame.draw.circle(
+                                surf,
+                                (255, 120, 0, alpha),
+                                (p.size + 1, p.size + 1),
+                                p.size,
+                            )
+                            self.ui.screen.blit(
+                                surf,
+                                (
+                                    int(p.x + shake_x - p.size),
+                                    int(p.y + shake_y - p.size),
+                                ),
+                            )
+                        except (AttributeError, TypeError, ValueError, KeyError):
+                            pass
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
         except (AttributeError, TypeError, ValueError, KeyError):

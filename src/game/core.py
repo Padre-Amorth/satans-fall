@@ -2861,7 +2861,7 @@ class Game:
         self.skullboom_explosions.clear()
         self.ice_particles.clear()
         self.ice_puddles.clear()
-        self.hell_fire_particles.clear()
+        self.hell_burn_fires.clear()
 
         self.wave = 0
         self.wave_time = 0.0
@@ -3442,31 +3442,31 @@ class Game:
                 self.statue_projectiles.remove(projectile)
 
     def _update_hell_fire_particles(self) -> None:
-        """Update Hell stage ambient fire particles (lateral flames - burn effect style)."""
+        """Update Hell stage ambient burn fires (sustained effects like burning enemies)."""
         # Only spawn in hell stages
         if not str(getattr(self, "selected_stage", "")).startswith("hell"):
             return
 
         try:
+            from src.entities.enemy import BurnParticle
             from src.game_constants import (
                 HELL_FIRE_PARTICLE_LIFETIME_MAX,
                 HELL_FIRE_PARTICLE_LIFETIME_MIN,
                 HELL_FIRE_PARTICLE_MARGIN,
                 HELL_FIRE_PARTICLE_MAX_ACTIVE,
-                HELL_FIRE_PARTICLE_SIZE,
                 HELL_FIRE_PARTICLE_SPAWN_CHANCE,
             )
         except (AttributeError, TypeError, ValueError, KeyError):
             return
 
-        # Remove dead particles
-        self.hell_fire_particles = [
-            p for p in self.hell_fire_particles if p.get("life", 0) > 0
+        # Remove expired fire sources
+        self.hell_burn_fires = [
+            f for f in self.hell_burn_fires if f.get("timer", 0) > 0
         ]
 
-        # Spawn new particles randomly
+        # Spawn new fires randomly
         if (
-            len(self.hell_fire_particles) < HELL_FIRE_PARTICLE_MAX_ACTIVE
+            len(self.hell_burn_fires) < HELL_FIRE_PARTICLE_MAX_ACTIVE
             and random.random() < HELL_FIRE_PARTICLE_SPAWN_CHANCE
         ):
             # Spawn only on left or right edges (outside playable area)
@@ -3479,24 +3479,59 @@ class Game:
             # Y position anywhere on screen
             y = random.uniform(0, self.height)
 
-            # Random lifetime between 5-8 seconds
-            lifetime = random.randint(
+            # Random duration between 5-8 seconds
+            duration = random.randint(
                 HELL_FIRE_PARTICLE_LIFETIME_MIN, HELL_FIRE_PARTICLE_LIFETIME_MAX
             )
 
-            self.hell_fire_particles.append(
+            self.hell_burn_fires.append(
                 {
                     "x": x,
                     "y": y,
-                    "size": HELL_FIRE_PARTICLE_SIZE,
-                    "life": lifetime,
-                    "max_life": lifetime,
+                    "timer": duration,
+                    "max_timer": duration,
+                    "particles": [],
                 }
             )
 
-        # Update particle lifetimes
-        for p in self.hell_fire_particles:
-            p["life"] -= 1
+        # Update each fire: emit particles and update existing ones
+        for fire in self.hell_burn_fires:
+            timer = fire.get("timer", 0)
+            if timer <= 0:
+                continue
+
+            # Emit 1-3 particles per frame (like burning enemy)
+            try:
+                for _ in range(random.randint(1, 3)):
+                    px = fire["x"] + random.uniform(-8, 8)
+                    py = fire["y"] + random.uniform(-4, 4)
+                    vx = random.uniform(-15, 15)
+                    vy = random.uniform(12, 36)
+                    p = BurnParticle(
+                        px,
+                        py,
+                        vx,
+                        vy,
+                        life=random.randint(20, 44),
+                        size=random.randint(3, 5),
+                    )
+                    fire["particles"].append(p)
+            except (AttributeError, TypeError, ValueError, KeyError):
+                pass
+
+            # Update and remove dead particles
+            particles_to_keep = []
+            for p in fire.get("particles", []):
+                try:
+                    p.update()
+                    if p.alive:
+                        particles_to_keep.append(p)
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+            fire["particles"] = particles_to_keep
+
+            # Decrement fire timer
+            fire["timer"] -= 1
 
     def _update_particle_effects(self) -> None:
         """Update all particle systems and puddle effects."""

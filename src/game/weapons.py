@@ -34,8 +34,8 @@ def init_weapons(game: Any) -> None:
     game.ice_particles: List[Any] = []
     # Ice puddles for slowing enemies
     game.ice_puddles: List[Dict[str, Any]] = []
-    # Hell stage ambient fire particles (lateral flames)
-    game.hell_fire_particles: List[Dict[str, Any]] = []
+    # Hell stage ambient burn fires (sustained burn effects with particles)
+    game.hell_burn_fires: List[Dict[str, Any]] = []
     # Orbital defaults
     game.orbital_count = 3
     game.orbitals: List[Dict[str, Any]] = []

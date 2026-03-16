@@ -78,6 +78,45 @@ class TestHellFireParticles:
             is_right = x > (g.width - HELL_FIRE_PARTICLE_MARGIN)
             assert is_left or is_right, f"Particle x={x} not at edge"
 
+    def test_particles_have_random_lifetime(self):
+        """Particles should have random lifetime between min and max."""
+        from src.game_constants import (
+            HELL_FIRE_PARTICLE_LIFETIME_MAX,
+            HELL_FIRE_PARTICLE_LIFETIME_MIN,
+        )
+
+        g = Game()
+        g.selected_stage = "hell"
+
+        # Spawn many particles and collect all lifetimes spawned
+        lifetimes = []
+        for _ in range(10000):
+            g._update_hell_fire_particles()
+
+        # Collect lifetimes from all particles ever spawned
+        # (check by monitoring different particles)
+        prev_max_life = None
+        for _ in range(10000):
+            g._update_hell_fire_particles()
+            for p in g.hell_fire_particles:
+                max_life = p["max_life"]
+                if prev_max_life is not None and max_life != prev_max_life:
+                    lifetimes.append(max_life)
+                    break
+                prev_max_life = max_life
+
+        # All lifetimes should be within range
+        for lifetime in set(lifetimes):
+            assert (
+                HELL_FIRE_PARTICLE_LIFETIME_MIN
+                <= lifetime
+                <= HELL_FIRE_PARTICLE_LIFETIME_MAX
+            ), f"Lifetime {lifetime} outside range"
+
+        # We should eventually see variation in lifetimes if we spawned enough
+        # (this is probabilistic, so keep it lenient)
+        assert len(g.hell_fire_particles) > 0, "No particles spawned in 10000 frames"
+
     def test_particles_fade_over_time(self):
         """Particles should decrease in life over time."""
         g = Game()

@@ -420,7 +420,11 @@ class UIEffectsRenderer:
         self.draw_chain_lightning_effects(shake_x, shake_y)
 
     def _draw_hell_fire_particles(self, shake_x: int = 0, shake_y: int = 0) -> None:
-        """Draw Hell stage ambient fire particles (lateral flames)."""
+        """Draw Hell stage ambient fire particles (lateral flames - burn effect style).
+
+        Matches the orange burn particle effect from Fire tower damage, with same
+        color (255, 120, 0) and alpha fade pattern.
+        """
         pygame = self.ui.pygame
         if not pygame or not self.ui.screen:
             return
@@ -432,69 +436,35 @@ class UIEffectsRenderer:
 
             for p in particles:
                 try:
-                    # Calculate fade based on life remaining
+                    # Calculate alpha based on life remaining (matching burn particle fade)
                     life = p.get("life", 0)
                     max_life = p.get("max_life", 1)
                     if max_life <= 0:
                         continue
 
-                    progress = 1.0 - (life / max_life)  # 0 (new) to 1 (dead)
-                    alpha = int(200 * (1.0 - progress))  # Fade out
+                    # Same alpha calculation as burn particles: max(60, int(255 * (life / 44)))
+                    # But adjusted for variable lifetime: use 44 frames as reference
+                    alpha = max(60, int(255 * (life / 44)))
 
-                    if alpha < 10:
+                    if alpha < 60:
                         continue
 
-                    # Pulsing size effect (larger at birth, shrinks as it fades)
-                    base_size = p.get("size", 8)
-                    size = int(base_size * (1.0 + 0.3 * progress))
-
-                    # Orange-red fire colors with flicker
-                    flicker = random.uniform(0.8, 1.2)
-                    if progress < 0.5:
-                        # Orange flames (early)
-                        color = (
-                            int(255 * flicker),
-                            int(150 * flicker),
-                            int(20 * flicker),
-                            alpha,
-                        )
-                    else:
-                        # Red-orange fading (late)
-                        color = (
-                            int(255 * flicker),
-                            int(100 * flicker),
-                            int(0 * flicker),
-                            alpha,
-                        )
-
-                    # Draw fire circle with inner glow
+                    size = p.get("size", 6)
                     px = int(p["x"] + shake_x)
                     py = int(p["y"] + shake_y)
 
-                    # Create temporary surface for alpha blending
-                    surf = pygame.Surface((size * 2 + 4, size * 2 + 4), pygame.SRCALPHA)
+                    # Create temporary surface for alpha blending (matching burn particle style)
+                    surf = pygame.Surface((size * 2 + 2, size * 2 + 2), pygame.SRCALPHA)
 
-                    # Outer bright flame circle
+                    # Same color as burn particles: (255, 120, 0)
                     pygame.draw.circle(
                         surf,
-                        color,
-                        (size + 2, size + 2),
+                        (255, 120, 0, alpha),
+                        (size + 1, size + 1),
                         size,
                     )
 
-                    # Inner yellow-white glow (only early in life)
-                    if progress < 0.6:
-                        inner_size = max(2, int(size * 0.5))
-                        inner_alpha = int(alpha * (1.0 - progress))
-                        inner_color = (255, 220, 100, inner_alpha)
-                        pygame.draw.circle(
-                            surf,
-                            inner_color,
-                            (size + 2, size + 2),
-                            inner_size,
-                        )
-
-                    self.ui.screen.blit(surf, (px - size - 2, py - size - 2))
+                    self.ui.screen.blit(surf, (px - size, py - size))
 
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass

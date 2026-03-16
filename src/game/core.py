@@ -3442,14 +3442,15 @@ class Game:
                 self.statue_projectiles.remove(projectile)
 
     def _update_hell_fire_particles(self) -> None:
-        """Update Hell stage ambient fire particles (lateral flames)."""
+        """Update Hell stage ambient fire particles (lateral flames - burn effect style)."""
         # Only spawn in hell stages
         if not str(getattr(self, "selected_stage", "")).startswith("hell"):
             return
 
         try:
             from src.game_constants import (
-                HELL_FIRE_PARTICLE_LIFETIME,
+                HELL_FIRE_PARTICLE_LIFETIME_MAX,
+                HELL_FIRE_PARTICLE_LIFETIME_MIN,
                 HELL_FIRE_PARTICLE_MARGIN,
                 HELL_FIRE_PARTICLE_MAX_ACTIVE,
                 HELL_FIRE_PARTICLE_SIZE,
@@ -3478,13 +3479,18 @@ class Game:
             # Y position anywhere on screen
             y = random.uniform(0, self.height)
 
+            # Random lifetime between 5-8 seconds
+            lifetime = random.randint(
+                HELL_FIRE_PARTICLE_LIFETIME_MIN, HELL_FIRE_PARTICLE_LIFETIME_MAX
+            )
+
             self.hell_fire_particles.append(
                 {
                     "x": x,
                     "y": y,
                     "size": HELL_FIRE_PARTICLE_SIZE,
-                    "life": HELL_FIRE_PARTICLE_LIFETIME,
-                    "max_life": HELL_FIRE_PARTICLE_LIFETIME,
+                    "life": lifetime,
+                    "max_life": lifetime,
                 }
             )
 

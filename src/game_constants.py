@@ -491,7 +491,8 @@ __all__: list[str] = [
     "BLASPHEMY_POINT_COST_DEFAULT",
     "BLASPHEMY_POINT_COST_10",
     "HELL_FIRE_PARTICLE_SPAWN_CHANCE",
-    "HELL_FIRE_PARTICLE_LIFETIME",
+    "HELL_FIRE_PARTICLE_LIFETIME_MIN",
+    "HELL_FIRE_PARTICLE_LIFETIME_MAX",
     "HELL_FIRE_PARTICLE_SIZE",
     "HELL_FIRE_PARTICLE_MARGIN",
     "HELL_FIRE_PARTICLE_MAX_ACTIVE",
@@ -508,12 +509,17 @@ PENTAGRAM_ELEMENTAL_SHIELD_HP = 500
 BLASPHEMY_POINT_COST_DEFAULT = 1  # cost per level for blasphemy_1..9
 BLASPHEMY_POINT_COST_10 = 3  # cost for blasphemy_10 (revive toggle)
 
-# Hell stage ambient fire particles (lateral flames)
-HELL_FIRE_PARTICLE_SPAWN_CHANCE = 0.005  # chance per frame to spawn a fire particle
-HELL_FIRE_PARTICLE_LIFETIME = 120  # frames (2 seconds at 60fps)
-HELL_FIRE_PARTICLE_SIZE = 8  # base radius of fire circles
+# Hell stage ambient fire particles (lateral flames - burn effect style)
+HELL_FIRE_PARTICLE_SPAWN_CHANCE = 0.01  # chance per frame to spawn a fire particle
+HELL_FIRE_PARTICLE_LIFETIME_MIN = (
+    5 * 60
+)  # minimum lifetime in frames (5 seconds at 60fps)
+HELL_FIRE_PARTICLE_LIFETIME_MAX = (
+    8 * 60
+)  # maximum lifetime in frames (8 seconds at 60fps)
+HELL_FIRE_PARTICLE_SIZE = 6  # base radius of fire circles
 HELL_FIRE_PARTICLE_MARGIN = 50  # pixels from edge where fires can spawn
-HELL_FIRE_PARTICLE_MAX_ACTIVE = 8  # max simultaneous fire particles on screen
+HELL_FIRE_PARTICLE_MAX_ACTIVE = 6  # max simultaneous fire particles on screen
 
 # GIF Recording
 GIF_RECORDING_FPS = 15  # frame rate GIF (cattura 1 frame ogni 4 @ 60fps)

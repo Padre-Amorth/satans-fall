@@ -3490,23 +3490,36 @@ class Game:
                     self.width - WALL_THICKNESS
                 )
 
-            # Y position anywhere along the screen height (external space)
-            y = random.uniform(0, self.height)
+            # Y position with margin from top/bottom edges (avoid screen edge cutoff)
+            margin_y = 100
+            y = random.uniform(margin_y, self.height - margin_y)
 
-            # Random duration between 5-8 seconds
-            duration = random.randint(
-                HELL_FIRE_PARTICLE_LIFETIME_MIN, HELL_FIRE_PARTICLE_LIFETIME_MAX
-            )
+            # Check distance from existing fires (minimum 150px separation)
+            min_distance = 150
+            too_close = False
+            for existing_fire in self.hell_burn_fires:
+                ex_x = existing_fire.get("x", 0)
+                ex_y = existing_fire.get("y", 0)
+                distance = math.sqrt((x - ex_x) ** 2 + (y - ex_y) ** 2)
+                if distance < min_distance:
+                    too_close = True
+                    break
 
-            self.hell_burn_fires.append(
-                {
-                    "x": x,
-                    "y": y,
-                    "timer": duration,
-                    "max_timer": duration,
-                    "particles": [],
-                }
-            )
+            if not too_close:
+                # Random duration between 10-15 seconds
+                duration = random.randint(
+                    HELL_FIRE_PARTICLE_LIFETIME_MIN, HELL_FIRE_PARTICLE_LIFETIME_MAX
+                )
+
+                self.hell_burn_fires.append(
+                    {
+                        "x": x,
+                        "y": y,
+                        "timer": duration,
+                        "max_timer": duration,
+                        "particles": [],
+                    }
+                )
 
         # Update each fire: emit particles and update existing ones
         for fire in self.hell_burn_fires:

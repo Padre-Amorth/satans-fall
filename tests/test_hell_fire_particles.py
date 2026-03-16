@@ -80,9 +80,10 @@ class TestHellBurnFires:
 
             assert is_left_edge or is_right_edge or is_left_wall or is_right_wall, f"Fire x={x} not at edge or wall"
 
-            # Y position should be anywhere on screen
+            # Y position should avoid screen edges (margin of 100px)
             y = fire["y"]
-            assert 0 <= y <= g.height, f"Fire y={y} outside screen height"
+            margin_y = 100
+            assert margin_y <= y <= (g.height - margin_y), f"Fire y={y} too close to screen edge"
 
     def test_fires_have_random_duration(self):
         """Fires should have random duration between min and max."""
@@ -261,3 +262,23 @@ class TestHellBurnFires:
 
             # Should spawn fires in each stage
             assert spawn_found, f"No fires spawned in {stage} after 2000 frames"
+
+    def test_fires_maintain_minimum_distance(self):
+        """Fires should maintain minimum distance (150px) from each other."""
+        import math
+
+        g = Game()
+        g.selected_stage = "hell"
+
+        # Spawn many fires to ensure multiple fires are present
+        for _ in range(10000):
+            g._update_hell_fire_particles()
+
+        # Check distance between all pairs of fires
+        min_distance = 150
+        for i, fire1 in enumerate(g.hell_burn_fires):
+            for fire2 in g.hell_burn_fires[i + 1 :]:
+                x1, y1 = fire1.get("x", 0), fire1.get("y", 0)
+                x2, y2 = fire2.get("x", 0), fire2.get("y", 0)
+                distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+                assert distance >= min_distance, f"Fires too close: {distance:.1f}px < {min_distance}px"

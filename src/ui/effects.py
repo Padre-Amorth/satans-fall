@@ -443,8 +443,8 @@ class UIEffectsRenderer:
                             surf = pygame.Surface(
                                 (p.size * 2 + 2, p.size * 2 + 2), pygame.SRCALPHA
                             )
-                            # Reduce alpha by 50% for ethereal semi-transparent effect
-                            alpha = max(60, int(255 * (p.life / 44))) * 0.5
+                            # Reduce alpha by 70% for very ethereal semi-transparent effect
+                            alpha = max(60, int(255 * (p.life / 44))) * 0.3
                             pygame.draw.circle(
                                 surf,
                                 (255, 120, 0, int(alpha)),

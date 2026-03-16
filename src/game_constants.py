@@ -519,7 +519,7 @@ HELL_FIRE_PARTICLE_LIFETIME_MAX = (
 )  # maximum lifetime in frames (15 seconds at 60fps)
 HELL_FIRE_PARTICLE_SIZE = 6  # base radius of fire circles
 HELL_FIRE_PARTICLE_MARGIN = 50  # pixels from edge where fires can spawn
-HELL_FIRE_PARTICLE_MAX_ACTIVE = 6  # max simultaneous fire particles on screen
+HELL_FIRE_PARTICLE_MAX_ACTIVE = 8  # max simultaneous fire particles on screen
 
 # GIF Recording
 GIF_RECORDING_FPS = 15  # frame rate GIF (cattura 1 frame ogni 4 @ 60fps)

@@ -296,7 +296,7 @@ class TestHellBurnFires:
             "hell_2": [(0, 0, 0), (255, 120, 0)],  # Lake of Fire: black and orange
             "hell_3": [
                 (100, 200, 80),
-                (100, 50, 150),
+                (130, 80, 180),
             ],  # Hades: light green and dark purple
         }
 

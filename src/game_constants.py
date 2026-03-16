@@ -524,8 +524,8 @@ HELL_FIRE_PARTICLE_MAX_ACTIVE = 8  # max simultaneous fire particles on screen
 # Hell stage fire colors (RGB tuples for each stage)
 # Mapping: stage -> list of possible colors to randomly choose from
 HELL_FIRE_COLORS = {
-    "hell": [(0, 0, 0), (255, 120, 0)],  # Lake of Fire: black and orange
-    "hell_2": [(180, 100, 200), (255, 220, 100)],  # Gehenna: purple and yellow
+    "hell": [(180, 100, 200), (255, 220, 100)],  # Gehenna: purple and yellow
+    "hell_2": [(0, 0, 0), (255, 120, 0)],  # Lake of Fire: black and orange
     "hell_3": [(100, 200, 80), (50, 150, 50)],  # Hades: light green and dark green
 }
 

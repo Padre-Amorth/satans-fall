@@ -292,8 +292,8 @@ class TestHellBurnFires:
         """Fires should have colors specific to the Hell stage."""
 
         stages_colors = {
-            "hell": [(0, 0, 0), (255, 120, 0)],  # Lake of Fire: black and orange
-            "hell_2": [(180, 100, 200), (255, 220, 100)],  # Gehenna: purple and yellow
+            "hell": [(180, 100, 200), (255, 220, 100)],  # Gehenna: purple and yellow
+            "hell_2": [(0, 0, 0), (255, 120, 0)],  # Lake of Fire: black and orange
             "hell_3": [
                 (100, 200, 80),
                 (50, 150, 50),

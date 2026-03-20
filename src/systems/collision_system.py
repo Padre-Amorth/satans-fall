@@ -101,10 +101,7 @@ class CollisionSystem:
             if not self.game.permanent_stats.get(f"{tp}_7", 0):
                 return
             amt = getattr(self.game, "tower_energy_per_hit", 0) * hits
-            try:
-                self.game.charge_tower_energy(amt)
-            except (AttributeError, TypeError, ValueError, KeyError):
-                pass
+            self.game.charge_tower_energy(amt)
         except (AttributeError, TypeError, ValueError, KeyError):
             pass
 

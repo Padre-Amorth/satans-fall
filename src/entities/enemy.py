@@ -54,6 +54,9 @@ try:
         SHOOT_COOLDOWN_BOSS_FINAL,
         SHOOT_COOLDOWN_INQUISITOR,
         SHOOT_COOLDOWN_NORMAL,
+        NORMAL_STOP_TIMER_HIDDEN,
+        NORMAL_STOP_TIMER_VISIBLE,
+        ENEMY_JITTER_FACTOR,
     )
 except ImportError:
     BARRIER_ARCHER_COVER_CHANCE = 0.95
@@ -70,6 +73,9 @@ except ImportError:
     SHOOT_COOLDOWN_ARCHER = (120, 200)
     SHOOT_COOLDOWN_INQUISITOR = (100, 140)
     SHOOT_COOLDOWN_BOSS_FINAL = (60, 110)
+    NORMAL_STOP_TIMER_HIDDEN = (300, 600)
+    NORMAL_STOP_TIMER_VISIBLE = (60, 180)
+    ENEMY_JITTER_FACTOR = 0.2
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -184,6 +190,32 @@ class Enemy(BaseSprite):
 
         y = by + bh / 2 + random.uniform(-5, 5)
         return (int(x), int(y))
+
+    @staticmethod
+    def _is_barrier_alive(barrier: Any, barriers: list) -> bool:
+        """Check if a barrier reference is still valid and has HP."""
+        return (
+            barrier is not None
+            and barrier in barriers
+            and barrier.get("hp", 0) > 0
+        )
+
+    @staticmethod
+    def _random_jittered_position(game: Any) -> tuple:
+        """Return a random (x, y) near the center of the screen."""
+        cx = game.width / 2
+        cy = game.height / 2
+        jx = game.width * ENEMY_JITTER_FACTOR
+        jy = game.height * ENEMY_JITTER_FACTOR
+        return (
+            cx + random.uniform(-jx, jx),
+            cy + random.uniform(-jy, jy),
+        )
+
+    def _apply_barrier_slot(self, barrier: dict) -> None:
+        """Assign barrier slot and start hide-suppression timer."""
+        self._barrier_slot = barrier.get("_current_slot", BARRIER_SLOT_LEFT)
+        self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
 
     def __init__(
         self,
@@ -1403,8 +1435,6 @@ class Enemy(BaseSprite):
                             self.x = game.clamp_to_walls(self.x)
                         except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-                    # movement handled; skip other behaviour
-                    pass
                 elif self.enemy_type in (
                     "pentagram",
                     "pentagram_fire",
@@ -1472,10 +1502,7 @@ class Enemy(BaseSprite):
                                     self.archer_target_x = side_pos[0]
                                     self._hiding_behind_barrier = True
                                     self._hiding_barrier_ref = nearest
-                                    self._barrier_slot = nearest.get(
-                                        "_current_slot", BARRIER_SLOT_LEFT
-                                    )
-                                    self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
+                                    self._apply_barrier_slot(nearest)
                                     self.archer_reposition_timer = random.randint(
                                         600, 900
                                     )
@@ -1499,10 +1526,8 @@ class Enemy(BaseSprite):
                                     curr_barrier = getattr(
                                         self, "_hiding_barrier_ref", None
                                     )
-                                    curr_alive = (
-                                        curr_barrier is not None
-                                        and curr_barrier in barriers
-                                        and curr_barrier.get("hp", 0) > 0
+                                    curr_alive = Enemy._is_barrier_alive(
+                                        curr_barrier, barriers
                                     )
 
                                     if (
@@ -1530,12 +1555,7 @@ class Enemy(BaseSprite):
                                         self.archer_target_x = pos[0]
                                         self._hiding_behind_barrier = True
                                         self._hiding_barrier_ref = nearest
-                                        self._barrier_slot = nearest.get(
-                                            "_current_slot", BARRIER_SLOT_LEFT
-                                        )
-                                        self._hide_suppress = (
-                                            BARRIER_HIDE_SUPPRESS_FRAMES
-                                        )
+                                        self._apply_barrier_slot(nearest)
                                     else:
                                         self.archer_target_x = (
                                             game.random_x_between_walls()
@@ -1561,10 +1581,8 @@ class Enemy(BaseSprite):
                         # Actively seek barriers if none found yet, or if current is destroyed
                         barriers = getattr(game, "barriers", [])
                         curr_barrier = getattr(self, "_hiding_barrier_ref", None)
-                        barrier_alive = (
-                            curr_barrier is not None
-                            and curr_barrier in barriers
-                            and curr_barrier.get("hp", 0) > 0
+                        barrier_alive = Enemy._is_barrier_alive(
+                            curr_barrier, barriers
                         )
 
                         if (
@@ -1577,10 +1595,7 @@ class Enemy(BaseSprite):
                             self.archer_target_x = pos[0]
                             self._hiding_behind_barrier = True
                             self._hiding_barrier_ref = nearest
-                            self._barrier_slot = nearest.get(
-                                "_current_slot", BARRIER_SLOT_LEFT
-                            )
-                            self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
+                            self._apply_barrier_slot(nearest)
 
                         # Add jitter on top of base movement
                         self.x += random.uniform(-0.5, 0.5) * self.speed / 60
@@ -1620,7 +1635,6 @@ class Enemy(BaseSprite):
                             self.y = min(self.y, ARCHER_VERTICAL_LIMIT)
                         except (AttributeError, TypeError, ValueError, KeyError):
                             pass
-                    pass
                 elif self.enemy_type == "normal" and game is not None:
                     # Lazily initialize a stop point/time near the center of the battlefield
                     if not getattr(self, "_normal_behavior_initialized", False):
@@ -1639,36 +1653,22 @@ class Enemy(BaseSprite):
                                 spy = side_pos[1]
                                 self._hiding_behind_barrier = True
                                 self._hiding_barrier_ref = nearest
-                                self._barrier_slot = nearest.get(
-                                    "_current_slot", BARRIER_SLOT_LEFT
-                                )
-                                self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
+                                self._apply_barrier_slot(nearest)
                             else:
                                 # No barriers or failed check: use random position
-                                center_x = game.width / 2
-                                center_y = game.height / 2
-                                jitter_x = game.width * 0.2
-                                jitter_y = game.height * 0.2
-                                spx = center_x + random.uniform(-jitter_x, jitter_x)
-                                spy = center_y + random.uniform(-jitter_y, jitter_y)
-                                # Ensure the chosen stop point is within the playable walls
+                                spx, spy = Enemy._random_jittered_position(game)
                                 spx = game.clamp_to_walls(spx)
                                 self._hiding_behind_barrier = False
                         except (AttributeError, TypeError, ValueError, KeyError):
                             # Fallback if barrier check fails
-                            center_x = game.width / 2
-                            center_y = game.height / 2
-                            jitter_x = game.width * 0.2
-                            jitter_y = game.height * 0.2
-                            spx = center_x + random.uniform(-jitter_x, jitter_x)
-                            spy = center_y + random.uniform(-jitter_y, jitter_y)
+                            spx, spy = Enemy._random_jittered_position(game)
                             spx = game.clamp_to_walls(spx)
                             self._hiding_behind_barrier = False
                         self.stop_point = (spx, spy)
                         self.stop_timer = (
-                            random.randint(300, 600)
+                            random.randint(*NORMAL_STOP_TIMER_HIDDEN)
                             if getattr(self, "_hiding_behind_barrier", False)
-                            else random.randint(60, 180)
+                            else random.randint(*NORMAL_STOP_TIMER_VISIBLE)
                         )
                         self.stop_threshold = max(
                             10, min(game.width, game.height) * 0.05
@@ -1695,15 +1695,13 @@ class Enemy(BaseSprite):
                                 self._facing_down = dy > 0
                         else:
                             if getattr(self, "_hiding_behind_barrier", False):
-                                self.stop_timer = random.randint(300, 600)
+                                self.stop_timer = random.randint(*NORMAL_STOP_TIMER_HIDDEN)
                             else:
-                                self.stop_timer = random.randint(60, 180)
+                                self.stop_timer = random.randint(*NORMAL_STOP_TIMER_VISIBLE)
                             barriers = getattr(game, "barriers", [])
                             curr_barrier = getattr(self, "_hiding_barrier_ref", None)
-                            curr_alive = (
-                                curr_barrier is not None
-                                and curr_barrier in barriers
-                                and curr_barrier.get("hp", 0) > 0
+                            curr_alive = Enemy._is_barrier_alive(
+                                curr_barrier, barriers
                             )
 
                             if (
@@ -1726,17 +1724,9 @@ class Enemy(BaseSprite):
                                 spx, spy = pos[0], pos[1]
                                 self._hiding_behind_barrier = True
                                 self._hiding_barrier_ref = nearest
-                                self._barrier_slot = nearest.get(
-                                    "_current_slot", BARRIER_SLOT_LEFT
-                                )
-                                self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
+                                self._apply_barrier_slot(nearest)
                             else:
-                                cx = game.width / 2
-                                cy = game.height / 2
-                                jx = game.width * 0.2
-                                jy = game.height * 0.2
-                                spx = cx + random.uniform(-jx, jx)
-                                spy = cy + random.uniform(-jy, jy)
+                                spx, spy = Enemy._random_jittered_position(game)
                                 spx = game.clamp_to_walls(spx)
                                 self._hiding_behind_barrier = False
                             self.stop_point = (spx, spy)
@@ -1744,10 +1734,8 @@ class Enemy(BaseSprite):
                     # Actively seek barriers if none found yet, or if current is destroyed
                     barriers = getattr(game, "barriers", [])
                     curr_barrier = getattr(self, "_hiding_barrier_ref", None)
-                    barrier_alive = (
-                        curr_barrier is not None
-                        and curr_barrier in barriers
-                        and curr_barrier.get("hp", 0) > 0
+                    barrier_alive = Enemy._is_barrier_alive(
+                        curr_barrier, barriers
                     )
 
                     if (
@@ -1760,11 +1748,8 @@ class Enemy(BaseSprite):
                         self.stop_point = (pos[0], pos[1])
                         self._hiding_behind_barrier = True
                         self._hiding_barrier_ref = nearest
-                        self._barrier_slot = nearest.get(
-                            "_current_slot", BARRIER_SLOT_LEFT
-                        )
-                        self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
-                        self.stop_timer = random.randint(300, 600)
+                        self._apply_barrier_slot(nearest)
+                        self.stop_timer = random.randint(*NORMAL_STOP_TIMER_HIDDEN)
 
                     # Tick down hide suppression timer; clear if barrier is gone (normal enemies)
                     if getattr(self, "_hiding_behind_barrier", False):

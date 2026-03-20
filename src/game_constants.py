@@ -334,6 +334,13 @@ SHOOT_COOLDOWN_ARCHER = (120, 200)
 SHOOT_COOLDOWN_INQUISITOR = (100, 140)
 SHOOT_COOLDOWN_BOSS_FINAL = (60, 110)
 
+# Normal enemy stop-timer ranges (frames)
+NORMAL_STOP_TIMER_HIDDEN = (300, 600)
+NORMAL_STOP_TIMER_VISIBLE = (60, 180)
+
+# Jitter factor for random spawn/reposition (fraction of screen size)
+ENEMY_JITTER_FACTOR = 0.2
+
 # Horde heavy composition: used in limbo and purgatory horde events
 HORDE_HEAVY_COMPOSITION = {
     "special": True,
@@ -506,6 +513,9 @@ __all__: list[str] = [
     "SHOOT_COOLDOWN_ARCHER",
     "SHOOT_COOLDOWN_INQUISITOR",
     "SHOOT_COOLDOWN_BOSS_FINAL",
+    "NORMAL_STOP_TIMER_HIDDEN",
+    "NORMAL_STOP_TIMER_VISIBLE",
+    "ENEMY_JITTER_FACTOR",
     "HORDE_HEAVY_COMPOSITION",
     "GIF_RECORDING_FPS",
     "GIF_MAX_DURATION_SECONDS",

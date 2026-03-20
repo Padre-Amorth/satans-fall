@@ -2026,8 +2026,7 @@ class Game:
             self.draw_ui(shake_x, shake_y)
 
             # FPS counter — always on top, no shake
-            if hasattr(self, "ui") and hasattr(self.ui, "draw_fps_counter"):
-                self.ui.draw_fps_counter()
+            self._ui_call("draw_fps_counter")
 
             # Scale virtual surface to actual window and update display
             try:
@@ -2066,17 +2065,18 @@ class Game:
 
             traceback.print_exc()
 
+    def _ui_call(self, method_name: str, *args) -> None:
+        """Safely delegate a call to the UI manager if the method exists."""
+        if hasattr(self, "ui") and hasattr(self.ui, method_name):
+            getattr(self.ui, method_name)(*args)
+
     def draw_game_world(self, shake_x=0, shake_y=0) -> None:
         """Delegate game world drawing to the Pygame UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_game_world"):
-            self.ui.draw_game_world(shake_x, shake_y)
-        return None
+        self._ui_call("draw_game_world", shake_x, shake_y)
 
     def draw_dead_trees(self, shake_x=0, shake_y=0) -> None:
         """Delegate dead tree drawing to Pygame UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_dead_trees"):
-            self.ui.draw_dead_trees(shake_x, shake_y)
-        return None
+        self._ui_call("draw_dead_trees", shake_x, shake_y)
 
     def draw_pedestals(self, shake_x=0, shake_y=0) -> None:
         """Delegate pedestal drawing to Pygame UI manager.
@@ -2085,33 +2085,23 @@ class Game:
         now performs no drawing.  This method remains for compatibility with
         existing codepaths.
         """
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_pedestals"):
-            self.ui.draw_pedestals(shake_x, shake_y)
-        return None
+        self._ui_call("draw_pedestals", shake_x, shake_y)
 
     def draw_fog(self, shake_x=0, shake_y=0) -> None:
         """Delegate fog drawing to Pygame UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_fog"):
-            self.ui.draw_fog(shake_x, shake_y)
-        return None
+        self._ui_call("draw_fog", shake_x, shake_y)
 
     def draw_game_objects(self, shake_x=0, shake_y=0) -> None:
         """Delegate drawing of objects to the Pygame UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_game_objects"):
-            self.ui.draw_game_objects(shake_x, shake_y)
-        return None
+        self._ui_call("draw_game_objects", shake_x, shake_y)
 
     def draw_special_effects(self, shake_x=0, shake_y=0) -> None:
         """Delegate special effects to Pygame UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_special_effects"):
-            self.ui.draw_special_effects(shake_x, shake_y)
-        return None
+        self._ui_call("draw_special_effects", shake_x, shake_y)
 
     def draw_lightning_effect(self, shake_x=0, shake_y=0):
         """Delegate lightning effect drawing to Pygame UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_lightning_effect"):
-            self.ui.draw_lightning_effect(shake_x, shake_y)
-        return None
+        self._ui_call("draw_lightning_effect", shake_x, shake_y)
 
     def _draw_particles(
         self,
@@ -2356,8 +2346,7 @@ class Game:
 
         # If victory overlay active, draw that first and skip everything else
         if getattr(self, "showing_victory", False):
-            if hasattr(self, "ui") and hasattr(self.ui, "draw_victory"):
-                self.ui.draw_victory(shake_x, shake_y)
+            self._ui_call("draw_victory", shake_x, shake_y)
             return
 
         # Draw menus (delegated to existing Game methods to preserve behavior)
@@ -2404,64 +2393,43 @@ class Game:
         # Always draw pause confirmation dialog if active (can appear even without pause menu)
         # This allows ALT+F4 to show quit confirmation during gameplay
         if getattr(self, "pause_confirmation", None):
-            if hasattr(self, "ui") and hasattr(
-                self.ui, "draw_pause_confirmation_dialog"
-            ):
-                self.ui.draw_pause_confirmation_dialog(shake_x, shake_y)
+            self._ui_call("draw_pause_confirmation_dialog", shake_x, shake_y)
 
     def draw_hud(self, shake_x=0, shake_y=0) -> None:
         """Backward-compatible wrapper that delegates HUD drawing to UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_hud"):
-            self.ui.draw_hud(shake_x, shake_y)
-        return None
+        self._ui_call("draw_hud", shake_x, shake_y)
 
     def draw_center_messages(self, shake_x=0, shake_y=0) -> None:
         """Backward-compatible wrapper: delegate to UI manager's implementation."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_center_messages"):
-            self.ui.draw_center_messages(shake_x, shake_y)
-        return None
+        self._ui_call("draw_center_messages", shake_x, shake_y)
 
     def draw_main_menu(self, shake_x=0, shake_y=0) -> None:
         """Wrapper: delegate main menu drawing to UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_main_menu"):
-            self.ui.draw_main_menu(shake_x, shake_y)
+        self._ui_call("draw_main_menu", shake_x, shake_y)
         # Draw unlock overlay if showing
         if getattr(self, "showing_unlock_overlay", False):
             if hasattr(self, "ui") and hasattr(self.ui, "effects"):
                 self.ui.effects.draw_unlock_overlay(shake_x, shake_y)
-        return None
 
     def draw_profiles_menu(self, shake_x=0, shake_y=0) -> None:
         """Wrapper: delegate profiles menu drawing to UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_profiles_menu"):
-            self.ui.draw_profiles_menu(shake_x, shake_y)
-        return None
+        self._ui_call("draw_profiles_menu", shake_x, shake_y)
 
     def draw_stage_menu(self, shake_x=0, shake_y=0) -> None:
         """Backward-compatible wrapper: delegate stage/menu drawing to UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_stage_menu"):
-            self.ui.draw_stage_menu(shake_x, shake_y)
-        return None
+        self._ui_call("draw_stage_menu", shake_x, shake_y)
 
     def draw_permanent_upgrades(self, shake_x=0, shake_y=0) -> None:
         """Backward-compatible wrapper that delegates to UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_permanent_upgrades"):
-            self.ui.draw_permanent_upgrades(shake_x, shake_y)
-        return None
+        self._ui_call("draw_permanent_upgrades", shake_x, shake_y)
 
     def draw_prologo_end(self, shake_x=0, shake_y=0) -> None:
         """Draw the prologo completion screen"""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_prologo_end"):
-            self.ui.draw_prologo_end(shake_x, shake_y)
-        return None
+        self._ui_call("draw_prologo_end", shake_x, shake_y)
 
     def draw_pause_menu(self, shake_x=0, shake_y=0) -> None:
         """Backward-compatible wrapper that delegates to UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_pause_menu"):
-            if hasattr(self, "ui") and hasattr(self.ui, "draw_pause_menu"):
-                self.ui.draw_pause_menu(shake_x, shake_y)
-            return None
-        return None
+        self._ui_call("draw_pause_menu", shake_x, shake_y)
 
     def _draw_pause_menu_impl(self, shake_x=0, shake_y=0) -> None:
         """Draw the pause menu"""
@@ -2521,15 +2489,11 @@ class Game:
 
     def draw_weapon_selection(self, shake_x=0, shake_y=0) -> None:
         """Draw weapon selection screen"""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_weapon_selection"):
-            self.ui.draw_weapon_selection(shake_x, shake_y)
-        return None
+        self._ui_call("draw_weapon_selection", shake_x, shake_y)
 
     def draw_tower_selection(self, shake_x=0, shake_y=0) -> None:
         """Draw tower selection screen (Purgatory)."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_tower_selection"):
-            self.ui.draw_tower_selection(shake_x, shake_y)
-        return None
+        self._ui_call("draw_tower_selection", shake_x, shake_y)
 
     def _player_stats_display_items(self):
         """Return (key, value) pairs to display in the player stats sheet."""
@@ -2604,11 +2568,7 @@ class Game:
 
     def draw_player_stats(self, shake_x=0, shake_y=0) -> None:
         """Backward-compatible wrapper that delegates to UI manager."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_player_stats"):
-            if hasattr(self, "ui") and hasattr(self.ui, "draw_player_stats"):
-                self.ui.draw_player_stats(shake_x, shake_y)
-            return None
-        return None
+        self._ui_call("draw_player_stats", shake_x, shake_y)
 
     def _draw_player_stats_impl(self, shake_x=0, shake_y=0) -> None:
         """Draw a player stats sheet overlay showing current stats and progress."""
@@ -2714,9 +2674,7 @@ class Game:
 
     def draw_upgrade_selection(self, shake_x=0, shake_y=0) -> None:
         """Draw upgrade selection screen"""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_upgrade_selection"):
-            self.ui.draw_upgrade_selection(shake_x, shake_y)
-        return None
+        self._ui_call("draw_upgrade_selection", shake_x, shake_y)
 
     def handle_events(self) -> None:
         return self.input_handler.handle_events() if self.input_handler else None
@@ -4286,9 +4244,7 @@ class Game:
 
     def draw_game_over(self, shake_x=0, shake_y=0) -> None:
         """Draw the persistent game over screen overlay with fade."""
-        if hasattr(self, "ui") and hasattr(self.ui, "draw_game_over"):
-            self.ui.draw_game_over(shake_x, shake_y)
-        return None
+        self._ui_call("draw_game_over", shake_x, shake_y)
 
     def prologo_defeat(self) -> None:
         """Show Prologo defeat screen"""

@@ -136,62 +136,9 @@ class UIGameRenderer:
                 self.game.left_wall_points, left_wall_exterior, shake_x, shake_y
             )
 
-            if is_hell_stage:
-                try:
-                    inner_edge = [
-                        (int(p[0]), int(p[1])) for p in self.game.left_wall_points
-                    ]
-                    outer_edge = [(int(p[0]), int(p[1])) for p in left_wall_exterior]
-                    pygame.draw.lines(
-                        self.ui.screen, (0, 0, 0), False, inner_edge, width=4
-                    )
-                    pygame.draw.lines(
-                        self.ui.screen, (0, 0, 0), False, outer_edge, width=4
-                    )
-                except (AttributeError, TypeError, ValueError, KeyError):
-                    pass
-            elif is_purgatory_stage:
-                try:
-                    inner_edge = [
-                        (int(p[0]), int(p[1])) for p in self.game.left_wall_points
-                    ]
-                    outer_edge = [(int(p[0]), int(p[1])) for p in left_wall_exterior]
-                    pygame.draw.lines(
-                        self.ui.screen, (30, 30, 30), False, inner_edge, width=3
-                    )
-                    pygame.draw.lines(
-                        self.ui.screen, (30, 30, 30), False, outer_edge, width=3
-                    )
-                except (AttributeError, TypeError, ValueError, KeyError):
-                    pass
-            elif is_prologo:
-                try:
-                    inner_edge = [
-                        (int(p[0]), int(p[1])) for p in self.game.left_wall_points
-                    ]
-                    outer_edge = [(int(p[0]), int(p[1])) for p in left_wall_exterior]
-                    pygame.draw.lines(
-                        self.ui.screen, (30, 30, 30), False, inner_edge, width=3
-                    )
-                    pygame.draw.lines(
-                        self.ui.screen, (30, 30, 30), False, outer_edge, width=3
-                    )
-                except (AttributeError, TypeError, ValueError, KeyError):
-                    pass
-            elif is_limbo_stage:
-                try:
-                    inner_edge = [
-                        (int(p[0]), int(p[1])) for p in self.game.left_wall_points
-                    ]
-                    outer_edge = [(int(p[0]), int(p[1])) for p in left_wall_exterior]
-                    pygame.draw.lines(
-                        self.ui.screen, (30, 30, 30), False, inner_edge, width=3
-                    )
-                    pygame.draw.lines(
-                        self.ui.screen, (30, 30, 30), False, outer_edge, width=3
-                    )
-                except (AttributeError, TypeError, ValueError, KeyError):
-                    pass
+            self._draw_wall_edges(
+                pygame, self.game.left_wall_points, left_wall_exterior, is_hell_stage
+            )
 
         if self.game.right_wall_points:
             if is_prologo or is_limbo_stage:
@@ -222,62 +169,23 @@ class UIGameRenderer:
                 self.game.right_wall_points, right_wall_exterior, shake_x, shake_y
             )
 
-            if is_hell_stage:
-                try:
-                    inner_edge = [
-                        (int(p[0]), int(p[1])) for p in self.game.right_wall_points
-                    ]
-                    outer_edge = [(int(p[0]), int(p[1])) for p in right_wall_exterior]
-                    pygame.draw.lines(
-                        self.ui.screen, (0, 0, 0), False, inner_edge, width=4
-                    )
-                    pygame.draw.lines(
-                        self.ui.screen, (0, 0, 0), False, outer_edge, width=4
-                    )
-                except (AttributeError, TypeError, ValueError, KeyError):
-                    pass
-            elif is_purgatory_stage:
-                try:
-                    inner_edge = [
-                        (int(p[0]), int(p[1])) for p in self.game.right_wall_points
-                    ]
-                    outer_edge = [(int(p[0]), int(p[1])) for p in right_wall_exterior]
-                    pygame.draw.lines(
-                        self.ui.screen, (30, 30, 30), False, inner_edge, width=3
-                    )
-                    pygame.draw.lines(
-                        self.ui.screen, (30, 30, 30), False, outer_edge, width=3
-                    )
-                except (AttributeError, TypeError, ValueError, KeyError):
-                    pass
-            elif is_prologo:
-                try:
-                    inner_edge = [
-                        (int(p[0]), int(p[1])) for p in self.game.right_wall_points
-                    ]
-                    outer_edge = [(int(p[0]), int(p[1])) for p in right_wall_exterior]
-                    pygame.draw.lines(
-                        self.ui.screen, (30, 30, 30), False, inner_edge, width=3
-                    )
-                    pygame.draw.lines(
-                        self.ui.screen, (30, 30, 30), False, outer_edge, width=3
-                    )
-                except (AttributeError, TypeError, ValueError, KeyError):
-                    pass
-            elif is_limbo_stage:
-                try:
-                    inner_edge = [
-                        (int(p[0]), int(p[1])) for p in self.game.right_wall_points
-                    ]
-                    outer_edge = [(int(p[0]), int(p[1])) for p in right_wall_exterior]
-                    pygame.draw.lines(
-                        self.ui.screen, (30, 30, 30), False, inner_edge, width=3
-                    )
-                    pygame.draw.lines(
-                        self.ui.screen, (30, 30, 30), False, outer_edge, width=3
-                    )
-                except (AttributeError, TypeError, ValueError, KeyError):
-                    pass
+            self._draw_wall_edges(
+                pygame, self.game.right_wall_points, right_wall_exterior, is_hell_stage
+            )
+
+    def _draw_wall_edges(self, pygame, wall_points, wall_exterior, is_hell: bool) -> None:
+        """Draw edge outlines on a single wall (left or right)."""
+        try:
+            inner_edge = [(int(p[0]), int(p[1])) for p in wall_points]
+            outer_edge = [(int(p[0]), int(p[1])) for p in wall_exterior]
+            if is_hell:
+                color, width = (0, 0, 0), 4
+            else:
+                color, width = (30, 30, 30), 3
+            pygame.draw.lines(self.ui.screen, color, False, inner_edge, width=width)
+            pygame.draw.lines(self.ui.screen, color, False, outer_edge, width=width)
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
 
     def _draw_wall_bricks(self, inner_pts, outer_pts, shake_x=0, shake_y=0) -> None:
         """Draw a brick/stone pattern over the wall polygon using a cached mask surface."""

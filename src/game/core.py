@@ -2956,19 +2956,20 @@ class Game:
         self.limbo_final_lightning_timer = 0
         self.limbo_final_lightning_strike = False
 
-        # Reset limbo horde tracking
-        self.limbo_horde_started = False
-        self.limbo_horde_timer = 0
-        self.limbo_horde_elapsed = 0
-        self.limbo_horde_active = False
-        self.limbo_horde_completed = False
+        # Reset horde tracking (shared fields)
+        for prefix in ("limbo_horde", "purgatory_horde"):
+            setattr(self, f"{prefix}_started", False)
+            setattr(self, f"{prefix}_timer", 0)
+            setattr(self, f"{prefix}_elapsed", 0)
+            setattr(self, f"{prefix}_active", False)
+            setattr(self, f"{prefix}_completed", False)
+            setattr(self, f"{prefix}_initial", 0)
+            setattr(self, f"{prefix}_killed", 0)
+            setattr(self, f"{prefix}_remaining", 0)
+            setattr(self, f"{prefix}_schedule", [])
+            setattr(self, f"{prefix}_phase_index", 0)
+        # limbo-specific
         self.limbo_horde_ready_for_victory = False
-        self.limbo_horde_initial = 0
-        self.limbo_horde_killed = 0
-        self.limbo_horde_remaining = 0
-        self.limbo_horde_schedule = []
-        self.limbo_horde_phase_index = 0
-        # clear any pending limbo final victory countdown
         self.limbo_final_victory_timer = 0
         self.limbo_final_victory_started = False
         # reset satan growth state
@@ -2978,18 +2979,7 @@ class Game:
         self.satan_growth_orig_width = None
         self.satan_growth_orig_height = None
         self.satan_growth_persistent = False
-
-        # Reset purgatory horde tracking
-        self.purgatory_horde_started = False
-        self.purgatory_horde_timer = 0
-        self.purgatory_horde_elapsed = 0
-        self.purgatory_horde_active = False
-        self.purgatory_horde_completed = False
-        self.purgatory_horde_initial = 0
-        self.purgatory_horde_killed = 0
-        self.purgatory_horde_remaining = 0
-        self.purgatory_horde_schedule = []
-        self.purgatory_horde_phase_index = 0
+        # purgatory-specific
         self.purgatory_horde_wave_timer = 0.0
         self.purgatory_horde_explosion_ready = False
         self.purgatory_horde_victory_timer = 0

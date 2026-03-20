@@ -103,6 +103,19 @@ def IceParticle(
 
 class Enemy(BaseSprite):
     @staticmethod
+    def _find_nearest_barrier(barriers: list, x: float) -> dict | None:
+        """Find the nearest intact barrier (or any barrier as fallback)."""
+        if not barriers:
+            return None
+        intact = [
+            b
+            for b in barriers
+            if b.get("hp", 0) / b.get("max_hp", 1) > BARRIER_DAMAGED_THRESHOLD
+        ]
+        barrier_list = intact if intact else barriers
+        return min(barrier_list, key=lambda b: abs(b["x"] + b["w"] / 2 - x))
+
+    @staticmethod
     def _get_barrier_side_position(barrier: dict, enemy_width: float = 30) -> tuple:
         """Position enemy at available slot (left/center/right) beside barrier."""
         if "occupied_slots" not in barrier:
@@ -1417,19 +1430,8 @@ class Enemy(BaseSprite):
                                     barriers
                                     and random.random() < BARRIER_ARCHER_COVER_CHANCE
                                 ):
-                                    # Prefer intact barriers from spawn
-                                    intact_barriers = [
-                                        b
-                                        for b in barriers
-                                        if b.get("hp", 0) / b.get("max_hp", 1)
-                                        > BARRIER_DAMAGED_THRESHOLD
-                                    ]
-                                    barrier_list = (
-                                        intact_barriers if intact_barriers else barriers
-                                    )
-                                    nearest = min(
-                                        barrier_list,
-                                        key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
+                                    nearest = Enemy._find_nearest_barrier(
+                                        barriers, self.x
                                     )
                                     side_pos = Enemy._get_barrier_side_position(
                                         nearest, self.width
@@ -1486,18 +1488,8 @@ class Enemy(BaseSprite):
                                         and random.random()
                                         < BARRIER_ARCHER_COVER_CHANCE
                                     ):
-                                        intact = [
-                                            b
-                                            for b in barriers
-                                            if b.get("hp", 0) / b.get("max_hp", 1)
-                                            > BARRIER_DAMAGED_THRESHOLD
-                                        ]
-                                        barrier_list = intact if intact else barriers
-                                        nearest = min(
-                                            barrier_list,
-                                            key=lambda b: abs(
-                                                b["x"] + b["w"] / 2 - self.x
-                                            ),
+                                        nearest = Enemy._find_nearest_barrier(
+                                            barriers, self.x
                                         )
                                         pos = Enemy._get_barrier_side_position(
                                             nearest, self.width
@@ -1547,17 +1539,7 @@ class Enemy(BaseSprite):
                             and barriers
                             and random.random() < BARRIER_ARCHER_COVER_CHANCE
                         ):
-                            intact = [
-                                b
-                                for b in barriers
-                                if b.get("hp", 0) / b.get("max_hp", 1)
-                                > BARRIER_DAMAGED_THRESHOLD
-                            ]
-                            barrier_list = intact if intact else barriers
-                            nearest = min(
-                                barrier_list,
-                                key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
-                            )
+                            nearest = Enemy._find_nearest_barrier(barriers, self.x)
                             pos = Enemy._get_barrier_side_position(nearest, self.width)
                             self.archer_target_x = pos[0]
                             self._hiding_behind_barrier = True
@@ -1614,23 +1596,9 @@ class Enemy(BaseSprite):
                                 barriers
                                 and random.random() < BARRIER_ARCHER_COVER_CHANCE
                             ):
-                                # Prefer intact barriers from spawn
-                                intact_barriers = [
-                                    b
-                                    for b in barriers
-                                    if b.get("hp", 0) / b.get("max_hp", 1)
-                                    > BARRIER_DAMAGED_THRESHOLD
-                                ]
-                                if intact_barriers:
-                                    nearest = min(
-                                        intact_barriers,
-                                        key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
-                                    )
-                                else:
-                                    nearest = min(
-                                        barriers,
-                                        key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
-                                    )
+                                nearest = Enemy._find_nearest_barrier(
+                                    barriers, self.x
+                                )
                                 side_pos = Enemy._get_barrier_side_position(
                                     nearest, self.width
                                 )
@@ -1718,16 +1686,8 @@ class Enemy(BaseSprite):
                                 barriers
                                 and random.random() < BARRIER_ARCHER_COVER_CHANCE
                             ):
-                                intact = [
-                                    b
-                                    for b in barriers
-                                    if b.get("hp", 0) / b.get("max_hp", 1)
-                                    > BARRIER_DAMAGED_THRESHOLD
-                                ]
-                                barrier_list = intact if intact else barriers
-                                nearest = min(
-                                    barrier_list,
-                                    key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
+                                nearest = Enemy._find_nearest_barrier(
+                                    barriers, self.x
                                 )
                                 pos = Enemy._get_barrier_side_position(
                                     nearest, self.width
@@ -1764,17 +1724,7 @@ class Enemy(BaseSprite):
                         and barriers
                         and random.random() < BARRIER_ARCHER_COVER_CHANCE
                     ):
-                        intact = [
-                            b
-                            for b in barriers
-                            if b.get("hp", 0) / b.get("max_hp", 1)
-                            > BARRIER_DAMAGED_THRESHOLD
-                        ]
-                        barrier_list = intact if intact else barriers
-                        nearest = min(
-                            barrier_list,
-                            key=lambda b: abs(b["x"] + b["w"] / 2 - self.x),
-                        )
+                        nearest = Enemy._find_nearest_barrier(barriers, self.x)
                         pos = Enemy._get_barrier_side_position(nearest, self.width)
                         self.stop_point = (pos[0], pos[1])
                         self._hiding_behind_barrier = True

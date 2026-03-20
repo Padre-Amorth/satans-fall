@@ -1,4 +1,5 @@
 import atexit
+import importlib
 import logging
 import math
 import random
@@ -68,10 +69,6 @@ from src.game_state import GameStateManager
 from src.projectile import FliesProjectile
 from src.systems.collision_system import CollisionSystem
 from src.systems.enemy_manager import EnemyManager
-from src.systems.input_handler import InputHandler
-from src.systems.spawn_system import SpawnSystem
-from src.systems.upgrade_system import UpgradeSystem
-from src.systems.weapon_system import WeaponSystem
 from src.ui import PygameUIManager
 from src.weapons import WEAPON_DEFS
 
@@ -273,10 +270,7 @@ class Game:
         # ensure some meta‑progression keys exist so callers can increment
         # without worrying about KeyError
         self.global_progress: Dict[str, Any] = getattr(self, "global_progress", {})
-        self.global_progress.setdefault("meta_xp", 0)
-        self.global_progress.setdefault("meta_level", 1)
-        self.global_progress.setdefault("meta_points", 0)
-        self.global_progress.setdefault("stages_cleared", {})
+        self._init_meta_defaults()
         self.global_progress.setdefault("pending_unlock_notifications", [])
         self.projectile_manager: "ProjectileManager | None" = None
 
@@ -1039,11 +1033,7 @@ class Game:
             self.load_permanent_stats()
 
         # Meta‑progression defaults. keys here are safe to call repeatedly.
-        self.global_progress.setdefault("meta_xp", 0)
-        self.global_progress.setdefault("meta_level", 1)
-        self.global_progress.setdefault("meta_points", 0)
-        # tracks whether a stage has granted its one-time clear reward
-        self.global_progress.setdefault("stages_cleared", {})
+        self._init_meta_defaults()
 
         # Apply any persisted display preferences (window size / fullscreen)
         try:
@@ -1069,77 +1059,28 @@ class Game:
         # Initialize GameStateManager (centralize wave/xp/upgrades/etc.)
         self.game_state: GameStateManager = GameStateManager(self)
 
-        # Initialize WeaponSystem (handles weapon firing and projectile creation)
-        try:
-            self.weapon_system = WeaponSystem(self)
-        except (AttributeError, TypeError, ValueError, KeyError):
-            self.weapon_system = None
-
-        # Initialize SpawnSystem (handles enemy spawning and wave progression)
-        try:
-            self.spawn_system = SpawnSystem(self)
-        except (AttributeError, TypeError, ValueError, KeyError):
-            self.spawn_system = None
-
-        # Initialize UpgradeSystem (handles weapon upgrades and permanent stats)
-        try:
-            self.upgrade_system = UpgradeSystem(self)
-        except (AttributeError, TypeError, ValueError, KeyError):
-            self.upgrade_system = None
-
-        # Initialize InputHandler (handles keyboard and mouse input)
-        try:
-            self.input_handler = InputHandler(self)
-        except (AttributeError, TypeError, ValueError, KeyError):
-            self.input_handler = None
-
-        # Initialize TowerSpecialSystem (handles energy bar and fire/blizzard/Voltaic Mayhem specials)
-        try:
-            from src.systems.tower_special_system import TowerSpecialSystem
-
-            self.tower_special = TowerSpecialSystem(self)
-        except (AttributeError, TypeError, ValueError, KeyError):
-            self.tower_special = None
-
-        # Initialize Blasphemy5System (handles blink teleport and revive)
-        try:
-            from src.systems.blasphemy5_system import Blasphemy5System
-
-            self.blasphemy5_system = Blasphemy5System(self)
-        except (AttributeError, TypeError, ValueError, KeyError):
-            self.blasphemy5_system = None
-
-        # Initialize ScoreSystem (handles meta-progression: XP, levels, points)
-        try:
-            from src.systems.score_system import ScoreSystem
-
-            self.score_system = ScoreSystem(self)
-        except (AttributeError, TypeError, ValueError, KeyError):
-            self.score_system = None
-
-        # Initialize DeathSystem (handles enemy/boss death, health drops, XP awards)
-        try:
-            from src.systems.death_system import DeathSystem
-
-            self.death_system = DeathSystem(self)
-        except (AttributeError, TypeError, ValueError, KeyError):
-            self.death_system = None
-
-        # Initialize ParticleSystem (handles rendering and updating particle effects)
-        try:
-            from src.systems.particle_system import ParticleSystem
-
-            self.particle_system = ParticleSystem(self)
-        except (AttributeError, TypeError, ValueError, KeyError):
-            self.particle_system = None
-
-        # Initialize ProjectileManager (handles pooling/spawn management)
-        try:
-            from src.systems.projectile_manager import ProjectileManager
-
-            self.projectile_manager = ProjectileManager(self)
-        except (AttributeError, TypeError, ValueError, KeyError):
-            self.projectile_manager = None
+        # Initialize all game sub-systems (weapon, spawn, upgrade, input, etc.)
+        # Each system is created with self as the game reference; if creation
+        # fails the attribute is set to None so the rest of the engine can
+        # degrade gracefully.
+        _systems: list[tuple[str, str, str]] = [
+            ("weapon_system", "src.systems.weapon_system", "WeaponSystem"),
+            ("spawn_system", "src.systems.spawn_system", "SpawnSystem"),
+            ("upgrade_system", "src.systems.upgrade_system", "UpgradeSystem"),
+            ("input_handler", "src.systems.input_handler", "InputHandler"),
+            ("tower_special", "src.systems.tower_special_system", "TowerSpecialSystem"),
+            ("blasphemy5_system", "src.systems.blasphemy5_system", "Blasphemy5System"),
+            ("score_system", "src.systems.score_system", "ScoreSystem"),
+            ("death_system", "src.systems.death_system", "DeathSystem"),
+            ("particle_system", "src.systems.particle_system", "ParticleSystem"),
+            ("projectile_manager", "src.systems.projectile_manager", "ProjectileManager"),
+        ]
+        for attr, module_path, class_name in _systems:
+            try:
+                mod = importlib.import_module(module_path)
+                setattr(self, attr, getattr(mod, class_name)(self))
+            except (AttributeError, TypeError, ValueError, KeyError):
+                setattr(self, attr, None)
 
         # Final debug check to show what ended up in permanent_stats (use logger, not print)
         try:
@@ -2064,6 +2005,13 @@ class Game:
             import traceback
 
             traceback.print_exc()
+
+    def _init_meta_defaults(self) -> None:
+        """Ensure core meta-progression keys exist in global_progress."""
+        self.global_progress.setdefault("meta_xp", 0)
+        self.global_progress.setdefault("meta_level", 1)
+        self.global_progress.setdefault("meta_points", 0)
+        self.global_progress.setdefault("stages_cleared", {})
 
     def _ui_call(self, method_name: str, *args) -> None:
         """Safely delegate a call to the UI manager if the method exists."""
@@ -3090,18 +3038,12 @@ class Game:
         # Reset stats before loading so old data doesn't bleed in
         self.permanent_stats = {}
         self.global_progress = {}
-        self.global_progress.setdefault("meta_xp", 0)
-        self.global_progress.setdefault("meta_level", 1)
-        self.global_progress.setdefault("meta_points", 0)
+        self._init_meta_defaults()
         self.global_progress.setdefault("blasphemy_points", 0)
-        self.global_progress.setdefault("stages_cleared", {})
         self.load_permanent_stats()
         # Fill any gaps with defaults
-        self.global_progress.setdefault("meta_xp", 0)
-        self.global_progress.setdefault("meta_level", 1)
-        self.global_progress.setdefault("meta_points", 0)
+        self._init_meta_defaults()
         self.global_progress.setdefault("blasphemy_points", 0)
-        self.global_progress.setdefault("stages_cleared", {})
         # Ensure profile_name is set
         self.global_progress.setdefault("profile_name", f"Profile {slot}")
         # Save selected slot so it persists across sessions
@@ -3124,10 +3066,7 @@ class Game:
             self.active_profile_slot = None
             self.permanent_stats = {}
             self.global_progress = {}
-            self.global_progress.setdefault("meta_xp", 0)
-            self.global_progress.setdefault("meta_level", 1)
-            self.global_progress.setdefault("meta_points", 0)
-            self.global_progress.setdefault("stages_cleared", {})
+            self._init_meta_defaults()
 
     def reset_game(self) -> None:
         """Reset everything EXCEPT permanent upgrades.
@@ -3735,13 +3674,15 @@ class Game:
             return
 
         # Sync with game_state
-        self.awaiting_weapon_choice = self.game_state.awaiting_weapon_choice
-        self.weapon_choices = self.game_state.weapon_choices
-        self.awaiting_upgrade = self.game_state.awaiting_upgrade
-        self.upgrade_choices = self.game_state.upgrade_choices
-        # Sync values from the `GameStateManager` (already declared in __init__)
-        self.selected_weapon_index = self.game_state.selected_weapon_index
-        self.selected_upgrade_index = self.game_state.selected_upgrade_index
+        for _attr in (
+            "awaiting_weapon_choice",
+            "weapon_choices",
+            "awaiting_upgrade",
+            "upgrade_choices",
+            "selected_weapon_index",
+            "selected_upgrade_index",
+        ):
+            setattr(self, _attr, getattr(self.game_state, _attr))
 
         # Also pause game updates while awaiting a tower choice to prevent the run from starting
         if (

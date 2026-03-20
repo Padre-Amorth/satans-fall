@@ -319,6 +319,20 @@ BARRIER_ARCHER_COVER_CHANCE = 0.95  # High aggressiveness: 95% chance to seek co
 BARRIER_HIDE_DISTANCE = 40  # px — archer considered "behind" barrier
 BARRIER_HIDE_SUPPRESS_FRAMES = 150  # frames archer won't shoot while hiding (~2.5s)
 BARRIER_DAMAGED_THRESHOLD = 0.40  # Seek new cover if current barrier has < 40% HP
+BARRIER_SLOT_LEFT = "left"
+BARRIER_SLOT_CENTER = "center"
+BARRIER_SLOT_RIGHT = "right"
+BARRIER_SLOTS = [BARRIER_SLOT_LEFT, BARRIER_SLOT_CENTER, BARRIER_SLOT_RIGHT]
+BARRIER_SLOT_DISTANCE_MULTIPLIER = (
+    1.2  # offset multiplier for left/right slot positioning
+)
+BARRIER_POSITION_JITTER = 3  # +/- random jitter for left/right slot positions
+
+# Enemy shoot cooldown ranges (min, max) in frames
+SHOOT_COOLDOWN_NORMAL = (60, 120)
+SHOOT_COOLDOWN_ARCHER = (120, 200)
+SHOOT_COOLDOWN_INQUISITOR = (100, 140)
+SHOOT_COOLDOWN_BOSS_FINAL = (60, 110)
 
 # Horde heavy composition: used in limbo and purgatory horde events
 HORDE_HEAVY_COMPOSITION = {
@@ -482,6 +496,16 @@ __all__: list[str] = [
     "BARRIER_HIDE_DISTANCE",
     "BARRIER_HIDE_SUPPRESS_FRAMES",
     "BARRIER_DAMAGED_THRESHOLD",
+    "BARRIER_SLOT_LEFT",
+    "BARRIER_SLOT_CENTER",
+    "BARRIER_SLOT_RIGHT",
+    "BARRIER_SLOTS",
+    "BARRIER_SLOT_DISTANCE_MULTIPLIER",
+    "BARRIER_POSITION_JITTER",
+    "SHOOT_COOLDOWN_NORMAL",
+    "SHOOT_COOLDOWN_ARCHER",
+    "SHOOT_COOLDOWN_INQUISITOR",
+    "SHOOT_COOLDOWN_BOSS_FINAL",
     "HORDE_HEAVY_COMPOSITION",
     "GIF_RECORDING_FPS",
     "GIF_MAX_DURATION_SECONDS",

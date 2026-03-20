@@ -44,12 +44,32 @@ try:
         BARRIER_DAMAGED_THRESHOLD,
         BARRIER_HIDE_DISTANCE,
         BARRIER_HIDE_SUPPRESS_FRAMES,
+        BARRIER_POSITION_JITTER,
+        BARRIER_SLOT_CENTER,
+        BARRIER_SLOT_DISTANCE_MULTIPLIER,
+        BARRIER_SLOT_LEFT,
+        BARRIER_SLOT_RIGHT,
+        BARRIER_SLOTS,
+        SHOOT_COOLDOWN_ARCHER,
+        SHOOT_COOLDOWN_BOSS_FINAL,
+        SHOOT_COOLDOWN_INQUISITOR,
+        SHOOT_COOLDOWN_NORMAL,
     )
 except ImportError:
     BARRIER_ARCHER_COVER_CHANCE = 0.95
     BARRIER_HIDE_DISTANCE = 40
     BARRIER_HIDE_SUPPRESS_FRAMES = 150
     BARRIER_DAMAGED_THRESHOLD = 0.40
+    BARRIER_SLOT_LEFT = "left"
+    BARRIER_SLOT_CENTER = "center"
+    BARRIER_SLOT_RIGHT = "right"
+    BARRIER_SLOTS = [BARRIER_SLOT_LEFT, BARRIER_SLOT_CENTER, BARRIER_SLOT_RIGHT]
+    BARRIER_SLOT_DISTANCE_MULTIPLIER = 1.2
+    BARRIER_POSITION_JITTER = 3
+    SHOOT_COOLDOWN_NORMAL = (60, 120)
+    SHOOT_COOLDOWN_ARCHER = (120, 200)
+    SHOOT_COOLDOWN_INQUISITOR = (100, 140)
+    SHOOT_COOLDOWN_BOSS_FINAL = (60, 110)
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -119,17 +139,21 @@ class Enemy(BaseSprite):
     def _get_barrier_side_position(barrier: dict, enemy_width: float = 30) -> tuple:
         """Position enemy at available slot (left/center/right) beside barrier."""
         if "occupied_slots" not in barrier:
-            barrier["occupied_slots"] = {"left": 0, "center": 0, "right": 0}
+            barrier["occupied_slots"] = {
+                BARRIER_SLOT_LEFT: 0,
+                BARRIER_SLOT_CENTER: 0,
+                BARRIER_SLOT_RIGHT: 0,
+            }
 
         slots = barrier["occupied_slots"]
-        if slots["left"] < 1:
-            slot = "left"
-        elif slots["center"] < 1:
-            slot = "center"
-        elif slots["right"] < 1:
-            slot = "right"
+        if slots[BARRIER_SLOT_LEFT] < 1:
+            slot = BARRIER_SLOT_LEFT
+        elif slots[BARRIER_SLOT_CENTER] < 1:
+            slot = BARRIER_SLOT_CENTER
+        elif slots[BARRIER_SLOT_RIGHT] < 1:
+            slot = BARRIER_SLOT_RIGHT
         else:
-            slot = random.choice(["left", "center", "right"])
+            slot = random.choice(BARRIER_SLOTS)
 
         slots[slot] += 1
         barrier["_current_slot"] = slot
@@ -142,12 +166,21 @@ class Enemy(BaseSprite):
         )
         bcx = bx + bw / 2
 
-        if slot == "left":
-            x = bx - enemy_width * 1.2 + random.uniform(-3, 3)
-        elif slot == "center":
+        if slot == BARRIER_SLOT_LEFT:
+            x = (
+                bx
+                - enemy_width * BARRIER_SLOT_DISTANCE_MULTIPLIER
+                + random.uniform(-BARRIER_POSITION_JITTER, BARRIER_POSITION_JITTER)
+            )
+        elif slot == BARRIER_SLOT_CENTER:
             x = bcx + random.uniform(-8, 8)
         else:
-            x = bx + bw + enemy_width * 1.2 + random.uniform(-3, 3)
+            x = (
+                bx
+                + bw
+                + enemy_width * BARRIER_SLOT_DISTANCE_MULTIPLIER
+                + random.uniform(-BARRIER_POSITION_JITTER, BARRIER_POSITION_JITTER)
+            )
 
         y = by + bh / 2 + random.uniform(-5, 5)
         return (int(x), int(y))
@@ -359,18 +392,18 @@ class Enemy(BaseSprite):
         # Shooting cooldown for enemies that shoot (None when not applicable)
         self.shoot_cooldown: int | None = None
         if enemy_type == "normal":
-            self.shoot_cooldown = random.randint(60, 120)
+            self.shoot_cooldown = random.randint(*SHOOT_COOLDOWN_NORMAL)
         elif enemy_type == "archer":
             # Archer uses its own cooldown pattern (single then burst) and is
             # generally slower than normal enemies
-            self.shoot_cooldown = random.randint(120, 200)
+            self.shoot_cooldown = random.randint(*SHOOT_COOLDOWN_ARCHER)
         elif enemy_type == "boss_medium":
-            self.shoot_cooldown = random.randint(60, 120)
+            self.shoot_cooldown = random.randint(*SHOOT_COOLDOWN_NORMAL)
         elif enemy_type == "boss_inquisitor":
             # Inquisitor fires a 3-shot spread periodically (slightly reduced fire rate)
-            self.shoot_cooldown = random.randint(100, 140)
+            self.shoot_cooldown = random.randint(*SHOOT_COOLDOWN_INQUISITOR)
         elif enemy_type == "boss_final":
-            self.shoot_cooldown = random.randint(60, 110)
+            self.shoot_cooldown = random.randint(*SHOOT_COOLDOWN_BOSS_FINAL)
         elif enemy_type == "boss_limbo":
             # Limbo boss doesn't fire via the normal shoot_at_player path; its
             # attacks are handled in the boss-pattern logic.  Keep cooldown
@@ -1440,7 +1473,7 @@ class Enemy(BaseSprite):
                                     self._hiding_behind_barrier = True
                                     self._hiding_barrier_ref = nearest
                                     self._barrier_slot = nearest.get(
-                                        "_current_slot", "left"
+                                        "_current_slot", BARRIER_SLOT_LEFT
                                     )
                                     self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
                                     self.archer_reposition_timer = random.randint(
@@ -1498,7 +1531,7 @@ class Enemy(BaseSprite):
                                         self._hiding_behind_barrier = True
                                         self._hiding_barrier_ref = nearest
                                         self._barrier_slot = nearest.get(
-                                            "_current_slot", "left"
+                                            "_current_slot", BARRIER_SLOT_LEFT
                                         )
                                         self._hide_suppress = (
                                             BARRIER_HIDE_SUPPRESS_FRAMES
@@ -1544,7 +1577,9 @@ class Enemy(BaseSprite):
                             self.archer_target_x = pos[0]
                             self._hiding_behind_barrier = True
                             self._hiding_barrier_ref = nearest
-                            self._barrier_slot = nearest.get("_current_slot", "left")
+                            self._barrier_slot = nearest.get(
+                                "_current_slot", BARRIER_SLOT_LEFT
+                            )
                             self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
 
                         # Add jitter on top of base movement
@@ -1596,9 +1631,7 @@ class Enemy(BaseSprite):
                                 barriers
                                 and random.random() < BARRIER_ARCHER_COVER_CHANCE
                             ):
-                                nearest = Enemy._find_nearest_barrier(
-                                    barriers, self.x
-                                )
+                                nearest = Enemy._find_nearest_barrier(barriers, self.x)
                                 side_pos = Enemy._get_barrier_side_position(
                                     nearest, self.width
                                 )
@@ -1607,7 +1640,7 @@ class Enemy(BaseSprite):
                                 self._hiding_behind_barrier = True
                                 self._hiding_barrier_ref = nearest
                                 self._barrier_slot = nearest.get(
-                                    "_current_slot", "left"
+                                    "_current_slot", BARRIER_SLOT_LEFT
                                 )
                                 self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
                             else:
@@ -1686,9 +1719,7 @@ class Enemy(BaseSprite):
                                 barriers
                                 and random.random() < BARRIER_ARCHER_COVER_CHANCE
                             ):
-                                nearest = Enemy._find_nearest_barrier(
-                                    barriers, self.x
-                                )
+                                nearest = Enemy._find_nearest_barrier(barriers, self.x)
                                 pos = Enemy._get_barrier_side_position(
                                     nearest, self.width
                                 )
@@ -1696,7 +1727,7 @@ class Enemy(BaseSprite):
                                 self._hiding_behind_barrier = True
                                 self._hiding_barrier_ref = nearest
                                 self._barrier_slot = nearest.get(
-                                    "_current_slot", "left"
+                                    "_current_slot", BARRIER_SLOT_LEFT
                                 )
                                 self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
                             else:
@@ -1729,7 +1760,9 @@ class Enemy(BaseSprite):
                         self.stop_point = (pos[0], pos[1])
                         self._hiding_behind_barrier = True
                         self._hiding_barrier_ref = nearest
-                        self._barrier_slot = nearest.get("_current_slot", "left")
+                        self._barrier_slot = nearest.get(
+                            "_current_slot", BARRIER_SLOT_LEFT
+                        )
                         self._hide_suppress = BARRIER_HIDE_SUPPRESS_FRAMES
                         self.stop_timer = random.randint(300, 600)
 

@@ -18,7 +18,6 @@ import pygame
 
 from src.balance import ENEMY_BASE_SPEEDS
 from src.entities.enemy import Enemy
-from src.game_constants import HELL_STAGES
 
 logger = logging.getLogger(__name__)
 
@@ -217,8 +216,7 @@ class EnemyManager:
             y = -30
 
         # Determine enemy type: hell stage uses custode instead of giant
-        stage = getattr(self.game, "selected_stage", "") or ""
-        if stage in HELL_STAGES:
+        if self.game.is_hell_stage():
             etype = "custode"
         else:
             etype = "giant"
@@ -438,10 +436,10 @@ class EnemyManager:
             # If we're in a Limbo stage: always spawn the inquisitor boss –
             # the "boss_big" wave boss is forbidden.  This rule applies even on
             # waves divisible by three and matches the new design requirement.
-            if getattr(self.game, "is_limbo_stage", lambda: False)():
+            if self.game.is_limbo_stage():
                 self.spawn_boss("inquisitor")
             # Purgatory: alternate end-of-wave boss between medium and inquisitor
-            elif getattr(self.game, "selected_stage", "").startswith("purgatory"):
+            elif self.game.is_purgatory_stage():
                 # Use wave parity to alternate: odd waves -> medium, even waves -> inquisitor
                 current_wave = getattr(self.game, "wave", 0)
                 if current_wave % 2 == 1:
@@ -449,7 +447,7 @@ class EnemyManager:
                 else:
                     self.spawn_boss("inquisitor")
             # Hell: Cross Bearer as the wave boss
-            elif getattr(self.game, "selected_stage", "").startswith("hell"):
+            elif self.game.is_hell_stage():
                 self.spawn_boss("cross_bearer")
             elif (
                 getattr(self.game, "wave", 0) % 3 == 0

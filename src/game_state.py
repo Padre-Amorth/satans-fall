@@ -11,7 +11,6 @@ from src.balance import (
     XP_BASE,
     calculate_xp_for_next_level,
 )
-from src.game_constants import HELL_STAGES
 from src.weapons import (
     WEAPON_DEFS,
     get_orbital_count,
@@ -436,9 +435,7 @@ class GameStateManager:
                         continue
                 elif af == "hell":
                     # only allow in HELL stages (not purgatory)
-                    if not (
-                        self.selected_stage and str(self.selected_stage) in HELL_STAGES
-                    ):
+                    if not self.is_hell_stage():
                         continue
             filtered.append(w)
 

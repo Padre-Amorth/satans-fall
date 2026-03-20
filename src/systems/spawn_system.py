@@ -764,18 +764,14 @@ class SpawnSystem:
         # revised fourth phase broken into four small bursts. first burst
         # triggers the growth event. composition remains heavy on giants,
         # shielded and light on inquisitors.
-        heavy_composition = {
-            "special": True,
-            "giant_ratio": 0.6,
-            "shielded_ratio": 0.3,
-            "inquisitor_ratio": 0.1,
-        }
+        from src.game_constants import HORDE_HEAVY_COMPOSITION
+
         schedule.extend(
             [
-                {"time": 20 * f, "count": 5, "growth": True, **heavy_composition},
-                {"time": 25 * f, "count": 5, **heavy_composition},
-                {"time": 28 * f, "count": 5, **heavy_composition},
-                {"time": 33 * f, "count": 5, **heavy_composition},
+                {"time": 20 * f, "count": 5, "growth": True, **HORDE_HEAVY_COMPOSITION},
+                {"time": 25 * f, "count": 5, **HORDE_HEAVY_COMPOSITION},
+                {"time": 28 * f, "count": 5, **HORDE_HEAVY_COMPOSITION},
+                {"time": 33 * f, "count": 5, **HORDE_HEAVY_COMPOSITION},
             ]
         )
         # special 5th phase entries with explicit composition
@@ -867,18 +863,14 @@ class SpawnSystem:
             {"time": 10 * f, "count": 15},
         ]
         # revised fourth phase broken into four small bursts with heavy composition
-        heavy_composition = {
-            "special": True,
-            "giant_ratio": 0.6,
-            "shielded_ratio": 0.3,
-            "inquisitor_ratio": 0.1,
-        }
+        from src.game_constants import HORDE_HEAVY_COMPOSITION
+
         schedule.extend(
             [
-                {"time": 20 * f, "count": 5, **heavy_composition},
-                {"time": 25 * f, "count": 5, **heavy_composition},
-                {"time": 28 * f, "count": 5, **heavy_composition},
-                {"time": 33 * f, "count": 5, **heavy_composition},
+                {"time": 20 * f, "count": 5, **HORDE_HEAVY_COMPOSITION},
+                {"time": 25 * f, "count": 5, **HORDE_HEAVY_COMPOSITION},
+                {"time": 28 * f, "count": 5, **HORDE_HEAVY_COMPOSITION},
+                {"time": 33 * f, "count": 5, **HORDE_HEAVY_COMPOSITION},
             ]
         )
         # special 5th phase entries with explicit composition (no boss)

@@ -89,11 +89,9 @@ class UIGameRenderer:
         settings = self.game.stage_settings[self.game.selected_stage]
         wall_color = settings["wall_color"]
 
-        is_hell_stage = getattr(self.game, "selected_stage", "") in HELL_STAGES
-        is_purgatory_stage = (
-            getattr(self.game, "selected_stage", "") in PURGATORY_STAGES
-        )
-        is_prologo = getattr(self.game, "selected_stage", "") == "prologo"
+        is_hell_stage = self.game.is_hell_stage()
+        is_purgatory_stage = self.game.is_purgatory_stage()
+        is_prologo = str(self.game.selected_stage) == "prologo"
         is_limbo_stage = self.game.is_limbo_stage()
         render_wall_thickness = (
             WALL_THICKNESS * 2

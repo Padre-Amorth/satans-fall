@@ -156,6 +156,9 @@ class Game:
         self._autosave_interval = 30.0  # seconds
         self._autosave_timer = 0.0
 
+        # Cursor management: track current cursor state to avoid redundant updates
+        self._current_cursor_state = None
+
         # Register atexit handler so Ctrl+C / process kill still saves.
         # Use module-level ref so only the LAST Game instance saves on exit.
         _set_atexit_game(self)
@@ -1480,12 +1483,10 @@ class Game:
             # Default width per-stage (may be overridden for stage-specific behavior)
             if self.is_limbo_stage():
                 width_at_y = 680 - (progress * 280)
-            elif self.selected_stage and str(self.selected_stage) in HELL_STAGES:
+            elif self.is_hell_stage():
                 # HELL: make walls totally vertical — narrowed by 50px per side (100px total)
                 width_at_y = 620.0  # 720 - 100 (50px per side)
-            elif self.selected_stage and str(self.selected_stage).startswith(
-                "purgatory"
-            ):
+            elif self.is_purgatory_stage():
                 # Purgatory retains previous layout
                 width_at_y = 720 - (progress * 240)
             elif self.selected_stage == "prologo":
@@ -1495,7 +1496,7 @@ class Game:
                 width_at_y = 560 - (progress * 240)
 
             # Irregularity creates small horizontal wobble; disable for HELL to keep walls vertical
-            if self.selected_stage and str(self.selected_stage) in HELL_STAGES:
+            if self.is_hell_stage():
                 irregularity = 0.0
             else:
                 irregularity = math.sin(y / 80) * 5 + math.cos(y / 60) * 3
@@ -1737,6 +1738,7 @@ class Game:
         """Main game loop"""
         logger.info("Game starting...")
         while self.running:
+            self._update_cursor()
             self.handle_events()
             self.handle_input()
             self.update()
@@ -1747,6 +1749,66 @@ class Game:
             self.clock.tick(self.fps)
         self.save_permanent_stats()
         logger.info("Game ended")
+
+    def _create_scope_cursor(self) -> tuple:
+        """Create a custom dark yellow telescopic sight cursor.
+
+        Returns a tuple (surface, hotspot) for pygame.mouse.set_cursor()
+        """
+        size = 32
+        surf = pygame.Surface((size, size), pygame.SRCALPHA)
+        center_x = size / 2.0
+        center_y = size / 2.0
+        dark_yellow = (200, 170, 0, 255)
+
+        # Outer circle (scope ring) - smaller
+        pygame.draw.circle(surf, dark_yellow, (int(center_x), int(center_y)), 7, 2)
+
+        # Horizontal line - extends beyond circle
+        pygame.draw.line(
+            surf,
+            dark_yellow,
+            (int(center_x - 12), int(center_y)),
+            (int(center_x + 12), int(center_y)),
+            2,
+        )
+
+        # Vertical line - extends beyond circle
+        pygame.draw.line(
+            surf,
+            dark_yellow,
+            (int(center_x), int(center_y - 12)),
+            (int(center_x), int(center_y + 12)),
+            2,
+        )
+
+        # Center dot
+        pygame.draw.circle(surf, dark_yellow, (int(center_x), int(center_y)), 2, 0)
+
+        return surf, (int(center_x), int(center_y))
+
+    def _update_cursor(self) -> None:
+        """Update mouse cursor based on game state.
+
+        During gameplay: yellow telescopic sight cursor
+        In menus/paused: default arrow cursor
+        """
+        is_in_gameplay = (
+            not self.showing_main_menu
+            and not self.showing_stage_menu
+            and not self.paused
+        )
+
+        target_cursor_state = "gameplay" if is_in_gameplay else "menu"
+
+        # Only update if state changed to avoid redundant pygame calls
+        if self._current_cursor_state != target_cursor_state:
+            self._current_cursor_state = target_cursor_state
+            if target_cursor_state == "gameplay":
+                cursor_surf, hotspot = self._create_scope_cursor()
+                pygame.mouse.set_cursor(hotspot, cursor_surf)
+            else:
+                pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
 
     def draw(self) -> None:
         """Main draw method"""
@@ -3444,7 +3506,7 @@ class Game:
     def _update_hell_fire_particles(self) -> None:
         """Update Hell stage ambient burn fires (sustained effects like burning enemies)."""
         # Only spawn in hell stages
-        if not str(getattr(self, "selected_stage", "")).startswith("hell"):
+        if not self.is_hell_stage():
             return
 
         try:

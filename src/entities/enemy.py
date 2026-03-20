@@ -54,11 +54,18 @@ except ImportError:
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-class BurnParticle:
-    """Simple particle for burn visual effect"""
+class DamageParticle:
+    """Generic particle for visual effects (burn, ice, etc)"""
 
     def __init__(
-        self, x: float, y: float, vx: float, vy: float, life: int = 30, size: int = 3
+        self,
+        x: float,
+        y: float,
+        vx: float,
+        vy: float,
+        life: int = 30,
+        size: int = 3,
+        y_accel: float = -0.2,
     ):
         self.x = x
         self.y = y
@@ -66,11 +73,12 @@ class BurnParticle:
         self.vy = vy
         self.life = life
         self.size = size
+        self.y_accel = y_accel
 
     def update(self) -> None:
         self.x += self.vx / 60
         self.y += self.vy / 60
-        self.vy -= 0.2  # slight upward acceleration
+        self.vy += self.y_accel
         self.life -= 1
 
     @property
@@ -78,28 +86,19 @@ class BurnParticle:
         return self.life > 0
 
 
-class IceParticle:
-    """Simple particle for ice explosion visual effect"""
+# Backwards compatibility factories
+def BurnParticle(
+    x: float, y: float, vx: float, vy: float, life: int = 30, size: int = 3
+) -> DamageParticle:
+    """Create a burn particle (upward acceleration)."""
+    return DamageParticle(x, y, vx, vy, life, size, y_accel=-0.2)
 
-    def __init__(
-        self, x: float, y: float, vx: float, vy: float, life: int = 20, size: int = 2
-    ):
-        self.x = x
-        self.y = y
-        self.vx = vx
-        self.vy = vy
-        self.life = life
-        self.size = size
 
-    def update(self) -> None:
-        self.x += self.vx / 60
-        self.y += self.vy / 60
-        self.vy += 0.1  # slight downward acceleration for ice shards
-        self.life -= 1
-
-    @property
-    def alive(self) -> bool:
-        return self.life > 0
+def IceParticle(
+    x: float, y: float, vx: float, vy: float, life: int = 20, size: int = 2
+) -> DamageParticle:
+    """Create an ice particle (downward acceleration)."""
+    return DamageParticle(x, y, vx, vy, life, size, y_accel=0.1)
 
 
 class Enemy(BaseSprite):

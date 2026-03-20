@@ -320,6 +320,14 @@ BARRIER_HIDE_DISTANCE = 40  # px — archer considered "behind" barrier
 BARRIER_HIDE_SUPPRESS_FRAMES = 150  # frames archer won't shoot while hiding (~2.5s)
 BARRIER_DAMAGED_THRESHOLD = 0.40  # Seek new cover if current barrier has < 40% HP
 
+# Horde heavy composition: used in limbo and purgatory horde events
+HORDE_HEAVY_COMPOSITION = {
+    "special": True,
+    "giant_ratio": 0.6,
+    "shielded_ratio": 0.3,
+    "inquisitor_ratio": 0.1,
+}
+
 STAGE_SETTINGS: dict[str, dict[str, Any]] = {
     "prologo": {
         "bg_color": (40, 20, 10),  # marrone scuro fuori dai muri
@@ -474,6 +482,7 @@ __all__: list[str] = [
     "BARRIER_HIDE_DISTANCE",
     "BARRIER_HIDE_SUPPRESS_FRAMES",
     "BARRIER_DAMAGED_THRESHOLD",
+    "HORDE_HEAVY_COMPOSITION",
     "GIF_RECORDING_FPS",
     "GIF_MAX_DURATION_SECONDS",
     "GIF_SCALE_FACTOR",

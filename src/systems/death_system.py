@@ -289,6 +289,38 @@ class DeathSystem:
                     except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
+                    # Visual death explosion (no damage)
+                    try:
+                        bx = getattr(boss, "x", g.player.x)
+                        by = getattr(boss, "y", g.player.y)
+                        bw = getattr(boss, "width", 80)
+                        bh = getattr(boss, "height", 80)
+                        blast_r = int(max(bw, bh) * 1.4)
+                        duration = 60  # 1 second at 60fps
+                        g.skullboom_explosions.append(
+                            {
+                                "x": bx,
+                                "y": by,
+                                "timer": duration,
+                                "max_timer": duration,
+                                "max_radius": blast_r,
+                                "color": (255, 80, 0),
+                            }
+                        )
+                        # second smaller inner burst
+                        g.skullboom_explosions.append(
+                            {
+                                "x": bx,
+                                "y": by,
+                                "timer": duration // 2,
+                                "max_timer": duration // 2,
+                                "max_radius": blast_r // 2,
+                                "color": (255, 220, 50),
+                            }
+                        )
+                    except (AttributeError, TypeError, ValueError, KeyError):
+                        pass
+
                     boss.kill()  # Remove dead boss
         else:
             for boss in list(g.bosses):

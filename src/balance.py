@@ -111,6 +111,7 @@ ENEMY_BASE_SPEEDS: dict[str, float] = {
     "pentagram_storm": 50.0,
     "pentagram_ice": 50.0,
     "cross_bearer": 40.0,  # shield-reflecting enemy, Hell+ only
+    "boss_hell": 50.0,  # Hell boss diagonal oscillation speed
 }
 
 

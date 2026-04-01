@@ -490,6 +490,10 @@ class Projectile(BaseSprite):
             self._render_inquisitor()
         elif appearance == "inquisitor_horde":
             self._render_inquisitor_horde()
+        elif appearance == "hell_boss_burst":
+            self._render_hell_boss_burst()
+        elif appearance == "eye_beam":
+            self._render_eye_beam()
         elif appearance == "enemy_default" or appearance is None:
             self._render_fallback()
         else:
@@ -721,6 +725,33 @@ class Projectile(BaseSprite):
         pygame.draw.circle(self.image, (20, 100, 20), center, self.radius)
         inner_r = max(1, self.radius - 3)
         pygame.draw.circle(self.image, (60, 255, 60), center, inner_r)
+
+    def _render_hell_boss_burst(self) -> None:
+        """Almost-white icy burst projectile for hell boss."""
+        r = self.radius
+        size = r * 2 + 6
+        try:
+            surf = pygame.Surface((size, size), pygame.SRCALPHA)
+            cx = size // 2
+            # Soft glow ring
+            pygame.draw.circle(surf, (220, 230, 255, 80), (cx, cx), r + 3)
+            # Main body: near-white with pale blue tint
+            pygame.draw.circle(surf, (230, 240, 255, 230), (cx, cx), r)
+            # Bright white core
+            pygame.draw.circle(surf, (255, 255, 255, 255), (cx, cx), max(1, r - 2))
+            self.image = surf
+            self.rect = self.image.get_rect(center=(int(self.x), int(self.y)))
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pygame.draw.circle(self.image, (230, 240, 255), (r, r), r)
+
+    def _render_eye_beam(self) -> None:
+        """Render Eye beam: a small light-green glowing orb."""
+        r = max(1, self.radius)
+        pygame.draw.circle(self.image, (100, 255, 120), (r, r), r)
+        # Inner brighter core
+        inner_r = max(1, r // 2)
+        pygame.draw.circle(self.image, (180, 255, 190), (r, r), inner_r)
+        self.rect = self.image.get_rect(center=(self.x, self.y))
 
     def _render_fallback(self) -> None:
         """Fallback rendering for generic/loaded projectiles."""

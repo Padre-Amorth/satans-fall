@@ -10,6 +10,14 @@ from typing import TYPE_CHECKING, Any, Dict, List
 from src.balance import ENEMY_BASE_SPEEDS
 from src.entities.enemy import Enemy
 from src.game_constants import (
+    EYE_HP,
+    EYE_SPEED,
+    EYE_FIRST_SPAWN_MIN,
+    EYE_FIRST_SPAWN_MAX,
+    EYE_SPAWN_INTERVAL_MIN,
+    EYE_SPAWN_INTERVAL_MAX,
+    HELL_BOSS_HP,
+    HELL_BOSS_SPAWN_TIME,
     HELL_STAGES,
     LIMBO_FINAL_ACCEL_START_TIME,
     LIMBO_FINAL_HALT_BEFORE_BOSS,
@@ -48,6 +56,8 @@ class SpawnSystem:
         self.last_giant_spawn_time: float = -float("inf")
         # One-time pentagram flag for the current run
         self.pentagram_spawned: bool = False
+        # Eye spawn timing: first spawn at random [20,25]s, then [20,30]s intervals
+        self._eye_next_spawn_time: float = random.uniform(EYE_FIRST_SPAWN_MIN, EYE_FIRST_SPAWN_MAX)
 
     def _can_spawn_giant(self) -> bool:
         """Return ``True`` if a giant (or similar big enemy) may spawn now.
@@ -154,6 +164,42 @@ class SpawnSystem:
             and not getattr(self.game, "showing_game_over", False)
         ):
             self._spawn_pentagram()
+
+        # Eye: recurring bonus enemy, all stages except prologo
+        if (
+            getattr(self.game, "selected_stage", "prologo") != "prologo"
+            and not getattr(self.game, "showing_victory", False)
+            and not getattr(self.game, "showing_game_over", False)
+        ):
+            time_now = getattr(self.game, "time_elapsed", 0.0)
+            if time_now >= self._eye_next_spawn_time:
+                _eye_alive = any(
+                    getattr(e, "enemy_type", "") == "eye"
+                    for e in (
+                        self.game.enemies.sprites()
+                        if hasattr(self.game.enemies, "sprites")
+                        else self.game.enemies
+                    )
+                )
+                if not _eye_alive:
+                    self._spawn_eye()
+                    self._eye_next_spawn_time = time_now + random.uniform(
+                        EYE_SPAWN_INTERVAL_MIN, EYE_SPAWN_INTERVAL_MAX
+                    )
+                else:
+                    # Eye still alive; retry in 1 second
+                    self._eye_next_spawn_time = time_now + 1.0
+
+        # Eye buff countdown (reverts fire rate boost after duration)
+        if getattr(self.game, "eye_buff_active", False):
+            self.game.eye_buff_elapsed = getattr(self.game, "eye_buff_elapsed", 0.0) + 1
+            if self.game.eye_buff_elapsed >= getattr(self.game, "eye_buff_duration", 300):
+                self.game.fire_rate_multiplier = getattr(self.game, "eye_buff_pre_fire_rate", 1.0)
+                try:
+                    self.game.player.fire_rate_multiplier = self.game.fire_rate_multiplier
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+                self.game.eye_buff_active = False
 
         # Use manager timers if manager exists
         # block any further spawning once the horde has been completed,
@@ -660,6 +706,18 @@ class SpawnSystem:
                         self.game.limbo_final_boss_spawned = True
                     except (AttributeError, TypeError, ValueError, KeyError):
                         setattr(self.game, "limbo_final_boss_spawned", True)
+
+        # Hell boss at 60 seconds
+        if (
+            self.game.is_hell_stage()
+            and not self.game.hell_boss_spawned
+            and self.game.time_elapsed >= HELL_BOSS_SPAWN_TIME
+        ):
+            logger.info(
+                "[HELL] Spawning hell boss at time %s", self.game.time_elapsed
+            )
+            self.spawn_boss("hell")
+            self.game.hell_boss_spawned = True
 
         # Lightning strike when immortal boss reaches full health
         if self.game.selected_stage == "prologo" and self.game.prologo_lightning_strike:
@@ -1527,6 +1585,33 @@ class SpawnSystem:
         else:
             self.game.enemies.append(enemy)
 
+    def _spawn_eye(self) -> None:
+        """Spawn an Eye bonus enemy just inside the outer wall, upper half of screen only."""
+        screen_w = getattr(self.game, "width", 1280)
+        screen_h = getattr(self.game, "height", 720)
+        # Eye is placed just inside the outer wall strip.
+        # x range: wall thickness (25) to wall+30, keeping it near the edge but visible.
+        wall = 25
+        x_margin = 50   # how far inward from the wall the Eye can spawn
+
+        # Upper half only: y from just below top wall to mid-screen
+        y_min = 60
+        y_max = screen_h // 2
+
+        side = random.choice(("left", "right"))
+        if side == "left":
+            x = float(random.randint(wall, wall + x_margin))
+            y = float(random.randint(y_min, y_max))
+        else:
+            x = float(random.randint(screen_w - wall - x_margin, screen_w - wall))
+            y = float(random.randint(y_min, y_max))
+
+        enemy = Enemy(x, y, "eye", float(EYE_HP), EYE_SPEED)
+        if hasattr(self.game.enemies, "add"):
+            self.game.enemies.add(enemy)
+        else:
+            self.game.enemies.append(enemy)
+
     def spawn_reinforcements(self, x=None, y=None, count=None):
         """Spawn a short-lived cluster of reinforcements near (x,y) or at a random building.
         If x,y are None the spawn will originate from a random building at the top.
@@ -1678,6 +1763,10 @@ class SpawnSystem:
             enemy_type = "boss_limbo_horde"
             health = 500 * self.game.difficulty_multiplier
             speed = ENEMY_BASE_SPEEDS.get("boss_limbo_horde", 40)
+        elif boss_type == "hell":
+            enemy_type = "boss_hell"
+            health = HELL_BOSS_HP * self.game.difficulty_multiplier
+            speed = ENEMY_BASE_SPEEDS.get("boss_hell", 50)
         else:  # mid
             enemy_type = "boss_medium"
             health = 300 * self.game.difficulty_multiplier

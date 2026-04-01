@@ -632,6 +632,9 @@ class PygameUIManager:
     def draw_game_objects(self, shake_x: int = 0, shake_y: int = 0) -> None:
         return self.renderer.draw_game_objects(shake_x, shake_y)
 
+    def draw_towers(self, shake_x: int = 0, shake_y: int = 0) -> None:
+        return self.renderer.draw_towers(shake_x, shake_y)
+
     # --- Effects Renderer Delegates --------------------------------------
 
     def _draw_tower_energy_bar(self, shake_x: int = 0, shake_y: int = 0) -> None:

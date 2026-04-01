@@ -254,7 +254,12 @@ class ParticleSystem:
                         except (AttributeError, TypeError, ValueError, KeyError):
                             pass
 
-                    # Draw skullboom particles (orange/brown color)
+                    # Draw skullboom particles (orange/brown color), clipped to
+                    # the current explosion radius so they don't spill across
+                    # the whole battlefield.
+                    _ex = explosion["x"]
+                    _ey = explosion["y"]
+                    _er = max(current_radius, 1)
                     self.draw_particles(
                         g.screen,
                         g.skullboom_particles,
@@ -262,6 +267,9 @@ class ParticleSystem:
                         alpha_fn=lambda p: max(30, int(255 * (p.life / 40))),
                         shake_x=shake_x,
                         shake_y=shake_y,
+                        filter_fn=lambda p, ex=_ex, ey=_ey, er=_er: (
+                            math.hypot(p.x - ex, p.y - ey) <= er
+                        ),
                     )
 
                     # Particles specific to blasphemy_5 revive (draw in red/orange)
@@ -350,6 +358,21 @@ class ParticleSystem:
         if not g.skullboom_particles:
             return
 
+    def draw_cocytus_particles(self, shake_x: int = 0, shake_y: int = 0) -> None:
+        """Draw Cocytus shard particles — near-white, smooth circles."""
+        g = self.game
+        particles = getattr(g, "cocytus_particles", None)
+        if not particles:
+            return
+        self.draw_particles(
+            g.screen,
+            particles,
+            color_fn=lambda p: (210, 240, 255),
+            alpha_fn=lambda p: max(30, int(255 * (p.life / 25))),
+            shake_x=shake_x,
+            shake_y=shake_y,
+        )
+
     def draw_ice_particles(self, shake_x: int = 0, shake_y: int = 0) -> None:
         """Draw ice explosion particles."""
         g = self.game
@@ -398,9 +421,15 @@ class ParticleSystem:
                     if radius < 1:
                         radius = 1
 
+                is_cocytus = puddle.get("source") == "cocytus"
+
                 # Fade out as timer decreases
                 progress = puddle["timer"] / (5 * 60)  # Max 5 seconds
-                alpha = int(100 * progress)  # Max 100 alpha
+                if is_cocytus:
+                    # Faster fade: squared progress + lower max alpha
+                    alpha = int(70 * (progress ** 1.6))
+                else:
+                    alpha = int(70 * progress)  # Max 70 alpha (more transparent)
 
                 # Create irregular shape instead of perfect circle
                 # Use puddle position as seed for consistent but varied shapes
@@ -412,11 +441,10 @@ class ParticleSystem:
 
                 for i in range(num_points):
                     angle = (2 * math.pi * i) / num_points
-                    # Blizzard zones should look slightly irregular but with more
-                    # clearly defined edges than ordinary ice puddles.  Decrease
-                    # the amount of random variation when drawing blizzard shapes
-                    # and later draw a thicker border outline.
-                    if puddle.get("blizzard"):
+                    if is_cocytus:
+                        # ±3% variation for clean, almost circular shape
+                        radius_variation = radius * (0.97 + random.random() * 0.06)
+                    elif puddle.get("blizzard"):
                         # ±4% instead of ±8% variation
                         radius_variation = radius * (0.96 + random.random() * 0.08)
                     else:
@@ -430,13 +458,19 @@ class ParticleSystem:
                 # Reset random seed to avoid affecting other random operations
                 random.seed()
 
+                # Pick fill color based on puddle source
+                if is_cocytus:
+                    fill_color = (200, 235, 255, alpha)
+                else:
+                    fill_color = (100, 200, 255, alpha)
+
                 # Draw irregular puddle shape
                 surf = pygame.Surface(
                     (radius * 2 + 20, radius * 2 + 20), pygame.SRCALPHA
                 )
                 pygame.draw.polygon(
                     surf,
-                    (100, 200, 255, alpha),
+                    fill_color,
                     [
                         (p[0] - (px - radius - 10), p[1] - (py - radius - 10))
                         for p in points
@@ -449,13 +483,16 @@ class ParticleSystem:
                     for p in points
                 ]
 
-                # Draw border as a clean polygon outline.  Blizzard puddles get a
-                # thicker, more opaque stroke to make the edge stand out.
-                border_color = (150, 220, 255, alpha // 2)
-                border_width = 2
-                if puddle.get("blizzard"):
+                # Draw border — Cocytus gets bright white border, blizzard thick cyan, default thin
+                if is_cocytus:
+                    border_color = (230, 248, 255, min(255, int(alpha * 0.95)))
+                    border_width = 2
+                elif puddle.get("blizzard"):
                     border_color = (180, 240, 255, min(255, alpha))
                     border_width = 4
+                else:
+                    border_color = (180, 235, 255, min(255, int(alpha * 1.1)))
+                    border_width = 2
                 pygame.draw.polygon(surf, border_color, border_points, border_width)
 
                 # Add a faint semi-transparent glow around the border for blizzard
@@ -701,6 +738,12 @@ class ParticleSystem:
         g.ice_particles = [p for p in g.ice_particles if p.alive]
         for p in g.ice_particles:
             p.update()
+
+        # Update Cocytus shard particles
+        if getattr(g, "cocytus_particles", None):
+            g.cocytus_particles = [p for p in g.cocytus_particles if p.alive]
+            for p in g.cocytus_particles:
+                p.update()
 
         # Update SkullBoom explosions
         g.skullboom_explosions = [e for e in g.skullboom_explosions if e["timer"] > 0]

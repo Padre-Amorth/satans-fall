@@ -25,6 +25,9 @@ def init_weapons(game: Any) -> None:
     game.flies_cooldown_timer = 0
     game.skullboom_cooldown_timer = 0
     game.tenebrae_cooldown_timer = 0
+    game.cocytus_cooldown_timer = 0
+    game.cocytus_shards: List[Dict[str, Any]] = []
+    game.cocytus_particles: List[Any] = []
     # SkullBoom particles and explosion effects
     game.skullboom_particles: List[Any] = []
     game.skullboom_explosions: List[Dict[str, Any]] = []

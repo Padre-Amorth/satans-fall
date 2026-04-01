@@ -734,6 +734,11 @@ class UpgradeSystem:
         left_x = left_wall_x - WALL_THICKNESS - margin
         right_x = right_wall_x + WALL_THICKNESS + margin
 
+        # Hell towers pushed further outward (beyond the wall edges)
+        if getattr(self.game, "selected_stage", None) in HELL_STAGES:
+            left_x -= 50
+            right_x += 50
+
         left_x = max(20, left_x)
         right_x = min(self.game.width - 20, right_x)
 

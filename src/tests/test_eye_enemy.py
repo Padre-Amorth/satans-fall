@@ -12,24 +12,24 @@ import math
 def test_eye_constants_present():
     """Verify all Eye-related constants are defined."""
     from src.game_constants import (
-        EYE_HP,
-        EYE_SPEED,
-        EYE_FIRST_SPAWN_MIN,
-        EYE_FIRST_SPAWN_MAX,
-        EYE_SPAWN_INTERVAL_MIN,
-        EYE_SPAWN_INTERVAL_MAX,
-        EYE_LIFESPAN_MIN,
-        EYE_LIFESPAN_MAX,
-        EYE_BEAM_TRAVEL_TIME,
         EYE_BEAM_RADIUS,
-        EYE_PARALYSIS_DURATION,
-        EYE_FIRE_RATE_BOOST,
-        EYE_BUFF_DURATION,
+        EYE_BEAM_TRAVEL_TIME,
+        EYE_BLINK_DURATION,
+        EYE_BLINK_INTERVAL_MAX,
+        EYE_BLINK_INTERVAL_MIN,
         EYE_BOB_AMPLITUDE,
         EYE_BOB_SPEED,
-        EYE_BLINK_INTERVAL_MIN,
-        EYE_BLINK_INTERVAL_MAX,
-        EYE_BLINK_DURATION,
+        EYE_BUFF_DURATION,
+        EYE_FIRE_RATE_BOOST,
+        EYE_FIRST_SPAWN_MAX,
+        EYE_FIRST_SPAWN_MIN,
+        EYE_HP,
+        EYE_LIFESPAN_MAX,
+        EYE_LIFESPAN_MIN,
+        EYE_PARALYSIS_DURATION,
+        EYE_SPAWN_INTERVAL_MAX,
+        EYE_SPAWN_INTERVAL_MIN,
+        EYE_SPEED,
     )
 
     # Basic attributes
@@ -58,7 +58,7 @@ def test_eye_constants_present():
     assert EYE_BOB_SPEED == 0.8
     assert EYE_BLINK_INTERVAL_MIN == 0.8
     assert EYE_BLINK_INTERVAL_MAX == 1.5
-    assert EYE_BLINK_DURATION == 0.2
+    assert EYE_BLINK_DURATION == 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +98,7 @@ def test_eye_init_lifespan():
 
     pygame.init()
     from src.entities.enemy import Enemy
-    from src.game_constants import EYE_HP, EYE_LIFESPAN_MIN, EYE_LIFESPAN_MAX
+    from src.game_constants import EYE_HP, EYE_LIFESPAN_MAX, EYE_LIFESPAN_MIN
 
     eye = Enemy(100, 200, "eye", EYE_HP, 0.0)
 
@@ -191,7 +191,7 @@ def test_eye_blink_animation_progress():
 
     pygame.init()
     from src.entities.enemy import Enemy
-    from src.game_constants import EYE_HP, EYE_BLINK_DURATION
+    from src.game_constants import EYE_BLINK_DURATION, EYE_HP
 
     eye = Enemy(100, 200, "eye", EYE_HP, 0.0)
 
@@ -241,7 +241,7 @@ def test_eye_bobbing_oscillation():
 
     pygame.init()
     from src.entities.enemy import Enemy
-    from src.game_constants import EYE_HP, EYE_BOB_AMPLITUDE, EYE_BOB_SPEED
+    from src.game_constants import EYE_BOB_AMPLITUDE, EYE_BOB_SPEED, EYE_HP
 
     eye = Enemy(100, 200.0, "eye", EYE_HP, 0.0)
     original_y = eye._eye_spawn_y

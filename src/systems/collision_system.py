@@ -977,7 +977,7 @@ class CollisionSystem:
                                 "y": py,
                                 "radius": puddle_radius,  # Puddle radius
                                 "timer": 5 * 60,  # 5 seconds at 60 FPS
-                                "slow_factor": 0.5,  # 50% speed reduction
+                                "slow_factor": 0.6,  # 40% speed reduction
                                 "slow_duration": 30,  # 0.5 seconds slow when entering puddle
                             }
                         )
@@ -1126,7 +1126,7 @@ class CollisionSystem:
                                 "y": py,
                                 "radius": puddle_radius,  # Puddle radius
                                 "timer": 5 * 60,  # 5 seconds at 60 FPS
-                                "slow_factor": 0.5,  # 50% speed reduction
+                                "slow_factor": 0.6,  # 40% speed reduction
                                 "slow_duration": 30,  # 0.5 seconds slow when entering puddle
                             }
                         )
@@ -4760,6 +4760,9 @@ class CollisionSystem:
         """
         g = self.game
         for enemy in g.enemies:
+            # Skip frozen enemies — their speed is managed by enemy.update()
+            if getattr(enemy, "frozen_timer", 0) > 0:
+                continue
             ex, ey = g._enemy_pos(enemy)
             in_puddle = False
             max_slow_factor = 1.0

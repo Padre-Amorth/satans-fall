@@ -53,6 +53,9 @@ class Player(BaseSprite):
         self.slow_timer: int = 0
         self.slow_factor: float = 1.0
 
+        # Paralysis status (Eye enemy beam — complete movement freeze)
+        self.paralyze_timer: int = 0
+
         # Health regeneration (per-run upgrade system)
         self.regen_per_5s: float = 0.0  # HP to regenerate every 5 seconds
         self.regen_timer: int = 0  # Frame counter for regeneration
@@ -270,6 +273,11 @@ class Player(BaseSprite):
         self.velocity_y = self.speed
 
     def update(self, screen_width) -> None:
+        # Paralysis: zero all movement, count down timer
+        if getattr(self, "paralyze_timer", 0) > 0:
+            self.paralyze_timer -= 1
+            self.velocity_x = 0.0
+            self.velocity_y = 0.0
         # Apply velocities (normalize on diagonal so diagonal speed == base speed)
         vx = float(self.velocity_x)
         vy = float(self.velocity_y)

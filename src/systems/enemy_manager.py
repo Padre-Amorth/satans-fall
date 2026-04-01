@@ -18,6 +18,7 @@ import pygame
 
 from src.balance import ENEMY_BASE_SPEEDS
 from src.entities.enemy import Enemy
+from src.game_constants import HELL_BOSS_HP
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,8 @@ class EnemyManager:
         self.prologo_final_boss_immortal: bool = getattr(
             game, "prologo_final_boss_immortal", False
         )
+        # Hell boss state proxy
+        self.hell_boss_spawned: bool = getattr(game, "hell_boss_spawned", False)
         # Limbo Final boss state proxy
         self.limbo_final_boss_spawned: bool = getattr(
             game, "limbo_final_boss_spawned", False
@@ -479,6 +482,19 @@ class EnemyManager:
                 self.spawn_boss("limbo")
                 self.limbo_final_boss_spawned = True
 
+            # Hell boss at 60 seconds (all three hell stages)
+            if (
+                getattr(self.game, "is_hell_stage", lambda: False)()
+                and not self.hell_boss_spawned
+                and getattr(self.game, "time_elapsed", 0) >= 60.0
+            ):
+                logger.info(
+                    "[HELL] Spawning hell boss at time %s",
+                    getattr(self.game, "time_elapsed", 0),
+                )
+                self.spawn_boss("hell")
+                self.hell_boss_spawned = True
+
             # Lightning strike countdown
             if (
                 getattr(self.game, "selected_stage", None) == "prologo"
@@ -661,6 +677,10 @@ class EnemyManager:
             enemy_type = "cross_bearer"
             health = 500 * getattr(self.game, "difficulty_multiplier", 1.0)
             speed = ENEMY_BASE_SPEEDS.get("cross_bearer", 45)
+        elif boss_type == "hell":
+            enemy_type = "boss_hell"
+            health = HELL_BOSS_HP * getattr(self.game, "difficulty_multiplier", 1.0)
+            speed = ENEMY_BASE_SPEEDS.get("boss_hell", 50)
 
         boss = Enemy(x, y, enemy_type, health, speed)
         # tune limbo bosses specially

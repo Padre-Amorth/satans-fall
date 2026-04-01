@@ -225,7 +225,7 @@ class Tower:
         # Add slow effect metadata used by collision handling
         p.effect = "slow"
         p.slow_duration = 120
-        p.slow_factor = 0.5
+        p.slow_factor = 0.6
         # Add area damage effect if tower has explosion_radius (from ICE1 upgrade)
         if hasattr(self, "explosion_radius"):
             p.explosion_radius = self.explosion_radius

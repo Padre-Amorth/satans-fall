@@ -376,8 +376,6 @@ class UIEffectsRenderer:
                             mid_radius_outer = current_radius
 
                             # Spawn particles in the ring between inner and outer halo
-                            import math
-
                             num_particles = max(8, int(current_radius / 40))
                             for i in range(num_particles):
                                 angle = (
@@ -415,6 +413,130 @@ class UIEffectsRenderer:
                     pass
 
         self.draw_chain_lightning_effects(shake_x, shake_y)
+
+        # Draw player fire rate buff aura (Eye bonus)
+        if pygame is not None:
+            try:
+                g = self.game
+                player = getattr(g, "player", None)
+                if player is not None and getattr(g, "eye_buff_active", False):
+                    # Subtle green glow around player
+                    px = int(player.x) + shake_x
+                    py = int(player.y) + shake_y
+                    glow_radius = 50
+                    # Draw concentric circles for aura effect
+                    glow_surf = pygame.Surface((g.width, g.height), pygame.SRCALPHA)
+                    pygame.draw.circle(glow_surf, (100, 255, 120, 20), (px, py), glow_radius)
+                    pygame.draw.circle(glow_surf, (100, 255, 120, 40), (px, py), int(glow_radius * 0.6))
+                    self.ui.screen.blit(glow_surf, (0, 0))
+            except (AttributeError, TypeError, ValueError, KeyError):
+                pass
+
+        # Draw Eye beam: segments extending from Eye toward player
+        if pygame is not None:
+            try:
+                g = self.game
+                player = getattr(g, "player", None)
+                enemies = getattr(g, "enemies", [])
+                enemy_list = enemies.sprites() if hasattr(enemies, "sprites") else enemies
+                for enemy in enemy_list:
+                    if (
+                        getattr(enemy, "enemy_type", "") == "eye"
+                        and getattr(enemy, "_eye_beam_active", False)
+                        and player is not None
+                    ):
+                        try:
+                            from src.game_constants import EYE_BEAM_TRAVEL_TIME
+                        except ImportError:
+                            EYE_BEAM_TRAVEL_TIME = 1.2
+                        beam_timer = getattr(enemy, "_eye_beam_timer", 0.0)
+                        beam_progress = min(1.0, beam_timer / EYE_BEAM_TRAVEL_TIME)
+
+                        # Beam origin (Eye position when fired)
+                        ex = getattr(enemy, "_eye_beam_start_x", enemy.x) + shake_x
+                        ey = getattr(enemy, "_eye_beam_start_y", enemy.y) + shake_y
+                        # Beam target (LOCKED at fire time - does NOT follow player)
+                        target_x = getattr(enemy, "_eye_beam_target_x", player.x)
+                        target_y = getattr(enemy, "_eye_beam_target_y", player.y)
+                        px = int(target_x) + shake_x
+                        py = int(target_y) + shake_y
+
+                        # Skip rendering if beam has already hit (paralysis applied)
+                        if getattr(enemy, "_eye_paralysis_applied", False):
+                            continue
+
+                        # Calculate beam as a moving projectile segment
+                        # Beam extends from Eye through target and continues to screen edge
+                        dx_norm = px - ex
+                        dy_norm = py - ey
+                        beam_dist = math.hypot(dx_norm, dy_norm)
+
+                        if beam_dist > 0:
+                            # Normalized direction to locked target
+                            dir_x = dx_norm / beam_dist
+                            dir_y = dy_norm / beam_dist
+
+                            # Slight homing: adjust direction slightly toward current player position
+                            # Only apply homing after 20% of travel, max 5 degrees deviation
+                            homing_strength = 0.0
+                            if beam_progress > 0.2:
+                                homing_progress = min(1.0, (beam_progress - 0.2) / 0.6)  # ramps from 0.2 to 0.8
+                                homing_strength = homing_progress * 0.08  # max 8% deviation toward player
+
+                            # Current beam position before homing
+                            screen_diag = math.hypot(g.width, g.height)
+                            max_beam_dist = screen_diag * 1.5
+                            travel_dist = max_beam_dist * beam_progress
+
+                            if homing_strength > 0:
+                                # Direction to current player position
+                                to_player_dx = player.x - (ex + dir_x * travel_dist)
+                                to_player_dy = player.y - (ey + dir_y * travel_dist)
+                                to_player_dist = math.hypot(to_player_dx, to_player_dy)
+
+                                if to_player_dist > 0:
+                                    homing_dir_x = to_player_dx / to_player_dist
+                                    homing_dir_y = to_player_dy / to_player_dist
+                                    # Blend directions: mostly original direction, slightly toward player
+                                    dir_x = dir_x * (1.0 - homing_strength) + homing_dir_x * homing_strength
+                                    dir_y = dir_y * (1.0 - homing_strength) + homing_dir_y * homing_strength
+                                    # Renormalize
+                                    dir_mag = math.hypot(dir_x, dir_y)
+                                    if dir_mag > 0:
+                                        dir_x /= dir_mag
+                                        dir_y /= dir_mag
+
+                            # Beam segment: from travel position for a fixed length backward
+                            beam_segment_length = 100  # pixels
+                            beam_end_x = ex + dir_x * travel_dist
+                            beam_end_y = ey + dir_y * travel_dist
+                            beam_start_render_x = ex + dir_x * max(0, travel_dist - beam_segment_length)
+                            beam_start_render_y = ey + dir_y * max(0, travel_dist - beam_segment_length)
+                            cx = beam_end_x
+                            cy = beam_end_y
+                        else:
+                            cx = ex
+                            cy = ey
+                            beam_start_render_x = ex
+                            beam_start_render_y = ey
+
+                        # Fade out only in last 15% of travel
+                        fade_progress = max(0.0, (beam_progress - 0.85) / 0.15)
+                        alpha_base = int(255 * (1.0 - fade_progress))
+
+                        beam_surf = pygame.Surface((g.width, g.height), pygame.SRCALPHA)
+                        # Outer glow (wider, semi-transparent green)
+                        pygame.draw.line(beam_surf, (100, 255, 120, int(60 * (1.0 - fade_progress))),
+                                       (int(beam_start_render_x), int(beam_start_render_y)), (int(cx), int(cy)), 6)
+                        # Mid glow
+                        pygame.draw.line(beam_surf, (180, 255, 190, int(120 * (1.0 - fade_progress))),
+                                       (int(beam_start_render_x), int(beam_start_render_y)), (int(cx), int(cy)), 3)
+                        # Bright core
+                        pygame.draw.line(beam_surf, (240, 255, 245, alpha_base),
+                                       (int(beam_start_render_x), int(beam_start_render_y)), (int(cx), int(cy)), 1)
+                        self.ui.screen.blit(beam_surf, (0, 0))
+            except (AttributeError, TypeError, ValueError, KeyError):
+                pass
 
     def _draw_hell_fire_particles(self, shake_x: int = 0, shake_y: int = 0) -> None:
         """Draw Hell stage ambient burn fires (sustained effects like burning enemies).

@@ -8,9 +8,15 @@ from typing import TYPE_CHECKING, Any
 
 from src.game_constants import HELL_STAGES, LIMBO_STAGES, PURGATORY_STAGES
 from src.projectile import FliesProjectile, Projectile
+from src.entities.enemy import DamageParticle
 from src.weapons import (
+    WEAPON_DEFS,
     DemonStrike_cooldown,
     beast_damage,
+    cocytus_cooldown,
+    cocytus_damage,
+    cocytus_impact_radius,
+    cocytus_shards,
     flies_cd,
     flies_damage_heal_mult,
     flies_projectile_count,
@@ -140,6 +146,16 @@ class WeaponSystem:
             cd_d: float = tenebrae_cooldown(dlevel)
             self.game.tenebrae_cooldown_timer = int(cd_d * self.game.fps)
 
+        # Cocytus weapon: ice shard rain at cursor position
+        if (
+            "cocytus" in self.game.player_weapons
+            and getattr(self.game, "cocytus_cooldown_timer", 0) <= 0
+        ):
+            self.fire_cocytus()
+            clevel = self.game.weapon_levels.get("cocytus", 0)
+            cd_c: float = cocytus_cooldown(clevel)
+            self.game.cocytus_cooldown_timer = int(cd_c * self.game.fps)
+
         # DemonStrike: vertical-only rolling ball, pierces and slows
         if (
             "DemonStrike" in self.game.player_weapons
@@ -167,6 +183,12 @@ class WeaponSystem:
             self.game.flies_cooldown_timer -= 1
         if getattr(self.game, "tenebrae_cooldown_timer", 0) > 0:
             self.game.tenebrae_cooldown_timer -= 1
+        if getattr(self.game, "cocytus_cooldown_timer", 0) > 0:
+            self.game.cocytus_cooldown_timer -= 1
+
+        # Update pending Cocytus shards (staggered landing animation)
+        if getattr(self.game, "cocytus_shards", None):
+            self.update_cocytus_shards()
 
     def fire_basic_weapon(self, aim_x, aim_y) -> None:
         """Fire basic projectile"""
@@ -453,6 +475,162 @@ class WeaponSystem:
                 mgr.register(beam)
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
+
+    def fire_cocytus(self) -> None:
+        """Queue ice shard impacts at mouse cursor position with staggered delays."""
+        g = self.game
+        clevel: int = g.weapon_levels.get("cocytus", 0)
+        num_shards: int = cocytus_shards(clevel)
+        impact_r: int = cocytus_impact_radius(clevel)
+        base_player = int(g.player_damage * g.damage_multiplier)
+        dmg: int = cocytus_damage(clevel, base_player)
+
+        tx: float = g.mouse_x
+        ty: float = g.mouse_y
+
+        shards_list = g.cocytus_shards
+
+        # Stagger impacts over ~20 frames for rain effect
+        delay_step = max(1, 20 // num_shards)
+        for i in range(num_shards):
+            # Uniform distribution inside circle using polar coords
+            angle = random.uniform(0, 2 * math.pi)
+            r = impact_r * math.sqrt(random.uniform(0, 1))
+            sx = tx + r * math.cos(angle)
+            sy = ty + r * math.sin(angle)
+            shards_list.append(
+                {
+                    "x": sx,
+                    "y": sy,
+                    "delay": i * delay_step,
+                    "weapon_level": clevel,
+                    "damage": dmg,
+                }
+            )
+
+    def update_cocytus_shards(self) -> None:
+        """Decrement shard delays and trigger impacts when they land."""
+        shards_list = getattr(self.game, "cocytus_shards", [])
+        remaining = []
+        for shard in shards_list:
+            shard["delay"] -= 1
+            if shard["delay"] <= 0:
+                self._cocytus_impact(shard)
+            else:
+                remaining.append(shard)
+        self.game.cocytus_shards = remaining
+
+    def _cocytus_impact(self, shard: dict) -> None:
+        """Land a single Cocytus shard: create puddle, deal damage, check freeze synergy."""
+        g = self.game
+        px: float = shard["x"]
+        py: float = shard["y"]
+        dmg: int = shard["damage"]
+
+        # Puddle radius scales with weapon level, independent of ICE2 tower upgrade
+        clevel = shard.get("weapon_level", 1)
+        puddle_radius = 40 + (clevel - 1) * 3  # 40px at Lv1 → 58px at Lv7
+
+        # Inject ice puddle — marked with source so renderer can distinguish it
+        defs = WEAPON_DEFS["cocytus"]
+        g.ice_puddles.append(
+            {
+                "x": px,
+                "y": py,
+                "radius": puddle_radius,
+                "timer": defs["puddle_lifetime"],
+                "slow_factor": defs["puddle_slow_factor"],
+                "slow_duration": defs["puddle_slow_duration"],
+                "source": "cocytus",
+            }
+        )
+
+        # Spawn Cocytus shard particles — near-white, larger size for smooth edges
+        for _ in range(8):
+            vx = random.uniform(-50, 50)
+            vy = random.uniform(-70, -15)
+            p = DamageParticle(
+                px + random.uniform(-6, 6),
+                py + random.uniform(-6, 6),
+                vx, vy,
+                life=25,
+                size=4,
+                y_accel=0.15,
+            )
+            g.cocytus_particles.append(p)
+
+        # Ice tower puddles only — exclude the puddle just injected (last entry) and
+        # any Cocytus-sourced puddles so freeze only triggers from ice tower coverage.
+        ice_tower_puddles = [
+            p for p in g.ice_puddles[:-1]
+            if p.get("source") != "cocytus"
+        ]
+        ice_tower_puddles.extend(getattr(g, "blizzard_puddles", []) or [])
+
+        # Damage and potentially freeze all enemies in the shard radius
+        for enemy in g.enemies:
+            try:
+                ex, ey = g._enemy_pos(enemy)
+            except (AttributeError, TypeError, ValueError, KeyError):
+                ex = getattr(enemy, "x", 0)
+                ey = getattr(enemy, "y", 0)
+
+            dx = ex - px
+            dy = ey - py
+            dist_sq = dx * dx + dy * dy
+            if dist_sq > puddle_radius * puddle_radius:
+                continue
+
+            # Check freeze synergy BEFORE applying slow (avoid self-triggering)
+            in_ice_tower_puddle = False
+            for puddle in ice_tower_puddles:
+                ddx = ex - puddle["x"]
+                ddy = ey - puddle["y"]
+                if ddx * ddx + ddy * ddy <= puddle["radius"] * puddle["radius"]:
+                    in_ice_tower_puddle = True
+                    break
+
+            # Apply damage
+            try:
+                enemy.take_damage(dmg)
+            except (AttributeError, TypeError, ValueError, KeyError):
+                try:
+                    enemy.health -= dmg
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+
+            # Apply slow
+            try:
+                defs = WEAPON_DEFS["cocytus"]
+                g.collision_system._apply_slow_effect(
+                    enemy,
+                    defs["puddle_slow_duration"],
+                    defs["puddle_slow_factor"],
+                    extend=True,
+                )
+            except (AttributeError, TypeError, ValueError, KeyError):
+                pass
+
+            # Freeze synergy: only if enemy was in an ice tower puddle before this impact
+            if in_ice_tower_puddle:
+                self._apply_freeze(enemy, ex, ey)
+
+    def _apply_freeze(self, enemy: Any, ex: float, ey: float) -> None:
+        """Freeze an enemy completely for 2 seconds (Cocytus synergy)."""
+        if not hasattr(enemy, "original_speed"):
+            enemy.original_speed = getattr(enemy, "speed", 0)
+        enemy.speed = 0
+        enemy.frozen_timer = WEAPON_DEFS["cocytus"]["freeze_duration"]
+        try:
+            self.game.spawn_floating_text(
+                "FROZEN!",
+                ex,
+                ey - 20,
+                color=(150, 220, 255),
+                font_size=18,
+            )
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
 
     def _orbital_cooldown_range(self) -> tuple[int, int]:
         """Return cooldown range for orbitals based on level (delegates to weapons helper)"""

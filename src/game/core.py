@@ -907,6 +907,8 @@ class Game:
         self.lightning_points = []
         # Limbo Final boss
         self._limbo_final_boss_spawned = False
+        # Hell boss
+        self._hell_boss_spawned: bool = False
 
         # Limbo horde event (for regular limbo levels)
         self.limbo_horde_started: bool = False
@@ -936,6 +938,12 @@ class Game:
         # record initial player dimensions for scaling
         self.satan_growth_orig_width: int | None = None
         self.satan_growth_orig_height: int | None = None
+
+        # Eye bonus enemy buff state
+        self.eye_buff_active: bool = False
+        self.eye_buff_elapsed: float = 0.0
+        self.eye_buff_duration: float = 0.0
+        self.eye_buff_pre_fire_rate: float = 1.0
 
         # Purgatory horde event (for purgatory levels, no boss, no buff)
         self.purgatory_horde_started: bool = False
@@ -1248,6 +1256,20 @@ class Game:
             self.enemy_manager.limbo_final_boss_spawned = val
         else:
             self._limbo_final_boss_spawned = val
+
+    # Hell boss flag (spawn at ~60s in hell stages)
+    @property
+    def hell_boss_spawned(self) -> bool:
+        if self.enemy_manager is not None:
+            return getattr(self.enemy_manager, "hell_boss_spawned", False)
+        return getattr(self, "_hell_boss_spawned", False)
+
+    @hell_boss_spawned.setter
+    def hell_boss_spawned(self, val: bool) -> None:
+        if self.enemy_manager is not None:
+            self.enemy_manager.hell_boss_spawned = val
+        else:
+            self._hell_boss_spawned = val
 
     @property
     def limbo_final_boss_immortal(self) -> bool:
@@ -1692,41 +1714,23 @@ class Game:
         logger.info("Game ended")
 
     def _create_scope_cursor(self) -> tuple:
-        """Create a custom dark yellow telescopic sight cursor.
+        """Create a custom yellow cross cursor (no circle).
 
         Returns a tuple (surface, hotspot) for pygame.mouse.set_cursor()
         """
         size = 32
         surf = pygame.Surface((size, size), pygame.SRCALPHA)
-        center_x = size / 2.0
-        center_y = size / 2.0
-        dark_yellow = (200, 170, 0, 255)
+        cx = int(size / 2.0)
+        cy = int(size / 2.0)
+        yellow = (255, 220, 0, 255)
 
-        # Outer circle (scope ring) - smaller
-        pygame.draw.circle(surf, dark_yellow, (int(center_x), int(center_y)), 7, 2)
+        # Horizontal line
+        pygame.draw.line(surf, yellow, (cx - 10, cy), (cx + 10, cy), 2)
 
-        # Horizontal line - extends beyond circle
-        pygame.draw.line(
-            surf,
-            dark_yellow,
-            (int(center_x - 12), int(center_y)),
-            (int(center_x + 12), int(center_y)),
-            2,
-        )
+        # Vertical line
+        pygame.draw.line(surf, yellow, (cx, cy - 10), (cx, cy + 10), 2)
 
-        # Vertical line - extends beyond circle
-        pygame.draw.line(
-            surf,
-            dark_yellow,
-            (int(center_x), int(center_y - 12)),
-            (int(center_x), int(center_y + 12)),
-            2,
-        )
-
-        # Center dot
-        pygame.draw.circle(surf, dark_yellow, (int(center_x), int(center_y)), 2, 0)
-
-        return surf, (int(center_x), int(center_y))
+        return surf, (cx, cy)
 
     def _update_cursor(self) -> None:
         """Update mouse cursor based on game state.
@@ -1889,14 +1893,20 @@ class Game:
                                     self.screen.fill(stage_settings["bg_color"])
                         else:
                             # For other stages, use rectangular area
-                            wall_thickness = WALL_THICKNESS
+                            # Calculate wall thickness used for rendering
+                            render_wall_thickness = (
+                                WALL_THICKNESS * 2
+                                if self.is_hell_stage()
+                                else WALL_THICKNESS
+                            )
+                            # Background extends from outer edge of left wall to outer edge of right wall
                             left_x = (
-                                max(point[0] for point in self.left_wall_points)
-                                + wall_thickness
+                                min(point[0] for point in self.left_wall_points)
+                                - render_wall_thickness
                             )
                             right_x = (
-                                min(point[0] for point in self.right_wall_points)
-                                - wall_thickness
+                                max(point[0] for point in self.right_wall_points)
+                                + render_wall_thickness
                             )
                             top_y = 0
                             bottom_y = self.screen.get_height()
@@ -1951,6 +1961,7 @@ class Game:
                     pass
                 self.draw_skullboom_particles(shake_x, shake_y)
                 self.draw_ice_particles(shake_x, shake_y)
+                self.particle_system.draw_cocytus_particles(shake_x, shake_y)
                 self.draw_ice_puddles(shake_x, shake_y)
                 # Draw centralized floating texts (damage numbers, etc.)
                 try:
@@ -1960,6 +1971,11 @@ class Game:
                 # Draw special effects (lightning, explosions, waves, etc.)
                 try:
                     self.draw_special_effects(shake_x, shake_y)
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+                # Draw towers on top of special effects (covers voltaic beam origin)
+                try:
+                    self.draw_towers(shake_x, shake_y)
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
@@ -2046,6 +2062,10 @@ class Game:
     def draw_special_effects(self, shake_x=0, shake_y=0) -> None:
         """Delegate special effects to Pygame UI manager."""
         self._ui_call("draw_special_effects", shake_x, shake_y)
+
+    def draw_towers(self, shake_x=0, shake_y=0) -> None:
+        """Draw towers on top of all special effects."""
+        self._ui_call("draw_towers", shake_x, shake_y)
 
     def draw_lightning_effect(self, shake_x=0, shake_y=0):
         """Delegate lightning effect drawing to Pygame UI manager."""
@@ -2829,6 +2849,10 @@ class Game:
         self.skullboom_explosions.clear()
         self.ice_particles.clear()
         self.ice_puddles.clear()
+        if hasattr(self, "cocytus_shards"):
+            self.cocytus_shards.clear()
+        if hasattr(self, "cocytus_particles"):
+            self.cocytus_particles.clear()
         self.hell_burn_fires.clear()
 
         self.wave = 0
@@ -2858,6 +2882,7 @@ class Game:
         self.prologo_lightning_strike = False
         self.lightning_points = []
         self._limbo_final_boss_spawned = False
+        self._hell_boss_spawned = False
         self.limbo_final_boss_immortal = False
         self.limbo_final_lightning_timer = 0
         self.limbo_final_lightning_strike = False
@@ -2885,6 +2910,11 @@ class Game:
         self.satan_growth_orig_width = None
         self.satan_growth_orig_height = None
         self.satan_growth_persistent = False
+        # reset Eye buff state
+        self.eye_buff_active = False
+        self.eye_buff_elapsed = 0.0
+        self.eye_buff_duration = 0.0
+        self.eye_buff_pre_fire_rate = 1.0
         # purgatory-specific
         self.purgatory_horde_wave_timer = 0.0
         self.purgatory_horde_explosion_ready = False
@@ -3871,8 +3901,8 @@ class Game:
         # Update wave progression
         self.update_wave_progression()
 
-        # Update prologo/limbo_final events (timed boss spawns & lightning)
-        if self.selected_stage in ("prologo", "limbo_final"):
+        # Update prologo/limbo_final/hell events (timed boss spawns & lightning)
+        if self.selected_stage in ("prologo", "limbo_final") or self.is_hell_stage():
             self.update_prologo_events()
 
         # Update chain lightning effects (for all stages)

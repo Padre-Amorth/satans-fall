@@ -324,6 +324,66 @@ WEAPON_DEFS["tenebrae"] = {
 }
 
 
+# Cocytus weapon: ice shard rain at mouse cursor position
+WEAPON_DEFS["cocytus"] = {
+    "name": "Cocytus",
+    "icon": "weapon_cocytus.png",
+    "description": "Ice shards slow enemies. Enemies hit by ice towers get frozen.",
+    "max_level": 7,
+    "required_meta_level": 15,
+    "upgrade_descriptions": {
+        1: "Lv1: 4 shards rain at cursor — slows enemies",
+        2: "Lv2: +area, +damage per shard",
+        3: "Lv3: +1 shard, +area, +damage",
+        4: "Lv4: +area, +damage per shard",
+        5: "Lv5: +1 shard, +area, +damage",
+        6: "Lv6: +area, +damage per shard",
+        7: "FINAL FORM: 7 shards — frozen foes shatter",
+    },
+    "base_cd": 5.0,
+    "cd_reduction_per_level": 0.25,
+    "min_cd": 3.5,
+    "base_shards": 4,
+    "base_impact_radius": 60,
+    "impact_radius_per_level": 8,
+    "base_damage": 18,
+    "damage_per_level": 4,
+    "puddle_slow_factor": 0.5,
+    "puddle_slow_duration": 120,  # 2s
+    "puddle_lifetime": 300,  # 5s
+    "freeze_duration": 120,  # 2s
+}
+
+
+def cocytus_cooldown(level: int) -> float:
+    d = WEAPON_DEFS["cocytus"]
+    lvl = max(1, min(int(level), d["max_level"]))
+    cd = d["base_cd"] - (lvl - 1) * d["cd_reduction_per_level"]
+    return max(d["min_cd"], cd)
+
+
+def cocytus_shards(level: int) -> int:
+    d = WEAPON_DEFS["cocytus"]
+    lvl = max(1, min(int(level), d["max_level"]))
+    return d["base_shards"] + (lvl - 1) // 2  # 4,4,5,5,6,6,7
+
+
+def cocytus_impact_radius(level: int) -> int:
+    d = WEAPON_DEFS["cocytus"]
+    lvl = max(1, min(int(level), d["max_level"]))
+    return d["base_impact_radius"] + (lvl - 1) * d["impact_radius_per_level"]
+
+
+def cocytus_damage(level: int, base_player_damage: int) -> int:
+    d = WEAPON_DEFS["cocytus"]
+    lvl = max(1, min(int(level), d["max_level"]))
+    base = d["base_damage"] + (lvl - 1) * d["damage_per_level"]
+    reference = 30.0
+    if base_player_damage is None:
+        base_player_damage = reference
+    return int(base * (float(base_player_damage) / reference))
+
+
 def tenebrae_damage(level: int, base_player_damage: int, targets_hit: int) -> int:
     """Danno inflitto al *targets_hit*-esimo nemico attraversato.
 

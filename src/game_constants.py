@@ -376,7 +376,7 @@ EYE_BOB_SPEED: float = 0.8  # oscillation cycles per second
 EYE_BEAM_TRAVEL_TIME: float = 1.8  # seconds per raggio per arrivare al giocatore
 EYE_BLINK_INTERVAL_MIN: float = 0.8  # minimum seconds between blinks
 EYE_BLINK_INTERVAL_MAX: float = 1.5  # maximum seconds between blinks
-EYE_BLINK_DURATION: float = 0.2  # seconds the blink lasts (open->close->open)
+EYE_BLINK_DURATION: float = 1.0  # seconds the blink lasts (open->close->open)
 
 # Enemy shoot cooldown ranges (min, max) in frames
 SHOOT_COOLDOWN_NORMAL = (60, 120)

@@ -50,12 +50,6 @@ try:
         BARRIER_SLOT_LEFT,
         BARRIER_SLOT_RIGHT,
         BARRIER_SLOTS,
-        SHOOT_COOLDOWN_ARCHER,
-        SHOOT_COOLDOWN_BOSS_FINAL,
-        SHOOT_COOLDOWN_INQUISITOR,
-        SHOOT_COOLDOWN_NORMAL,
-        NORMAL_STOP_TIMER_HIDDEN,
-        NORMAL_STOP_TIMER_VISIBLE,
         ENEMY_JITTER_FACTOR,
         HELL_BOSS_AREA_COOLDOWN_MAX,
         HELL_BOSS_AREA_COOLDOWN_MIN,
@@ -75,6 +69,12 @@ try:
         HELL_BOSS_X_MARGIN,
         HELL_BOSS_Y_MAX,
         HELL_BOSS_Y_MIN,
+        NORMAL_STOP_TIMER_HIDDEN,
+        NORMAL_STOP_TIMER_VISIBLE,
+        SHOOT_COOLDOWN_ARCHER,
+        SHOOT_COOLDOWN_BOSS_FINAL,
+        SHOOT_COOLDOWN_INQUISITOR,
+        SHOOT_COOLDOWN_NORMAL,
     )
 except ImportError:
     BARRIER_ARCHER_COVER_CHANCE = 0.95
@@ -115,19 +115,19 @@ except ImportError:
 
 try:
     from src.game_constants import (
-        EYE_HP,
-        EYE_LIFESPAN_MIN,
-        EYE_LIFESPAN_MAX,
-        EYE_BEAM_TRAVEL_TIME,
         EYE_BEAM_RADIUS,
-        EYE_PARALYSIS_DURATION,
-        EYE_FIRE_RATE_BOOST,
-        EYE_BUFF_DURATION,
+        EYE_BEAM_TRAVEL_TIME,
+        EYE_BLINK_DURATION,
+        EYE_BLINK_INTERVAL_MAX,
+        EYE_BLINK_INTERVAL_MIN,
         EYE_BOB_AMPLITUDE,
         EYE_BOB_SPEED,
-        EYE_BLINK_INTERVAL_MIN,
-        EYE_BLINK_INTERVAL_MAX,
-        EYE_BLINK_DURATION,
+        EYE_BUFF_DURATION,
+        EYE_FIRE_RATE_BOOST,
+        EYE_HP,
+        EYE_LIFESPAN_MAX,
+        EYE_LIFESPAN_MIN,
+        EYE_PARALYSIS_DURATION,
     )
 except ImportError:
     EYE_HP = 70
@@ -138,8 +138,7 @@ except ImportError:
     EYE_PARALYSIS_DURATION = 2.0
     EYE_BLINK_INTERVAL_MIN = 0.8
     EYE_BLINK_INTERVAL_MAX = 1.5
-    EYE_BLINK_DURATION = 0.2
-    EYE_BLINK_DURATION = 0.15
+    EYE_BLINK_DURATION = 1.0
     EYE_FIRE_RATE_BOOST = 2.0
     EYE_BUFF_DURATION = 10.0
     EYE_BOB_AMPLITUDE = 4.0
@@ -1286,7 +1285,7 @@ class Enemy(BaseSprite):
             pygame.draw.circle(self.image, (180, 50, 50), (cx, cy), r, 3)
 
             # Eyelid animation (blink)
-            blink_progress = getattr(self, "_eye_blink_progress", 0.0)
+            blink_progress = self._eye_blink_progress
             if blink_progress > 0:
                 # Blink animation: closes and opens symmetrically
                 # Progress 0.0-0.5 = closing, 0.5-1.0 = opening

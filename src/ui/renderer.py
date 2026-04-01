@@ -2193,13 +2193,23 @@ class UIGameRenderer:
         # Draw Hell fire particles BEFORE towers so towers layer on top
         self.ui.effects._draw_hell_fire_particles(shake_x, shake_y)
 
-        # Render statues/towers BEFORE special effects so they layer above Voltaic Mayhem.
-        # ``draw_pedestals`` is a no-op except in Limbo, while the dynamic tower code
-        # handles Purgatory/Hell.
+        # Draw pedestals (Limbo only)
         try:
             if hasattr(self, "draw_pedestals"):
                 self.draw_pedestals(shake_x, shake_y)
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
 
+        # Draw tower energy bar (bottom-right) only if special unlocked and not prologo
+        try:
+            if self.game.special_unlocked():
+                self.ui._draw_tower_energy_bar(shake_x, shake_y)
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
+
+    def draw_towers(self, shake_x: int = 0, shake_y: int = 0) -> None:
+        """Draw purgatory/hell/limbo_final towers on top of all special effects."""
+        try:
             if getattr(self.game, "selected_stage", None) and (
                 str(self.game.selected_stage).startswith(("purgatory", "hell"))
                 or self.game.selected_stage == "limbo_final"
@@ -2218,16 +2228,5 @@ class UIGameRenderer:
                         STATUE_BASE_Y + shake_y,
                         getattr(rt, "tower_type", None),
                     )
-        except (AttributeError, TypeError, ValueError, KeyError):
-            # Don't break rendering if statue drawing throws
-            pass
-
-        # Draw special effects (including Voltaic Mayhem, which now layers behind towers)
-        self.ui.effects.draw_special_effects(shake_x, shake_y)
-
-        # Draw tower energy bar (bottom-right) only if special unlocked and not prologo
-        try:
-            if self.game.special_unlocked():
-                self.ui._draw_tower_energy_bar(shake_x, shake_y)
         except (AttributeError, TypeError, ValueError, KeyError):
             pass

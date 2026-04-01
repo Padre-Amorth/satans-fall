@@ -1296,14 +1296,14 @@ class Enemy(BaseSprite):
 
                 eyelid_height = int(r * blink_close)
                 if eyelid_height > 0:
-                    # Top eyelid (closes from top)
+                    # Top eyelid (closes from top) - black for visibility
                     pygame.draw.rect(
-                        self.image, (40, 40, 40), (cx - r, cy - r, w, eyelid_height)
+                        self.image, (0, 0, 0), (cx - r, cy - r, w, eyelid_height)
                     )
-                    # Bottom eyelid (closes from bottom)
+                    # Bottom eyelid (closes from bottom) - black for visibility
                     pygame.draw.rect(
                         self.image,
-                        (40, 40, 40),
+                        (0, 0, 0),
                         (cx - r, cy + r - eyelid_height, w, eyelid_height),
                     )
 

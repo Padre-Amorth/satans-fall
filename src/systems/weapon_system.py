@@ -6,9 +6,9 @@ import math
 import random
 from typing import TYPE_CHECKING, Any
 
+from src.entities.enemy import DamageParticle
 from src.game_constants import HELL_STAGES, LIMBO_STAGES, PURGATORY_STAGES
 from src.projectile import FliesProjectile, Projectile
-from src.entities.enemy import DamageParticle
 from src.weapons import (
     WEAPON_DEFS,
     DemonStrike_cooldown,
@@ -34,7 +34,6 @@ if TYPE_CHECKING:
     from src.game import Game
 
 from src.core.entities.tower import TowerManager
-from src.weapons import WEAPON_DEFS
 
 
 def statue_projectile_offsets(game: "Game") -> tuple[float, float]:
@@ -75,6 +74,12 @@ class WeaponSystem:
 
     def __init__(self, game: "Game") -> None:
         self.game = game
+
+    def _apply_fire_rate_to_cooldown(self, cooldown_seconds: float) -> int:
+        """Helper: Convert cooldown seconds to frames, applying fire_rate_multiplier."""
+        return max(
+            1, int((cooldown_seconds * self.game.fps) / self.game.fire_rate_multiplier)
+        )
 
     def update_weapon_firing(self) -> None:
         """Handle automatic weapon firing"""
@@ -120,7 +125,7 @@ class WeaponSystem:
                         self.game.burst_cooldown = effective_burst_pause
                         self.game.burst_count = 0
 
-        # Special weapons
+        # Special weapons (all apply fire_rate_multiplier via helper)
         if (
             "shotgun" in self.game.player_weapons
             and self.game.hellgun_cooldown_timer <= 0
@@ -128,13 +133,15 @@ class WeaponSystem:
             self.fire_hellgun(aim_vel_x, aim_vel_y)
             slevel = self.game.weapon_levels.get("shotgun", 0)
             cd_shot: float = shotgun_cooldown(slevel)
-            self.game.hellgun_cooldown_timer = int(cd_shot * self.game.fps)
+            self.game.hellgun_cooldown_timer = self._apply_fire_rate_to_cooldown(
+                cd_shot
+            )
 
         if "spear" in self.game.player_weapons and self.game.spear_cooldown_timer <= 0:
             self.fire_spear(aim_vel_x, aim_vel_y)
             slevel = self.game.weapon_levels.get("spear", 0)
             cd: float = DemonStrike_cooldown(slevel)
-            self.game.spear_cooldown_timer = int(cd * self.game.fps)
+            self.game.spear_cooldown_timer = self._apply_fire_rate_to_cooldown(cd)
 
         # Tenebrae weapon: piercing beam that decays per enemy hit
         if (
@@ -144,7 +151,7 @@ class WeaponSystem:
             self.fire_tenebrae(aim_vel_x, aim_vel_y)
             dlevel = self.game.weapon_levels.get("tenebrae", 0)
             cd_d: float = tenebrae_cooldown(dlevel)
-            self.game.tenebrae_cooldown_timer = int(cd_d * self.game.fps)
+            self.game.tenebrae_cooldown_timer = self._apply_fire_rate_to_cooldown(cd_d)
 
         # Cocytus weapon: ice shard rain at cursor position
         if (
@@ -154,7 +161,7 @@ class WeaponSystem:
             self.fire_cocytus()
             clevel = self.game.weapon_levels.get("cocytus", 0)
             cd_c: float = cocytus_cooldown(clevel)
-            self.game.cocytus_cooldown_timer = int(cd_c * self.game.fps)
+            self.game.cocytus_cooldown_timer = self._apply_fire_rate_to_cooldown(cd_c)
 
         # DemonStrike: vertical-only rolling ball, pierces and slows
         if (
@@ -164,13 +171,15 @@ class WeaponSystem:
             self.fire_demon_strike(aim_vel_x, aim_vel_y)
             ds_level = self.game.weapon_levels.get("DemonStrike", 0)
             cd_ds: float = DemonStrike_cooldown(ds_level)
-            self.game.DemonStrike_cooldown_timer = int(cd_ds * self.game.fps)
+            self.game.DemonStrike_cooldown_timer = self._apply_fire_rate_to_cooldown(
+                cd_ds
+            )
 
         if "Flies" in self.game.player_weapons and self.game.flies_cooldown_timer <= 0:
             self.fire_flies(aim_vel_x, aim_vel_y)
             slevel = self.game.weapon_levels.get("Flies", 0)
             cd_sec: float = flies_cd(slevel)
-            self.game.flies_cooldown_timer = int(cd_sec * self.game.fps)
+            self.game.flies_cooldown_timer = self._apply_fire_rate_to_cooldown(cd_sec)
 
         # Update weapon cooldowns
         if self.game.hellgun_cooldown_timer > 0:
@@ -552,7 +561,8 @@ class WeaponSystem:
             p = DamageParticle(
                 px + random.uniform(-6, 6),
                 py + random.uniform(-6, 6),
-                vx, vy,
+                vx,
+                vy,
                 life=25,
                 size=4,
                 y_accel=0.15,
@@ -562,8 +572,7 @@ class WeaponSystem:
         # Ice tower puddles only — exclude the puddle just injected (last entry) and
         # any Cocytus-sourced puddles so freeze only triggers from ice tower coverage.
         ice_tower_puddles = [
-            p for p in g.ice_puddles[:-1]
-            if p.get("source") != "cocytus"
+            p for p in g.ice_puddles[:-1] if p.get("source") != "cocytus"
         ]
         ice_tower_puddles.extend(getattr(g, "blizzard_puddles", []) or [])
 
@@ -633,9 +642,17 @@ class WeaponSystem:
             pass
 
     def _orbital_cooldown_range(self) -> tuple[int, int]:
-        """Return cooldown range for orbitals based on level (delegates to weapons helper)"""
+        """Return cooldown range for orbitals based on level.
+
+        Applies fire_rate_multiplier to cooldown range so each orbital's fire rate
+        respects global fire rate bonuses (adrenaline, upgrades, buffs).
+        """
         olevel: int = self.game.weapon_levels.get("orbital", 0)
-        return orbital_cooldown_range(olevel)
+        min_cd, max_cd = orbital_cooldown_range(olevel)
+        # Divide frame counts by fire rate multiplier (lower = faster)
+        min_cd = max(1, int(min_cd / self.game.fire_rate_multiplier))
+        max_cd = max(1, int(max_cd / self.game.fire_rate_multiplier))
+        return min_cd, max_cd
 
     def create_orbitals(self) -> None:
         """Initialize orbital sentinels around player"""
@@ -785,10 +802,10 @@ class WeaponSystem:
         # Fire SkullBoom
         self.fire_skullboom(dx, dy)
 
-        # Set cooldown
+        # Set cooldown (affected by fire rate multiplier)
         slevel = self.game.weapon_levels.get("skullboom", 0)
         cd: float = skullboom_cooldown(slevel)
-        self.game.skullboom_cooldown_timer = int(cd * self.game.fps)
+        self.game.skullboom_cooldown_timer = self._apply_fire_rate_to_cooldown(cd)
 
     def update_statue_weapons(self) -> None:
         """Update Limbo statue weapons"""

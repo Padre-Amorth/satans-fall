@@ -57,6 +57,24 @@ try:
         NORMAL_STOP_TIMER_HIDDEN,
         NORMAL_STOP_TIMER_VISIBLE,
         ENEMY_JITTER_FACTOR,
+        HELL_BOSS_AREA_COOLDOWN_MAX,
+        HELL_BOSS_AREA_COOLDOWN_MIN,
+        HELL_BOSS_AREA_DAMAGE,
+        HELL_BOSS_AREA_DELAY,
+        HELL_BOSS_AREA_RADIUS,
+        HELL_BOSS_BURST_COUNT,
+        HELL_BOSS_BURST_DAMAGE,
+        HELL_BOSS_BURST_INTERVAL,
+        HELL_BOSS_BURST_PAUSE,
+        HELL_BOSS_BURST_SPEED,
+        HELL_BOSS_HEIGHT,
+        HELL_BOSS_TELEPORT_FADE_FRAMES,
+        HELL_BOSS_TELEPORT_MAX,
+        HELL_BOSS_TELEPORT_MIN,
+        HELL_BOSS_WIDTH,
+        HELL_BOSS_X_MARGIN,
+        HELL_BOSS_Y_MAX,
+        HELL_BOSS_Y_MIN,
     )
 except ImportError:
     BARRIER_ARCHER_COVER_CHANCE = 0.95
@@ -76,6 +94,56 @@ except ImportError:
     NORMAL_STOP_TIMER_HIDDEN = (300, 600)
     NORMAL_STOP_TIMER_VISIBLE = (60, 180)
     ENEMY_JITTER_FACTOR = 0.2
+    HELL_BOSS_AREA_COOLDOWN_MAX = 360
+    HELL_BOSS_AREA_COOLDOWN_MIN = 240
+    HELL_BOSS_AREA_DAMAGE = 30
+    HELL_BOSS_AREA_DELAY = 1.2
+    HELL_BOSS_AREA_RADIUS = 60
+    HELL_BOSS_BURST_COUNT = 10
+    HELL_BOSS_BURST_DAMAGE = 15
+    HELL_BOSS_BURST_INTERVAL = 3
+    HELL_BOSS_BURST_PAUSE = 150
+    HELL_BOSS_BURST_SPEED = 350.0
+    HELL_BOSS_HEIGHT = 130
+    HELL_BOSS_TELEPORT_FADE_FRAMES = 20
+    HELL_BOSS_TELEPORT_MAX = 10.0
+    HELL_BOSS_TELEPORT_MIN = 8.0
+    HELL_BOSS_WIDTH = 130
+    HELL_BOSS_X_MARGIN = 100
+    HELL_BOSS_Y_MAX = 300
+    HELL_BOSS_Y_MIN = 80
+
+try:
+    from src.game_constants import (
+        EYE_HP,
+        EYE_LIFESPAN_MIN,
+        EYE_LIFESPAN_MAX,
+        EYE_BEAM_TRAVEL_TIME,
+        EYE_BEAM_RADIUS,
+        EYE_PARALYSIS_DURATION,
+        EYE_FIRE_RATE_BOOST,
+        EYE_BUFF_DURATION,
+        EYE_BOB_AMPLITUDE,
+        EYE_BOB_SPEED,
+        EYE_BLINK_INTERVAL_MIN,
+        EYE_BLINK_INTERVAL_MAX,
+        EYE_BLINK_DURATION,
+    )
+except ImportError:
+    EYE_HP = 70
+    EYE_LIFESPAN_MIN = 5.0
+    EYE_LIFESPAN_MAX = 7.0
+    EYE_BEAM_TRAVEL_TIME = 1.8
+    EYE_BEAM_RADIUS = 6
+    EYE_PARALYSIS_DURATION = 2.0
+    EYE_BLINK_INTERVAL_MIN = 0.8
+    EYE_BLINK_INTERVAL_MAX = 1.5
+    EYE_BLINK_DURATION = 0.2
+    EYE_BLINK_DURATION = 0.15
+    EYE_FIRE_RATE_BOOST = 2.0
+    EYE_BUFF_DURATION = 10.0
+    EYE_BOB_AMPLITUDE = 4.0
+    EYE_BOB_SPEED = 2.0
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -194,11 +262,7 @@ class Enemy(BaseSprite):
     @staticmethod
     def _is_barrier_alive(barrier: Any, barriers: list) -> bool:
         """Check if a barrier reference is still valid and has HP."""
-        return (
-            barrier is not None
-            and barrier in barriers
-            and barrier.get("hp", 0) > 0
-        )
+        return barrier is not None and barrier in barriers and barrier.get("hp", 0) > 0
 
     @staticmethod
     def _random_jittered_position(game: Any) -> tuple:
@@ -325,6 +389,10 @@ class Enemy(BaseSprite):
             self.width = 100
             self.height = 100
             self.damage = 30
+        elif enemy_type == "boss_hell":
+            self.width = HELL_BOSS_WIDTH
+            self.height = HELL_BOSS_HEIGHT
+            self.damage = 35
         elif enemy_type == "pentagram":
             # Horizontal traversal tank shaped like a pentagram/star
             self.width = 70
@@ -343,6 +411,38 @@ class Enemy(BaseSprite):
             self._wave_time = 0.0
             self._rotation_angle = 0.0
             self._spawn_y = 0.0
+        elif enemy_type == "eye":
+            # Bonus enemy: small round eye that hovers in the outer wall margin.
+            # Stationary, fires a persistent beam (not a projectile), despawns automatically.
+            # External asset: enemy_eye.png  (falls back to draw_demon)
+            self.width = 20
+            self.height = 20
+            self.damage = 0
+            self._eye_lifespan: float = random.uniform(
+                EYE_LIFESPAN_MIN, EYE_LIFESPAN_MAX
+            )
+            self._eye_elapsed: float = 0.0
+            self._eye_angle: float = 0.0
+            self._eye_spawn_y: float = float(y)  # reference Y for bobbing
+            self._eye_bob_phase: float = random.uniform(0.0, 6.28)  # random start phase
+            self._eye_beam_fired: bool = False  # True after beam has been fired once
+            self._eye_beam_active: bool = False  # True while beam is traveling
+            self._eye_beam_timer: float = 0.0  # seconds the beam has been traveling
+            self._eye_paralysis_applied: bool = False  # guard: apply only once per beam
+            self._eye_beam_start_x: float = (
+                x  # where beam originates (Eye position at fire time)
+            )
+            self._eye_beam_start_y: float = y
+            self._eye_beam_fire_delay: float = (
+                1.5  # delay before firing the beam (Eye appears first)
+            )
+            # Blink animation: periodic eyelid closing
+            self._eye_blink_next_time: float = random.uniform(
+                EYE_BLINK_INTERVAL_MIN, EYE_BLINK_INTERVAL_MAX
+            )
+            self._eye_blink_progress: float = (
+                0.0  # 0.0 = open, 0.0-1.0 = closing, 1.0-0.0 = opening
+            )
         elif enemy_type == "cross_bearer":
             # Cross Bearer: armored knight with a reflective frontal shield.
             # The shield faces the player at all times and deflects projectiles.
@@ -369,6 +469,11 @@ class Enemy(BaseSprite):
         # Increase health by 20% for all enemies
         self.max_health = int(self.max_health * 1.2)
         self.health = self.max_health
+
+        # Eye: pin HP to exact value after global modifier
+        if enemy_type == "eye":
+            self.max_health = EYE_HP
+            self.health = EYE_HP
 
         # Custode are especially tough: double their health after global modifier
         if enemy_type == "custode":
@@ -441,8 +546,11 @@ class Enemy(BaseSprite):
             # attacks are handled in the boss-pattern logic.  Keep cooldown
             # set to None so update() doesn't try to call shoot_at_player.
             self.shoot_cooldown = None
-        elif enemy_type in ["boss_big"]:
-            # Boss_big doesn't have regular shooting, only special attacks
+        elif enemy_type in ["boss_big", "boss_hell"]:
+            # Boss_big / boss_hell don't use shoot_at_player; attacks via pattern logic
+            self.shoot_cooldown = None
+        elif enemy_type == "eye":
+            # Eye uses its own beam timer, not the projectile shoot_cooldown
             self.shoot_cooldown = None
         else:
             self.shoot_cooldown = None
@@ -478,6 +586,33 @@ class Enemy(BaseSprite):
             self.pattern_timer = None
             self.big_shot_cooldown = random.randint(200, 320)
             self.area_attack_cooldown = None
+        elif enemy_type == "boss_hell":
+            self.pattern_timer = None
+            self.big_shot_cooldown = None
+            self.area_attack_cooldown = random.randint(
+                HELL_BOSS_AREA_COOLDOWN_MIN, HELL_BOSS_AREA_COOLDOWN_MAX
+            )
+            # Burst state
+            self._burst_active: bool = False
+            self._burst_remaining: int = 0
+            self._burst_frame_counter: int = 0
+            self._burst_pause_timer: int = HELL_BOSS_BURST_PAUSE
+            # Teleport state
+            self._teleport_timer: int = int(
+                random.uniform(HELL_BOSS_TELEPORT_MIN, HELL_BOSS_TELEPORT_MAX) * 60
+            )
+            self._teleport_phase: str = "idle"
+            self._teleport_fade_counter: int = 0
+            self._teleport_target_x: float = 0.0
+            self._teleport_target_y: float = 0.0
+            self._hell_alpha: int = 255
+            # Diagonal oscillation velocity
+            self._hell_vx: float = 0.0
+            self._hell_vy: float = 0.0
+            self._hell_entrance_complete: bool = False
+            # Shrink hitbox so it matches the sprite, not the aura ring
+            self._shrink_hitbox: bool = True
+            self._hitbox_scale: float = 0.55
         else:
             self.pattern_timer = None
             self.big_shot_cooldown = None
@@ -732,6 +867,46 @@ class Enemy(BaseSprite):
                             pass
                 except Exception:
                     pass
+                # Award fire rate boost for Eye kill
+                try:
+                    if (
+                        CURRENT_GAME is not None
+                        and getattr(self, "enemy_type", "") == "eye"
+                    ):
+                        CURRENT_GAME.eye_buff_active = True
+                        CURRENT_GAME.eye_buff_elapsed = 0.0
+                        CURRENT_GAME.eye_buff_duration = EYE_BUFF_DURATION * getattr(
+                            CURRENT_GAME, "fps", 60
+                        )
+                        CURRENT_GAME.eye_buff_pre_fire_rate = getattr(
+                            CURRENT_GAME, "fire_rate_multiplier", 1.0
+                        )
+                        CURRENT_GAME.fire_rate_multiplier = (
+                            getattr(CURRENT_GAME, "fire_rate_multiplier", 1.0)
+                            * EYE_FIRE_RATE_BOOST
+                        )
+                        try:
+                            CURRENT_GAME.player.fire_rate_multiplier = (
+                                getattr(
+                                    CURRENT_GAME.player, "fire_rate_multiplier", 1.0
+                                )
+                                * EYE_FIRE_RATE_BOOST
+                            )
+                        except (AttributeError, TypeError, ValueError, KeyError):
+                            pass
+                        try:
+                            CURRENT_GAME.spawn_floating_text(
+                                "DOUBLE FIRE RATE!",
+                                getattr(self, "x", CURRENT_GAME.player.x),
+                                getattr(self, "y", CURRENT_GAME.player.y) - 20,
+                                color=(255, 200, 50),
+                                font_size=28,
+                                life=90,
+                            )
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
                 try:
                     self._kill_recorded = True
                 except (AttributeError, TypeError, ValueError, KeyError):
@@ -831,7 +1006,39 @@ class Enemy(BaseSprite):
                         (0, 0, self.width, self.height),
                     )
                 except (AttributeError, TypeError, ValueError, KeyError):
-                    # if anything goes wrong, fall back to generic demon art
+                    self.draw_demon()
+            elif self.enemy_type == "boss_hell":
+                try:
+                    self.image.fill((0, 0, 0, 0))
+                    # Dark red ellipse body
+                    pygame.draw.ellipse(
+                        self.image,
+                        (200, 0, 0),
+                        (0, 0, self.width, self.height),
+                    )
+                    # Inner glow
+                    pygame.draw.ellipse(
+                        self.image,
+                        (255, 60, 0),
+                        (
+                            self.width // 6,
+                            self.height // 6,
+                            self.width * 2 // 3,
+                            self.height * 2 // 3,
+                        ),
+                    )
+                    # Eyes
+                    eye_y = self.height // 3
+                    pygame.draw.circle(
+                        self.image, (255, 255, 0), (self.width // 3, eye_y), 8
+                    )
+                    pygame.draw.circle(
+                        self.image,
+                        (255, 255, 0),
+                        (self.width * 2 // 3, eye_y),
+                        8,
+                    )
+                except (AttributeError, TypeError, ValueError, KeyError):
                     self.draw_demon()
             else:
                 self.draw_demon()
@@ -1049,6 +1256,58 @@ class Enemy(BaseSprite):
             pygame.draw.circle(self.image, (220, 60, 60), (cx - 3, cy - 15), 2)
             pygame.draw.circle(self.image, (220, 60, 60), (cx + 3, cy - 15), 2)
 
+        elif self.enemy_type == "eye":
+            w, h = self.width, self.height
+            cx, cy = w // 2, h // 2
+            r = min(cx, cy) - 2
+            angle = getattr(self, "_eye_angle", 0.0)
+            iris_r = max(2, r * 2 // 3)
+            iris_ox = int(math.cos(angle) * 2)
+            iris_oy = int(math.sin(angle) * 2)
+            # Sclera (white)
+            pygame.draw.circle(self.image, (230, 230, 230), (cx, cy), r)
+            # Iris (teal/cyan)
+            pygame.draw.circle(
+                self.image, (0, 200, 220), (cx + iris_ox, cy + iris_oy), iris_r
+            )
+            # Pupil (black)
+            pupil_r = max(1, iris_r // 2)
+            pygame.draw.circle(
+                self.image, (10, 10, 10), (cx + iris_ox, cy + iris_oy), pupil_r
+            )
+            # Highlight (white dot)
+            pygame.draw.circle(
+                self.image,
+                (255, 255, 255),
+                (cx + iris_ox - 2, cy + iris_oy - 2),
+                max(1, pupil_r // 2),
+            )
+            # Red outline
+            pygame.draw.circle(self.image, (180, 50, 50), (cx, cy), r, 3)
+
+            # Eyelid animation (blink)
+            blink_progress = getattr(self, "_eye_blink_progress", 0.0)
+            if blink_progress > 0:
+                # Blink animation: closes and opens symmetrically
+                # Progress 0.0-0.5 = closing, 0.5-1.0 = opening
+                if blink_progress <= 0.5:
+                    blink_close = blink_progress * 2.0  # 0.0 to 1.0
+                else:
+                    blink_close = (1.0 - blink_progress) * 2.0  # 1.0 to 0.0
+
+                eyelid_height = int(r * blink_close)
+                if eyelid_height > 0:
+                    # Top eyelid (closes from top)
+                    pygame.draw.rect(
+                        self.image, (40, 40, 40), (cx - r, cy - r, w, eyelid_height)
+                    )
+                    # Bottom eyelid (closes from bottom)
+                    pygame.draw.rect(
+                        self.image,
+                        (40, 40, 40),
+                        (cx - r, cy + r - eyelid_height, w, eyelid_height),
+                    )
+
         else:
             # Default demon (bosses)
             # Body (dark red/purple)
@@ -1201,6 +1460,157 @@ class Enemy(BaseSprite):
                 # movement handled; fall through to the remainder of update
                 # (shooting and special attack code should still run)
                 pass
+
+            # ---------------------------------------------------------------
+            # Hell Boss: diagonal oscillation + teleport
+            # ---------------------------------------------------------------
+            if self.enemy_type == "boss_hell" and game is not None:
+                if not self._hell_entrance_complete:
+                    # Entrance: descend from off-screen to centre of oscillation zone
+                    entry_y = (HELL_BOSS_Y_MIN + HELL_BOSS_Y_MAX) / 2
+                    if self.y < entry_y:
+                        self.y += (
+                            3.0  # ~180px/second at 60fps — fast enough to be visible
+                        )
+                        self.x += (game.width / 2 - self.x) * 0.05
+                    else:
+                        self._hell_entrance_complete = True
+                        angle = math.radians(35)
+                        speed_factor = 3.0
+                        self._hell_vx = self.speed * speed_factor * math.cos(angle)
+                        self._hell_vy = self.speed * speed_factor * math.sin(angle)
+                else:
+                    # --- Teleport logic ---
+                    if self._teleport_phase == "idle":
+                        self._teleport_timer -= 1
+                        if self._teleport_timer <= 0:
+                            self._teleport_phase = "fading_out"
+                            self._teleport_fade_counter = HELL_BOSS_TELEPORT_FADE_FRAMES
+                            x_min = HELL_BOSS_X_MARGIN
+                            x_max = game.width - HELL_BOSS_X_MARGIN
+                            self._teleport_target_x = float(
+                                random.randint(int(x_min), int(x_max))
+                            )
+                            self._teleport_target_y = float(
+                                random.randint(HELL_BOSS_Y_MIN, HELL_BOSS_Y_MAX)
+                            )
+                    elif self._teleport_phase == "fading_out":
+                        self._teleport_fade_counter -= 1
+                        # quadratic ease-in: starts slow, accelerates to black
+                        t = self._teleport_fade_counter / HELL_BOSS_TELEPORT_FADE_FRAMES
+                        self._hell_alpha = max(0, int(255 * t * t))
+                        if self._teleport_fade_counter <= 0:
+                            self._hell_alpha = 0
+                            self.x = self._teleport_target_x
+                            self.y = self._teleport_target_y
+                            self._teleport_phase = "fading_in"
+                            self._teleport_fade_counter = HELL_BOSS_TELEPORT_FADE_FRAMES
+                    elif self._teleport_phase == "fading_in":
+                        self._teleport_fade_counter -= 1
+                        # quadratic ease-out: bursts in fast then slows
+                        t = (
+                            1.0
+                            - self._teleport_fade_counter
+                            / HELL_BOSS_TELEPORT_FADE_FRAMES
+                        )
+                        self._hell_alpha = min(255, int(255 * t * t))
+                        if self._teleport_fade_counter <= 0:
+                            self._hell_alpha = 255
+                            self._teleport_phase = "idle"
+                            self._teleport_timer = int(
+                                random.uniform(
+                                    HELL_BOSS_TELEPORT_MIN, HELL_BOSS_TELEPORT_MAX
+                                )
+                                * 60
+                            )
+
+                    # --- Diagonal oscillation (only when not mid-teleport) ---
+                    if self._teleport_phase == "idle":
+                        next_x = self.x + self._hell_vx / 60
+                        next_y = self.y + self._hell_vy / 60
+                        x_min = float(HELL_BOSS_X_MARGIN)
+                        x_max = float(game.width - HELL_BOSS_X_MARGIN)
+                        if next_x <= x_min or next_x >= x_max:
+                            self._hell_vx *= -1
+                            next_x = self.x + self._hell_vx / 60
+                        if next_y <= HELL_BOSS_Y_MIN or next_y >= HELL_BOSS_Y_MAX:
+                            self._hell_vy *= -1
+                            next_y = self.y + self._hell_vy / 60
+                        self.x = max(x_min, min(x_max, next_x))
+                        self.y = max(
+                            float(HELL_BOSS_Y_MIN),
+                            min(float(HELL_BOSS_Y_MAX), next_y),
+                        )
+
+                    # --- Golden aura (always on, pulsing) ---
+                    # Phase accumulator: full cycle = 2 seconds = 120 frames
+                    self._hell_aura_phase = getattr(self, "_hell_aura_phase", 0.0) + (
+                        2 * math.pi / 120
+                    )
+                    try:
+                        src = (
+                            self.base_image
+                            if self.base_image is not None
+                            else self.image
+                        )
+                        boss_w = src.get_width()
+                        boss_h = src.get_height()
+                        base_r = int(math.hypot(boss_w, boss_h) / 2)
+                        inner_r = base_r - 10
+                        # Fixed aura canvas based on MAX outer_r so rect never changes size
+                        max_outer_r = inner_r + 35 + 20  # +20 = max pulse_extra
+                        aura_size = (max_outer_r + 4) * 2
+                        # Current outer_r varies with pulse
+                        pulse_extra = int(
+                            (math.sin(self._hell_aura_phase) + 1) / 2 * 20
+                        )
+                        outer_r = inner_r + 35 + pulse_extra
+                        aura = pygame.Surface((aura_size, aura_size), pygame.SRCALPHA)
+                        cx = aura_size // 2
+                        cy = aura_size // 2
+                        # Outer soft ring — very transparent, expands with pulse
+                        pygame.draw.circle(aura, (255, 200, 0, 35), (cx, cy), outer_r)
+                        # Inner filled golden circle — semi-transparent
+                        pygame.draw.circle(aura, (255, 185, 0, 60), (cx, cy), inner_r)
+                        # Blit boss sprite centered on aura
+                        boss_img = src.copy()
+                        if self._hell_alpha < 255:
+                            overlay = pygame.Surface(
+                                boss_img.get_size(), pygame.SRCALPHA
+                            )
+                            overlay.fill((255, 255, 255, self._hell_alpha))
+                            boss_img.blit(
+                                overlay, (0, 0), special_flags=pygame.BLEND_RGBA_MULT
+                            )
+                        boss_rect = boss_img.get_rect(center=(cx, cy))
+                        aura.blit(boss_img, boss_rect)
+                        self.image = aura
+                        # Keep rect centered on world position with fixed aura dimensions
+                        self.rect = self.image.get_rect(
+                            center=(int(self.x), int(self.y))
+                        )
+                    except (AttributeError, TypeError, ValueError, KeyError):
+                        # fallback: just apply alpha without aura
+                        try:
+                            src = (
+                                self.base_image
+                                if self.base_image is not None
+                                else self.image
+                            )
+                            if self._hell_alpha < 255:
+                                alpha_surf = src.copy()
+                                ov = pygame.Surface(
+                                    alpha_surf.get_size(), pygame.SRCALPHA
+                                )
+                                ov.fill((255, 255, 255, self._hell_alpha))
+                                alpha_surf.blit(
+                                    ov, (0, 0), special_flags=pygame.BLEND_RGBA_MULT
+                                )
+                                self.image = alpha_surf
+                            else:
+                                self.image = src.copy()
+                        except (AttributeError, TypeError, ValueError, KeyError):
+                            pass
 
             # Special behavior for the *final* boss in certain stages (Prologo or Limbo Final).
             # Boss_big should not be treated here otherwise it prevents the custom
@@ -1464,6 +1874,226 @@ class Enemy(BaseSprite):
                         elif self.direction == -1 and self.x < -(half_w + 20):
                             # Exited left side
                             self.health = 0
+                elif self.enemy_type == "eye":
+                    # Eye: stationary bonus enemy with vertical bob and lifespan
+                    dt = 1.0 / 60.0
+                    self._eye_angle = getattr(self, "_eye_angle", 0.0) + 0.03
+                    self._eye_elapsed = getattr(self, "_eye_elapsed", 0.0) + dt
+                    # Vertical bobbing oscillation
+                    self._eye_bob_phase = (
+                        getattr(self, "_eye_bob_phase", 0.0)
+                        + EYE_BOB_SPEED * dt * 6.2832
+                    )
+                    spawn_y = getattr(self, "_eye_spawn_y", self.y)
+                    self.y = spawn_y + math.sin(self._eye_bob_phase) * EYE_BOB_AMPLITUDE
+
+                    # Blink animation: periodic eyelid closing/opening
+                    # Decrement timer to next blink
+                    self._eye_blink_next_time -= dt
+
+                    if self._eye_blink_next_time <= 0:
+                        # Timer expired: start blinking
+                        self._eye_blink_progress = 0.001  # Trigger blink
+                        self._eye_blink_next_time = random.uniform(
+                            EYE_BLINK_INTERVAL_MIN, EYE_BLINK_INTERVAL_MAX
+                        )
+                    elif self._eye_blink_progress > 0:
+                        # Currently blinking: advance progress
+                        self._eye_blink_progress += dt / EYE_BLINK_DURATION
+                        if self._eye_blink_progress >= 1.0:
+                            # Blink complete: reset to open
+                            self._eye_blink_progress = 0.0
+                    if self._eye_elapsed >= getattr(
+                        self, "_eye_lifespan", EYE_LIFESPAN_MAX
+                    ):
+                        # Natural despawn: no kill reward
+                        try:
+                            for grp in list(self.groups()):
+                                grp.remove(self)
+                        except (AttributeError, TypeError, ValueError, KeyError):
+                            pass
+                        return
+                    # Beam logic: Eye fires ONE beam after initial delay, then despawns
+                    beam_fired = getattr(self, "_eye_beam_fired", False)
+                    if not beam_fired:
+                        # Delay before firing
+                        self._eye_beam_fire_delay = (
+                            getattr(self, "_eye_beam_fire_delay", 1.5) - dt
+                        )
+                        if self._eye_beam_fire_delay <= 0:
+                            # Fire the beam now
+                            self._eye_beam_active = True
+                            self._eye_beam_timer = 0.0
+                            self._eye_paralysis_applied = False
+                            self._eye_beam_start_x = self.x
+                            self._eye_beam_start_y = self.y
+                            # LOCK target position at fire time (beam travels in fixed direction)
+                            if player is not None:
+                                self._eye_beam_target_x = player.x
+                                self._eye_beam_target_y = player.y
+                            self._eye_beam_fired = True
+
+                    # Beam travel
+                    if getattr(self, "_eye_beam_active", False):
+                        self._eye_beam_timer = (
+                            getattr(self, "_eye_beam_timer", 0.0) + dt
+                        )
+                        beam_progress = self._eye_beam_timer / EYE_BEAM_TRAVEL_TIME
+                        # Check collision with player during beam travel
+                        if not getattr(self, "_eye_paralysis_applied", False):
+                            if game is not None and player is not None:
+                                try:
+                                    # Beam start and locked target
+                                    beam_start_x = getattr(
+                                        self, "_eye_beam_start_x", self.x
+                                    )
+                                    beam_start_y = getattr(
+                                        self, "_eye_beam_start_y", self.y
+                                    )
+                                    beam_target_x = getattr(
+                                        self, "_eye_beam_target_x", player.x
+                                    )
+                                    beam_target_y = getattr(
+                                        self, "_eye_beam_target_y", player.y
+                                    )
+
+                                    # Direction and distance of beam
+                                    dx = beam_target_x - beam_start_x
+                                    dy = beam_target_y - beam_start_y
+                                    beam_target_dist = math.hypot(dx, dy)
+
+                                    if beam_target_dist > 0:
+                                        # Normalize direction to locked target
+                                        dir_x = dx / beam_target_dist
+                                        dir_y = dy / beam_target_dist
+
+                                        # Slight homing: adjust direction slightly toward current player position
+                                        homing_strength = 0.0
+                                        if beam_progress > 0.2:
+                                            homing_progress = min(
+                                                1.0, (beam_progress - 0.2) / 0.6
+                                            )
+                                            homing_strength = (
+                                                homing_progress * 0.08
+                                            )  # max 8% deviation
+
+                                        # Beam travels to screen edge (same as rendering)
+                                        screen_diag = math.hypot(
+                                            game.width if game else 1280,
+                                            game.height if game else 720,
+                                        )
+                                        max_beam_dist = screen_diag * 1.5
+                                        # Current beam endpoint based on progress
+                                        current_beam_dist = (
+                                            max_beam_dist * beam_progress
+                                        )
+
+                                        if homing_strength > 0:
+                                            # Direction to current player position
+                                            beam_current_x = (
+                                                beam_start_x + dir_x * current_beam_dist
+                                            )
+                                            beam_current_y = (
+                                                beam_start_y + dir_y * current_beam_dist
+                                            )
+                                            to_player_x = player.x - beam_current_x
+                                            to_player_y = player.y - beam_current_y
+                                            to_player_dist = math.hypot(
+                                                to_player_x, to_player_y
+                                            )
+
+                                            if to_player_dist > 0:
+                                                homing_dir_x = (
+                                                    to_player_x / to_player_dist
+                                                )
+                                                homing_dir_y = (
+                                                    to_player_y / to_player_dist
+                                                )
+                                                # Blend directions
+                                                dir_x = (
+                                                    dir_x * (1.0 - homing_strength)
+                                                    + homing_dir_x * homing_strength
+                                                )
+                                                dir_y = (
+                                                    dir_y * (1.0 - homing_strength)
+                                                    + homing_dir_y * homing_strength
+                                                )
+                                                # Renormalize
+                                                dir_mag = math.hypot(dir_x, dir_y)
+                                                if dir_mag > 0:
+                                                    dir_x /= dir_mag
+                                                    dir_y /= dir_mag
+
+                                        # Beam segment properties (same as rendering)
+                                        beam_segment_length = 100  # pixels
+                                        beam_start_render_x = (
+                                            beam_start_x
+                                            + dir_x
+                                            * max(
+                                                0,
+                                                current_beam_dist - beam_segment_length,
+                                            )
+                                        )
+                                        beam_start_render_y = (
+                                            beam_start_y
+                                            + dir_y
+                                            * max(
+                                                0,
+                                                current_beam_dist - beam_segment_length,
+                                            )
+                                        )
+
+                                        # Distance from player to beam segment
+                                        # Project player onto the beam direction
+                                        to_player_x = player.x - beam_start_render_x
+                                        to_player_y = player.y - beam_start_render_y
+                                        proj_len = (
+                                            to_player_x * dir_x + to_player_y * dir_y
+                                        )
+
+                                        # Only hit if player is within the actual rendered beam segment
+                                        if 0 <= proj_len <= beam_segment_length:
+                                            closest_x = (
+                                                beam_start_render_x + proj_len * dir_x
+                                            )
+                                            closest_y = (
+                                                beam_start_render_y + proj_len * dir_y
+                                            )
+                                            dist = math.hypot(
+                                                player.x - closest_x,
+                                                player.y - closest_y,
+                                            )
+
+                                            # Hit if within 15 pixel radius
+                                            if dist <= 15:
+                                                paralyze_dur = int(
+                                                    EYE_PARALYSIS_DURATION
+                                                    * getattr(game, "fps", 60)
+                                                )
+                                                player.paralyze_timer = paralyze_dur
+                                                self._eye_paralysis_applied = True
+                                                self._eye_beam_active = False  # Deactivate beam so it disappears
+                                                try:
+                                                    game.spawn_floating_text(
+                                                        "PARALYZED!",
+                                                        player.x,
+                                                        player.y - 30,
+                                                        color=(100, 100, 255),
+                                                        font_size=24,
+                                                        life=60,
+                                                    )
+                                                except Exception:
+                                                    pass
+                                except (
+                                    AttributeError,
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                ):
+                                    pass
+                        if self._eye_beam_timer >= EYE_BEAM_TRAVEL_TIME:
+                            # Beam done: just deactivate (no more beams)
+                            self._eye_beam_active = False
                 elif self.enemy_type == "archer":
                     # Entry phase: move downward into view
                     if getattr(self, "archer_entering", False):
@@ -1581,9 +2211,7 @@ class Enemy(BaseSprite):
                         # Actively seek barriers if none found yet, or if current is destroyed
                         barriers = getattr(game, "barriers", [])
                         curr_barrier = getattr(self, "_hiding_barrier_ref", None)
-                        barrier_alive = Enemy._is_barrier_alive(
-                            curr_barrier, barriers
-                        )
+                        barrier_alive = Enemy._is_barrier_alive(curr_barrier, barriers)
 
                         if (
                             not barrier_alive
@@ -1695,14 +2323,16 @@ class Enemy(BaseSprite):
                                 self._facing_down = dy > 0
                         else:
                             if getattr(self, "_hiding_behind_barrier", False):
-                                self.stop_timer = random.randint(*NORMAL_STOP_TIMER_HIDDEN)
+                                self.stop_timer = random.randint(
+                                    *NORMAL_STOP_TIMER_HIDDEN
+                                )
                             else:
-                                self.stop_timer = random.randint(*NORMAL_STOP_TIMER_VISIBLE)
+                                self.stop_timer = random.randint(
+                                    *NORMAL_STOP_TIMER_VISIBLE
+                                )
                             barriers = getattr(game, "barriers", [])
                             curr_barrier = getattr(self, "_hiding_barrier_ref", None)
-                            curr_alive = Enemy._is_barrier_alive(
-                                curr_barrier, barriers
-                            )
+                            curr_alive = Enemy._is_barrier_alive(curr_barrier, barriers)
 
                             if (
                                 getattr(self, "_hiding_behind_barrier", False)
@@ -1734,9 +2364,7 @@ class Enemy(BaseSprite):
                     # Actively seek barriers if none found yet, or if current is destroyed
                     barriers = getattr(game, "barriers", [])
                     curr_barrier = getattr(self, "_hiding_barrier_ref", None)
-                    barrier_alive = Enemy._is_barrier_alive(
-                        curr_barrier, barriers
-                    )
+                    barrier_alive = Enemy._is_barrier_alive(curr_barrier, barriers)
 
                     if (
                         not barrier_alive
@@ -2184,6 +2812,17 @@ class Enemy(BaseSprite):
                     if hasattr(self, "original_speed"):
                         self.speed = getattr(self, "original_speed", self.speed)
                         delattr(self, "original_speed")
+            # Handle frozen timer (Cocytus synergy — speed = 0 completely)
+            if getattr(self, "frozen_timer", 0) > 0:
+                self.frozen_timer -= 1
+                if self.frozen_timer <= 0:
+                    if hasattr(self, "original_speed"):
+                        self.speed = getattr(self, "original_speed", self.speed)
+                        delattr(self, "original_speed")
+                    self.frozen_timer = 0
+                else:
+                    # Re-zero every frame to guard against puddle system restoring speed
+                    self.speed = 0
             if hasattr(self, "burn_timer") and getattr(self, "burn_timer", 0) > 0:
                 # Per-frame decrement
                 self.burn_timer -= 1
@@ -2285,12 +2924,18 @@ class Enemy(BaseSprite):
 
             # Handle boss special attacks
             # include the horde variant so its triple-shot code runs
-            if game and self.enemy_type in [
-                "boss_big",
-                "boss_final",
-                "boss_limbo",
-                "boss_limbo_horde",
-            ]:
+            if (
+                game
+                and self.enemy_type
+                in [
+                    "boss_big",
+                    "boss_final",
+                    "boss_limbo",
+                    "boss_limbo_horde",
+                    "boss_hell",
+                ]
+                and self.y >= 0
+            ):  # no attacks while still off-screen
                 # Update boss timers
                 if self.pattern_timer is not None:
                     self.pattern_timer -= 1
@@ -2312,13 +2957,14 @@ class Enemy(BaseSprite):
                     if self.pending_area["timer"] <= 0:
                         tx = self.pending_area["x"]
                         ty = self.pending_area["y"]
+                        _area_r = self.pending_area.get("radius", 50)
+                        _area_dmg = self.pending_area.get("damage", 25)
                         game.skullboom_explosions.append(
                             {
                                 "x": tx,
                                 "y": ty,
-                                # actual explosion is larger as well
-                                "radius": 50,
-                                "max_radius": 50,
+                                "radius": _area_r,
+                                "max_radius": _area_r,
                                 "timer": 15,
                                 "max_timer": 15,
                                 "color": (255, 100, 100),  # reddish explosion
@@ -2327,32 +2973,28 @@ class Enemy(BaseSprite):
                         # decide damage by checking circle-rect intersection
                         # using player's current rect (fall back to center/radius)
                         try:
-                            # assume player has `width`/`height` and `x`,`y` at center
                             half_w = player.width / 2
                             half_h = player.height / 2
                             left = player.x - half_w
                             right = player.x + half_w
                             top = player.y - half_h
                             bottom = player.y + half_h
-                            # nearest point from explosion center to rect using clamp
                             nearest_x = max(left, min(tx, right))
                             nearest_y = max(top, min(ty, bottom))
                             ddx = tx - nearest_x
                             ddy = ty - nearest_y
-                            exp_r = 50
-                            inside = ddx * ddx + ddy * ddy <= exp_r * exp_r
+                            inside = ddx * ddx + ddy * ddy <= _area_r * _area_r
                         except (AttributeError, TypeError, ValueError, KeyError):
-                            # fallback to old center-based check
                             dx = player.x - tx
                             dy = player.y - ty
                             inside = dx * dx + dy * dy <= 30 * 30
                         if inside:
                             try:
-                                player.take_damage(25)
+                                player.take_damage(_area_dmg)
                             except (AttributeError, TypeError, ValueError, KeyError):
                                 pass
                         logger.debug(
-                            "Limbo boss area attack exploded at %.1f,%.1f",
+                            "Boss area attack exploded at %.1f,%.1f",
                             tx,
                             ty,
                         )
@@ -2557,6 +3199,82 @@ class Enemy(BaseSprite):
                                 proj.slow_factor = 0.4
                                 game.enemy_projectiles.add(proj)
                         self.big_shot_cooldown: int = random.randint(220, 320)
+                elif self.enemy_type == "boss_hell":
+                    # Skip attacks while teleporting
+                    _tp_idle = getattr(self, "_teleport_phase", "idle") == "idle"
+                    if _tp_idle:
+                        # --- Burst attack ---
+                        if getattr(self, "_burst_active", False):
+                            self._burst_frame_counter -= 1
+                            if self._burst_frame_counter <= 0:
+                                dx = player.x - self.x
+                                dy = player.y - self.y
+                                dist = math.sqrt(dx * dx + dy * dy)
+                                if dist > 0:
+                                    base_angle = math.atan2(dy, dx)
+                                    spread = random.uniform(-0.05, 0.05)
+                                    angle = base_angle + spread
+                                    vel_x = math.cos(angle) * HELL_BOSS_BURST_SPEED
+                                    vel_y = math.sin(angle) * HELL_BOSS_BURST_SPEED
+                                else:
+                                    vel_x = 0.0
+                                    vel_y = HELL_BOSS_BURST_SPEED
+                                proj = Projectile(
+                                    self.x,
+                                    self.y,
+                                    vel_x,
+                                    vel_y,
+                                    damage=HELL_BOSS_BURST_DAMAGE,
+                                    radius=5,
+                                    is_enemy_projectile=True,
+                                    appearance="hell_boss_burst",
+                                )
+                                game.enemy_projectiles.add(proj)
+                                self._burst_remaining -= 1
+                                self._burst_frame_counter = HELL_BOSS_BURST_INTERVAL
+                                if self._burst_remaining <= 0:
+                                    self._burst_active = False
+                                    self._burst_pause_timer = HELL_BOSS_BURST_PAUSE
+                        else:
+                            self._burst_pause_timer -= 1
+                            if self._burst_pause_timer <= 0:
+                                self._burst_active = True
+                                self._burst_remaining = HELL_BOSS_BURST_COUNT
+                                self._burst_frame_counter = 0
+
+                        # --- Area attack (delayed explosion) ---
+                        if (
+                            getattr(self, "area_attack_cooldown", None) is not None
+                            and self.area_attack_cooldown <= 0
+                            and not getattr(self, "_burst_active", False)
+                        ):
+                            tx = player.x
+                            ty = player.y
+                            fps = getattr(game, "fps", 60)
+                            delay = int(HELL_BOSS_AREA_DELAY * fps)
+                            self.pending_area = {
+                                "x": tx,
+                                "y": ty,
+                                "timer": delay,
+                                "damage": HELL_BOSS_AREA_DAMAGE,
+                                "radius": HELL_BOSS_AREA_RADIUS,
+                            }
+                            game.skullboom_explosions.append(
+                                {
+                                    "x": tx,
+                                    "y": ty,
+                                    "radius": HELL_BOSS_AREA_RADIUS,
+                                    "max_radius": HELL_BOSS_AREA_RADIUS,
+                                    "timer": delay,
+                                    "max_timer": delay,
+                                    "color": (180, 0, 0),
+                                    "indicator": True,
+                                }
+                            )
+                            self.area_attack_cooldown = random.randint(
+                                HELL_BOSS_AREA_COOLDOWN_MIN,
+                                HELL_BOSS_AREA_COOLDOWN_MAX,
+                            )
         except Exception as e:
             logger.exception("Error updating enemy %s: %s", self.enemy_type, e)
 
@@ -2564,6 +3282,9 @@ class Enemy(BaseSprite):
 
     def shoot_at_player(self, player, game):
         """Handle shooting logic for different enemy types"""
+        # No enemy shoots while still off-screen (above the top wall)
+        if self.y < 0:
+            return
         # Archer doesn't shoot while entering screen
         if self.enemy_type == "archer" and getattr(self, "archer_entering", False):
             return
@@ -2999,6 +3720,36 @@ class Enemy(BaseSprite):
                 and getattr(self, "health", 1) <= 0
                 and (_etype.startswith("boss_") or _etype == "cross_bearer")
             ):
+                # Visual death explosion (purely aesthetic, no damage)
+                if not getattr(self, "_death_explosion_spawned", False):
+                    self._death_explosion_spawned = True
+                    try:
+                        bw = getattr(self, "width", 80)
+                        bh = getattr(self, "height", 80)
+                        blast_r = int(max(bw, bh) * 1.4)
+                        duration = 60
+                        CURRENT_GAME.skullboom_explosions.append(
+                            {
+                                "x": self.x,
+                                "y": self.y,
+                                "timer": duration,
+                                "max_timer": duration,
+                                "max_radius": blast_r,
+                                "color": (255, 80, 0),
+                            }
+                        )
+                        CURRENT_GAME.skullboom_explosions.append(
+                            {
+                                "x": self.x,
+                                "y": self.y,
+                                "timer": duration // 2,
+                                "max_timer": duration // 2,
+                                "max_radius": blast_r // 2,
+                                "color": (255, 220, 50),
+                            }
+                        )
+                    except (AttributeError, TypeError, ValueError, KeyError):
+                        pass
                 # schedule reinforcements for wave bosses
                 import random as _rand
 
@@ -3338,8 +4089,12 @@ class Enemy(BaseSprite):
             _is_wave_boss = self.enemy_type in ("boss_medium", "cross_bearer")
             bar_width = 40 if _is_wave_boss else 25
             bar_height = 4 if _is_wave_boss else 3
-            bar_x: int | Any = self.rect.centerx - bar_width // 2 + shake_x
-            bar_y: int | Any = self.rect.top - 12 + shake_y
+            bar_x: int | Any = int(self.x) - bar_width // 2 + shake_x
+            if self.enemy_type == "boss_hell":
+                # rect includes the aura padding — anchor bar above the actual sprite
+                bar_y = int(self.y) - self.height // 2 - 12 + shake_y
+            else:
+                bar_y = self.rect.top - 12 + shake_y
 
             if self.shake_timer > 0:
                 bar_x += random.randint(-1, 1)

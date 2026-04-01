@@ -328,6 +328,56 @@ BARRIER_SLOT_DISTANCE_MULTIPLIER = (
 )
 BARRIER_POSITION_JITTER = 3  # +/- random jitter for left/right slot positions
 
+# ---------------------------------------------------------------------------
+# Hell Boss
+# ---------------------------------------------------------------------------
+HELL_BOSS_SPAWN_TIME: float = 60.0  # seconds into any hell stage
+HELL_BOSS_HP: int = 1200
+HELL_BOSS_WIDTH: int = 130
+HELL_BOSS_HEIGHT: int = 130
+# Movement bounds (upper screen diagonal oscillation)
+HELL_BOSS_Y_MIN: int = 80
+HELL_BOSS_Y_MAX: int = 300
+HELL_BOSS_X_MARGIN: int = 100  # px from screen edges
+# Teleport
+HELL_BOSS_TELEPORT_MIN: float = 8.0  # seconds between teleports
+HELL_BOSS_TELEPORT_MAX: float = 10.0
+HELL_BOSS_TELEPORT_FADE_FRAMES: int = 45  # fade out/in duration in frames
+# Burst attack
+HELL_BOSS_BURST_COUNT: int = 10  # projectiles per burst
+HELL_BOSS_BURST_INTERVAL: int = 10  # frames between each projectile
+HELL_BOSS_BURST_PAUSE: int = 150  # frames pause between bursts (~2.5s)
+HELL_BOSS_BURST_SPEED: float = 240.0  # projectile speed px/s
+HELL_BOSS_BURST_DAMAGE: int = 15
+# Area attack (delayed explosion, like boss_limbo)
+HELL_BOSS_AREA_COOLDOWN_MIN: int = 240  # frames
+HELL_BOSS_AREA_COOLDOWN_MAX: int = 360
+HELL_BOSS_AREA_DELAY: float = 1.2  # seconds before explosion
+HELL_BOSS_AREA_RADIUS: int = 60
+HELL_BOSS_AREA_DAMAGE: int = 30
+
+# ---------------------------------------------------------------------------
+# Eye (Bonus Enemy)
+# ---------------------------------------------------------------------------
+EYE_HP: int = 70
+EYE_SPEED: float = 0.0
+EYE_FIRST_SPAWN_MIN: float = 20.0  # first Eye appears between 20-25s
+EYE_FIRST_SPAWN_MAX: float = 25.0
+EYE_SPAWN_INTERVAL_MIN: float = 20.0  # subsequent Eyes: 20-30s after previous
+EYE_SPAWN_INTERVAL_MAX: float = 30.0
+EYE_LIFESPAN_MIN: float = 5.0
+EYE_LIFESPAN_MAX: float = 7.0
+EYE_BEAM_RADIUS: int = 6
+EYE_PARALYSIS_DURATION: float = 2.0  # seconds player is frozen
+EYE_FIRE_RATE_BOOST: float = 2.0  # x2 fire rate on kill
+EYE_BUFF_DURATION: float = 10.0  # seconds
+EYE_BOB_AMPLITUDE: float = 4.0  # pixels of vertical oscillation
+EYE_BOB_SPEED: float = 0.8  # oscillation cycles per second
+EYE_BEAM_TRAVEL_TIME: float = 1.8  # seconds per raggio per arrivare al giocatore
+EYE_BLINK_INTERVAL_MIN: float = 0.8  # minimum seconds between blinks
+EYE_BLINK_INTERVAL_MAX: float = 1.5  # maximum seconds between blinks
+EYE_BLINK_DURATION: float = 0.2  # seconds the blink lasts (open->close->open)
+
 # Enemy shoot cooldown ranges (min, max) in frames
 SHOOT_COOLDOWN_NORMAL = (60, 120)
 SHOOT_COOLDOWN_ARCHER = (120, 200)
@@ -509,6 +559,26 @@ __all__: list[str] = [
     "BARRIER_SLOTS",
     "BARRIER_SLOT_DISTANCE_MULTIPLIER",
     "BARRIER_POSITION_JITTER",
+    "HELL_BOSS_SPAWN_TIME",
+    "HELL_BOSS_HP",
+    "HELL_BOSS_WIDTH",
+    "HELL_BOSS_HEIGHT",
+    "HELL_BOSS_Y_MIN",
+    "HELL_BOSS_Y_MAX",
+    "HELL_BOSS_X_MARGIN",
+    "HELL_BOSS_TELEPORT_MIN",
+    "HELL_BOSS_TELEPORT_MAX",
+    "HELL_BOSS_TELEPORT_FADE_FRAMES",
+    "HELL_BOSS_BURST_COUNT",
+    "HELL_BOSS_BURST_INTERVAL",
+    "HELL_BOSS_BURST_PAUSE",
+    "HELL_BOSS_BURST_SPEED",
+    "HELL_BOSS_BURST_DAMAGE",
+    "HELL_BOSS_AREA_COOLDOWN_MIN",
+    "HELL_BOSS_AREA_COOLDOWN_MAX",
+    "HELL_BOSS_AREA_DELAY",
+    "HELL_BOSS_AREA_RADIUS",
+    "HELL_BOSS_AREA_DAMAGE",
     "SHOOT_COOLDOWN_NORMAL",
     "SHOOT_COOLDOWN_ARCHER",
     "SHOOT_COOLDOWN_INQUISITOR",

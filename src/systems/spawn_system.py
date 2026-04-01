@@ -57,7 +57,9 @@ class SpawnSystem:
         # One-time pentagram flag for the current run
         self.pentagram_spawned: bool = False
         # Eye spawn timing: first spawn at random [20,25]s, then [20,30]s intervals
-        self._eye_next_spawn_time: float = random.uniform(EYE_FIRST_SPAWN_MIN, EYE_FIRST_SPAWN_MAX)
+        self._eye_next_spawn_time: float = random.uniform(
+            EYE_FIRST_SPAWN_MIN, EYE_FIRST_SPAWN_MAX
+        )
 
     def _can_spawn_giant(self) -> bool:
         """Return ``True`` if a giant (or similar big enemy) may spawn now.
@@ -166,11 +168,11 @@ class SpawnSystem:
             self._spawn_pentagram()
 
         # Eye: recurring bonus enemy, all stages except prologo
-        if (
-            getattr(self.game, "selected_stage", "prologo") != "prologo"
-            and not getattr(self.game, "showing_victory", False)
-            and not getattr(self.game, "showing_game_over", False)
-        ):
+        stage = getattr(self.game, "selected_stage", "prologo")
+        showing_victory = getattr(self.game, "showing_victory", False)
+        showing_game_over = getattr(self.game, "showing_game_over", False)
+
+        if stage != "prologo" and not showing_victory and not showing_game_over:
             time_now = getattr(self.game, "time_elapsed", 0.0)
             if time_now >= self._eye_next_spawn_time:
                 _eye_alive = any(
@@ -193,10 +195,16 @@ class SpawnSystem:
         # Eye buff countdown (reverts fire rate boost after duration)
         if getattr(self.game, "eye_buff_active", False):
             self.game.eye_buff_elapsed = getattr(self.game, "eye_buff_elapsed", 0.0) + 1
-            if self.game.eye_buff_elapsed >= getattr(self.game, "eye_buff_duration", 300):
-                self.game.fire_rate_multiplier = getattr(self.game, "eye_buff_pre_fire_rate", 1.0)
+            if self.game.eye_buff_elapsed >= getattr(
+                self.game, "eye_buff_duration", 300
+            ):
+                self.game.fire_rate_multiplier = getattr(
+                    self.game, "eye_buff_pre_fire_rate", 1.0
+                )
                 try:
-                    self.game.player.fire_rate_multiplier = self.game.fire_rate_multiplier
+                    self.game.player.fire_rate_multiplier = (
+                        self.game.fire_rate_multiplier
+                    )
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
                 self.game.eye_buff_active = False
@@ -713,9 +721,7 @@ class SpawnSystem:
             and not self.game.hell_boss_spawned
             and self.game.time_elapsed >= HELL_BOSS_SPAWN_TIME
         ):
-            logger.info(
-                "[HELL] Spawning hell boss at time %s", self.game.time_elapsed
-            )
+            logger.info("[HELL] Spawning hell boss at time %s", self.game.time_elapsed)
             self.spawn_boss("hell")
             self.game.hell_boss_spawned = True
 
@@ -1592,7 +1598,7 @@ class SpawnSystem:
         # Eye is placed just inside the outer wall strip.
         # x range: wall thickness (25) to wall+30, keeping it near the edge but visible.
         wall = 25
-        x_margin = 50   # how far inward from the wall the Eye can spawn
+        x_margin = 50  # how far inward from the wall the Eye can spawn
 
         # Upper half only: y from just below top wall to mid-screen
         y_min = 60

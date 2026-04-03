@@ -611,7 +611,7 @@ class UIGameRenderer:
 
                 # Draw glow effect (positioned above torch flame)
                 glow_x = torch_x + 20  # Center of torch (40px wide)
-                glow_y = torch_y + 20 + glow_config["glow_offset"]  # Top of flame area
+                glow_y = torch_y + 10 + glow_config["glow_offset"]  # Flame center area
 
                 self._draw_glow_effect(
                     pygame,

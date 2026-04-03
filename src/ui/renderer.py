@@ -113,7 +113,7 @@ class UIGameRenderer:
             alpha_intensity: Base alpha intensity (100-120).
         """
         for ring in range(glow_radius, 0, -3):
-            alpha = int(alpha_intensity * (1 - ring / glow_radius) * pulse_value)
+            alpha = int(alpha_intensity * (1 - ring / glow_radius))
             alpha = max(0, min(255, alpha))
             # Get cached surface (created only once)
             glow_surface = self._get_cached_glow_ring(pygame, ring, glow_color)

@@ -1703,7 +1703,7 @@ class Game:
 
             if left_point:
                 torch_x = left_point[0] - 20
-                torch_y = left_point[1] - 65
+                torch_y = left_point[1] - 80
                 self.prologo_torches.append(
                     {"x": torch_x, "y": torch_y, "side": "left"}
                 )

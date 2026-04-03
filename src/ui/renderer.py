@@ -36,7 +36,7 @@ class UIGameRenderer:
         "limbo": {"min_pulse": 0.55, "alpha": 100, "glow_offset": -3},
         "limbo_final": {"min_pulse": 0.45, "alpha": 100, "glow_offset": -3},
         "hell": {"min_pulse": 0.55, "alpha": 120, "glow_offset": -12},
-        "prologo": {"min_pulse": 0.55, "alpha": 110, "glow_offset": -25},
+        "prologo": {"min_pulse": 0.55, "alpha": 90, "glow_offset": -5},
     }
 
     def __init__(self, ui_manager):
@@ -611,7 +611,9 @@ class UIGameRenderer:
 
                 # Draw glow effect (positioned above torch flame)
                 glow_x = torch_x + 20  # Center of torch (40px wide)
-                glow_y = torch_y + 10 + glow_config["glow_offset"]  # Flame center area
+                glow_y = (
+                    torch_y + 40 + glow_config["glow_offset"]
+                )  # Center-ish of flame
 
                 self._draw_glow_effect(
                     pygame,

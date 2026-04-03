@@ -1718,7 +1718,7 @@ class Game:
         self._add_lamp_pulsation_parameters(
             self.prologo_torches,
             is_final=False,
-            glow_radius_regular=22,  # Slightly wider glow
+            glow_radius_regular=24,  # Wider glow
             pulse_speed_min=0.2,  # Slower pulsation (0.2-0.4 Hz vs 0.3-0.6)
             pulse_speed_max=0.4,
         )

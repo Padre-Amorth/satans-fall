@@ -55,8 +55,8 @@ class TestPrologoTorchPulsation:
             assert "glow_radius" in torch, "Torch missing glow_radius"
             assert isinstance(torch["glow_radius"], int), "glow_radius should be int"
             assert (
-                torch["glow_radius"] == 22
-            ), "Prologo torches should have glow_radius=22"
+                torch["glow_radius"] == 24
+            ), "Prologo torches should have glow_radius=24"
 
     def test_prologo_torches_have_glow_color(self, prologo_game):
         """Verify each torch has glow_color parameter."""

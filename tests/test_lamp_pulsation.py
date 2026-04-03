@@ -94,26 +94,26 @@ class TestLampPulsation:
 
     def test_pulse_calculation_range(self):
         """Verify pulse value calculation stays within valid range."""
-        # Regular limbo stages (0.50 to 1.0)
+        # Regular limbo stages (0.70 to 1.0)
         for t in [0, 0.25, 0.5, 1.0, 2.0, 5.0]:
             pulse_speed = 0.5
             pulse_phase = 0.5
-            pulse_value = 0.50 + 0.50 * (
+            pulse_value = 0.70 + 0.30 * (
                 0.5 + 0.5 * math.sin(2 * math.pi * pulse_speed * t + pulse_phase)
             )
             assert (
-                0.50 <= pulse_value <= 1.0
+                0.70 <= pulse_value <= 1.0
             ), f"Regular limbo pulse {pulse_value} out of range at t={t}"
 
-        # limbo_final (0.50 to 1.0)
+        # limbo_final (0.70 to 1.0)
         for t in [0, 0.25, 0.5, 1.0, 2.0, 5.0]:
             pulse_speed = 0.5
             pulse_phase = 0.5
-            pulse_value = 0.50 + 0.50 * (
+            pulse_value = 0.70 + 0.30 * (
                 0.5 + 0.5 * math.sin(2 * math.pi * pulse_speed * t + pulse_phase)
             )
             assert (
-                0.50 <= pulse_value <= 1.0
+                0.70 <= pulse_value <= 1.0
             ), f"limbo_final pulse {pulse_value} out of range at t={t}"
 
     def test_glow_color_consistency(self, limbo_game):

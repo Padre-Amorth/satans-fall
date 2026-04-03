@@ -62,7 +62,7 @@ class UIGameRenderer:
             current_time: Current elapsed time in seconds.
             pulse_speed: Pulsation frequency in Hz.
             pulse_phase: Phase offset in radians.
-            min_value: Minimum pulse value (0.55 for normal, 0.45 for limbo_final).
+            min_value: Minimum pulse value (0.70 for limbo, 0.80 for prologo, etc.).
 
         Returns:
             Pulse value between min_value and 1.0.
@@ -103,13 +103,16 @@ class UIGameRenderer:
     ) -> None:
         """Draw pulsating glow with gradient effect using cached surfaces.
 
+        The glow radius pulsates via the caller's scaling of glow_radius.
+        Alpha remains constant (not faded) to prevent glow from disappearing.
+
         Args:
             pygame: Pygame module reference.
             glow_x: Center X position of glow.
             glow_y: Center Y position of glow.
-            glow_radius: Radius of glow in pixels.
+            glow_radius: Radius of glow in pixels (pre-scaled by caller with pulse_value).
             glow_color: RGB color tuple.
-            pulse_value: Pulsation intensity (0-1).
+            pulse_value: Pulsation intensity (used by caller for radius scaling, not here).
             alpha_intensity: Base alpha intensity (100-120).
         """
         for ring in range(glow_radius, 0, -3):

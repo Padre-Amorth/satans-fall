@@ -45,7 +45,7 @@ class TestPrologoTorchPulsation:
                 torch["pulse_phase"], float
             ), "pulse_phase should be float"
             assert (
-                0 <= torch["pulse_phase"] <= 2 * 3.14159
+                0 <= torch["pulse_phase"] <= 2 * math.pi
             ), f"pulse_phase out of range: {torch['pulse_phase']}"
 
     def test_prologo_torches_have_glow_radius(self, prologo_game):

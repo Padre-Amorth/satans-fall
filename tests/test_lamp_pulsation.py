@@ -45,7 +45,7 @@ class TestLampPulsation:
             assert "pulse_phase" in lamp, "Lamp missing pulse_phase"
             assert isinstance(lamp["pulse_phase"], float), "pulse_phase should be float"
             assert (
-                0 <= lamp["pulse_phase"] <= 2 * 3.14159
+                0 <= lamp["pulse_phase"] <= 2 * math.pi
             ), f"pulse_phase out of range: {lamp['pulse_phase']}"
 
     def test_lamps_have_glow_radius(self, limbo_game):

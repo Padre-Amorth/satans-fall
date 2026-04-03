@@ -1750,7 +1750,7 @@ class Game:
         """
         for lamp in lamps:
             lamp["pulse_speed"] = random.uniform(pulse_speed_min, pulse_speed_max)
-            lamp["pulse_phase"] = random.uniform(0, 2 * 3.14159)  # Staggered effect
+            lamp["pulse_phase"] = random.uniform(0, 2 * math.pi)  # Staggered effect
             lamp["glow_radius"] = glow_radius_final if is_final else glow_radius_regular
             lamp["glow_color"] = (255, 100, 60)  # Red-orange base color
 

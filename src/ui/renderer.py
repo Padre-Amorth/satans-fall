@@ -36,7 +36,7 @@ class UIGameRenderer:
         "limbo": {"min_pulse": 0.55, "alpha": 100, "glow_offset": -3},
         "limbo_final": {"min_pulse": 0.45, "alpha": 100, "glow_offset": -3},
         "hell": {"min_pulse": 0.55, "alpha": 120, "glow_offset": -12},
-        "prologo": {"min_pulse": 0.55, "alpha": 90, "glow_offset": -5},
+        "prologo": {"min_pulse": 0.55, "alpha": 110, "glow_offset": 0},
     }
 
     def __init__(self, ui_manager):
@@ -605,14 +605,13 @@ class UIGameRenderer:
                 )
 
                 # Get torch color and glow radius
-                glow_radius = torch.get("glow_radius", 18)
+                glow_radius_base = torch.get("glow_radius", 18)
+                glow_radius = int(glow_radius_base * pulse_value)
                 glow_color = torch.get("glow_color", (255, 100, 60))
 
-                # Draw glow effect
+                # Draw glow effect (positioned above torch flame)
                 glow_x = torch_x + 20  # Center of torch (40px wide)
-                glow_y = (
-                    torch_y + 40 + glow_config["glow_offset"]
-                )  # Center-ish of flame
+                glow_y = torch_y + 20 + glow_config["glow_offset"]  # Top of flame area
 
                 self._draw_glow_effect(
                     pygame,

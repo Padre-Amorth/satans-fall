@@ -35,7 +35,7 @@ class UIGameRenderer:
     _LAMP_GLOW_CONFIG = {
         "limbo": {"min_pulse": 0.70, "alpha": 100, "glow_offset": -3},
         "limbo_final": {"min_pulse": 0.70, "alpha": 100, "glow_offset": -3},
-        "hell": {"min_pulse": 0.55, "alpha": 120, "glow_offset": -12},
+        "hell": {"min_pulse": 0.70, "alpha": 120, "glow_offset": -12},
         "prologo": {"min_pulse": 0.80, "alpha": 90, "glow_offset": -13},
     }
 

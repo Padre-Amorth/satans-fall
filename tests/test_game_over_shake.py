@@ -1,0 +1,29 @@
+import os
+
+# headless display for tests
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+
+from src.game import Game
+
+
+def test_game_over_stops_shaking():
+    game = Game(debug=True)
+    game.permanent_stats["blasphemy_10"] = 0  # Disable revive
+    game.select_stage("prologo")
+    game.showing_main_menu = False  # Exit menu to allow gameplay updates
+
+    # Simulate active screen shake
+    game.shake_timer = 30
+    game.shake_intensity = 10
+
+    # Trigger death
+    game.player.health = 0
+    game.stage_start_countdown = 0
+    game.stage_start_timer = 0
+
+    game.update()
+
+    # Game over should be active and shake_timer must be cleared
+    assert game.showing_game_over is True
+    assert game.shake_timer == 0

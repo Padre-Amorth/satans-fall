@@ -12,8 +12,10 @@ default_section = "THIRDPARTY"
 [tool.ruff]
 line-length = 88
 target-version = "py311"
-ignore = ["E203"]
 exclude = [".git", "__pycache__", "build", "dist", "venv", ".venv"]
+
+[tool.ruff.lint]
+ignore = ["E203"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

@@ -38,7 +38,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install ruff black isort mypy
+          pip install -r requirements-dev.txt
+
+      - name: Run pre-commit hooks
+        run: |
+          pip install pre-commit
+          pre-commit run --all-files
 
       - name: Lint (ruff)
         run: ruff check .
@@ -54,3 +59,19 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q
+
+      - name: Fail if tests modified repository assets
+        # Detect any changes (modified / deleted / untracked) under the `assets/` directory
+        run: |
+          set -o pipefail
+          echo "Checking for repository changes after test run..."
+          git --no-pager status --porcelain | tee changed.txt
+          # If any changed path is under assets/, fail the job and show a diff
+          if grep -qE '^(.{2} )?assets/' changed.txt || grep -qE '^\?\? assets/' changed.txt; then
+            echo "ERROR: Tests modified files under assets/ -- this is not allowed."
+            echo "Changed files:"
+            grep -E 'assets/' changed.txt || true
+            echo "--- git diff (repo assets) ---"
+            git --no-pager diff -- assets/ || true
+            exit 1
+          fi

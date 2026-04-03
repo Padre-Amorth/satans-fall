@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
 """Test script to verify level 3 weapon selection"""
 
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from game import Game
+from src.game import Game
 
 
 def test_level_3_weapon_selection():

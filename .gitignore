@@ -34,6 +34,14 @@ desktop.ini
 # Logs
 *.log
 
+# Player save data — must NOT be tracked by git to avoid resets on checkout/pull
+permanent_stats.json
+permanent_stats.json.bak
+permanent_stats.json.tmp
+profile_1.json
+profile_2.json
+profile_3.json
+*.json.tmp
+
 # Ignore everything in parent dir (avoid nested-repo confusion)
 # Note: avoid ignoring repo root
-

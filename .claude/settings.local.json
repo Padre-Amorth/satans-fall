@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile:*)",
+      "Bash(python -m pylint:*)",
+      "Bash(git stash:*)",
+      "Bash(python:*)",
+      "Bash(git stash pop:*)",
+      "Bash(git apply:*)",
+      "Read(//c/Users/Gla/.claude/projects/c--Users-Gla-Desktop-Nuova-cartella-giochi-satans-fall/memory/**)",
+      "Bash(git add src/systems/input_handler.py tests/test_quit_event_confirmation.py)",
+      "Bash(git commit -m \"feat: add exit confirmation dialogs for X, ALT+F4, and EXIT button:*)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Gla\\.claude\\projects\\c--Users-Gla-Desktop-Nuova-cartella-giochi-satans-fall\\memory"
+    ]
+  }
+}

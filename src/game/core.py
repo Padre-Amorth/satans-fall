@@ -1431,6 +1431,7 @@ class Game:
             "barrier_damaged.png",
             # optional Limbo wall lamp assets
             "lamp1.png",
+            "lamp2.png",
             # optional Purgatory decorative cauldron assets
             "purgatory_cauldron.png",
             # optional Hell wall lamp assets
@@ -1597,6 +1598,13 @@ class Game:
         if len(right_candidates) > 3:
             self.limbo_lamps.extend(right_candidates[1:5])  # indices 1,2,3,4
 
+        self._add_lamp_pulsation_parameters(
+            self.limbo_lamps,
+            is_final=str(self.selected_stage) == "limbo_final",
+            glow_radius_regular=20,
+            glow_radius_final=35,
+        )
+
         logger.info(
             "Generated %d limbo lamps for stage %s",
             len(self.limbo_lamps),
@@ -1663,6 +1671,82 @@ class Game:
             HELL_LAMP_Y_FROM_BOTTOM,
             "hell lamps",
         )
+
+        self._add_lamp_pulsation_parameters(
+            self.hell_lamps,
+            is_final=False,
+            glow_radius_regular=25,  # Increased from 20
+        )
+
+    def generate_prologo_torches(self) -> None:
+        """Generate decorative torches along prologo walls at regular intervals."""
+        is_prologo = str(self.selected_stage) == "prologo"
+        if not is_prologo:
+            self.prologo_torches = []
+            return
+
+        self.prologo_torches = []
+        torch_positions = [0.2, 0.5, 0.8]
+
+        for frac in torch_positions:
+            y = int(frac * self.height)
+            left_point = (
+                min(self.left_wall_points, key=lambda p: abs(p[1] - y))
+                if self.left_wall_points
+                else None
+            )
+            right_point = (
+                min(self.right_wall_points, key=lambda p: abs(p[1] - y))
+                if self.right_wall_points
+                else None
+            )
+
+            if left_point:
+                torch_x = left_point[0] - 20
+                torch_y = left_point[1] - 80
+                self.prologo_torches.append(
+                    {"x": torch_x, "y": torch_y, "side": "left"}
+                )
+
+            if right_point:
+                torch_x = right_point[0] - 20
+                torch_y = right_point[1] - 80
+                self.prologo_torches.append(
+                    {"x": torch_x, "y": torch_y, "side": "right"}
+                )
+
+        self._add_lamp_pulsation_parameters(
+            self.prologo_torches,
+            is_final=False,
+            glow_radius_regular=18,  # Smaller glow for torches
+        )
+
+        logger.info(
+            "Generated %d prologo torches for stage %s",
+            len(self.prologo_torches),
+            self.selected_stage,
+        )
+
+    def _add_lamp_pulsation_parameters(
+        self,
+        lamps: list,
+        is_final: bool = False,
+        glow_radius_regular: int = 20,
+        glow_radius_final: int = 35,
+    ) -> None:
+        """Add pulsation parameters to a list of lamps (limbo or hell).
+
+        Args:
+            lamps: List of lamp dictionaries to modify.
+            is_final: True for limbo_final lamps, False otherwise.
+            glow_radius_regular: Glow radius for non-final lamps.
+            glow_radius_final: Glow radius for final lamps.
+        """
+        for lamp in lamps:
+            lamp["pulse_speed"] = random.uniform(0.3, 0.6)  # Hz (slow breath-like)
+            lamp["pulse_phase"] = random.uniform(0, 2 * 3.14159)  # Staggered effect
+            lamp["glow_radius"] = glow_radius_final if is_final else glow_radius_regular
+            lamp["glow_color"] = (255, 100, 60)  # Red-orange base color
 
     def is_limbo_stage(self) -> bool:
         """Return True if the currently selected stage is any variant of Limbo."""
@@ -3028,6 +3112,9 @@ class Game:
 
         # Reset hell lamps (decorative wall elements)
         self.hell_lamps = []
+
+        # Reset prologo torches (decorative wall elements)
+        self.prologo_torches = []
 
         # Reset stage start countdown
         self.stage_start_countdown = 0

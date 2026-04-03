@@ -3,7 +3,7 @@
 import logging
 from typing import TYPE_CHECKING
 
-from src.game_constants import LIMBO_STAGES
+from src.game_constants import HELL_STAGES, LIMBO_STAGES, PURGATORY_STAGES
 
 if TYPE_CHECKING:
     from src.game import Game
@@ -484,32 +484,24 @@ class InputHandler:
                             f"Reroll  ({self.game.upgrade_rerolls_remaining} left)"
                         )
                         reroll_surf = get_text(
-                            reroll_label, get_font(15), (220, 180, 180)
+                            reroll_label, get_font(23), (220, 180, 180)
                         )
-                        reroll_w = reroll_surf.get_width() + 24
-                        reroll_h = reroll_surf.get_height() + 10
+                        reroll_w = reroll_surf.get_width() + 36
+                        reroll_h = reroll_surf.get_height() + 15
                         reroll_x = self.game.width // 2 - reroll_w // 2
                         title_h = get_font(38).get_height()
                         sub_h = get_font(15).get_height()
                         div_y = 60 + title_h + sub_h + 10
                         title_bottom = div_y + 6
                         reroll_y = int((title_bottom + start_y) / 2 - reroll_h / 2)
-                        pad = 8
+                        pad = 12
                         hot_rect = pygame.Rect(
                             reroll_x - pad,
                             reroll_y - pad,
                             reroll_w + pad * 2,
                             reroll_h + pad * 2,
                         )
-                        if hot_rect.collidepoint(pos):
-                            self.game.reroll_upgrade_choices()
-                            return
-                        band_top = title_bottom - 16
-                        band_bottom = start_y + 16
-                        if (
-                            band_top <= pos[1] <= band_bottom
-                            and abs(pos[0] - (self.game.width // 2)) <= 300
-                        ):
+                        if hot_rect.collidepoint(pos) and button == 1:
                             self.game.reroll_upgrade_choices()
                             return
                     except (AttributeError, TypeError, ValueError, KeyError):
@@ -520,6 +512,7 @@ class InputHandler:
                     if (
                         x_pos <= pos[0] <= x_pos + box_width
                         and y_pos <= pos[1] <= y_pos + box_height
+                        and button == 1
                     ):
                         self.game.apply_upgrade(i)
                         return
@@ -1981,8 +1974,20 @@ class InputHandler:
         self.game.reset_run()
 
         # Generate lamps for limbo stages (after reset_run so they're not cleared)
-        if str(stage) in LIMBO_STAGES and stage != "limbo_final":
+        if str(stage) in LIMBO_STAGES:
             self.game.generate_limbo_lamps()
+
+        # Generate cauldrons for purgatory stages
+        if str(stage) in PURGATORY_STAGES:
+            self.game.generate_purgatory_cauldrons()
+
+        # Generate lamps for hell stages
+        if str(stage) in HELL_STAGES:
+            self.game.generate_hell_lamps()
+
+        # Generate torches for prologo stage
+        if stage == "prologo":
+            self.game.generate_prologo_torches()
 
         # Prologo-specific starting weapon
         if stage == "prologo":
@@ -2192,6 +2197,9 @@ class InputHandler:
         self.game.generate_dead_trees()
         self.game.reset_run()
         self.game.generate_limbo_lamps()
+        self.game.generate_purgatory_cauldrons()
+        self.game.generate_hell_lamps()
+        self.game.generate_prologo_torches()
 
     def continue_after_victory(self) -> None:
         """After a victory overlay, start the next limbo variant (or return to limbo).
@@ -2235,10 +2243,31 @@ class InputHandler:
                 self.game.reset_run()
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
-            # Generate lamps for limbo stages (excluding limbo_final)
-            if nxt in LIMBO_STAGES and nxt != "limbo_final":
+            # Generate lamps for limbo stages
+            if nxt in LIMBO_STAGES:
                 try:
                     self.game.generate_limbo_lamps()
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+
+            # Generate cauldrons for purgatory stages
+            if nxt in PURGATORY_STAGES:
+                try:
+                    self.game.generate_purgatory_cauldrons()
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+
+            # Generate lamps for hell stages
+            if nxt in HELL_STAGES:
+                try:
+                    self.game.generate_hell_lamps()
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+
+            # Generate torches for prologo stage
+            if nxt == "prologo":
+                try:
+                    self.game.generate_prologo_torches()
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 

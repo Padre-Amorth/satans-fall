@@ -1,13 +1,16 @@
 """UI Game Renderer: World, objects, HUD, stage-specific rendering."""
 
 import logging
+import math
 import random
 from typing import TYPE_CHECKING
 
 from src.assets.manager import get_image
 from src.game_constants import (
+    HELL_LAMP_SIZE,
     HELL_STAGES,
     LIMBO_LAMP_SIZE,
+    PURGATORY_CAULDRON_SIZE,
     PURGATORY_STAGES,
     STATUE_ASSET_VERTICAL_OFFSET,
     STATUE_BASE_Y,
@@ -28,6 +31,14 @@ logger: logging.Logger = logging.getLogger(__name__)
 class UIGameRenderer:
     """Handles all game world rendering: floor, walls, buildings, objects, HUD."""
 
+    # Lamp glow configuration by stage type
+    _LAMP_GLOW_CONFIG = {
+        "limbo": {"min_pulse": 0.55, "alpha": 100, "glow_offset": -3},
+        "limbo_final": {"min_pulse": 0.45, "alpha": 100, "glow_offset": -3},
+        "hell": {"min_pulse": 0.55, "alpha": 120, "glow_offset": -12},
+        "prologo": {"min_pulse": 0.55, "alpha": 90, "glow_offset": -5},
+    }
+
     def __init__(self, ui_manager):
         """
         Args:
@@ -36,6 +47,79 @@ class UIGameRenderer:
         self.ui = ui_manager
         self.game: Game = ui_manager.game
         self._wall_brick_cache: dict = {}  # cache key → (surface, min_x, min_y)
+        self._glow_ring_cache: dict = {}  # cache key → {ring: surface}
+
+    def _calculate_pulse_value(
+        self,
+        current_time: float,
+        pulse_speed: float,
+        pulse_phase: float,
+        min_value: float = 0.55,
+    ) -> float:
+        """Calculate pulsation intensity using sine wave.
+
+        Args:
+            current_time: Current elapsed time in seconds.
+            pulse_speed: Pulsation frequency in Hz.
+            pulse_phase: Phase offset in radians.
+            min_value: Minimum pulse value (0.55 for normal, 0.45 for limbo_final).
+
+        Returns:
+            Pulse value between min_value and 1.0.
+        """
+        range_val = 1.0 - min_value
+        return min_value + range_val * (
+            0.5 + 0.5 * math.sin(2 * math.pi * pulse_speed * current_time + pulse_phase)
+        )
+
+    def _get_cached_glow_ring(self, pygame, ring: int, glow_color: tuple):
+        """Get or create cached glow ring surface.
+
+        Args:
+            pygame: Pygame module reference.
+            ring: Ring radius in pixels.
+            glow_color: RGB color tuple (base color, alpha applied at draw time).
+
+        Returns:
+            Cached pygame.Surface with pre-drawn circle.
+        """
+        cache_key = (ring, glow_color)
+        if cache_key not in self._glow_ring_cache:
+            # Create surface once and cache it
+            glow_surface = pygame.Surface((ring * 2, ring * 2), pygame.SRCALPHA)
+            pygame.draw.circle(glow_surface, (*glow_color, 255), (ring, ring), ring)
+            self._glow_ring_cache[cache_key] = glow_surface
+        return self._glow_ring_cache[cache_key]
+
+    def _draw_glow_effect(
+        self,
+        pygame,
+        glow_x: float,
+        glow_y: float,
+        glow_radius: int,
+        glow_color: tuple,
+        pulse_value: float,
+        alpha_intensity: int = 100,
+    ) -> None:
+        """Draw pulsating glow with gradient effect using cached surfaces.
+
+        Args:
+            pygame: Pygame module reference.
+            glow_x: Center X position of glow.
+            glow_y: Center Y position of glow.
+            glow_radius: Radius of glow in pixels.
+            glow_color: RGB color tuple.
+            pulse_value: Pulsation intensity (0-1).
+            alpha_intensity: Base alpha intensity (100-120).
+        """
+        for ring in range(glow_radius, 0, -3):
+            alpha = int(alpha_intensity * (1 - ring / glow_radius) * pulse_value)
+            alpha = max(0, min(255, alpha))
+            # Get cached surface (created only once)
+            glow_surface = self._get_cached_glow_ring(pygame, ring, glow_color)
+            # Apply alpha by setting it on the cached surface
+            glow_surface.set_alpha(alpha)
+            self.ui.screen.blit(glow_surface, (int(glow_x - ring), int(glow_y - ring)))
 
     # ========== GAME RENDERING METHODS ==========
 
@@ -90,7 +174,6 @@ class UIGameRenderer:
         wall_color = settings["wall_color"]
 
         is_hell_stage = self.game.is_hell_stage()
-        is_purgatory_stage = self.game.is_purgatory_stage()
         is_prologo = str(self.game.selected_stage) == "prologo"
         is_limbo_stage = self.game.is_limbo_stage()
         render_wall_thickness = (
@@ -173,7 +256,9 @@ class UIGameRenderer:
                 pygame, self.game.right_wall_points, right_wall_exterior, is_hell_stage
             )
 
-    def _draw_wall_edges(self, pygame, wall_points, wall_exterior, is_hell: bool) -> None:
+    def _draw_wall_edges(
+        self, pygame, wall_points, wall_exterior, is_hell: bool
+    ) -> None:
         """Draw edge outlines on a single wall (left or right)."""
         try:
             inner_edge = [(int(p[0]), int(p[1])) for p in wall_points]
@@ -291,7 +376,7 @@ class UIGameRenderer:
         self.ui.screen.blit(surf, (min_x + shake_x, min_y + shake_y))
 
     def _draw_limbo_lamps(self, shake_x=0, shake_y=0) -> None:
-        """Draw decorative lamps along limbo walls."""
+        """Draw decorative lamps along limbo walls with pulsating glow effect."""
         if not self.game.is_limbo_stage():
             return
 
@@ -305,9 +390,18 @@ class UIGameRenderer:
             return
 
         logger.debug("Drawing %d limbo lamps", len(self.game.limbo_lamps))
-        lamp_sprite = get_image("lamp1.png", LIMBO_LAMP_SIZE)
+        # Use lamp2.png for limbo_final, lamp1.png for other limbo stages
+        is_final = str(self.game.selected_stage) == "limbo_final"
+        lamp_asset = "lamp2.png" if is_final else "lamp1.png"
+        # Limbo_final lamps are 5px larger
+        lamp_size = (32, 84) if is_final else LIMBO_LAMP_SIZE
+        lamp_sprite = get_image(lamp_asset, lamp_size)
         if lamp_sprite is None:
-            logger.debug("lamp1.png not loaded, using circle fallback")
+            logger.warning(
+                "%s not loaded, using circle fallback (stage: %s)",
+                lamp_asset,
+                self.game.selected_stage,
+            )
             # Fallback: draw simple circles if asset not available
             for lamp in self.game.limbo_lamps:
                 x = int(lamp["x"]) + shake_x
@@ -316,14 +410,170 @@ class UIGameRenderer:
             return
 
         logger.debug("Drawing lamps with sprite")
-        for lamp in self.game.limbo_lamps:
+
+        # Pre-compute right lamp indices for limbo_final offset calculations
+        right_lamp_indices = (
+            [
+                idx
+                for idx, lamp in enumerate(self.game.limbo_lamps)
+                if lamp.get("side") == "right"
+            ]
+            if is_final
+            else []
+        )
+        last_right_idx = right_lamp_indices[-1] if right_lamp_indices else -1
+
+        # Current time for pulsation
+        current_time = self.game.frame_count / self.game.fps
+
+        # Get glow configuration for this stage
+        stage_key = "limbo_final" if is_final else "limbo"
+        glow_config = self._LAMP_GLOW_CONFIG[stage_key]
+        glow_color = (
+            (150, 50, 130) if is_final else (255, 100, 60)
+        )  # Purple or red-orange
+
+        for i, lamp in enumerate(self.game.limbo_lamps):
             x = int(lamp["x"]) + shake_x
             y = int(lamp["y"]) + shake_y
-            # Apply horizontal flip if needed
+
+            # Apply limbo_final positioning adjustments
+            if is_final:
+                if lamp.get("side") == "left":
+                    x += 3  # Move left-side lamps 3px inward
+                elif lamp.get("side") == "right":
+                    x -= 6  # 3px inward + 3px left
+                    if i != last_right_idx:  # Not the bottommost right lamp
+                        x -= 2  # Extra 2px left for upper right lamps
+
+            # Calculate pulsation with stage-specific min value
+            pulse_value = self._calculate_pulse_value(
+                current_time,
+                lamp.get("pulse_speed", 0.5),
+                lamp.get("pulse_phase", 0),
+                min_value=glow_config["min_pulse"],
+            )
+
+            # Draw pulsating glow (before lamp sprite)
+            glow_radius = int(lamp.get("glow_radius", 35) * pulse_value)
+            glow_x = x + lamp_size[0] // 2
+            glow_y = y + lamp_size[1] // 3 + glow_config["glow_offset"]
+
+            self._draw_glow_effect(
+                pygame,
+                glow_x,
+                glow_y,
+                glow_radius,
+                glow_color,
+                pulse_value,
+                glow_config["alpha"],
+            )
+
+            # Draw lamp sprite
             sprite = lamp_sprite
             if lamp.get("flip", False):
                 sprite = pygame.transform.flip(lamp_sprite, True, False)
             self.ui.screen.blit(sprite, (x, y))
+
+    def _draw_purgatory_cauldrons(self, shake_x=0, shake_y=0) -> None:
+        """Draw decorative cauldrons at bottom of purgatory arena."""
+        if not self.game.is_purgatory_stage():
+            return
+
+        pygame = self.ui.pygame
+        if not hasattr(self.game, "purgatory_cauldrons"):
+            logger.warning("Game has no purgatory_cauldrons attribute")
+            return
+
+        if not self.game.purgatory_cauldrons:
+            logger.debug("No purgatory cauldrons to draw")
+            return
+
+        logger.debug(
+            "Drawing %d purgatory cauldrons", len(self.game.purgatory_cauldrons)
+        )
+        cauldron_sprite = get_image("purgatory_cauldron.png", PURGATORY_CAULDRON_SIZE)
+        if cauldron_sprite is None:
+            logger.debug("purgatory_cauldron.png not loaded, using circle fallback")
+            # Fallback: draw simple circles if asset not available
+            for cauldron in self.game.purgatory_cauldrons:
+                x = int(cauldron["x"]) + PURGATORY_CAULDRON_SIZE[0] // 2 + shake_x
+                y = int(cauldron["y"]) + PURGATORY_CAULDRON_SIZE[1] // 2 + shake_y
+                pygame.draw.circle(self.ui.screen, (100, 40, 40), (x, y), 30)
+            return
+
+        logger.debug("Drawing cauldrons with sprite")
+        for cauldron in self.game.purgatory_cauldrons:
+            x = int(cauldron["x"]) + shake_x
+            y = int(cauldron["y"]) + shake_y
+            self.ui.screen.blit(cauldron_sprite, (x, y))
+
+    def _draw_hell_lamps(self, shake_x=0, shake_y=0) -> None:
+        """Draw decorative lamps at bottom corners of hell arena with pulsating glow."""
+        if not self.game.is_hell_stage():
+            return
+
+        pygame = self.ui.pygame
+        if not hasattr(self.game, "hell_lamps"):
+            logger.warning("Game has no hell_lamps attribute")
+            return
+
+        if not self.game.hell_lamps:
+            logger.debug("No hell lamps to draw")
+            return
+
+        logger.debug("Drawing %d hell lamps", len(self.game.hell_lamps))
+        lamp_sprite = get_image("hell_lamp.png", HELL_LAMP_SIZE)
+        if lamp_sprite is None:
+            logger.debug("hell_lamp.png not loaded, using rectangle fallback")
+            # Fallback: draw vertical rectangles if asset not available
+            for lamp in self.game.hell_lamps:
+                x = int(lamp["x"]) + shake_x
+                y = int(lamp["y"]) + shake_y
+                pygame.draw.rect(
+                    self.ui.screen,
+                    (200, 100, 0),
+                    (x, y, HELL_LAMP_SIZE[0], HELL_LAMP_SIZE[1]),
+                )
+            return
+
+        logger.debug("Drawing hell lamps with sprite")
+        # Current time for pulsation
+        current_time = self.game.frame_count / self.game.fps
+
+        # Get glow configuration for hell stages
+        glow_config = self._LAMP_GLOW_CONFIG["hell"]
+        glow_color = (255, 100, 60)  # Red-orange
+
+        for lamp in self.game.hell_lamps:
+            x = int(lamp["x"]) + shake_x
+            y = int(lamp["y"]) + shake_y
+
+            # Calculate pulsation with stage-specific config
+            pulse_value = self._calculate_pulse_value(
+                current_time,
+                lamp.get("pulse_speed", 0.5),
+                lamp.get("pulse_phase", 0),
+                min_value=glow_config["min_pulse"],
+            )
+
+            # Draw pulsating glow (before lamp sprite)
+            glow_radius = int(lamp.get("glow_radius", 25) * pulse_value)
+            glow_x = x + HELL_LAMP_SIZE[0] // 2
+            glow_y = y + HELL_LAMP_SIZE[1] // 3 + glow_config["glow_offset"]
+
+            self._draw_glow_effect(
+                pygame,
+                glow_x,
+                glow_y,
+                glow_radius,
+                glow_color,
+                pulse_value,
+                glow_config["alpha"],
+            )
+
+            # Draw lamp sprite
+            self.ui.screen.blit(lamp_sprite, (x, y))
 
     def _draw_torches(self, shake_x=0, shake_y=0) -> None:
         pygame = self.ui.pygame
@@ -331,57 +581,127 @@ class UIGameRenderer:
         if not is_prologo:
             return
 
+        # Use generated torch data with pulsation if available
+        prologo_torches = getattr(self.game, "prologo_torches", [])
+        glow_config = self._LAMP_GLOW_CONFIG.get(
+            "prologo", {"min_pulse": 0.55, "alpha": 90, "glow_offset": -5}
+        )
+        current_time = self.game.frame_count / self.game.fps if self.game else 0
+
         torch_image = get_image("torch.png", (40, 80))
-        torch_positions = [0.2, 0.5, 0.8]
-        for frac in torch_positions:
-            y = int(frac * self.ui.height)
-            left_point = min(self.game.left_wall_points, key=lambda p: abs(p[1] - y))
-            right_point = min(self.game.right_wall_points, key=lambda p: abs(p[1] - y))
 
-            if torch_image:
-                torch_x = left_point[0] - 20
-                torch_y = left_point[1] - 80
-                self.ui.screen.blit(torch_image, (torch_x, torch_y))
+        # Draw torches from generated list with pulsation
+        if prologo_torches:
+            for torch in prologo_torches:
+                torch_x = torch["x"] + shake_x
+                torch_y = torch["y"] + shake_y
 
-                torch_x = right_point[0] - 20
-                torch_y = right_point[1] - 80
-                self.ui.screen.blit(torch_image, (torch_x, torch_y))
-            else:
-                torch_x = left_point[0] - 20
-                torch_y = left_point[1]
-                pygame.draw.rect(
-                    self.ui.screen, (50, 25, 0), (torch_x, torch_y - 20, 16, 40)
-                )
-                pygame.draw.circle(
-                    self.ui.screen,
-                    (255, 100, 0),
-                    (int(torch_x + 8), int(torch_y - 20)),
-                    16,
-                )
-                pygame.draw.circle(
-                    self.ui.screen,
-                    (255, 200, 0),
-                    (int(torch_x + 8), int(torch_y - 20)),
-                    8,
+                # Calculate pulsation
+                pulse_value = self._calculate_pulse_value(
+                    current_time,
+                    torch.get("pulse_speed", 0.4),
+                    torch.get("pulse_phase", 0),
+                    glow_config["min_pulse"],
                 )
 
-                torch_x = right_point[0] - 20
-                torch_y = right_point[1]
-                pygame.draw.rect(
-                    self.ui.screen, (50, 25, 0), (torch_x, torch_y - 20, 16, 40)
+                # Get torch color and glow radius
+                glow_radius = torch.get("glow_radius", 18)
+                glow_color = torch.get("glow_color", (255, 100, 60))
+
+                # Draw glow effect
+                glow_x = torch_x + 20  # Center of torch (40px wide)
+                glow_y = (
+                    torch_y + 40 + glow_config["glow_offset"]
+                )  # Center-ish of flame
+
+                self._draw_glow_effect(
+                    pygame,
+                    glow_x,
+                    glow_y,
+                    glow_radius,
+                    glow_color,
+                    pulse_value,
+                    glow_config["alpha"],
                 )
-                pygame.draw.circle(
-                    self.ui.screen,
-                    (255, 100, 0),
-                    (int(torch_x + 8), int(torch_y - 20)),
-                    16,
+
+                # Draw torch sprite or fallback
+                if torch_image:
+                    self.ui.screen.blit(torch_image, (torch_x, torch_y))
+                else:
+                    # Draw torch fallback (stick + flame)
+                    pygame.draw.rect(
+                        self.ui.screen,
+                        (50, 25, 0),
+                        (torch_x + 12, torch_y + 20, 16, 40),
+                    )
+                    pygame.draw.circle(
+                        self.ui.screen,
+                        glow_color,
+                        (int(torch_x + 20), int(torch_y + 20)),
+                        int(16 * pulse_value),
+                    )
+                    pygame.draw.circle(
+                        self.ui.screen,
+                        (255, 200, 0),
+                        (int(torch_x + 20), int(torch_y + 20)),
+                        int(8 * pulse_value),
+                    )
+        else:
+            # Fallback: draw basic torches at fixed positions (legacy behavior)
+            torch_positions = [0.2, 0.5, 0.8]
+            for frac in torch_positions:
+                y = int(frac * self.ui.height)
+                left_point = min(
+                    self.game.left_wall_points, key=lambda p: abs(p[1] - y)
                 )
-                pygame.draw.circle(
-                    self.ui.screen,
-                    (255, 200, 0),
-                    (int(torch_x + 8), int(torch_y - 20)),
-                    8,
+                right_point = min(
+                    self.game.right_wall_points, key=lambda p: abs(p[1] - y)
                 )
+
+                if torch_image:
+                    torch_x = left_point[0] - 20
+                    torch_y = left_point[1] - 80
+                    self.ui.screen.blit(torch_image, (torch_x, torch_y))
+
+                    torch_x = right_point[0] - 20
+                    torch_y = right_point[1] - 80
+                    self.ui.screen.blit(torch_image, (torch_x, torch_y))
+                else:
+                    torch_x = left_point[0] - 20
+                    torch_y = left_point[1]
+                    pygame.draw.rect(
+                        self.ui.screen, (50, 25, 0), (torch_x, torch_y - 20, 16, 40)
+                    )
+                    pygame.draw.circle(
+                        self.ui.screen,
+                        (255, 100, 0),
+                        (int(torch_x + 8), int(torch_y - 20)),
+                        16,
+                    )
+                    pygame.draw.circle(
+                        self.ui.screen,
+                        (255, 200, 0),
+                        (int(torch_x + 8), int(torch_y - 20)),
+                        8,
+                    )
+
+                    torch_x = right_point[0] - 20
+                    torch_y = right_point[1]
+                    pygame.draw.rect(
+                        self.ui.screen, (50, 25, 0), (torch_x, torch_y - 20, 16, 40)
+                    )
+                    pygame.draw.circle(
+                        self.ui.screen,
+                        (255, 100, 0),
+                        (int(torch_x + 8), int(torch_y - 20)),
+                        16,
+                    )
+                    pygame.draw.circle(
+                        self.ui.screen,
+                        (255, 200, 0),
+                        (int(torch_x + 8), int(torch_y - 20)),
+                        8,
+                    )
 
     def _draw_cathedral_procedural(self, pygame, base_x: int, base_y: int) -> None:
         """Draw cathedral procedural pixel art (Prologo stage)."""
@@ -894,6 +1214,8 @@ class UIGameRenderer:
         self.ui._draw_floor_polygon(shake_x, shake_y)
         self.ui._draw_walls(shake_x, shake_y)
         self.ui._draw_limbo_lamps(shake_x, shake_y)
+        self._draw_purgatory_cauldrons(shake_x, shake_y)
+        self._draw_hell_lamps(shake_x, shake_y)
         self.ui._draw_torches(shake_x, shake_y)
         self.ui._draw_buildings(shake_x, shake_y)
         self.ui._draw_battlefield_crosses(shake_x, shake_y)
@@ -1308,10 +1630,53 @@ class UIGameRenderer:
         TRUNK_EDGE = (32, 18, 12)
         TRUNK_HIGHLIGHT = (108, 78, 58)
         CRACK_COLOR = (42, 25, 16)
-        BRANCH_COLOR = (65, 44, 32)
-        BRANCH_SHADOW = (22, 11, 7)
-        SUB_COLOR = (56, 36, 25)
-        TWIG_COLOR = (46, 28, 18)
+
+        # Base brown palette — charred, bone-dry wood
+        BASE_BRANCH_COLOR = (65, 44, 32)
+        BASE_BRANCH_SHADOW = (22, 11, 7)
+        BASE_SUB_COLOR = (56, 36, 25)
+        BASE_TWIG_COLOR = (46, 28, 18)
+
+        def blend_color(base, accent, accent_ratio=0.4):
+            """Blend base color with accent color (accent_ratio controls saturation)."""
+            return tuple(
+                int(base[i] * (1 - accent_ratio) + accent[i] * accent_ratio)
+                for i in range(3)
+            )
+
+        # Stage-specific psychedelic color schemes (40% accent, 60% brown base)
+        stage = str(self.game.selected_stage)
+        stage_colors = {
+            "limbo_final": {
+                "branch": (200, 100, 180),  # Purple
+                "branch_shadow": (150, 60, 120),  # Purple shadow
+                "sub": (50, 200, 100),  # Bright green
+                "twig": (100, 180, 80),  # Lime green
+            },
+            "limbo": {
+                "branch": (180, 160, 50),  # Yellow
+                "branch_shadow": (120, 100, 30),  # Yellow shadow
+                "sub": (80, 200, 80),  # Bright green
+                "twig": (120, 170, 60),  # Lime green
+            },
+        }
+
+        # Use same color scheme for limbo_2 and limbo_3 as limbo
+        if stage in ("limbo_2", "limbo_3"):
+            colors = stage_colors["limbo"]
+        else:
+            colors = stage_colors.get(stage)
+
+        if colors:
+            BRANCH_COLOR = blend_color(BASE_BRANCH_COLOR, colors["branch"])
+            BRANCH_SHADOW = blend_color(BASE_BRANCH_SHADOW, colors["branch_shadow"])
+            SUB_COLOR = blend_color(BASE_SUB_COLOR, colors["sub"])
+            TWIG_COLOR = blend_color(BASE_TWIG_COLOR, colors["twig"])
+        else:
+            BRANCH_COLOR = BASE_BRANCH_COLOR
+            BRANCH_SHADOW = BASE_BRANCH_SHADOW
+            SUB_COLOR = BASE_SUB_COLOR
+            TWIG_COLOR = BASE_TWIG_COLOR
 
         for tree in self.game.dead_trees:
             x = int(tree["x"] + shake_x)
@@ -1905,23 +2270,23 @@ class UIGameRenderer:
         except (AttributeError, TypeError, ValueError, KeyError):
             pass
 
-        # Choose overlay color based on limbo variant
+        # Choose overlay color and alpha based on limbo variant
         stage = getattr(self.game, "selected_stage", None)
-        if stage == "limbo_2":
-            limbo_overlay_color = (80, 75, 55)  # More orange tint for limbo_2
-        elif stage == "limbo_3":
-            limbo_overlay_color = (80, 60, 60)  # Red tint for limbo_3
-        elif stage == "limbo_final":
-            limbo_overlay_color = (70, 45, 55)  # Darker red tint for limbo_final
-        else:
-            limbo_overlay_color = (60, 60, 60)  # Gray for default limbo
+        limbo_overlay_presets = {
+            "limbo_2": ((80, 75, 55), LIMBO_OVERLAY_ALPHA),  # Orange tint
+            "limbo_3": ((80, 60, 60), LIMBO_OVERLAY_ALPHA),  # Red tint
+            "limbo_final": ((80, 45, 65), 100),  # Darker red with increased alpha
+        }
+        limbo_overlay_color, limbo_overlay_alpha = limbo_overlay_presets.get(
+            stage, ((60, 60, 60), LIMBO_OVERLAY_ALPHA)  # Default gray
+        )
 
         self._draw_stage_overlay(
             "_limbo_overlay",
             "_limbo_overlay_color",
             "_limbo_overlay_alpha",
             limbo_overlay_color,
-            LIMBO_OVERLAY_ALPHA,
+            limbo_overlay_alpha,
         )
 
         # LIMBO: Skip lateral fog layers to show the background asset clearly
@@ -2014,6 +2379,19 @@ class UIGameRenderer:
                     self.ui.screen.blit(fill_surf, (bx, by + bh + 3))
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
+        # Draw voltaic mayhem before enemies and towers so towers cover it
+        try:
+            self.ui.effects.draw_voltaic_mayhem(shake_x, shake_y)
+        except (AttributeError, TypeError, ValueError, KeyError):
+            pass
+
+        # Draw bloodstain decals (appears under enemies)
+        for bloodstain in getattr(self.game, "bloodstains", []):
+            try:
+                bloodstain.draw(self.ui.screen, shake_x, shake_y)
+            except (AttributeError, TypeError, ValueError, KeyError):
+                pass
+
         # Draw enemies (object-based Enemy instances only)
         for enemy in self.game.enemies:
             # Delegate drawing (and particle updates/emission) to the Enemy instance

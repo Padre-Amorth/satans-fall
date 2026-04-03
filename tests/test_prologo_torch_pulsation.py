@@ -33,7 +33,7 @@ class TestPrologoTorchPulsation:
                 torch["pulse_speed"], float
             ), "pulse_speed should be float"
             assert (
-                0.3 <= torch["pulse_speed"] <= 0.6
+                0.2 <= torch["pulse_speed"] <= 0.4
             ), f"pulse_speed out of range: {torch['pulse_speed']}"
 
     def test_prologo_torches_have_pulse_phase(self, prologo_game):
@@ -55,8 +55,8 @@ class TestPrologoTorchPulsation:
             assert "glow_radius" in torch, "Torch missing glow_radius"
             assert isinstance(torch["glow_radius"], int), "glow_radius should be int"
             assert (
-                torch["glow_radius"] == 18
-            ), "Prologo torches should have glow_radius=18"
+                torch["glow_radius"] == 22
+            ), "Prologo torches should have glow_radius=22"
 
     def test_prologo_torches_have_glow_color(self, prologo_game):
         """Verify each torch has glow_color parameter."""

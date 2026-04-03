@@ -1718,7 +1718,9 @@ class Game:
         self._add_lamp_pulsation_parameters(
             self.prologo_torches,
             is_final=False,
-            glow_radius_regular=18,  # Smaller glow for torches
+            glow_radius_regular=22,  # Slightly wider glow
+            pulse_speed_min=0.2,  # Slower pulsation (0.2-0.4 Hz vs 0.3-0.6)
+            pulse_speed_max=0.4,
         )
 
         logger.info(
@@ -1733,17 +1735,21 @@ class Game:
         is_final: bool = False,
         glow_radius_regular: int = 20,
         glow_radius_final: int = 35,
+        pulse_speed_min: float = 0.3,
+        pulse_speed_max: float = 0.6,
     ) -> None:
-        """Add pulsation parameters to a list of lamps (limbo or hell).
+        """Add pulsation parameters to a list of lamps (limbo, hell, or prologo).
 
         Args:
             lamps: List of lamp dictionaries to modify.
             is_final: True for limbo_final lamps, False otherwise.
             glow_radius_regular: Glow radius for non-final lamps.
             glow_radius_final: Glow radius for final lamps.
+            pulse_speed_min: Minimum pulse speed in Hz.
+            pulse_speed_max: Maximum pulse speed in Hz.
         """
         for lamp in lamps:
-            lamp["pulse_speed"] = random.uniform(0.3, 0.6)  # Hz (slow breath-like)
+            lamp["pulse_speed"] = random.uniform(pulse_speed_min, pulse_speed_max)
             lamp["pulse_phase"] = random.uniform(0, 2 * 3.14159)  # Staggered effect
             lamp["glow_radius"] = glow_radius_final if is_final else glow_radius_regular
             lamp["glow_color"] = (255, 100, 60)  # Red-orange base color

@@ -36,7 +36,7 @@ class UIGameRenderer:
         "limbo": {"min_pulse": 0.55, "alpha": 100, "glow_offset": -3},
         "limbo_final": {"min_pulse": 0.45, "alpha": 100, "glow_offset": -3},
         "hell": {"min_pulse": 0.55, "alpha": 120, "glow_offset": -12},
-        "prologo": {"min_pulse": 0.75, "alpha": 90, "glow_offset": -13},
+        "prologo": {"min_pulse": 0.85, "alpha": 90, "glow_offset": -13},
     }
 
     def __init__(self, ui_manager):

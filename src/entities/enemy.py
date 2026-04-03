@@ -435,13 +435,6 @@ class Enemy(BaseSprite):
             self._eye_beam_fire_delay: float = (
                 1.5  # delay before firing the beam (Eye appears first)
             )
-            # Blink animation: periodic eyelid closing
-            self._eye_blink_next_time: float = random.uniform(
-                EYE_BLINK_INTERVAL_MIN, EYE_BLINK_INTERVAL_MAX
-            )
-            self._eye_blink_progress: float = (
-                0.0  # 0.0 = open, 0.0-1.0 = closing, 1.0-0.0 = opening
-            )
         elif enemy_type == "cross_bearer":
             # Cross Bearer: armored knight with a reflective frontal shield.
             # The shield faces the player at all times and deflects projectiles.
@@ -1284,29 +1277,6 @@ class Enemy(BaseSprite):
             # Red outline
             pygame.draw.circle(self.image, (180, 50, 50), (cx, cy), r, 3)
 
-            # Eyelid animation (blink)
-            blink_progress = self._eye_blink_progress
-            if blink_progress > 0:
-                # Blink animation: closes and opens symmetrically
-                # Progress 0.0-0.5 = closing, 0.5-1.0 = opening
-                if blink_progress <= 0.5:
-                    blink_close = blink_progress * 2.0  # 0.0 to 1.0
-                else:
-                    blink_close = (1.0 - blink_progress) * 2.0  # 1.0 to 0.0
-
-                eyelid_height = int(r * blink_close)
-                if eyelid_height > 0:
-                    # Top eyelid (closes from top) - black for visibility
-                    pygame.draw.rect(
-                        self.image, (0, 0, 0), (cx - r, cy - r, w, eyelid_height)
-                    )
-                    # Bottom eyelid (closes from bottom) - black for visibility
-                    pygame.draw.rect(
-                        self.image,
-                        (0, 0, 0),
-                        (cx - r, cy + r - eyelid_height, w, eyelid_height),
-                    )
-
         else:
             # Default demon (bosses)
             # Body (dark red/purple)
@@ -1886,22 +1856,6 @@ class Enemy(BaseSprite):
                     spawn_y = getattr(self, "_eye_spawn_y", self.y)
                     self.y = spawn_y + math.sin(self._eye_bob_phase) * EYE_BOB_AMPLITUDE
 
-                    # Blink animation: periodic eyelid closing/opening
-                    # Decrement timer to next blink
-                    self._eye_blink_next_time -= dt
-
-                    if self._eye_blink_next_time <= 0:
-                        # Timer expired: start blinking
-                        self._eye_blink_progress = 0.001  # Trigger blink
-                        self._eye_blink_next_time = random.uniform(
-                            EYE_BLINK_INTERVAL_MIN, EYE_BLINK_INTERVAL_MAX
-                        )
-                    elif self._eye_blink_progress > 0:
-                        # Currently blinking: advance progress
-                        self._eye_blink_progress += dt / EYE_BLINK_DURATION
-                        if self._eye_blink_progress >= 1.0:
-                            # Blink complete: reset to open
-                            self._eye_blink_progress = 0.0
                     if self._eye_elapsed >= getattr(
                         self, "_eye_lifespan", EYE_LIFESPAN_MAX
                     ):
@@ -3681,6 +3635,25 @@ class Enemy(BaseSprite):
             )
         except (AttributeError, TypeError, ValueError, KeyError):
             pass
+
+        # Create bloodstain when enemy dies (skip pentagram and eye)
+        if self.health <= 0:
+            try:
+                from src.entities.bloodstain import Bloodstain
+                from src.game import CURRENT_GAME
+
+                enemy_type = getattr(self, "enemy_type", "")
+                if CURRENT_GAME is not None and enemy_type not in ("pentagram", "eye"):
+                    is_large = getattr(self, "is_boss", False) or enemy_type in (
+                        "giant",
+                        "angel",
+                        "custode",
+                        "shield",
+                    )
+                    bs = Bloodstain(self.x, self.y, size=4, is_large=is_large)
+                    CURRENT_GAME.bloodstains.append(bs)
+            except Exception as e:
+                logger.debug(f"Failed to create bloodstain on enemy death: {e}")
 
         # Check if kill explosion should trigger (when kill_counter >= 10)
         # Use a flag to prevent recursive explosions from explosion damage

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from src.game import Game
 
 from src.balance import ENEMY_SCORE_PER_HEALTH
+from src.entities.bloodstain import Bloodstain
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,19 @@ class DeathSystem:
                     except (AttributeError, TypeError):
                         pass
                     try:
+                        # Create bloodstain at enemy death position (skip pentagram and eye)
+                        enemy_type = getattr(enemy, "enemy_type", "")
+                        if enemy_type not in ("pentagram", "eye"):
+                            enemy_x = getattr(enemy, "x", g.player.x)
+                            enemy_y = getattr(enemy, "y", g.player.y)
+                            is_large = getattr(
+                                enemy, "is_boss", False
+                            ) or enemy_type in ("giant", "angel", "custode", "shield")
+                            bs = Bloodstain(enemy_x, enemy_y, size=4, is_large=is_large)
+                            g.bloodstains.append(bs)
+                    except Exception as e:
+                        logger.debug(f"Failed to create bloodstain: {e}")
+                    try:
                         enemy.kill()
                     except (AttributeError, TypeError):
                         pass
@@ -109,6 +123,21 @@ class DeathSystem:
                     # Capture coordinates BEFORE removal
                     enemy_x = getattr(enemy, "x", None)
                     enemy_y = getattr(enemy, "y", None)
+                    try:
+                        # Create bloodstain at enemy death position (skip pentagram and eye)
+                        enemy_type = getattr(enemy, "enemy_type", "")
+                        if (
+                            enemy_x is not None
+                            and enemy_y is not None
+                            and enemy_type not in ("pentagram", "eye")
+                        ):
+                            is_large = getattr(
+                                enemy, "is_boss", False
+                            ) or enemy_type in ("giant", "angel", "custode", "shield")
+                            bs = Bloodstain(enemy_x, enemy_y, size=4, is_large=is_large)
+                            g.bloodstains.append(bs)
+                    except Exception as e:
+                        logger.debug(f"Failed to create bloodstain: {e}")
                     try:
                         # Call kill() if implemented, then ensure removal from plain list
                         if hasattr(enemy, "kill"):
@@ -176,8 +205,16 @@ class DeathSystem:
                         enemy_x = getattr(enemy, "x", g.player.x)
                         enemy_y = getattr(enemy, "y", g.player.y)
                         g.record_enemy_kill(enemy_x, enemy_y)
-                    except (AttributeError, TypeError, ValueError, KeyError):
-                        pass
+                        # Create bloodstain at enemy death position (skip pentagram and eye)
+                        enemy_type = getattr(enemy, "enemy_type", "")
+                        if enemy_type not in ("pentagram", "eye"):
+                            is_large = getattr(
+                                enemy, "is_boss", False
+                            ) or enemy_type in ("giant", "angel", "custode", "shield")
+                            bs = Bloodstain(enemy_x, enemy_y, size=4, is_large=is_large)
+                            g.bloodstains.append(bs)
+                    except Exception as e:
+                        logger.debug(f"Failed to create bloodstain: {e}")
                     try:
                         # If enemy implements kill(), call it for symmetry with Group
                         enemy.kill()
@@ -321,6 +358,15 @@ class DeathSystem:
                     except (AttributeError, TypeError, ValueError, KeyError):
                         pass
 
+                    # Create large bloodstain at boss death position
+                    try:
+                        bx = getattr(boss, "x", g.player.x)
+                        by = getattr(boss, "y", g.player.y)
+                        bs = Bloodstain(bx, by, size=6, is_large=True)
+                        g.bloodstains.append(bs)
+                    except Exception as e:
+                        logger.debug(f"Failed to create boss bloodstain: {e}")
+
                     boss.kill()  # Remove dead boss
         else:
             for boss in list(g.bosses):
@@ -342,6 +388,14 @@ class DeathSystem:
                                 pass
                     except (AttributeError, TypeError, ValueError, KeyError):
                         pass
+                    # Create large bloodstain at boss death position
+                    try:
+                        bx = boss.get("x", g.player.x)
+                        by = boss.get("y", g.player.y)
+                        bs = Bloodstain(bx, by, size=6, is_large=True)
+                        g.bloodstains.append(bs)
+                    except Exception as e:
+                        logger.debug(f"Failed to create boss bloodstain: {e}")
                     try:
                         g.bosses.remove(boss)
                     except (AttributeError, TypeError, ValueError, KeyError):

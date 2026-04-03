@@ -54,6 +54,9 @@ from src.game_constants import (
     HELL_BARRIER_X_MIN,
     HELL_BARRIER_Y_MAX,
     HELL_BARRIER_Y_MIN,
+    HELL_LAMP_SIZE,
+    HELL_LAMP_X_FROM_WALL,
+    HELL_LAMP_Y_FROM_BOTTOM,
     HELL_STAGES,
     LIMBO_LAMP_OFFSET_LEFT,
     LIMBO_LAMP_OFFSET_LEFT_BOTTOM,
@@ -61,6 +64,10 @@ from src.game_constants import (
     LIMBO_LAMP_OFFSET_RIGHT,
     LIMBO_LAMP_SPACING,
     LIMBO_STAGES,
+    MAX_BLOODSTAINS,
+    PURGATORY_CAULDRON_SIZE,
+    PURGATORY_CAULDRON_X_FROM_WALL,
+    PURGATORY_CAULDRON_Y_FROM_BOTTOM,
     PURGATORY_STAGES,
     STAGE_SETTINGS,
     WALL_THICKNESS,
@@ -282,6 +289,8 @@ class Game:
         self.health_drops: List[Dict[str, Any]] = []
         # Center-screen messages (used by UI and GameStateManager)
         self.center_messages: List[Dict[str, Any]] = []
+        # Bloodstain decals left when enemies die (with fade-out)
+        self.bloodstains: List[Any] = []
 
         # Statue / tower defaults used by Limbo/stage logic and tests
         try:
@@ -1081,7 +1090,11 @@ class Game:
             ("score_system", "src.systems.score_system", "ScoreSystem"),
             ("death_system", "src.systems.death_system", "DeathSystem"),
             ("particle_system", "src.systems.particle_system", "ParticleSystem"),
-            ("projectile_manager", "src.systems.projectile_manager", "ProjectileManager"),
+            (
+                "projectile_manager",
+                "src.systems.projectile_manager",
+                "ProjectileManager",
+            ),
         ]
         for attr, module_path, class_name in _systems:
             try:
@@ -1418,6 +1431,10 @@ class Game:
             "barrier_damaged.png",
             # optional Limbo wall lamp assets
             "lamp1.png",
+            # optional Purgatory decorative cauldron assets
+            "purgatory_cauldron.png",
+            # optional Hell wall lamp assets
+            "hell_lamp.png",
         ]
 
         # Preload originals for quick subsequent scaling
@@ -1584,6 +1601,67 @@ class Game:
             "Generated %d limbo lamps for stage %s",
             len(self.limbo_lamps),
             self.selected_stage,
+        )
+
+    def _generate_decorative_elements(
+        self,
+        is_stage_valid: bool,
+        elements_list: list,
+        size: tuple,
+        x_from_wall: int,
+        y_from_bottom: int,
+        element_name: str,
+    ) -> None:
+        """Helper to generate decorative elements at bottom corners (cauldrons, lamps)."""
+        if not is_stage_valid:
+            elements_list.clear()
+            return
+
+        elements_list.clear()
+
+        if not self.left_wall_points or not self.right_wall_points:
+            logger.warning("No wall points available for %s", element_name)
+            return
+
+        left_wall_x = self.left_wall_points[0][0]
+        right_wall_x = self.right_wall_points[0][0]
+        bottom_y = self.height - y_from_bottom
+
+        # Left element
+        left_x = left_wall_x + x_from_wall
+        elements_list.append({"x": left_x, "y": bottom_y, "side": "left"})
+
+        # Right element
+        right_x = right_wall_x - x_from_wall - size[0]
+        elements_list.append({"x": right_x, "y": bottom_y, "side": "right"})
+
+        logger.info(
+            "Generated %d %s for stage %s",
+            len(elements_list),
+            element_name,
+            self.selected_stage,
+        )
+
+    def generate_purgatory_cauldrons(self) -> None:
+        """Generate decorative cauldrons at bottom sides of purgatory arena."""
+        self._generate_decorative_elements(
+            self.is_purgatory_stage(),
+            self.purgatory_cauldrons,
+            PURGATORY_CAULDRON_SIZE,
+            PURGATORY_CAULDRON_X_FROM_WALL,
+            PURGATORY_CAULDRON_Y_FROM_BOTTOM,
+            "purgatory cauldrons",
+        )
+
+    def generate_hell_lamps(self) -> None:
+        """Generate decorative lamps at bottom corners of hell arena."""
+        self._generate_decorative_elements(
+            self.is_hell_stage(),
+            self.hell_lamps,
+            HELL_LAMP_SIZE,
+            HELL_LAMP_X_FROM_WALL,
+            HELL_LAMP_Y_FROM_BOTTOM,
+            "hell lamps",
         )
 
     def is_limbo_stage(self) -> bool:
@@ -1954,28 +2032,28 @@ class Game:
                 # game objects are rendered.  The UI manager handles purgatory
                 # stages internally.
                 self.draw_game_objects(shake_x, shake_y)
-                # Fog must be drawn after world/objects so it tints enemies and player
-                try:
-                    self.draw_fog(shake_x, shake_y)
-                except (AttributeError, TypeError, ValueError, KeyError):
-                    pass
                 self.draw_skullboom_particles(shake_x, shake_y)
                 self.draw_ice_particles(shake_x, shake_y)
                 self.particle_system.draw_cocytus_particles(shake_x, shake_y)
                 self.draw_ice_puddles(shake_x, shake_y)
+                # Draw towers before fog so they are covered by the overlay
+                try:
+                    self.draw_towers(shake_x, shake_y)
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
+                # Fog must be drawn after world/objects/towers so it tints everything
+                try:
+                    self.draw_fog(shake_x, shake_y)
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    pass
                 # Draw centralized floating texts (damage numbers, etc.)
                 try:
                     self.draw_floating_texts(shake_x, shake_y)
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
-                # Draw special effects (lightning, explosions, waves, etc.)
+                # Draw special effects (lightning, explosions, waves, etc.) after towers
                 try:
                     self.draw_special_effects(shake_x, shake_y)
-                except (AttributeError, TypeError, ValueError, KeyError):
-                    pass
-                # Draw towers on top of special effects (covers voltaic beam origin)
-                try:
-                    self.draw_towers(shake_x, shake_y)
                 except (AttributeError, TypeError, ValueError, KeyError):
                     pass
 
@@ -2170,6 +2248,20 @@ class Game:
             except (AttributeError, TypeError, ValueError, KeyError):
                 pass
         self.floating_texts = alive
+
+    def _update_bloodstains(self) -> None:
+        """Update and remove expired bloodstains."""
+        alive = []
+        for bs in list(self.bloodstains):
+            try:
+                if not bs.update():
+                    alive.append(bs)
+            except (AttributeError, TypeError, ValueError, KeyError):
+                pass
+        # Limit total bloodstains to avoid performance issues
+        self.bloodstains = (
+            alive[-MAX_BLOODSTAINS:] if len(alive) > MAX_BLOODSTAINS else alive
+        )
 
     def _update_health_drops(self) -> None:
         """Move health drops downward and handle collection by the player.
@@ -2854,6 +2946,7 @@ class Game:
         if hasattr(self, "cocytus_particles"):
             self.cocytus_particles.clear()
         self.hell_burn_fires.clear()
+        self.bloodstains.clear()
 
         self.wave = 0
         self.wave_time = 0.0
@@ -2929,6 +3022,12 @@ class Game:
 
         # Reset limbo lamps (decorative wall elements)
         self.limbo_lamps = []
+
+        # Reset purgatory cauldrons (decorative arena elements)
+        self.purgatory_cauldrons = []
+
+        # Reset hell lamps (decorative wall elements)
+        self.hell_lamps = []
 
         # Reset stage start countdown
         self.stage_start_countdown = 0
@@ -3921,6 +4020,9 @@ class Game:
 
         # Update floating texts (drawn later)
         self._update_floating_texts()
+
+        # Update bloodstains (decay and fade)
+        self._update_bloodstains()
 
         # Update health drop positions / player collisions
         self._update_health_drops()
